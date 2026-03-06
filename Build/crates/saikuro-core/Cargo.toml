@@ -1,0 +1,24 @@
+[package]
+name = "saikuro-core"
+description = "Core protocol types, envelope model, and error definitions for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_bytes = { workspace = true }
+rmp-serde = { workspace = true }
+rmpv = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-test = { workspace = true }

@@ -1,0 +1,58 @@
+name: Security Audit
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Build/Cargo.lock"
+      - "Build/adapters/rust/Cargo.lock"
+      - "Build/adapters/typescript/package-lock.json"
+      - ".github/workflows/security.yml"
+  pull_request:
+    paths:
+      - "Build/Cargo.lock"
+      - "Build/adapters/rust/Cargo.lock"
+      - "Build/adapters/typescript/package-lock.json"
+      - ".github/workflows/security.yml"
+  schedule:
+    # Run weekly on Mondays at 07:00 UTC
+    - cron: "0 7 * * 1"
+
+jobs:
+  cargo-audit:
+    name: cargo audit (workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit workspace
+        run: cargo audit
+        working-directory: Build
+
+  cargo-audit-adapter:
+    name: cargo audit (Rust adapter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit Rust adapter
+        run: cargo audit
+        working-directory: Build/adapters/rust
+
+  npm-audit:
+    name: npm audit (TypeScript adapter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build/adapters/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - run: npm audit --audit-level=high

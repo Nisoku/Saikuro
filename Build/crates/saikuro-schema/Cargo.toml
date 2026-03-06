@@ -1,0 +1,22 @@
+[package]
+name = "saikuro-schema"
+description = "Schema registry, invocation validator, and capability enforcement for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "schema", "validation"]
+
+[dependencies]
+saikuro-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-test = { workspace = true }

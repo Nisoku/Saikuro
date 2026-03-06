@@ -1,0 +1,37 @@
+# C# CI: build and tests
+name: C#
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Build/adapters/csharp/**"
+      - ".github/workflows/csharp.yml"
+  pull_request:
+    paths:
+      - "Build/adapters/csharp/**"
+      - ".github/workflows/csharp.yml"
+
+jobs:
+  test:
+    name: Build + Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build/adapters/csharp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore Saikuro/src/Saikuro.csproj
+
+      - name: Build
+        run: dotnet build Saikuro/src/Saikuro.csproj --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Saikuro --configuration Release --no-build --verbosity normal

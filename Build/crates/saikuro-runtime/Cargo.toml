@@ -1,0 +1,38 @@
+[package]
+name = "saikuro-runtime"
+description = "The Saikuro runtime:  orchestrates schema, transport, routing, and capability enforcement"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "runtime", "async"]
+
+[features]
+default = ["native-transport"]
+native-transport = ["saikuro-transport/native-transport"]
+ws-transport = ["saikuro-transport/ws-transport"]
+
+[dependencies]
+saikuro-core      = { workspace = true }
+saikuro-schema    = { workspace = true }
+saikuro-transport = { workspace = true }
+saikuro-router    = { workspace = true }
+
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+rmp-serde   = { workspace = true }
+bytes       = { workspace = true }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+tracing-subscriber = { workspace = true }
+dashmap     = { workspace = true }
+parking_lot = { workspace = true }
+tokio       = { workspace = true }
+tokio-stream = { workspace = true }
+uuid        = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

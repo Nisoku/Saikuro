@@ -1,0 +1,45 @@
+# TypeScript CI: typecheck, lint, build, and tests
+name: TypeScript
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Build/adapters/typescript/**"
+      - ".github/workflows/typescript.yml"
+  pull_request:
+    paths:
+      - "Build/adapters/typescript/**"
+      - ".github/workflows/typescript.yml"
+
+jobs:
+  ci:
+    name: Build + Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build/adapters/typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: Build/adapters/typescript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test

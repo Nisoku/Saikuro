@@ -1,0 +1,60 @@
+{
+  "name": "@nisoku/saikuro",
+  "version": "0.1.0",
+  "description": "TypeScript/JavaScript adapter for the Saikuro cross-language invocation fabric",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "saikuro-schema": "./dist/bin/saikuro-schema.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nisoku/Saikuro"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "schema": "node dist/bin/saikuro-schema.js"
+  },
+  "keywords": [
+    "ipc",
+    "cross-language",
+    "saikuro",
+    "rpc",
+    "msgpack"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0",
+    "typescript": "^5.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@eslint/markdown": "^7.5.1",
+    "@types/node": "^22.19.15",
+    "child_process": "^1.0.2",
+    "eslint": "^10.0.2",
+    "globals": "^17.4.0",
+    "path": "^0.12.7",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  }
+}

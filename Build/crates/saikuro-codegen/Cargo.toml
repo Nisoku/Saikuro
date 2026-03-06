@@ -1,0 +1,31 @@
+[package]
+name = "saikuro-codegen"
+description = "Binding generator: produce typed client/server stubs from a frozen Saikuro schema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "codegen", "bindings"]
+
+[[bin]]
+name = "saikuro-codegen"
+path = "src/bin/saikuro-codegen.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:clap"]
+
+[dependencies]
+saikuro-core   = { workspace = true }
+saikuro-schema = { workspace = true }
+
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+anyhow      = { workspace = true }
+
+clap = { version = "4.5", features = ["derive", "env"], optional = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

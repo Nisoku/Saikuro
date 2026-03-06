@@ -1,0 +1,29 @@
+[package]
+name = "saikuro-router"
+description = "Invocation router and provider registry for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "router", "rpc"]
+
+[dependencies]
+saikuro-core   = { workspace = true }
+saikuro-schema = { workspace = true }
+
+serde       = { workspace = true }
+bytes       = { workspace = true }
+rmp-serde   = { workspace = true }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+dashmap     = { workspace = true }
+tokio       = { workspace = true }
+tokio-stream = { workspace = true }
+uuid        = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tracing-subscriber = { workspace = true }

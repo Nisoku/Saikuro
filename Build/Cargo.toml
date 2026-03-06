@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/saikuro-core",
+    "crates/saikuro-schema",
+    "crates/saikuro-transport",
+    "crates/saikuro-router",
+    "crates/saikuro-runtime",
+    "crates/saikuro-codegen",
+    "crates/saikuro-runtime-bin",
+    "adapters/rust",
+    "tests",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["NellowTCS"]
+license = "Apache-2.0"
+repository = "https://github.com/Nisoku/Saikuro"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_bytes = "0.11"
+rmp-serde = "1.3"
+rmpv = { version = "1.3", features = ["with-serde"] }
+bytes = "1.7"
+
+# Async runtime: on native we use the full tokio; on wasm32 we use the
+# wasm-bindgen-futures executor and only pull in tokio's sync primitives.
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+async-trait = "0.1"
+pin-project-lite = "0.2"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# UUID
+uuid = { version = "1.10", features = ["v4", "serde", "js"] }
+
+# Logging / tracing: tracing itself is wasm-safe; the subscriber is not
+# used directly from WASM so it only appears in crates that explicitly need it.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# Error handling:  both are wasm-safe
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Concurrency: dashmap and parking_lot are wasm-safe for single-threaded WASM i think
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Time: chrono is wasm-safe when 'wasmbind' feature is enabled
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+
+# Internal crates
+saikuro-core      = { path = "crates/saikuro-core" }
+saikuro-schema    = { path = "crates/saikuro-schema" }
+saikuro-transport = { path = "crates/saikuro-transport" }
+saikuro-router    = { path = "crates/saikuro-router" }
+saikuro-runtime   = { path = "crates/saikuro-runtime" }
+saikuro-codegen   = { path = "crates/saikuro-codegen" }
+saikuro           = { path = "adapters/rust", default-features = false }
+
+# Testing
+tokio-test = "0.4"

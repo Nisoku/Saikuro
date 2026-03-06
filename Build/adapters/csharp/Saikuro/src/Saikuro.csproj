@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;netstandard2.0;netstandard2.1</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>Saikuro</RootNamespace>
+    <AssemblyName>Saikuro</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- NuGet metadata -->
+    <PackageId>Saikuro</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>NellowTCS</Authors>
+    <Company>Saikuro</Company>
+    <Product>Saikuro</Product>
+    <Description>C# adapter for the Saikuro cross-language invocation fabric. Supports net8.0, netstandard, and Blazor WebAssembly.</Description>
+    <Copyright>Copyright (c) 2026 NellowTCS and Saikuro Contributors</Copyright>
+    <RepositoryUrl>https://github.com/Nisoku/Saikuro</RepositoryUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSource>true</IncludeSource>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageTags>ipc;cross-language;saikuro;rpc;msgpack</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MessagePack" Version="3.1.4" />
+    <PackageReference Include="System.IO.Pipelines" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Saikuro.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

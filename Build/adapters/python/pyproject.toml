@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "saikuro"
+version = "0.1.0"
+description = "Python adapter for the Saikuro cross-language invocation fabric"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "NellowTCS" },
+]
+keywords = ["ipc", "cross-language", "rpc", "msgpack"]
+
+[project.urls]
+Repository = "https://github.com/Nisoku/Saikuro"
+Homepage   = "https://github.com/Nisoku/Saikuro"
+
+[project.scripts]
+saikuro-schema = "saikuro.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "anyio[trio]>=4.0",
+]
+websocket = [
+    "websockets>=13.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["saikuro"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "anyio[trio]>=4.0",
+    "hatchling",
+    "websockets>=13.0",
+]

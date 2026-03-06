@@ -1,0 +1,114 @@
+# Rust CI: format check, clippy, and tests for the workspace + Rust adapter
+name: Rust
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Build/Cargo.toml"
+      - "Build/Cargo.lock"
+      - "Build/crates/**"
+      - "Build/tests/**"
+      - "Build/adapters/rust/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    paths:
+      - "Build/Cargo.toml"
+      - "Build/Cargo.lock"
+      - "Build/crates/**"
+      - "Build/tests/**"
+      - "Build/adapters/rust/**"
+      - ".github/workflows/rust.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Format + Clippy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Build/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Build/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: cargo test (workspace)
+        run: cargo test --workspace --all-features
+
+  rust-adapter:
+    name: Rust adapter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Build/adapters/rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Build/adapters/rust/target
+          key: ${{ runner.os }}-cargo-adapter-${{ hashFiles('Build/adapters/rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-adapter-
+
+      - name: cargo fmt --check
+        run: cargo fmt -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-features

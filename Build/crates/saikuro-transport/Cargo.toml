@@ -1,0 +1,46 @@
+[package]
+name = "saikuro-transport"
+description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, and WebSocket backends"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
+
+# Feature flags control which transport backends are compiled in.
+#
+#   native-transport:  Unix socket + TCP (requires std networking; disabled on wasm32)
+#   ws-transport:  WebSocket (works on both native and wasm32)
+#
+# The in-memory transport is always compiled; it has zero OS dependencies.
+[features]
+default = ["native-transport"]
+native-transport = []
+ws-transport = ["dep:tokio-tungstenite", "dep:tungstenite"]
+
+[dependencies]
+saikuro-core = { workspace = true }
+
+serde       = { workspace = true }
+bytes       = { workspace = true }
+rmp-serde   = { workspace = true }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+pin-project-lite = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+tokio-stream = { workspace = true }
+
+# tokio: on native we want the full suite; on wasm32 only sync + io features
+# compile. We depend on it unconditionally and cfg-gate the native-only APIs.
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# WebSocket support:  optional
+tokio-tungstenite = { version = "0.24", optional = true }
+tungstenite       = { version = "0.24", optional = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,0 +1,24 @@
+[package]
+name = "saikuro-tests"
+description = "All tests for the Saikuro library"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+saikuro-core      = { workspace = true }
+saikuro-schema    = { workspace = true }
+saikuro-transport = { workspace = true, features = ["native-transport"] }
+saikuro-router    = { workspace = true }
+saikuro-runtime   = { workspace = true, features = ["native-transport"] }
+saikuro-codegen   = { workspace = true }
+saikuro           = { workspace = true }
+
+tokio         = { workspace = true }
+bytes         = { workspace = true }
+rmp-serde     = { workspace = true }
+serde_json    = { workspace = true }
+tracing       = { workspace = true }
+tracing-subscriber = { workspace = true }
