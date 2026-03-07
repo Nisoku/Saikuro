@@ -41,3 +41,5 @@
 
 - [ ] Add codegen for Rust
 - [ ] Storage backend (currently working on), allows all FS access to be agnostic and stuff
+- [ ] Add HTTP transport (credit: u/emetah850 on Reddit) 
+- [ ] add support for custom transports (credit: u/rogerara on Reddit) 
