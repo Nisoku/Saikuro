@@ -95,6 +95,34 @@ Full documentation is available at the project's GitHub Pages site.
 
 ---
 
+## Contributing
+
+Contributions are welcome! Here’s how to get started:
+
+1. Fork the repository.
+2. Create a branch for your feature, adapter, or bug fix (`git checkout -b feature/name`).
+3. Commit your changes (`git commit -m "Description of change"`).
+4. Push your branch (`git push origin feature/name`).
+5. Open a Pull Request.
+
+Please make sure your changes follow the existing style and that all tests pass before submitting.
+
+See [CONTRIBUTING](CONTRIBUTING.md) for more details.
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=Nisoku%2FSaikuro&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Nisoku/Saikuro&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Nisoku/Saikuro&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Nisoku/Saikuro&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
