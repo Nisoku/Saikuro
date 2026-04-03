@@ -47,6 +47,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@eslint/markdown": "^7.5.1",
+    "@rollup/rollup-darwin-x64": "^4.60.1",
     "@types/node": "^22.19.15",
     "child_process": "^1.0.2",
     "eslint": "^10.0.2",
