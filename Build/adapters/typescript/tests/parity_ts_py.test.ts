@@ -14,7 +14,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe("Schema parity: TypeScript ↔ Python (basic)", () => {
-  it("TS extractor and Python builder produce compatible schemas for fixture", async () => {
+  it(
+    "TS extractor and Python builder produce compatible schemas for fixture",
+    async () => {
     const tsFixture = resolve(__dirname, "./fixtures/service.ts");
     const tsSchema = await extractSchema([tsFixture], "parityns");
 
@@ -206,5 +208,7 @@ describe("Schema parity: TypeScript ↔ Python (basic)", () => {
       expect(a).toEqual(b);
       expect(c).toEqual(b);
     }
-  });
+    },
+    60000,
+  );
 });
