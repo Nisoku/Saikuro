@@ -34,8 +34,7 @@ impl BindingGenerator for TypeScriptGenerator {
             let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
             output.add(&file_name, src);
             index_exports.push(format!(
-                "export {{ {} }} from './{}';\n",
-                class_name, class_name
+                "export {{ {class_name} }} from './{class_name}';\n"
             ));
         }
 
@@ -56,25 +55,25 @@ impl TypeScriptGenerator {
         for (type_name, type_def) in &schema.types {
             match type_def {
                 TypeDefinition::Record { fields } => {
-                    lines.push(format!("export interface {} {{", type_name));
+                    lines.push(format!("export interface {type_name} {{"));
                     for (field_name, field_desc) in fields {
-                        let ts_type = self.type_to_ts(&field_desc.r#type)?;
+                        let ts_type = Self::type_to_ts(&field_desc.r#type)?;
                         let optional = if field_desc.optional { "?" } else { "" };
-                        lines.push(format!("  {}{}: {};", field_name, optional, ts_type));
+                        lines.push(format!("  {field_name}{optional}: {ts_type};"));
                     }
                     lines.push("}".to_owned());
                     lines.push(String::new());
                 }
                 TypeDefinition::Enum { variants } => {
-                    lines.push(format!("export type {} =", type_name));
+                    lines.push(format!("export type {type_name} ="));
                     let variants_str: Vec<String> =
-                        variants.iter().map(|v| format!("  | \"{}\"", v)).collect();
+                        variants.iter().map(|v| format!("  | \"{v}\"")).collect();
                     lines.push(variants_str.join("\n") + ";");
                     lines.push(String::new());
                 }
                 TypeDefinition::Alias { inner } => {
-                    let ts_type = self.type_to_ts(inner)?;
-                    lines.push(format!("export type {} = {};", type_name, ts_type));
+                    let ts_type = Self::type_to_ts(inner)?;
+                    lines.push(format!("export type {type_name} = {ts_type};"));
                     lines.push(String::new());
                 }
             }
@@ -105,7 +104,7 @@ impl TypeScriptGenerator {
 
         lines.push("import type * as Types from './types';".to_owned());
         lines.push(String::new());
-        lines.push(format!("export class {} {{", class_name));
+        lines.push(format!("export class {class_name} {{"));
         lines.push("  constructor(private readonly client: SaikuroClient) {}".to_owned());
         lines.push(String::new());
 
@@ -134,25 +133,25 @@ impl TypeScriptGenerator {
         let mut call_args = vec![];
 
         for arg in &schema.args {
-            let ts_type = self.type_to_ts(&arg.r#type)?;
+            let ts_type = Self::type_to_ts(&arg.r#type)?;
             let optional = if arg.optional { "?" } else { "" };
             params.push(format!("{}{}: {}", arg.name, optional, ts_type));
             call_args.push(arg.name.clone());
         }
 
-        let target = format!("{}.{}", ns_name, fn_name);
+        let target = format!("{ns_name}.{fn_name}");
         let args_list = call_args.join(", ");
 
         let mut lines = vec![];
 
         if let Some(doc) = &schema.doc {
-            lines.push(format!("  /** {} */", doc));
+            lines.push(format!("  /** {doc} */"));
         }
 
         // Choose the correct client primitive based on the return type.
         match &schema.returns {
             TypeDescriptor::Stream { item } => {
-                let item_ts = self.type_to_ts(item)?;
+                let item_ts = Self::type_to_ts(item)?;
                 lines.push(format!(
                     "  async {}({}): Promise<AsyncIterable<{}>> {{",
                     fn_name,
@@ -160,14 +159,13 @@ impl TypeScriptGenerator {
                     item_ts
                 ));
                 lines.push(format!(
-                    "    return this.client.stream<{}>('{}', [{}]);",
-                    item_ts, target, args_list
+                    "    return this.client.stream<{item_ts}>('{target}', [{args_list}]);"
                 ));
                 lines.push("  }".to_owned());
             }
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_ts = self.type_to_ts(inbound)?;
-                let out_ts = self.type_to_ts(outbound)?;
+                let in_ts = Self::type_to_ts(inbound)?;
+                let out_ts = Self::type_to_ts(outbound)?;
                 lines.push(format!(
                     "  async {}({}): Promise<SaikuroChannel<{}, {}>> {{",
                     fn_name,
@@ -176,13 +174,12 @@ impl TypeScriptGenerator {
                     out_ts,
                 ));
                 lines.push(format!(
-                    "    return this.client.channel<{}, {}>('{}', [{}]);",
-                    in_ts, out_ts, target, args_list
+                    "    return this.client.channel<{in_ts}, {out_ts}>('{target}', [{args_list}]);"
                 ));
                 lines.push("  }".to_owned());
             }
             _ => {
-                let return_type = self.type_to_ts(&schema.returns)?;
+                let return_type = Self::type_to_ts(&schema.returns)?;
                 lines.push(format!(
                     "  async {}({}): Promise<{}> {{",
                     fn_name,
@@ -190,8 +187,7 @@ impl TypeScriptGenerator {
                     return_type
                 ));
                 lines.push(format!(
-                    "    return this.client.call('{}', [{}]) as Promise<{}>;",
-                    target, args_list, return_type
+                    "    return this.client.call('{target}', [{args_list}]) as Promise<{return_type}>;"
                 ));
                 lines.push("  }".to_owned());
             }
@@ -202,7 +198,7 @@ impl TypeScriptGenerator {
         Ok(lines.join("\n"))
     }
 
-    fn type_to_ts(&self, desc: &TypeDescriptor) -> Result<String> {
+    fn type_to_ts(desc: &TypeDescriptor) -> Result<String> {
         Ok(match desc {
             TypeDescriptor::Primitive { r#type } => match r#type {
                 PrimitiveType::Bool => "boolean".to_owned(),
@@ -221,24 +217,24 @@ impl TypeScriptGenerator {
                 PrimitiveType::Any => "unknown".to_owned(),
                 PrimitiveType::Unit => "void".to_owned(),
             },
-            TypeDescriptor::Named { name } => format!("Types.{}", name),
+            TypeDescriptor::Named { name } => format!("Types.{name}"),
             TypeDescriptor::Option { inner } => {
-                format!("{} | null", self.type_to_ts(inner)?)
+                format!("{} | null", Self::type_to_ts(inner)?)
             }
             TypeDescriptor::Array { item } => {
-                format!("Array<{}>", self.type_to_ts(item)?)
+                format!("Array<{}>", Self::type_to_ts(item)?)
             }
             TypeDescriptor::Map { value } => {
-                format!("Record<string, {}>", self.type_to_ts(value)?)
+                format!("Record<string, {}>", Self::type_to_ts(value)?)
             }
             TypeDescriptor::Stream { item } => {
-                format!("AsyncIterable<{}>", self.type_to_ts(item)?)
+                format!("AsyncIterable<{}>", Self::type_to_ts(item)?)
             }
             TypeDescriptor::Channel { inbound, outbound } => {
                 format!(
                     "SaikuroChannel<{}, {}>",
-                    self.type_to_ts(inbound)?,
-                    self.type_to_ts(outbound)?
+                    Self::type_to_ts(inbound)?,
+                    Self::type_to_ts(outbound)?
                 )
             }
         })

@@ -68,7 +68,7 @@ fn register_namespace(registry: &SchemaRegistry, namespace: &str, function: &str
 fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
-        format!("{}-provider", namespace),
+        format!("{namespace}-provider"),
         vec![namespace.to_owned()],
         work_tx,
     );

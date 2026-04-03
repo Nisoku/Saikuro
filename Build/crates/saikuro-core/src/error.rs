@@ -79,7 +79,7 @@ pub enum ErrorCode {
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Delegate to the derived Debug output which matches the serde names.
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

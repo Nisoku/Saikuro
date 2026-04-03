@@ -21,7 +21,7 @@ fn register_echo_provider(
 ) -> mpsc::Receiver<ProviderWorkItem> {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
-        format!("{}-provider", namespace),
+        format!("{namespace}-provider"),
         vec![namespace.to_owned()],
         work_tx,
     );

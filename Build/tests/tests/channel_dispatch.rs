@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
-        format!("{}-provider", namespace),
+        format!("{namespace}-provider"),
         vec![namespace.to_owned()],
         work_tx,
     );
@@ -66,7 +66,7 @@ fn channel_abort(id: InvocationId, seq: u64) -> ResponseEnvelope {
 async fn channel_open_returns_ok_empty() {
     let (registry, mut work_rx) = make_provider("chat");
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let router = InvocationRouter::with_providers(registry);
     let env = Envelope::channel_open("chat.open", vec![Value::String("room1".into())]);
@@ -98,7 +98,7 @@ async fn route_channel_inbound_delivers_to_state() {
     let open_env = Envelope::channel_open("pipe.connect", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let open_resp = router.dispatch(open_env).await;
     assert!(open_resp.ok);
@@ -132,7 +132,7 @@ async fn route_channel_outbound_delivers_to_state() {
     let open_env = Envelope::channel_open("pipe2.connect", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     router.dispatch(open_env).await;
 
@@ -164,7 +164,7 @@ async fn route_channel_inbound_end_removes_state() {
     let open_env = Envelope::channel_open("fin_chan.open", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
     router.dispatch(open_env).await;
 
     // Consume the receiver so sends don't fail.
@@ -189,7 +189,7 @@ async fn route_channel_outbound_end_removes_state() {
     let open_env = Envelope::channel_open("fin_out.open", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
     router.dispatch(open_env).await;
 
     let _rx = router.streams().take_channel_outbound_receiver(&channel_id);
@@ -214,7 +214,7 @@ async fn route_channel_abort_removes_state() {
     let open_env = Envelope::channel_open("abort_chan.open", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
     router.dispatch(open_env).await;
 
     let _rx = router.streams().take_channel_inbound_receiver(&channel_id);
@@ -259,7 +259,7 @@ async fn multiple_channels_are_independent() {
     let (registry, mut work_rx) = make_provider("multi_chan");
     let router = InvocationRouter::with_providers(registry);
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let env1 = Envelope::channel_open("multi_chan.ch1", vec![]);
     let env2 = Envelope::channel_open("multi_chan.ch2", vec![]);
@@ -326,7 +326,7 @@ async fn channel_pause_resume_round_trips() {
     let open_env = Envelope::channel_open("bpressure.stream", vec![]);
     let channel_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
     router.dispatch(open_env).await;
 
     let mut outbound_rx = router

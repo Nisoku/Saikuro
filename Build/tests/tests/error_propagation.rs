@@ -218,15 +218,14 @@ fn all_error_codes_survive_msgpack_roundtrip() {
 
     for code in codes {
         let id = InvocationId::new();
-        let detail = ErrorDetail::new(code.clone(), format!("test for {:?}", code));
+        let detail = ErrorDetail::new(code.clone(), format!("test for {code:?}"));
         let resp = ResponseEnvelope::err(id, detail);
         let bytes = resp.to_msgpack().expect("serialize");
         let decoded = ResponseEnvelope::from_msgpack(&bytes).expect("deserialize");
         assert_eq!(
             decoded.error.unwrap().code,
             code,
-            "ErrorCode {:?} did not survive roundtrip",
-            code
+            "ErrorCode {code:?} did not survive roundtrip"
         );
     }
 }

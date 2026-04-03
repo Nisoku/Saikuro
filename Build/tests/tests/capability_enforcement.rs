@@ -50,10 +50,10 @@ fn wildcard_set_grants_everything() {
 fn grants_all_requires_every_token() {
     let set =
         CapabilitySet::from_tokens([CapabilityToken::new("read"), CapabilityToken::new("write")]);
-    let required = vec![CapabilityToken::new("read"), CapabilityToken::new("write")];
+    let required = [CapabilityToken::new("read"), CapabilityToken::new("write")];
     assert!(set.grants_all(required.iter()));
 
-    let missing_one = vec![
+    let missing_one = [
         CapabilityToken::new("read"),
         CapabilityToken::new("write"),
         CapabilityToken::new("admin"),

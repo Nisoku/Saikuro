@@ -103,11 +103,11 @@ fn batch_envelope_roundtrip() {
 #[test]
 fn stream_item_with_seq_roundtrip() {
     let id = InvocationId::new();
-    let resp = ResponseEnvelope::stream_item(id, 42, Value::Float(3.14));
+    let resp = ResponseEnvelope::stream_item(id, 42, Value::Float(std::f64::consts::PI));
     let decoded = roundtrip_response(&resp);
     assert!(decoded.ok);
     assert_eq!(decoded.seq, Some(42));
-    assert_eq!(decoded.result, Some(Value::Float(3.14)));
+    assert_eq!(decoded.result, Some(Value::Float(std::f64::consts::PI)));
     assert!(decoded.stream_control.is_none());
 }
 
@@ -142,7 +142,7 @@ fn value_all_variants_roundtrip() {
         Value::Bool(false),
         Value::Int(-42),
         Value::UInt(u64::MAX),
-        Value::Float(2.718281828),
+        Value::Float(std::f64::consts::E),
         Value::String("hello, 世界".into()),
         Value::Bytes(vec![0x00, 0xff, 0x7e]),
         Value::Array(vec![Value::Int(1), Value::String("two".into())]),

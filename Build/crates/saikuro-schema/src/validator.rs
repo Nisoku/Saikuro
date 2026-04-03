@@ -352,7 +352,7 @@ impl InvocationValidator {
             TypeDescriptor::Array { item } => {
                 let items = value.as_array().ok_or_else(|| type_error("array"))?;
                 for (i, item_value) in items.iter().enumerate() {
-                    let inner_name = format!("{}[{}]", name, i);
+                    let inner_name = format!("{name}[{i}]");
                     self.check_value_type(target, i, &inner_name, item, item_value)?;
                 }
                 Ok(())

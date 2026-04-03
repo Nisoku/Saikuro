@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
-        format!("{}-provider", namespace),
+        format!("{namespace}-provider"),
         vec![namespace.to_owned()],
         work_tx,
     );
@@ -34,7 +34,7 @@ async fn stream_open_returns_ok_empty() {
     let (registry, mut work_rx) = make_provider("events");
 
     // Consume work items (provider side).
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let router = InvocationRouter::with_providers(registry);
     let env = Envelope::stream_open("events.subscribe", vec![Value::String("topic".into())]);
@@ -56,7 +56,7 @@ async fn route_stream_item_delivers_to_state() {
     let open_env = Envelope::stream_open("data.feed", vec![]);
     let stream_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let open_resp = router.dispatch(open_env).await;
     assert!(open_resp.ok);
@@ -75,7 +75,7 @@ async fn route_stream_end_removes_state() {
     let open_env = Envelope::stream_open("fin.feed", vec![]);
     let stream_id = open_env.id;
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     router.dispatch(open_env).await;
 
@@ -119,7 +119,7 @@ async fn multiple_streams_are_independent() {
     let (registry, mut work_rx) = make_provider("multi");
     let router = InvocationRouter::with_providers(registry);
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     // Open two streams.
     let env1 = Envelope::stream_open("multi.s1", vec![]);
@@ -154,7 +154,7 @@ async fn out_of_order_item_is_dropped_not_panicked() {
     let (registry, mut work_rx) = make_provider("ooo");
     let router = InvocationRouter::with_providers(registry);
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let env = Envelope::stream_open("ooo.feed", vec![]);
     let id = env.id;
@@ -175,7 +175,7 @@ async fn stream_abort_control_removes_state() {
     let (registry, mut work_rx) = make_provider("abort");
     let router = InvocationRouter::with_providers(registry);
 
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let env = Envelope::stream_open("abort.feed", vec![]);
     let id = env.id;

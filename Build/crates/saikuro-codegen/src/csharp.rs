@@ -30,7 +30,7 @@ impl BindingGenerator for CSharpGenerator {
 
         for (ns_name, ns_schema) in &schema.namespaces {
             let class_name = format!("{}Client", to_pascal_case(ns_name));
-            let file_name = format!("{}.cs", class_name);
+            let file_name = format!("{class_name}.cs");
             let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
             output.add(&file_name, src);
             client_names.push(class_name);
@@ -56,20 +56,19 @@ impl CSharpGenerator {
         for (type_name, type_def) in &schema.types {
             match type_def {
                 TypeDefinition::Record { fields } => {
-                    lines.push(format!("public sealed record {}(", type_name));
+                    lines.push(format!("public sealed record {type_name}("));
                     let field_lines: Vec<String> = fields
                         .iter()
                         .map(|(field_name, field_desc)| {
-                            let cs_type = self
-                                .type_to_cs(&field_desc.r#type)
+                            let cs_type = Self::type_to_cs(&field_desc.r#type)
                                 .unwrap_or_else(|_| "object?".to_owned());
                             let nullable = if field_desc.optional {
-                                format!("{}?", cs_type)
+                                format!("{cs_type}?")
                             } else {
                                 cs_type
                             };
                             let pascal = to_pascal_case(field_name);
-                            format!("    {} {}", nullable, pascal)
+                            format!("    {nullable} {pascal}")
                         })
                         .collect();
                     lines.push(field_lines.join(",\n"));
@@ -77,18 +76,18 @@ impl CSharpGenerator {
                     lines.push("".to_owned());
                 }
                 TypeDefinition::Enum { variants } => {
-                    lines.push(format!("public enum {} {{", type_name));
+                    lines.push(format!("public enum {type_name} {{"));
                     for variant in variants {
-                        lines.push(format!("    {},", variant));
+                        lines.push(format!("    {variant},"));
                     }
                     lines.push("}".to_owned());
                     lines.push("".to_owned());
                 }
                 TypeDefinition::Alias { inner } => {
                     // C# doesn't have true type aliases; emit a using directive.
-                    let cs_type = self.type_to_cs(inner)?;
-                    lines.push(format!("// {} is an alias for {}", type_name, cs_type));
-                    lines.push(format!("using {} = {};", type_name, cs_type));
+                    let cs_type = Self::type_to_cs(inner)?;
+                    lines.push(format!("// {type_name} is an alias for {cs_type}"));
+                    lines.push(format!("using {type_name} = {cs_type};"));
                     lines.push("".to_owned());
                 }
             }
@@ -133,15 +132,14 @@ impl CSharpGenerator {
         lines.push("".to_owned());
 
         if let Some(doc) = &ns.doc {
-            lines.push(format!("/// <summary>{}</summary>", doc));
+            lines.push(format!("/// <summary>{doc}</summary>"));
         }
 
-        lines.push(format!("public sealed class {} {{", class_name));
+        lines.push(format!("public sealed class {class_name} {{"));
         lines.push("    private readonly SaikuroClient _client;".to_owned());
         lines.push("".to_owned());
         lines.push(format!(
-            "    public {}(SaikuroClient client) => _client = client;",
-            class_name
+            "    public {class_name}(SaikuroClient client) => _client = client;"
         ));
         lines.push("".to_owned());
 
@@ -167,13 +165,13 @@ impl CSharpGenerator {
         schema: &FunctionSchema,
     ) -> Result<String> {
         let method_name = to_pascal_case(fn_name);
-        let target = format!("{}.{}", ns_name, fn_name);
+        let target = format!("{ns_name}.{fn_name}");
 
         let mut params: Vec<String> = vec![];
         let mut call_args_items: Vec<String> = vec![];
 
         for arg in &schema.args {
-            let cs_type = self.type_to_cs(&arg.r#type)?;
+            let cs_type = Self::type_to_cs(&arg.r#type)?;
             if arg.optional {
                 params.push(format!("{}? {} = null", cs_type, to_camel_case(&arg.name)));
             } else {
@@ -192,57 +190,49 @@ impl CSharpGenerator {
         let mut lines = vec![];
 
         if let Some(doc) = &schema.doc {
-            lines.push(format!("    /// <summary>{}</summary>", doc));
+            lines.push(format!("    /// <summary>{doc}</summary>"));
         }
 
         match &schema.returns {
             TypeDescriptor::Stream { item } => {
-                let item_cs = self.type_to_cs(item)?;
+                let item_cs = Self::type_to_cs(item)?;
                 lines.push(format!(
-                    "    public Task<SaikuroStream<{}>> {}Async({}) =>",
-                    item_cs, method_name, params_str
+                    "    public Task<SaikuroStream<{item_cs}>> {method_name}Async({params_str}) =>"
                 ));
                 lines.push(format!(
-                    "        _client.StreamAsync<{}>(\"{}\",",
-                    item_cs, target
+                    "        _client.StreamAsync<{item_cs}>(\"{target}\","
                 ));
-                lines.push(format!("            {});", args_array));
+                lines.push(format!("            {args_array});"));
             }
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_cs = self.type_to_cs(inbound)?;
-                let out_cs = self.type_to_cs(outbound)?;
+                let in_cs = Self::type_to_cs(inbound)?;
+                let out_cs = Self::type_to_cs(outbound)?;
                 lines.push(format!(
-                    "    public Task<SaikuroChannel<{}, {}>> {}Async({}) =>",
-                    in_cs, out_cs, method_name, params_str
+                    "    public Task<SaikuroChannel<{in_cs}, {out_cs}>> {method_name}Async({params_str}) =>"
                 ));
                 lines.push(format!(
-                    "        _client.ChannelAsync<{}, {}>(\"{}\",",
-                    in_cs, out_cs, target
+                    "        _client.ChannelAsync<{in_cs}, {out_cs}>(\"{target}\","
                 ));
-                lines.push(format!("            {});", args_array));
+                lines.push(format!("            {args_array});"));
             }
             _ => {
-                let return_cs = self.type_to_cs(&schema.returns)?;
+                let return_cs = Self::type_to_cs(&schema.returns)?;
                 if return_cs == "void" {
                     lines.push(format!(
-                        "    public async Task {}Async({}) {{",
-                        method_name, params_str
+                        "    public async Task {method_name}Async({params_str}) {{"
                     ));
                     lines.push(format!(
-                        "        await _client.CallAsync(\"{}\", {});",
-                        target, args_array
+                        "        await _client.CallAsync(\"{target}\", {args_array});"
                     ));
                     lines.push("    }".to_owned());
                 } else {
                     lines.push(format!(
-                        "    public async Task<{}> {}Async({}) {{",
-                        return_cs, method_name, params_str
+                        "    public async Task<{return_cs}> {method_name}Async({params_str}) {{"
                     ));
                     lines.push(format!(
-                        "        var result = await _client.CallAsync(\"{}\", {});",
-                        target, args_array
+                        "        var result = await _client.CallAsync(\"{target}\", {args_array});"
                     ));
-                    lines.push(format!("        return ({})result!;", return_cs));
+                    lines.push(format!("        return ({return_cs})result!;"));
                     lines.push("    }".to_owned());
                 }
             }
@@ -260,13 +250,13 @@ impl CSharpGenerator {
             "// Generated clients:".to_owned(),
         ];
         for name in client_names {
-            lines.push(format!("//   {}", name));
+            lines.push(format!("//   {name}"));
         }
         lines.push("".to_owned());
         lines.join("\n")
     }
 
-    fn type_to_cs(&self, desc: &TypeDescriptor) -> Result<String> {
+    fn type_to_cs(desc: &TypeDescriptor) -> Result<String> {
         Ok(match desc {
             TypeDescriptor::Primitive { r#type } => match r#type {
                 PrimitiveType::Bool => "bool".to_owned(),
@@ -287,23 +277,23 @@ impl CSharpGenerator {
             },
             TypeDescriptor::Named { name } => name.clone(),
             TypeDescriptor::Option { inner } => {
-                let inner_cs = self.type_to_cs(inner)?;
-                format!("{}?", inner_cs)
+                let inner_cs = Self::type_to_cs(inner)?;
+                format!("{inner_cs}?")
             }
             TypeDescriptor::Array { item } => {
-                format!("List<{}>", self.type_to_cs(item)?)
+                format!("List<{}>", Self::type_to_cs(item)?)
             }
             TypeDescriptor::Map { value } => {
-                format!("Dictionary<string, {}>", self.type_to_cs(value)?)
+                format!("Dictionary<string, {}>", Self::type_to_cs(value)?)
             }
             TypeDescriptor::Stream { item } => {
-                format!("SaikuroStream<{}>", self.type_to_cs(item)?)
+                format!("SaikuroStream<{}>", Self::type_to_cs(item)?)
             }
             TypeDescriptor::Channel { inbound, outbound } => {
                 format!(
                     "SaikuroChannel<{}, {}>",
-                    self.type_to_cs(inbound)?,
-                    self.type_to_cs(outbound)?
+                    Self::type_to_cs(inbound)?,
+                    Self::type_to_cs(outbound)?
                 )
             }
         })

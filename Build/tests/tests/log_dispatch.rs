@@ -111,7 +111,7 @@ async fn log_all_levels_are_forwarded() {
     for &level in &levels {
         let env = make_log_envelope(level, "level.test", "msg");
         let resp = router.dispatch(env).await;
-        assert!(resp.ok, "log dispatch for {:?} should succeed", level);
+        assert!(resp.ok, "log dispatch for {level:?} should succeed");
     }
 
     let records = captured.lock().unwrap();
@@ -214,7 +214,7 @@ async fn multiple_log_envelopes_all_delivered_to_sink() {
     let router = make_router_with_sink(sink);
 
     for i in 0..10u32 {
-        let env = make_log_envelope(LogLevel::Info, "bulk.test", &format!("message {}", i));
+        let env = make_log_envelope(LogLevel::Info, "bulk.test", &format!("message {i}"));
         let resp = router.dispatch(env).await;
         assert!(resp.ok);
     }
@@ -222,6 +222,6 @@ async fn multiple_log_envelopes_all_delivered_to_sink() {
     let records = captured.lock().unwrap();
     assert_eq!(records.len(), 10, "all 10 log records should be captured");
     for (i, record) in records.iter().enumerate() {
-        assert_eq!(record.msg, format!("message {}", i));
+        assert_eq!(record.msg, format!("message {i}"));
     }
 }

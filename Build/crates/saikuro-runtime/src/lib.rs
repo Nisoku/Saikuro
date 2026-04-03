@@ -8,6 +8,11 @@ pub mod error;
 pub mod handle;
 pub mod runtime;
 
+pub use config::RuntimeConfig;
+pub use error::RuntimeError;
+pub use handle::RuntimeHandle;
+pub use runtime::SaikuroRuntime;
+
 // A small number of doc-test-only inline tests live here
 #[cfg(test)]
 mod tests {
@@ -56,8 +61,3 @@ mod tests {
         assert_eq!(func_ref.provider_id, "test-provider");
     }
 }
-
-pub use config::RuntimeConfig;
-pub use error::RuntimeError;
-pub use handle::RuntimeHandle;
-pub use runtime::SaikuroRuntime;

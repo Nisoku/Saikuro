@@ -29,14 +29,11 @@ impl BindingGenerator for PythonGenerator {
         let mut init_imports = vec!["from .types import *".to_owned()];
 
         for (ns_name, ns_schema) in &schema.namespaces {
-            let file_name = format!("{}_client.py", ns_name);
+            let file_name = format!("{ns_name}_client.py");
             let class_name = to_pascal_case(ns_name);
             let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
             output.add(&file_name, src);
-            init_imports.push(format!(
-                "from .{}_client import {}Client",
-                ns_name, class_name
-            ));
+            init_imports.push(format!("from .{ns_name}_client import {class_name}Client"));
         }
 
         // __init__.py
@@ -60,33 +57,33 @@ impl PythonGenerator {
             match type_def {
                 TypeDefinition::Record { fields } => {
                     lines.push("@dataclass".to_string());
-                    lines.push(format!("class {}:", type_name));
+                    lines.push(format!("class {type_name}:"));
                     if fields.is_empty() {
                         lines.push("    pass".to_owned());
                     } else {
                         for (field_name, field_desc) in fields {
-                            let py_type = self.type_to_python(&field_desc.r#type)?;
+                            let py_type = Self::type_to_python(&field_desc.r#type)?;
                             let default = if field_desc.optional {
-                                format!(": Optional[{}] = None", py_type)
+                                format!(": Optional[{py_type}] = None")
                             } else {
-                                format!(": {}", py_type)
+                                format!(": {py_type}")
                             };
-                            lines.push(format!("    {}{}", field_name, default));
+                            lines.push(format!("    {field_name}{default}"));
                         }
                     }
                     lines.push(String::new());
                 }
                 TypeDefinition::Enum { variants } => {
                     lines.push("from enum import Enum".to_owned());
-                    lines.push(format!("class {}(str, Enum):", type_name));
+                    lines.push(format!("class {type_name}(str, Enum):"));
                     for variant in variants {
-                        lines.push(format!("    {} = \"{}\"", variant, variant));
+                        lines.push(format!("    {variant} = \"{variant}\""));
                     }
                     lines.push(String::new());
                 }
                 TypeDefinition::Alias { inner } => {
-                    let py_type = self.type_to_python(inner)?;
-                    lines.push(format!("{} = {}", type_name, py_type));
+                    let py_type = Self::type_to_python(inner)?;
+                    lines.push(format!("{type_name} = {py_type}"));
                     lines.push(String::new());
                 }
             }
@@ -137,10 +134,9 @@ impl PythonGenerator {
         }
 
         lines.push(String::new());
-        lines.push(format!("class {}Client:", class_name));
+        lines.push(format!("class {class_name}Client:"));
         lines.push(format!(
-            "    \"\"\"Typed client for the '{}' namespace.\"\"\"",
-            ns_name
+            "    \"\"\"Typed client for the '{ns_name}' namespace.\"\"\""
         ));
         lines.push(String::new());
         lines.push("    def __init__(self, client: Any) -> None:".to_owned());
@@ -169,7 +165,7 @@ impl PythonGenerator {
         let mut call_args = vec![];
 
         for arg in &schema.args {
-            let py_type = self.type_to_python(&arg.r#type)?;
+            let py_type = Self::type_to_python(&arg.r#type)?;
             if arg.optional {
                 args.push(format!("{}: Optional[{}] = None", arg.name, py_type));
             } else {
@@ -178,8 +174,8 @@ impl PythonGenerator {
             call_args.push(arg.name.clone());
         }
 
-        let return_type = self.type_to_python(&schema.returns)?;
-        let target = format!("{}.{}", ns_name, fn_name);
+        let return_type = Self::type_to_python(&schema.returns)?;
+        let target = format!("{ns_name}.{fn_name}");
         let args_list = call_args.join(", ");
 
         // Choose the correct client primitive based on the return type.
@@ -191,14 +187,11 @@ impl PythonGenerator {
                     args.join(", "),
                     return_type
                 ),
-                format!(
-                    "        return await self._client.stream(\"{}\", [{}])",
-                    target, args_list
-                ),
+                format!("        return await self._client.stream(\"{target}\", [{args_list}])"),
             ),
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_py = self.type_to_python(inbound)?;
-                let out_py = self.type_to_python(outbound)?;
+                let in_py = Self::type_to_python(inbound)?;
+                let out_py = Self::type_to_python(outbound)?;
                 (
                     format!(
                         "    async def {}({}) -> \"SaikuroChannel[{}, {}]\":",
@@ -208,8 +201,7 @@ impl PythonGenerator {
                         out_py,
                     ),
                     format!(
-                        "        return await self._client.channel(\"{}\", [{}])",
-                        target, args_list
+                        "        return await self._client.channel(\"{target}\", [{args_list}])"
                     ),
                 )
             }
@@ -220,16 +212,13 @@ impl PythonGenerator {
                     args.join(", "),
                     return_type
                 ),
-                format!(
-                    "        return await self._client.call(\"{}\", [{}])",
-                    target, args_list
-                ),
+                format!("        return await self._client.call(\"{target}\", [{args_list}])"),
             ),
         };
 
         let mut lines = vec![];
         if let Some(doc) = &schema.doc {
-            lines.push(format!("    \"\"\"{}\"\"\"", doc));
+            lines.push(format!("    \"\"\"{doc}\"\"\""));
         }
         lines.push(signature);
         lines.push(body);
@@ -238,7 +227,7 @@ impl PythonGenerator {
         Ok(lines.join("\n"))
     }
 
-    fn type_to_python(&self, desc: &TypeDescriptor) -> Result<String> {
+    fn type_to_python(desc: &TypeDescriptor) -> Result<String> {
         Ok(match desc {
             TypeDescriptor::Primitive { r#type } => match r#type {
                 PrimitiveType::Bool => "bool".to_owned(),
@@ -258,22 +247,22 @@ impl PythonGenerator {
             },
             TypeDescriptor::Named { name } => name.clone(),
             TypeDescriptor::Option { inner } => {
-                format!("Optional[{}]", self.type_to_python(inner)?)
+                format!("Optional[{}]", Self::type_to_python(inner)?)
             }
             TypeDescriptor::Array { item } => {
-                format!("List[{}]", self.type_to_python(item)?)
+                format!("List[{}]", Self::type_to_python(item)?)
             }
             TypeDescriptor::Map { value } => {
-                format!("Dict[str, {}]", self.type_to_python(value)?)
+                format!("Dict[str, {}]", Self::type_to_python(value)?)
             }
             TypeDescriptor::Stream { item } => {
-                format!("AsyncIterator[{}]", self.type_to_python(item)?)
+                format!("AsyncIterator[{}]", Self::type_to_python(item)?)
             }
             TypeDescriptor::Channel { inbound, outbound } => {
                 format!(
                     "\"SaikuroChannel[{}, {}]\"",
-                    self.type_to_python(inbound)?,
-                    self.type_to_python(outbound)?
+                    Self::type_to_python(inbound)?,
+                    Self::type_to_python(outbound)?
                 )
             }
         })

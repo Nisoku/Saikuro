@@ -97,11 +97,11 @@ fn connect_simulated_peer(
     handle: &saikuro_runtime::handle::RuntimeHandle,
     peer_id: &str,
 ) -> (
-    impl TransportSender + Send + 'static,
-    impl TransportReceiver + Send + 'static,
+    impl TransportSender + 'static,
+    impl TransportReceiver + 'static,
 ) {
     let (test_transport, runtime_transport) =
-        MemoryTransport::pair(peer_id, &format!("{peer_id}-runtime"));
+        MemoryTransport::pair(peer_id, format!("{peer_id}-runtime"));
     let (test_sender, test_receiver) = test_transport.split();
     handle.accept_transport(
         runtime_transport,
@@ -185,7 +185,7 @@ async fn l_csharp_style_client_wire_fidelity() {
 
     // Encode exactly as a C# adapter would: named-field MessagePack.
     // C# adapters use the same rmp_serde::to_vec_named encoding as TypeScript.
-    let env = Envelope::call("buf.len", vec![Value::Bytes(b"hello".to_vec().into())]);
+    let env = Envelope::call("buf.len", vec![Value::Bytes(b"hello".to_vec())]);
     let id = env.id;
     let raw = rmp_serde::to_vec_named(&env).expect("csharp-style encode");
     tx.send(Bytes::from(raw)).await.expect("send");

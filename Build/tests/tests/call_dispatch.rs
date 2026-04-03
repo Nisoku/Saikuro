@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 fn make_echo_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
-        format!("{}-provider", namespace),
+        format!("{namespace}-provider"),
         vec![namespace.to_owned()],
         work_tx,
     );
@@ -79,7 +79,7 @@ async fn cast_returns_ok_empty_immediately() {
     let (registry, mut work_rx) = make_echo_provider("logger");
 
     // Consume work items so the channel doesn't fill up, but never respond.
-    tokio::spawn(async move { while let Some(_) = work_rx.recv().await {} });
+    tokio::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
     let router = InvocationRouter::with_providers(registry);
     let env = Envelope::cast("logger.info", vec![Value::String("hello".into())]);

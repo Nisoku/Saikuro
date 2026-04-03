@@ -115,6 +115,6 @@ pub fn stderr_log_sink() -> LogSink {
     Box::new(|record: LogRecord| {
         // Minimal JSON serialisation without pulling in serde_json :  just emit
         // the Display representation which is always human-readable.
-        eprintln!("[saikuro] {}", record);
+        eprintln!("[saikuro] {record}");
     })
 }
