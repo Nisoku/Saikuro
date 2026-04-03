@@ -6,8 +6,12 @@ import {
   normalizeReturns,
   tolerantNormalize,
 } from "./canonicalize";
-import { resolve, __dirname } from "path";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 describe("Schema parity: TypeScript ↔ Python (basic)", () => {
   it("TS extractor and Python builder produce compatible schemas for fixture", async () => {
