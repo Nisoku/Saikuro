@@ -10,7 +10,7 @@ keywords = ["ipc", "cross-language", "saikuro", "codegen", "bindings"]
 
 [[bin]]
 name = "saikuro-codegen"
-path = "src/bin/saikuro-codegen.rs"
+path = "src/cli/saikuro-codegen.rs"
 required-features = ["cli"]
 
 [features]
