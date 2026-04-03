@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "saikuro-schema": "./dist/bin/saikuro-schema.js"
+    "saikuro-schema": "./dist/cli/saikuro-schema.js"
   },
   "files": [
     "dist"
@@ -30,7 +30,7 @@
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "schema": "node dist/bin/saikuro-schema.js"
+    "schema": "node dist/cli/saikuro-schema.js"
   },
   "keywords": [
     "ipc",

@@ -20,7 +20,7 @@ export default defineConfig([
   },
   // CLI binary (CommonJS, executable)
   {
-    entry: { "bin/saikuro-schema": "src/bin/saikuro-schema.ts" },
+    entry: { "cli/saikuro-schema": "src/cli/saikuro-schema.ts" },
     format: ["cjs"],
     dts: false,
     sourcemap: false,
