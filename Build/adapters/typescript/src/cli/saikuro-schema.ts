@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { extractSchema } from "../schema_extractor";
 import { resolve } from "path";
 

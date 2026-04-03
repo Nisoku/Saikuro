@@ -142,7 +142,7 @@ fn schema_capabilities_convert() {
 async fn call_add_returns_sum() {
     let mut provider = Provider::new("math");
     provider.register("add", |args: Vec<serde_json::Value>| async move {
-        let a = args.get(0).and_then(|v| v.as_i64()).unwrap_or(0);
+        let a = args.first().and_then(|v| v.as_i64()).unwrap_or(0);
         let b = args.get(1).and_then(|v| v.as_i64()).unwrap_or(0);
         Ok(json!(a + b))
     });
@@ -203,7 +203,7 @@ async fn cast_does_not_block() {
     provider.register("write", move |args: Vec<serde_json::Value>| {
         let log = log_clone.clone();
         async move {
-            if let Some(msg) = args.get(0).and_then(|v| v.as_str()) {
+            if let Some(msg) = args.first().and_then(|v| v.as_str()) {
                 log.lock().unwrap().push(msg.to_owned());
             }
             Ok(json!(null))
@@ -227,7 +227,7 @@ async fn cast_does_not_block() {
 async fn batch_returns_all_results() {
     let mut provider = Provider::new("math");
     provider.register("double", |args: Vec<serde_json::Value>| async move {
-        let n = args.get(0).and_then(|v| v.as_i64()).unwrap_or(0);
+        let n = args.first().and_then(|v| v.as_i64()).unwrap_or(0);
         Ok(json!(n * 2))
     });
 
