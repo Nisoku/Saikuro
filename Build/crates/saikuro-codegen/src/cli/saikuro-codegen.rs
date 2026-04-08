@@ -1,7 +1,17 @@
 #![cfg(feature = "cli")]
 
-use clap::Parser;
+use std::{fs, path::PathBuf};
 
+use clap::Parser;
+use saikuro_codegen::{
+    c::CGenerator, cpp::CppGenerator, csharp::CSharpGenerator, generator::BindingGenerator,
+    python::PythonGenerator, typescript::TypeScriptGenerator,
+};
+use saikuro_core::schema::Schema;
+
+// TODO: This is a minimal CLI for manual testing. 
+// We should build out a more robust CLI with subcommands, better error handling, etc. 
+// in the future tho
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Saikuro binding generator (minimal CLI)")]
 struct Opts {
@@ -9,7 +19,7 @@ struct Opts {
     #[arg(long)]
     schema: String,
 
-    /// Target language (typescript, python, csharp)
+    /// Target language (typescript, python, csharp, c, cpp)
     #[arg(long)]
     lang: String,
 
@@ -21,16 +31,35 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
-    // TODO: implement the actual codegen logic here. For now, just print the options.
-    if opts.schema.is_empty() {
-        eprintln!("--schema is required");
-        std::process::exit(2);
-    }
+    let schema_json = fs::read_to_string(&opts.schema)?;
+    let schema: Schema = serde_json::from_str(&schema_json)?;
 
-    println!(
-        "saikuro-codegen: would generate lang={} from schema={} -> {:?}",
-        opts.lang, opts.schema, opts.out
-    );
+    let generator: Box<dyn BindingGenerator> = match opts.lang.as_str() {
+        "python" => Box::new(PythonGenerator),
+        "typescript" | "ts" => Box::new(TypeScriptGenerator),
+        "csharp" | "cs" => Box::new(CSharpGenerator),
+        "c" => Box::new(CGenerator),
+        "cpp" | "cxx" | "c++" => Box::new(CppGenerator),
+        other => anyhow::bail!(
+            "unsupported language '{other}'. expected one of: python, typescript, csharp, c, cpp"
+        ),
+    };
+
+    let output = generator.generate(&schema)?;
+
+    let out_dir = opts
+        .out
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    fs::create_dir_all(&out_dir)?;
+
+    for file in output.files {
+        let path = out_dir.join(&file.path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, file.content)?;
+    }
 
     Ok(())
 }

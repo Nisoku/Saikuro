@@ -28,3 +28,4 @@ obj/
 __pycache__
 .ruff_cache/
 site/
+build/

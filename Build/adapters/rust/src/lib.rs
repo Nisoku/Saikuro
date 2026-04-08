@@ -12,7 +12,7 @@ pub mod schema;
 pub mod transport;
 pub mod value;
 
-pub use client::{Client, ClientOptions, SaikuroStream};
+pub use client::{Client, ClientOptions, SaikuroChannel, SaikuroStream};
 pub use error::{Error, Result};
 pub use provider::{HandlerArgs, Provider, RegisterOptions};
 pub use schema::{ArgDescriptor, FunctionSchema, NamespaceSchema};

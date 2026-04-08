@@ -1,0 +1,113 @@
+#ifndef SAIKURO_H
+#define SAIKURO_H
+
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Opaque handles */
+typedef void* saikuro_client_t;
+typedef void* saikuro_provider_t;
+typedef void* saikuro_stream_t;
+typedef void* saikuro_channel_t;
+
+/* Provider callback: receives JSON args array and returns JSON result.
+ * VERY important: The returned string must be allocated with saikuro_string_dup so the adapter
+ * can reclaim it safely.
+ */
+typedef char* (*saikuro_provider_handler_fn)(void* user_data, const char* args_json);
+
+/* Shared string helpers */
+char* saikuro_string_dup(const char* input);
+void saikuro_string_free(char* ptr);
+char* saikuro_last_error_message(void);
+
+/* Client API */
+saikuro_client_t saikuro_client_connect(const char* address);
+int saikuro_client_close(saikuro_client_t handle);
+void saikuro_client_free(saikuro_client_t handle);
+
+char* saikuro_client_call_json(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json
+);
+
+int saikuro_client_cast_json(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json
+);
+
+char* saikuro_client_batch_json(
+    saikuro_client_t handle,
+    const char* calls_json
+);
+
+saikuro_stream_t saikuro_client_stream_json(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json
+);
+
+saikuro_channel_t saikuro_client_channel_json(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json
+);
+
+int saikuro_channel_send_json(
+    saikuro_channel_t channel,
+    const char* item_json
+);
+
+int saikuro_channel_next_json(
+    saikuro_channel_t channel,
+    char** out_item_json,
+    int* out_done
+);
+
+void saikuro_channel_free(saikuro_channel_t channel);
+
+int saikuro_stream_next_json(
+    saikuro_stream_t stream,
+    char** out_item_json,
+    int* out_done
+);
+
+void saikuro_stream_free(saikuro_stream_t stream);
+
+char* saikuro_client_resource_json(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json
+);
+
+int saikuro_client_log(
+    saikuro_client_t handle,
+    const char* level,
+    const char* name,
+    const char* msg,
+    const char* fields_json
+);
+
+/* Provider API */
+saikuro_provider_t saikuro_provider_new(const char* namespace_name);
+
+int saikuro_provider_register(
+    saikuro_provider_t handle,
+    const char* name,
+    saikuro_provider_handler_fn callback,
+    void* user_data
+);
+
+int saikuro_provider_serve(saikuro_provider_t handle, const char* address);
+void saikuro_provider_free(saikuro_provider_t handle);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
