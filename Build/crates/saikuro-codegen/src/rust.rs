@@ -273,7 +273,7 @@ fn sanitize_ident(s: &str) -> String {
 fn sanitize_variant_preserve_leading(s: &str) -> String {
     let ident = sanitize_ident(s);
     let leading = ident.starts_with('_');
-    let body = to_pascal_case(&ident.trim_start_matches('_'));
+    let body = to_pascal_case(ident.trim_start_matches('_'));
     if leading {
         format!("_{}", body)
     } else {
@@ -284,7 +284,7 @@ fn sanitize_variant_preserve_leading(s: &str) -> String {
 fn sanitize_then_pascal(s: &str) -> String {
     let ident = sanitize_ident(s);
     let leading = ident.starts_with('_');
-    let body = to_pascal_case(&ident.trim_start_matches('_'));
+    let body = to_pascal_case(ident.trim_start_matches('_'));
     if leading {
         format!("_{}", body)
     } else {

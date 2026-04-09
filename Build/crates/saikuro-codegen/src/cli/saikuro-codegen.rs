@@ -1,5 +1,6 @@
 #![cfg(feature = "cli")]
 
+use std::path::Path;
 use std::{fs, path::PathBuf};
 
 use clap::Parser;
