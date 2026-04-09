@@ -143,6 +143,12 @@ impl ClientHandle {
     }
 }
 
+/// C callback for provider functions.
+///
+/// # Safety
+/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
+/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
+/// to a stack or static buffer is undefined behavior.
 type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
 
 struct ProviderHandle {
@@ -777,12 +783,6 @@ pub extern "C" fn saikuro_client_resource_json(
     }
 }
 
-/// C callback for provider functions.
-///
-/// # Safety
-/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
-/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
-/// to a stack or static buffer is undefined behavior.
 #[no_mangle]
 pub extern "C" fn saikuro_client_log(
     handle: *mut c_void,
@@ -856,12 +856,7 @@ pub extern "C" fn saikuro_client_log(
         }
     }
 }
-/// C callback for provider functions.
-///
-/// # Safety
-/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
-/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
-/// to a stack or static buffer is undefined behavior.
+
 #[no_mangle]
 pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void {
     clear_last_error();

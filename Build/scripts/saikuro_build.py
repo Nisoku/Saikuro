@@ -232,7 +232,7 @@ def adapter_checks(name: str) -> list[CommandSpec]:
                 optional=True,
             ),
         ],
-        "typescript": (lambda: [
+        "typescript": lambda: [
             CommandSpec("TypeScript deps", ["npm", "install"], ts_dir),
             CommandSpec("TypeScript lint", ["npm", "run", "lint"], ts_dir),
             CommandSpec("TypeScript typecheck", ["npm", "run", "typecheck"], ts_dir),
@@ -242,7 +242,7 @@ def adapter_checks(name: str) -> list[CommandSpec]:
                 CommandSpec("TypeScript tests (skip dotnet8 parity test)", ["npm", "run", "test", "--", "--exclude", "tests/parity_ts_py.test.ts"], ts_dir)
             ]),
             CommandSpec("TypeScript build", ["npm", "run", "build"], ts_dir),
-        ])(),
+        ],
         "python": [
             CommandSpec(
                 "Python adapter deps",

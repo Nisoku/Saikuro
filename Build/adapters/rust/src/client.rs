@@ -85,6 +85,34 @@ impl SaikuroChannel {
         }
     }
 
+    /// Close the channel by sending a StreamControl::End frame.
+    pub async fn close(&self) -> Result<()> {
+        let mut envelope =
+            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![], None);
+        envelope.stream_control = Some(StreamControl::End);
+        let bytes = envelope
+            .to_msgpack()
+            .map_err(|e| Error::Codec(e.to_string()))?;
+        self.send_tx
+            .send(Bytes::from(bytes))
+            .await
+            .map_err(|_| Error::Transport("client send channel closed".into()))
+    }
+
+    /// Abort the channel by sending a StreamControl::Abort frame.
+    pub async fn abort(&self) -> Result<()> {
+        let mut envelope =
+            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![], None);
+        envelope.stream_control = Some(StreamControl::Abort);
+        let bytes = envelope
+            .to_msgpack()
+            .map_err(|e| Error::Codec(e.to_string()))?;
+        self.send_tx
+            .send(Bytes::from(bytes))
+            .await
+            .map_err(|_| Error::Transport("client send channel closed".into()))
+    }
+
     /// Send a value to the provider side of this channel.
     pub async fn send(&self, value: Value) -> Result<()> {
         let envelope =
@@ -598,8 +626,10 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
                         pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        let _ = tx.send(Ok(value)).await;
-                        // Keep slot alive for subsequent messages
+                        if tx.send(Ok(value)).await.is_err() {
+                            pending.remove(&id);
+                        }
+                        // Keep slot alive for subsequent messages unless send failed
                     }
                 }
             }

@@ -164,7 +164,9 @@ impl RustGenerator {
 
         let mut lines = vec![];
         if let Some(doc) = &schema.doc {
-            lines.push(format!("    /// {doc}"));
+            for line in doc.lines() {
+                lines.push(format!("    /// {line}"));
+            }
         }
 
         match &schema.returns {
@@ -233,7 +235,7 @@ impl RustGenerator {
                 PrimitiveType::Any => "serde_json::Value".to_owned(),
                 PrimitiveType::Unit => "()".to_owned(),
             },
-            TypeDescriptor::Named { name } => name.clone(),
+            TypeDescriptor::Named { name } => sanitize_type_name(name),
             TypeDescriptor::Option { inner } => format!("Option<{}>", Self::type_to_rust(inner)?),
             TypeDescriptor::Array { item } => format!("Vec<{}>", Self::type_to_rust(item)?),
             TypeDescriptor::Map { value } => {

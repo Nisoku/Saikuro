@@ -272,6 +272,15 @@ impl InvocationRouter {
                         .into(),
                 );
             }
+            // If this is a terminal frame, clean up the channel
+            let is_terminal = matches!(
+                envelope.stream_control,
+                Some(StreamControl::End | StreamControl::Abort)
+            );
+            if is_terminal {
+                self.streams.remove_channel(&id);
+            }
+            // No response for channel data frames
             return ResponseEnvelope::ok_empty(id);
         }
 
