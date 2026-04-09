@@ -25,13 +25,16 @@ impl BindingGenerator for RustGenerator {
 
         let mut mods = vec!["pub mod types;".to_owned(), "pub use types::*;".to_owned()];
 
-        for (ns_name, ns_schema) in &schema.namespaces {
-            let module_name = format!("{}_client", sanitize_ident(ns_name));
+        let mut ns_keys: Vec<_> = schema.namespaces.keys().cloned().collect();
+        ns_keys.sort();
+        for ns_name in ns_keys {
+            let ns_schema = &schema.namespaces[&ns_name];
+            let module_name = format!("{}_client", sanitize_ident(&ns_name));
             let file_name = format!("{module_name}.rs");
-            let class_name = format!("{}Client", sanitize_then_pascal(ns_name));
+            let class_name = format!("{}Client", sanitize_then_pascal(&ns_name));
             output.add(
                 &file_name,
-                self.generate_namespace_client(ns_name, &class_name, ns_schema)?,
+                self.generate_namespace_client(&ns_name, &class_name, ns_schema)?,
             );
             mods.push(format!("pub mod {module_name};"));
             mods.push(format!("pub use {module_name}::{class_name};"));
@@ -53,8 +56,11 @@ impl RustGenerator {
             "".to_owned(),
         ];
 
-        for (type_name, type_def) in &schema.types {
-            let safe_type_name = sanitize_type_name(type_name);
+        let mut type_keys: Vec<_> = schema.types.keys().cloned().collect();
+        type_keys.sort();
+        for type_name in type_keys {
+            let type_def = &schema.types[&type_name];
+            let safe_type_name = sanitize_type_name(&type_name);
             match type_def {
                 TypeDefinition::Record { fields } => {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
@@ -66,6 +72,8 @@ impl RustGenerator {
                         } else {
                             rust_type
                         };
+                        // Preserve original wire name via serde rename
+                        lines.push(format!("    #[serde(rename = \"{}\")]", field_name));
                         lines.push(format!(
                             "    pub {}: {},",
                             sanitize_ident(field_name),
@@ -79,6 +87,8 @@ impl RustGenerator {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
                     lines.push(format!("pub enum {safe_type_name} {{"));
                     for variant in variants {
+                        // Preserve original variant wire name via serde rename
+                        lines.push(format!("    #[serde(rename = \"{}\")]", variant));
                         lines.push(format!(
                             "    {},",
                             sanitize_variant_preserve_leading(variant)
@@ -270,6 +280,11 @@ fn sanitize_ident(s: &str) -> String {
     if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
     }
+    // Avoid Rust reserved keywords by appending an underscore.
+    let kw = rust_keywords();
+    if kw.contains(&out.as_str()) {
+        out.push('_');
+    }
     out
 }
 
@@ -280,7 +295,13 @@ fn sanitize_variant_preserve_leading(s: &str) -> String {
     if leading {
         format!("_{}", body)
     } else {
-        body
+        // Avoid reserved keywords for variant names
+        let kw = rust_keywords();
+        if kw.contains(&body.as_str()) {
+            format!("{}_", body)
+        } else {
+            body
+        }
     }
 }
 
@@ -291,7 +312,13 @@ fn sanitize_then_pascal(s: &str) -> String {
     if leading {
         format!("_{}", body)
     } else {
-        body
+        // Avoid reserved keywords
+        let kw = rust_keywords();
+        if kw.contains(&body.as_str()) {
+            format!("{}_", body)
+        } else {
+            body
+        }
     }
 }
 
@@ -302,8 +329,24 @@ fn sanitize_type_name(s: &str) -> String {
     } else if ident.chars().next().unwrap().is_ascii_digit() {
         format!("_{}", ident)
     } else {
-        ident
+        // Avoid reserved keywords for type names
+        let kw = rust_keywords();
+        if kw.contains(&ident.as_str()) {
+            format!("{}_", ident)
+        } else {
+            ident
+        }
     }
+}
+
+fn rust_keywords() -> Vec<&'static str> {
+    // A conservative list of Rust keywords to avoid; include common strict keywords.
+    vec![
+        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
+        "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
+        "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
+        "use", "where", "while", "async", "await", "dyn", "union",
+    ]
 }
 
 fn to_pascal_case(s: &str) -> String {

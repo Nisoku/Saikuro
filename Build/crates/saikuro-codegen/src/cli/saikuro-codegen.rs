@@ -74,17 +74,20 @@ fn main() -> anyhow::Result<()> {
         let canon_out_dir = out_dir.canonicalize()?;
         let canon_path = if path.exists() {
             path.canonicalize()?
+        } else if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)?;
+            parent.canonicalize()?.join(
+                path.file_name()
+                    .expect("file_name should exist after filtering ParentDir/RootDir"),
+            )
         } else {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-                if parent.as_os_str().is_empty() {
-                    path.clone()
-                } else {
-                    parent.canonicalize()?.join(path.file_name().unwrap())
-                }
-            } else {
-                path.clone()
-            }
+            // No parent or empty parent means file is directly in out_dir
+            fs::create_dir_all(&out_dir)?;
+            let canon_out_dir = out_dir.canonicalize()?;
+            canon_out_dir.join(
+                path.file_name()
+                    .expect("file_name should exist after filtering ParentDir/RootDir"),
+            )
         };
         if !canon_path.starts_with(&canon_out_dir) {
             anyhow::bail!(

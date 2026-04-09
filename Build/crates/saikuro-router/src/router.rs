@@ -272,16 +272,23 @@ impl InvocationRouter {
                         .into(),
                 );
             }
-            // If this is a terminal frame, clean up the channel
-            let is_terminal = matches!(
+            // If this is a terminal frame, clean up the channel and return ok_empty
+            if matches!(
                 envelope.stream_control,
                 Some(StreamControl::End | StreamControl::Abort)
-            );
-            if is_terminal {
+            ) {
                 self.streams.remove_channel(&id);
+                return ResponseEnvelope::ok_empty(id);
             }
-            // No response for channel data frames
-            return ResponseEnvelope::ok_empty(id);
+            // For non-terminal frames, do not return a response (one-way)
+            return ResponseEnvelope {
+                id,
+                ok: true,
+                result: None,
+                error: None,
+                seq: None,
+                stream_control: None,
+            };
         }
 
         // Otherwise, open a new channel as before

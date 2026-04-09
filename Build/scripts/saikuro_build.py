@@ -272,19 +272,22 @@ def adapter_checks(name: str) -> list[CommandSpec]:
         ordered = ["rust", "c", "cpp", "typescript", "python", "csharp"]
         merged: list[CommandSpec] = []
         for adapter in ordered:
-            merged.extend(adapters[adapter])
+            item = adapters[adapter]
+            items = item() if callable(item) else item
+            merged.extend(items)
         return merged
 
     return adapters[name]
 
 
 def run_specs(ui: Ui, specs: Iterable[CommandSpec]) -> list[CommandResult]:
+    specs_list = list(specs)
     results: list[CommandResult] = []
-    for idx, spec in enumerate(specs):
+    for idx, spec in enumerate(specs_list):
         result = run_command(ui, spec)
         results.append(result)
         if not result.ok and not spec.optional:
-            skipped = len(list(specs)) - (idx + 1)
+            skipped = len(specs_list) - (idx + 1)
             ui.error(f"Stopping on first required failure; {skipped} specs skipped")
             break
     return results

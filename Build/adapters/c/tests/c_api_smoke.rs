@@ -60,7 +60,7 @@ fn provider_register_rejects_null_callback() {
 }
 
 #[test]
-fn batch_rejects_invalid_json_shape() {
+fn batch_rejects_null_handle() {
     // null handle error should trigger before JSON parsing.
     let calls = CString::new("{}").expect("CString should be created");
     let result = saikuro_client_batch_json(ptr::null_mut(), calls.as_ptr());
@@ -70,12 +70,14 @@ fn batch_rejects_invalid_json_shape() {
 }
 
 #[test]
-fn stream_next_rejects_null_output_pointers() {
+fn stream_rejects_null_stream_handle() {
     let stream = saikuro_client_stream_json(ptr::null_mut(), ptr::null(), ptr::null());
     assert!(stream.is_null());
 
     let mut out_json = ptr::null_mut();
     let mut out_done = 0;
+    // This test verifies that passing a null stream handle to `saikuro_stream_next_json`
+    // is rejected; the output pointers provided here are valid (non-null).
     let rc = unsafe { saikuro_stream_next_json(ptr::null_mut(), &mut out_json, &mut out_done) };
     assert_eq!(rc, 1);
     let message = take_error();

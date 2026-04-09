@@ -43,11 +43,14 @@ so that ownership and freeing are well-defined across the ABI boundary.
 
 ## Error handling
 
-Functions that fail return `NULL`/non-zero.
+Error return conventions:
+
+- Pointer-returning functions return `NULL` on failure.
+- Integer-returning functions return a non-zero value on failure.
 
 Use:
 
-- `saikuro_last_error_message()` to fetch the latest error as a heap string.
+- `saikuro_last_error_message()` to fetch the latest error as a heap-allocated C string.
 - `saikuro_string_free()` to release returned error/result strings.
 
 ## License
