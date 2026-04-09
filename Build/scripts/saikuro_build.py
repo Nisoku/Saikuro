@@ -13,7 +13,7 @@ from typing import Iterable
 
 try:
     TUI = getattr(importlib.import_module("tuiro"), "TUI")
-except Exception:
+except (ImportError, AttributeError):
     TUI = None
 
 

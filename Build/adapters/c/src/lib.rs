@@ -10,7 +10,7 @@ use tokio::runtime::Runtime;
 // TODO: Modularize a bit haha
 
 thread_local! {
-    static LAST_ERROR: RefCell<Option<String>> = RefCell::new(None);
+    static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 fn set_last_error(msg: impl Into<String>) {

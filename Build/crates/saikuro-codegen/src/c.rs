@@ -84,10 +84,12 @@ impl CGenerator {
 
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             let target = format!("{ns_name}.{fn_name}");
+            let ownership_note = "\n *\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
             if let Some(doc) = &fn_schema.doc {
                 let sanitized_doc = doc.replace("*/", "*\\/");
-                let ownership_note = "\n *\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
                 lines.push(format!("/* {sanitized_doc}{ownership_note} */"));
+            } else {
+                lines.push(format!("/* {ownership_note} */"));
             }
             lines.push(format!(
                 "static inline char* {c_fn_name}(saikuro_client_t client, const char* args_json) {{"

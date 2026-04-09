@@ -235,5 +235,24 @@ fn sanitize_ident(s: &str) -> String {
 }
 
 fn escape_cpp_string_literal(s: &str) -> String {
-    s.replace('"', "\\\"")
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\x08' => out.push_str("\\b"),
+            '\x0C' => out.push_str("\\f"),
+            '\0' => out.push_str("\\0"),
+            '\x0B' => out.push_str("\\v"),
+            c if c.is_control() || (c as u32) < 0x20 || (c as u32) == 0x7F => {
+                use std::fmt::Write;
+                write!(out, "\\x{:02X}", c as u32).unwrap();
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }

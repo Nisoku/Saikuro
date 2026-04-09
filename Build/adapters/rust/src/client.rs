@@ -579,36 +579,24 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
         Some("channel") => {
             if let Some(slot) = pending.get(&id) {
                 if let PendingSlot::Channel(tx) = slot.value() {
-                    if is_stream_end {
-                        drop(slot);
-                        pending.remove(&id);
-                    } else if is_error {
+                    let tx = tx.clone();
+                    drop(slot); // Drop DashMap guard before await
+                    let _send_result = if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
-                        if let Err(_e) = tx
-                            .send(Err(Error::remote(
-                                detail.code.to_string(),
-                                detail.message,
-                                None,
-                            )))
-                            .await
-                        {
-                            // Terminal channel error: drop slot and remove pending
-                            drop(slot);
-                            pending.remove(&id);
-                        } else {
-                            drop(slot);
-                            pending.remove(&id);
-                        }
+                        tx.send(Err(Error::remote(
+                            detail.code.to_string(),
+                            detail.message,
+                            None,
+                        )))
+                        .await
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if let Err(_e) = tx.send(Ok(value)).await {
-                            // Terminal channel error: drop slot and remove pending
-                            drop(slot);
-                            pending.remove(&id);
-                        }
-                    }
+                        tx.send(Ok(value)).await
+                    };
+                    // Always remove pending after send
+                    pending.remove(&id);
                 }
             }
         }
