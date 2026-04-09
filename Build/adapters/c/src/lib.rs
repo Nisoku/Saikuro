@@ -44,8 +44,8 @@ fn into_c_string_ptr(s: &str) -> *mut c_char {
 }
 
 fn parse_json_array_arg(raw: &str, arg_name: &str) -> Result<Vec<Value>, String> {
-    let parsed: serde_json::Value = serde_json::from_str(raw)
-        .map_err(|e| format!("{arg_name} must be valid JSON: {e}"))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("{arg_name} must be valid JSON: {e}"))?;
     match parsed {
         serde_json::Value::Array(items) => Ok(items),
         _ => Err(format!("{arg_name} must be a JSON array")),
@@ -53,8 +53,8 @@ fn parse_json_array_arg(raw: &str, arg_name: &str) -> Result<Vec<Value>, String>
 }
 
 fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
-    let parsed: serde_json::Value = serde_json::from_str(raw)
-        .map_err(|e| format!("calls_json must be valid JSON: {e}"))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("calls_json must be valid JSON: {e}"))?;
     let entries = match parsed {
         serde_json::Value::Array(items) => items,
         _ => return Err("calls_json must be a JSON array".to_owned()),
@@ -71,11 +71,7 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
                     .to_owned();
                 let args = match obj.get("args") {
                     Some(serde_json::Value::Array(items)) => items.clone(),
-                    _ => {
-                        return Err(
-                            "batch call object requires array 'args'".to_owned(),
-                        )
-                    }
+                    _ => return Err("batch call object requires array 'args'".to_owned()),
                 };
                 calls.push((target, args));
             }
@@ -101,9 +97,12 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
     Ok(calls)
 }
 
-fn parse_json_object_arg(raw: &str, arg_name: &str) -> Result<serde_json::Map<String, Value>, String> {
-    let parsed: serde_json::Value = serde_json::from_str(raw)
-        .map_err(|e| format!("{arg_name} must be valid JSON: {e}"))?;
+fn parse_json_object_arg(
+    raw: &str,
+    arg_name: &str,
+) -> Result<serde_json::Map<String, Value>, String> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(raw).map_err(|e| format!("{arg_name} must be valid JSON: {e}"))?;
     match parsed {
         serde_json::Value::Object(map) => Ok(map),
         _ => Err(format!("{arg_name} must be a JSON object")),
@@ -932,10 +931,7 @@ pub extern "C" fn saikuro_provider_register(
 }
 
 #[no_mangle]
-pub extern "C" fn saikuro_provider_serve(
-    handle: *mut c_void,
-    address: *const c_char,
-) -> c_int {
+pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_char) -> c_int {
     clear_last_error();
 
     if handle.is_null() {

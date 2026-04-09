@@ -5,7 +5,7 @@
 ### I can implement
 
 - [O] C++ and C Adapters
-- [ ] Bash (lol, I know some Bash but this is the scariest adapter haha we don't want to delete anything from the system, it needs to be EXTREMELY SANDBOXED)
+- [ ] Bash (lol, I know some Bash but this is the scariest adapter haha we don't want to delete anything from the system, it needs to be EXTREMELY SANDBOXED/safe)
 - [ ] AssemblyScript (lol this technically isn't needed since TS adapter but we could have a wasm specific adapter using it (I don't know AS but it's really similar to TS from what i've heard))
 - [ ] Swift Adapter (Ladybird would benefit from it (bit too late for that but either way))
 - [ ] Lua (super useful, especially for games and game engines and so much more (Picotility might benefit hehe))

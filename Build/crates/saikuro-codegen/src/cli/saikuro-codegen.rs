@@ -9,8 +9,8 @@ use saikuro_codegen::{
 };
 use saikuro_core::schema::Schema;
 
-// TODO: This is a minimal CLI for manual testing. 
-// We should build out a more robust CLI with subcommands, better error handling, etc. 
+// TODO: This is a minimal CLI for manual testing.
+// We should build out a more robust CLI with subcommands, better error handling, etc.
 // in the future tho
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Saikuro binding generator (minimal CLI)")]

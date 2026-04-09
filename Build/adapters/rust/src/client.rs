@@ -87,13 +87,8 @@ impl SaikuroChannel {
 
     /// Send a value to the provider side of this channel.
     pub async fn send(&self, value: Value) -> Result<()> {
-        let envelope = make_envelope_with_id(
-            self.id,
-            InvocationType::Channel,
-            "",
-            vec![value],
-            None,
-        );
+        let envelope =
+            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![value], None);
         let bytes = envelope
             .to_msgpack()
             .map_err(|e| Error::Codec(e.to_string()))?;

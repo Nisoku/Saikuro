@@ -54,7 +54,9 @@ impl CppGenerator {
             "namespace saikuro::generated {".to_owned(),
             format!("class {class_name} {{"),
             "public:".to_owned(),
-            format!("    explicit {class_name}(const saikuro::Client& client) : client_(client) {{}}"),
+            format!(
+                "    explicit {class_name}(const saikuro::Client& client) : client_(client) {{}}"
+            ),
             String::new(),
         ];
 

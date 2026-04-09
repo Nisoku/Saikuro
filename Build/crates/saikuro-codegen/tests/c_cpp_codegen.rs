@@ -37,7 +37,9 @@ fn has_file(output: &GeneratorOutput, name: &str) -> bool {
 #[test]
 fn c_generator_emits_expected_files() {
     let schema = sample_schema();
-    let output = CGenerator.generate(&schema).expect("C generation should succeed");
+    let output = CGenerator
+        .generate(&schema)
+        .expect("C generation should succeed");
 
     assert!(has_file(&output, "saikuro_types.h"));
     assert!(has_file(&output, "saikuro_generated.h"));

@@ -26,7 +26,9 @@ fn string_dup_roundtrip() {
     let duplicated = saikuro_string_dup(input.as_ptr());
     assert!(!duplicated.is_null());
 
-    let text = unsafe { CStr::from_ptr(duplicated) }.to_string_lossy().to_string();
+    let text = unsafe { CStr::from_ptr(duplicated) }
+        .to_string_lossy()
+        .to_string();
     assert_eq!(text, "saikuro");
 
     saikuro_string_free(duplicated);
@@ -64,8 +66,7 @@ fn batch_rejects_invalid_json_shape() {
     assert!(handle.is_null());
 
     // null handle error should trigger before JSON parsing.
-    let calls = CString::new("{}")
-        .expect("CString should be created");
+    let calls = CString::new("{}").expect("CString should be created");
     let result = saikuro_client_batch_json(ptr::null_mut(), calls.as_ptr());
     assert!(result.is_null());
     let message = take_error();
