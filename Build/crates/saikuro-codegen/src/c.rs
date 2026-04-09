@@ -28,7 +28,10 @@ impl BindingGenerator for CGenerator {
             "#include \"saikuro_types.h\"".to_owned(),
         ];
 
-        for (ns_name, ns_schema) in &schema.namespaces {
+        let mut ns_keys: Vec<_> = schema.namespaces.keys().collect();
+        ns_keys.sort();
+        for ns_name in ns_keys {
+            let ns_schema = &schema.namespaces[ns_name];
             let safe = normalize_namespace_stem(ns_name);
             let file_name = format!("{safe}_client.h");
             let src = self.generate_namespace_client(ns_name, &safe, ns_schema);
@@ -77,17 +80,20 @@ impl CGenerator {
             String::new(),
         ];
 
-        for (fn_name, fn_schema) in &ns.functions {
+        let mut fn_keys: Vec<_> = ns.functions.keys().collect();
+        fn_keys.sort();
+        for fn_name in fn_keys {
+            let fn_schema = &ns.functions[fn_name];
             if fn_schema.visibility == Visibility::Private {
                 continue;
             }
 
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             let target = format!("{ns_name}.{fn_name}");
-            let ownership_note = "\n *\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
+            let ownership_note = "*\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
             if let Some(doc) = &fn_schema.doc {
                 let sanitized_doc = doc.replace("*/", "*\\/");
-                lines.push(format!("/* {sanitized_doc}{ownership_note} */"));
+                lines.push(format!("/* {sanitized_doc}\n {ownership_note} */"));
             } else {
                 lines.push(format!("/* {ownership_note} */"));
             }

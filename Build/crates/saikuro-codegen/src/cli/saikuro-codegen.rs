@@ -77,8 +77,14 @@ fn main() -> anyhow::Result<()> {
         } else {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
+                if parent.as_os_str().is_empty() {
+                    path.clone()
+                } else {
+                    parent.canonicalize()?.join(path.file_name().unwrap())
+                }
+            } else {
+                path.clone()
             }
-            path.clone()
         };
         if !canon_path.starts_with(&canon_out_dir) {
             anyhow::bail!(

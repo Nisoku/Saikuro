@@ -581,22 +581,26 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
                 if let PendingSlot::Channel(tx) = slot.value() {
                     let tx = tx.clone();
                     drop(slot); // Drop DashMap guard before await
-                    let _send_result = if is_error {
+                    if is_stream_end {
+                        // Remove pending slot on stream end
+                        pending.remove(&id);
+                    } else if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
-                        tx.send(Err(Error::remote(
-                            detail.code.to_string(),
-                            detail.message,
-                            None,
-                        )))
-                        .await
+                        let _ = tx
+                            .send(Err(Error::remote(
+                                detail.code.to_string(),
+                                detail.message,
+                                None,
+                            )))
+                            .await;
+                        pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        tx.send(Ok(value)).await
-                    };
-                    // Always remove pending after send
-                    pending.remove(&id);
+                        let _ = tx.send(Ok(value)).await;
+                        // Keep slot alive for subsequent messages
+                    }
                 }
             }
         }

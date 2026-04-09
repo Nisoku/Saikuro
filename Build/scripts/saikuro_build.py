@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Iterable
 
 try:
-    TUI = getattr(importlib.import_module("tuiro"), "TUI")
+    module = importlib.import_module("tuiro")
+    TUI = module.TUI
 except (ImportError, AttributeError):
     TUI = None
 
@@ -114,13 +115,17 @@ def _missing_binary(cmd: list[str]) -> bool:
 def _has_dotnet_runtime_8() -> bool:
     if shutil.which("dotnet") is None:
         return False
-    proc = subprocess.run(
-        ["dotnet", "--list-runtimes"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["dotnet", "--list-runtimes"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     if proc.returncode != 0:
         return False
     return any(line.startswith("Microsoft.NETCore.App 8.") for line in proc.stdout.splitlines())
@@ -138,16 +143,29 @@ def run_command(ui: Ui, spec: CommandSpec) -> CommandResult:
         ui.error(f"{spec.label}: {msg}")
         return CommandResult(spec.label, False, False, " ".join(spec.cmd), spec.cwd, 127, msg)
 
-    proc = subprocess.run(
-        spec.cmd,
-        cwd=spec.cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-    )
-    ok = proc.returncode == 0
-    out = _tail(proc.stdout)
+    try:
+        proc = subprocess.run(
+            spec.cmd,
+            cwd=spec.cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+        ok = proc.returncode == 0
+        out = _tail(proc.stdout)
+    except subprocess.TimeoutExpired as e:
+        ui.error(f"{spec.label} timed out after {e.timeout} seconds")
+        return CommandResult(
+            label=spec.label,
+            ok=False,
+            skipped=False,
+            command=" ".join(spec.cmd),
+            cwd=spec.cwd,
+            returncode=124,
+            output_tail="<timeout>\n" + (e.output or ""),
+        )
 
     if not ok and spec.optional:
         ui.warning(f"{spec.label} failed (exit {proc.returncode}); marked optional")
@@ -262,11 +280,12 @@ def adapter_checks(name: str) -> list[CommandSpec]:
 
 def run_specs(ui: Ui, specs: Iterable[CommandSpec]) -> list[CommandResult]:
     results: list[CommandResult] = []
-    for spec in specs:
+    for idx, spec in enumerate(specs):
         result = run_command(ui, spec)
         results.append(result)
         if not result.ok and not spec.optional:
-            ui.error("Stopping on first required failure")
+            skipped = len(list(specs)) - (idx + 1)
+            ui.error(f"Stopping on first required failure; {skipped} specs skipped")
             break
     return results
 

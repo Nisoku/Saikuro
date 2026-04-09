@@ -185,12 +185,15 @@ pub extern "C" fn saikuro_string_dup(input: *const c_char) -> *mut c_char {
     }
 }
 
-#[no_mangle]
+/// Frees a heap-allocated string returned by the Saikuro C API.
+///
 /// # Safety
 ///
-/// `ptr` must either be null or a pointer previously returned by
-/// `saikuro_string_dup`, `saikuro_last_error_message`, or another Saikuro C API
-/// function that transfers ownership of a heap string to the caller.
+/// `ptr` must be either null or a pointer previously returned by
+/// [`saikuro_string_dup`], [`saikuro_last_error_message`], or another Saikuro C API function
+/// that transfers ownership of a heap string to the caller. Passing any other pointer,
+/// or a pointer not obtained from Saikuro, results in undefined behavior.
+#[no_mangle]
 pub unsafe extern "C" fn saikuro_string_free(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
@@ -853,7 +856,12 @@ pub extern "C" fn saikuro_client_log(
         }
     }
 }
-
+/// C callback for provider functions.
+///
+/// # Safety
+/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
+/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
+/// to a stack or static buffer is undefined behavior.
 #[no_mangle]
 pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void {
     clear_last_error();
