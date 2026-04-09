@@ -20,6 +20,7 @@ pub mod csharp;
 pub mod error;
 pub mod generator;
 pub mod python;
+pub mod rust;
 pub mod typescript;
 
 pub use error::CodegenError;

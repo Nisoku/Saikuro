@@ -184,7 +184,12 @@ pub extern "C" fn saikuro_string_dup(input: *const c_char) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn saikuro_string_free(ptr: *mut c_char) {
+/// # Safety
+///
+/// `ptr` must either be null or a pointer previously returned by
+/// `saikuro_string_dup`, `saikuro_last_error_message`, or another Saikuro C API
+/// function that transfers ownership of a heap string to the caller.
+pub unsafe extern "C" fn saikuro_string_free(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
     }
@@ -490,7 +495,12 @@ pub extern "C" fn saikuro_client_stream_json(
 }
 
 #[no_mangle]
-pub extern "C" fn saikuro_stream_next_json(
+/// # Safety
+///
+/// `stream` must be a valid handle returned by `saikuro_client_stream_json`.
+/// `out_item_json` and `out_done` must be non-null writable pointers valid for
+/// writes for the duration of this call.
+pub unsafe extern "C" fn saikuro_stream_next_json(
     stream: *mut c_void,
     out_item_json: *mut *mut c_char,
     out_done: *mut c_int,
@@ -642,7 +652,12 @@ pub extern "C" fn saikuro_channel_send_json(
 }
 
 #[no_mangle]
-pub extern "C" fn saikuro_channel_next_json(
+/// # Safety
+///
+/// `channel` must be a valid handle returned by `saikuro_client_channel_json`.
+/// `out_item_json` and `out_done` must be non-null writable pointers valid for
+/// writes for the duration of this call.
+pub unsafe extern "C" fn saikuro_channel_next_json(
     channel: *mut c_void,
     out_item_json: *mut *mut c_char,
     out_done: *mut c_int,

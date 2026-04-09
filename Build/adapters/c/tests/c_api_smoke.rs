@@ -16,7 +16,7 @@ fn take_error() -> String {
     }
 
     let message = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().to_string();
-    saikuro_string_free(ptr);
+    unsafe { saikuro_string_free(ptr) };
     message
 }
 
@@ -31,7 +31,7 @@ fn string_dup_roundtrip() {
         .to_string();
     assert_eq!(text, "saikuro");
 
-    saikuro_string_free(duplicated);
+    unsafe { saikuro_string_free(duplicated) };
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn stream_next_rejects_null_output_pointers() {
 
     let mut out_json = ptr::null_mut();
     let mut out_done = 0;
-    let rc = saikuro_stream_next_json(ptr::null_mut(), &mut out_json, &mut out_done);
+    let rc = unsafe { saikuro_stream_next_json(ptr::null_mut(), &mut out_json, &mut out_done) };
     assert_eq!(rc, 1);
     let message = take_error();
     assert!(message.contains("stream must not be null"));
@@ -104,7 +104,7 @@ fn channel_calls_reject_null_handles() {
 
     let mut out_json = ptr::null_mut();
     let mut out_done = 0;
-    let rc = saikuro_channel_next_json(ptr::null_mut(), &mut out_json, &mut out_done);
+    let rc = unsafe { saikuro_channel_next_json(ptr::null_mut(), &mut out_json, &mut out_done) };
     assert_eq!(rc, 1);
     let message = take_error();
     assert!(message.contains("channel must not be null"));

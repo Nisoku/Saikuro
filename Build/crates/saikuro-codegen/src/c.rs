@@ -47,7 +47,7 @@ impl BindingGenerator for CGenerator {
 
 impl CGenerator {
     fn generate_types(&self, _schema: &Schema) -> String {
-        vec![
+        [
             "#ifndef SAIKURO_TYPES_H".to_owned(),
             "#define SAIKURO_TYPES_H".to_owned(),
             String::new(),

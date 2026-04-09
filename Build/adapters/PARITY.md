@@ -8,7 +8,7 @@
 | partial | available indirectly or with reduced ergonomics |
 | no      | currently missing                               |
 
-## Cool table
+## Runtime capability parity
 
 | Capability                  | Rust    | TypeScript | Python | C#      | C       | C++     |
 |-----------------------------|---------|------------|--------|---------|---------|---------|
@@ -17,13 +17,18 @@
 | batch                       | yes     | yes        | yes    | yes     | yes     | yes     |
 | stream                      | yes     | yes        | yes    | yes     | yes     | yes     |
 | channel                     | yes     | yes        | yes    | yes     | yes     | yes     |
-| resource invocation helpers | yes     | partial    | yes    | partial | yes     | yes     |
+| resource invocation helpers | yes     | yes        | yes    | yes     | yes     | yes     |
 | log forwarding helper       | yes     | yes        | yes    | yes     | yes     | yes     |
 | provider registration       | yes     | yes        | yes    | yes     | yes     | yes     |
-| schema extractor CLI        | partial | yes        | yes    | partial | no      | no      |
-| typed codegen output        | no      | yes        | yes    | yes     | partial | partial |
 
-## Cool table but tests
+## Tooling parity
+
+| Capability                  | Rust    | TypeScript | Python | C#      | C       | C++     |
+|-----------------------------|---------|------------|--------|---------|---------|---------|
+| schema extractor CLI        | partial | yes        | yes    | yes     | no      | no      |
+| typed codegen output        | yes     | yes        | yes    | yes     | partial | yes     |
+
+## Test parity
 
 | Test                        | Rust    | TypeScript | Python  | C#      | C       | C++     |
 |-----------------------------|---------|------------|---------|---------|---------|---------|

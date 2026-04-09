@@ -5,7 +5,7 @@ use std::{fs, path::PathBuf};
 use clap::Parser;
 use saikuro_codegen::{
     c::CGenerator, cpp::CppGenerator, csharp::CSharpGenerator, generator::BindingGenerator,
-    python::PythonGenerator, typescript::TypeScriptGenerator,
+    python::PythonGenerator, rust::RustGenerator, typescript::TypeScriptGenerator,
 };
 use saikuro_core::schema::Schema;
 
@@ -19,7 +19,7 @@ struct Opts {
     #[arg(long)]
     schema: String,
 
-    /// Target language (typescript, python, csharp, c, cpp)
+    /// Target language (typescript, python, csharp, c, cpp, rust)
     #[arg(long)]
     lang: String,
 
@@ -40,8 +40,9 @@ fn main() -> anyhow::Result<()> {
         "csharp" | "cs" => Box::new(CSharpGenerator),
         "c" => Box::new(CGenerator),
         "cpp" | "cxx" | "c++" => Box::new(CppGenerator),
+        "rust" | "rs" => Box::new(RustGenerator),
         other => anyhow::bail!(
-            "unsupported language '{other}'. expected one of: python, typescript, csharp, c, cpp"
+            "unsupported language '{other}'. expected one of: python, typescript|ts, csharp|cs, c, cpp|cxx|c++, rust|rs"
         ),
     };
 
