@@ -29,8 +29,9 @@ impl BindingGenerator for CGenerator {
         ];
 
         for (ns_name, ns_schema) in &schema.namespaces {
-            let file_name = format!("{ns_name}_client.h");
-            let src = self.generate_namespace_client(ns_name, ns_schema);
+            let safe = normalize_namespace_stem(ns_name);
+            let file_name = format!("{safe}_client.h");
+            let src = self.generate_namespace_client(ns_name, &safe, ns_schema);
             output.add(&file_name, src);
             includes.push(format!("#include \"{file_name}\""));
         }
@@ -64,8 +65,8 @@ impl CGenerator {
         .join("\n")
     }
 
-    fn generate_namespace_client(&self, ns_name: &str, ns: &NamespaceSchema) -> String {
-        let guard = format!("SAIKURO_{}_CLIENT_H", ns_name.to_uppercase());
+    fn generate_namespace_client(&self, ns_name: &str, safe: &str, ns: &NamespaceSchema) -> String {
+        let guard = format!("SAIKURO_{}_CLIENT_H", safe.to_uppercase());
 
         let mut lines = vec![
             format!("#ifndef {guard}"),
@@ -81,11 +82,12 @@ impl CGenerator {
                 continue;
             }
 
-            let c_fn_name = format!("{}_{}", sanitize_ident(ns_name), sanitize_ident(fn_name));
+            let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             let target = format!("{ns_name}.{fn_name}");
             if let Some(doc) = &fn_schema.doc {
                 let sanitized_doc = doc.replace("*/", "*\\/");
-                lines.push(format!("/* {sanitized_doc} */"));
+                let ownership_note = "\n *\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
+                lines.push(format!("/* {sanitized_doc}{ownership_note} */"));
             }
             lines.push(format!(
                 "static inline char* {c_fn_name}(saikuro_client_t client, const char* args_json) {{"
@@ -121,4 +123,19 @@ fn sanitize_ident(s: &str) -> String {
         sanitized.push('_');
     }
     sanitized
+}
+
+fn normalize_namespace_stem(ns_name: &str) -> String {
+    let mut stem: String = ns_name
+        .replace(['/', '\\', '-'], "_")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    if stem.is_empty() {
+        stem.push('_');
+    }
+    if stem.chars().next().unwrap().is_ascii_digit() {
+        stem.insert(0, '_');
+    }
+    stem
 }

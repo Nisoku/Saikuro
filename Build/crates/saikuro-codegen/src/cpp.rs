@@ -23,8 +23,10 @@ impl BindingGenerator for CppGenerator {
             "#include <saikuro/saikuro.hpp>".to_owned(),
         ];
 
-        for (ns_name, ns_schema) in &schema.namespaces {
-            let class_name = format!("{}Client", to_pascal_case(ns_name));
+        let mut ns_items: Vec<_> = schema.namespaces.iter().collect();
+        ns_items.sort_by_key(|(k, _)| *k);
+        for (ns_name, ns_schema) in ns_items {
+            let class_name = sanitize_ident(&format!("{}Client", to_pascal_case(ns_name)));
             let file_name = format!("{class_name}.hpp");
             let src = self.generate_namespace_client(ns_name, &class_name, ns_schema);
             output.add(&file_name, src);
@@ -57,18 +59,21 @@ impl CppGenerator {
             [
                 "    explicit ",
                 class_name,
-                "(const saikuro::Client& client) : client_(client) {}"
-            ].join("") ,
+                "(const saikuro::Client& client) : client_(client) {}",
+            ]
+            .join(""),
             String::new(),
         ];
 
-        for (fn_name, fn_schema) in &ns.functions {
+        let mut fn_items: Vec<_> = ns.functions.iter().collect();
+        fn_items.sort_by_key(|(k, _)| *k);
+        for (fn_name, fn_schema) in fn_items {
             if fn_schema.visibility == Visibility::Private {
                 continue;
             }
 
             let method_name = sanitize_ident(fn_name);
-            let target = format!("{ns_name}.{fn_name}");
+            let target = escape_cpp_string_literal(&format!("{ns_name}.{fn_name}"));
             if let Some(doc) = &fn_schema.doc {
                 for line in doc.lines() {
                     lines.push(format!("    // {}", line.trim_end()));
@@ -106,6 +111,107 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
+// TODO: Don't use such a hacky (subjectively) thing to sanitize identifiers.
+const CPP_RESERVED: &[&str] = &[
+    "alignas",
+    "alignof",
+    "and",
+    "and_eq",
+    "asm",
+    "atomic_cancel",
+    "atomic_commit",
+    "atomic_noexcept",
+    "auto",
+    "bitand",
+    "bitor",
+    "bool",
+    "break",
+    "case",
+    "catch",
+    "char",
+    "char8_t",
+    "char16_t",
+    "char32_t",
+    "class",
+    "compl",
+    "concept",
+    "const",
+    "consteval",
+    "constexpr",
+    "constinit",
+    "const_cast",
+    "continue",
+    "co_await",
+    "co_return",
+    "co_yield",
+    "decltype",
+    "default",
+    "delete",
+    "do",
+    "double",
+    "dynamic_cast",
+    "else",
+    "enum",
+    "explicit",
+    "export",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "friend",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "mutable",
+    "namespace",
+    "new",
+    "noexcept",
+    "not",
+    "not_eq",
+    "nullptr",
+    "operator",
+    "or",
+    "or_eq",
+    "private",
+    "protected",
+    "public",
+    "reflexpr",
+    "register",
+    "reinterpret_cast",
+    "requires",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "static_cast",
+    "struct",
+    "switch",
+    "synchronized",
+    "template",
+    "this",
+    "thread_local",
+    "throw",
+    "true",
+    "try",
+    "typedef",
+    "typeid",
+    "typename",
+    "union",
+    "unsigned",
+    "using",
+    "virtual",
+    "void",
+    "volatile",
+    "wchar_t",
+    "while",
+    "xor",
+    "xor_eq",
+];
+
 fn sanitize_ident(s: &str) -> String {
     let mut result: String = s
         .chars()
@@ -122,5 +228,12 @@ fn sanitize_ident(s: &str) -> String {
     if result.is_empty() {
         result.push('_');
     }
+    if CPP_RESERVED.contains(&result.as_str()) {
+        result.push('_');
+    }
     result
+}
+
+fn escape_cpp_string_literal(s: &str) -> String {
+    s.replace('"', "\\\"")
 }

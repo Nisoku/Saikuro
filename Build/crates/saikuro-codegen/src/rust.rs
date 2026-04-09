@@ -28,7 +28,7 @@ impl BindingGenerator for RustGenerator {
         for (ns_name, ns_schema) in &schema.namespaces {
             let file_name = format!("{ns_name}_client.rs");
             let module_name = format!("{}_client", sanitize_ident(ns_name));
-            let class_name = format!("{}Client", to_pascal_case(ns_name));
+            let class_name = format!("{}Client", sanitize_then_pascal(ns_name));
             output.add(
                 &file_name,
                 self.generate_namespace_client(ns_name, &class_name, ns_schema)?,
@@ -54,10 +54,11 @@ impl RustGenerator {
         ];
 
         for (type_name, type_def) in &schema.types {
+            let safe_type_name = sanitize_type_name(type_name);
             match type_def {
                 TypeDefinition::Record { fields } => {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
-                    lines.push(format!("pub struct {type_name} {{"));
+                    lines.push(format!("pub struct {safe_type_name} {{"));
                     for (field_name, field_desc) in fields {
                         let rust_type = Self::type_to_rust(&field_desc.r#type)?;
                         let final_type = if field_desc.optional {
@@ -76,16 +77,19 @@ impl RustGenerator {
                 }
                 TypeDefinition::Enum { variants } => {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
-                    lines.push(format!("pub enum {type_name} {{"));
+                    lines.push(format!("pub enum {safe_type_name} {{"));
                     for variant in variants {
-                        lines.push(format!("    {},", sanitize_variant(variant)));
+                        lines.push(format!(
+                            "    {},",
+                            sanitize_variant_preserve_leading(variant)
+                        ));
                     }
                     lines.push("}".to_owned());
                     lines.push("".to_owned());
                 }
                 TypeDefinition::Alias { inner } => {
                     lines.push(format!(
-                        "pub type {type_name} = {};",
+                        "pub type {safe_type_name} = {};",
                         Self::type_to_rust(inner)?
                     ));
                     lines.push("".to_owned());
@@ -266,9 +270,37 @@ fn sanitize_ident(s: &str) -> String {
     out
 }
 
-fn sanitize_variant(s: &str) -> String {
+fn sanitize_variant_preserve_leading(s: &str) -> String {
     let ident = sanitize_ident(s);
-    to_pascal_case(&ident)
+    let leading = ident.starts_with('_');
+    let body = to_pascal_case(&ident.trim_start_matches('_'));
+    if leading {
+        format!("_{}", body)
+    } else {
+        body
+    }
+}
+
+fn sanitize_then_pascal(s: &str) -> String {
+    let ident = sanitize_ident(s);
+    let leading = ident.starts_with('_');
+    let body = to_pascal_case(&ident.trim_start_matches('_'));
+    if leading {
+        format!("_{}", body)
+    } else {
+        body
+    }
+}
+
+fn sanitize_type_name(s: &str) -> String {
+    let ident = sanitize_ident(s);
+    if ident.is_empty() {
+        "_".to_string()
+    } else if ident.chars().next().unwrap().is_ascii_digit() {
+        format!("_{}", ident)
+    } else {
+        ident
+    }
 }
 
 fn to_pascal_case(s: &str) -> String {

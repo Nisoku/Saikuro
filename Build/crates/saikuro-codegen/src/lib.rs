@@ -8,6 +8,7 @@
 //! - [`csharp`] :  C# records + async client stubs
 //! - [`c`] :  C headers with namespace client helpers over the C adapter ABI
 //! - [`cpp`] :  C++ wrappers with typed class stubs over the C adapter ABI
+//! - [`rust`] :  Rust bindings with async client and type-safe wrappers
 //!
 //! The codegen pipeline is:
 //! 1. Load a [`Schema`] (from JSON file or in-process snapshot).

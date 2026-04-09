@@ -507,7 +507,7 @@ async fn handle_inbound(
     pending: &DashMap<InvocationId, PendingSlot>,
 ) {
     if let Ok(resp) = ResponseEnvelope::from_msgpack(&frame) {
-        route_response(resp, pending);
+        route_response(resp, pending).await;
         return;
     }
 
@@ -531,8 +531,7 @@ async fn handle_inbound(
     warn!("client: received undecodable inbound frame");
 }
 
-
-fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, PendingSlot>) {
+async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, PendingSlot>) {
     let id = resp.id;
     let is_stream_end = resp
         .stream_control
@@ -587,16 +586,28 @@ fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, Pendin
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
-                        let _ = tx.try_send(Err(Error::remote(
-                            detail.code.to_string(),
-                            detail.message,
-                            None,
-                        )));
-                        drop(slot);
-                        pending.remove(&id);
+                        if let Err(_e) = tx
+                            .send(Err(Error::remote(
+                                detail.code.to_string(),
+                                detail.message,
+                                None,
+                            )))
+                            .await
+                        {
+                            // Terminal channel error: drop slot and remove pending
+                            drop(slot);
+                            pending.remove(&id);
+                        } else {
+                            drop(slot);
+                            pending.remove(&id);
+                        }
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        let _ = tx.try_send(Ok(value));
+                        if let Err(_e) = tx.send(Ok(value)).await {
+                            // Terminal channel error: drop slot and remove pending
+                            drop(slot);
+                            pending.remove(&id);
+                        }
                     }
                 }
             }

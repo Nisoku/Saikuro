@@ -191,12 +191,6 @@ def quality_checks() -> list[CommandSpec]:
 
 def adapter_checks(name: str) -> list[CommandSpec]:
     ts_dir = ROOT / "adapters" / "typescript"
-    if _has_dotnet_runtime_8():
-        ts_test_label = "TypeScript tests"
-        ts_test_cmd = ["npm", "test"]
-    else:
-        ts_test_label = "TypeScript tests (skip dotnet8 parity test)"
-        ts_test_cmd = ["npm", "run", "test", "--", "--exclude", "tests/parity_ts_py.test.ts"]
 
     adapters = {
         "rust": [
@@ -220,13 +214,17 @@ def adapter_checks(name: str) -> list[CommandSpec]:
                 optional=True,
             ),
         ],
-        "typescript": [
+        "typescript": (lambda: [
             CommandSpec("TypeScript deps", ["npm", "install"], ts_dir),
             CommandSpec("TypeScript lint", ["npm", "run", "lint"], ts_dir),
             CommandSpec("TypeScript typecheck", ["npm", "run", "typecheck"], ts_dir),
-            CommandSpec(ts_test_label, ts_test_cmd, ts_dir),
+            *([
+                CommandSpec("TypeScript tests", ["npm", "test"], ts_dir)
+            ] if _has_dotnet_runtime_8() else [
+                CommandSpec("TypeScript tests (skip dotnet8 parity test)", ["npm", "run", "test", "--", "--exclude", "tests/parity_ts_py.test.ts"], ts_dir)
+            ]),
             CommandSpec("TypeScript build", ["npm", "run", "build"], ts_dir),
-        ],
+        ])(),
         "python": [
             CommandSpec(
                 "Python adapter deps",

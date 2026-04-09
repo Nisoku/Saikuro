@@ -774,6 +774,12 @@ pub extern "C" fn saikuro_client_resource_json(
     }
 }
 
+/// C callback for provider functions.
+///
+/// # Safety
+/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
+/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
+/// to a stack or static buffer is undefined behavior.
 #[no_mangle]
 pub extern "C" fn saikuro_client_log(
     handle: *mut c_void,
