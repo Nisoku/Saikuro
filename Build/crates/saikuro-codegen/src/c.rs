@@ -84,7 +84,8 @@ impl CGenerator {
             let c_fn_name = format!("{}_{}", sanitize_ident(ns_name), sanitize_ident(fn_name));
             let target = format!("{ns_name}.{fn_name}");
             if let Some(doc) = &fn_schema.doc {
-                lines.push(format!("/* {doc} */"));
+                let sanitized_doc = doc.replace("*/", "*\\/");
+                lines.push(format!("/* {sanitized_doc} */"));
             }
             lines.push(format!(
                 "static inline char* {c_fn_name}(saikuro_client_t client, const char* args_json) {{"
@@ -104,7 +105,20 @@ impl CGenerator {
 }
 
 fn sanitize_ident(s: &str) -> String {
-    s.chars()
+    let mut sanitized: String = s
+        .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect()
+        .collect();
+    if sanitized
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
+        sanitized.insert(0, '_');
+    }
+    if sanitized.is_empty() {
+        sanitized.push('_');
+    }
+    sanitized
 }

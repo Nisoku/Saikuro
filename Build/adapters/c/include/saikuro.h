@@ -8,10 +8,14 @@ extern "C" {
 #endif
 
 /* Opaque handles */
-typedef void* saikuro_client_t;
-typedef void* saikuro_provider_t;
-typedef void* saikuro_stream_t;
-typedef void* saikuro_channel_t;
+struct saikuro_client;
+struct saikuro_provider;
+struct saikuro_stream;
+struct saikuro_channel;
+typedef struct saikuro_client* saikuro_client_t;
+typedef struct saikuro_provider* saikuro_provider_t;
+typedef struct saikuro_stream* saikuro_stream_t;
+typedef struct saikuro_channel* saikuro_channel_t;
 
 /* Provider callback: receives JSON args array and returns JSON result.
  * VERY important: The returned string must be allocated with saikuro_string_dup so the adapter

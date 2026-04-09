@@ -54,9 +54,11 @@ impl CppGenerator {
             "namespace saikuro::generated {".to_owned(),
             format!("class {class_name} {{"),
             "public:".to_owned(),
-            format!(
-                "    explicit {class_name}(const saikuro::Client& client) : client_(client) {{}}"
-            ),
+            [
+                "    explicit ",
+                class_name,
+                "(const saikuro::Client& client) : client_(client) {}"
+            ].join("") ,
             String::new(),
         ];
 
@@ -68,7 +70,9 @@ impl CppGenerator {
             let method_name = sanitize_ident(fn_name);
             let target = format!("{ns_name}.{fn_name}");
             if let Some(doc) = &fn_schema.doc {
-                lines.push(format!("    // {doc}"));
+                for line in doc.lines() {
+                    lines.push(format!("    // {}", line.trim_end()));
+                }
             }
             lines.push(format!(
                 "    std::string {method_name}(const std::string& args_json) const {{"
@@ -103,7 +107,20 @@ fn to_pascal_case(s: &str) -> String {
 }
 
 fn sanitize_ident(s: &str) -> String {
-    s.chars()
+    let mut result: String = s
+        .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect()
+        .collect();
+    if result
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
+        result.insert(0, '_');
+    }
+    if result.is_empty() {
+        result.push('_');
+    }
+    result
 }

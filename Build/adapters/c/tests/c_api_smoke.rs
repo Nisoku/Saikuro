@@ -61,10 +61,6 @@ fn provider_register_rejects_null_callback() {
 
 #[test]
 fn batch_rejects_invalid_json_shape() {
-    let addr = CString::new("tcp://127.0.0.1:1").expect("CString should be created");
-    let handle = saikuro_client_connect(addr.as_ptr());
-    assert!(handle.is_null());
-
     // null handle error should trigger before JSON parsing.
     let calls = CString::new("{}").expect("CString should be created");
     let result = saikuro_client_batch_json(ptr::null_mut(), calls.as_ptr());

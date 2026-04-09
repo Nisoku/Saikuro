@@ -1,28 +1,28 @@
+use std::cell::RefCell;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
-use std::sync::{Mutex, OnceLock};
+use std::thread_local;
 
 use saikuro::{Client, Provider, SaikuroChannel, Value};
-use tokio::runtime::Handle;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 // TODO: Modularize a bit haha
 
-static LAST_ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
-
-fn last_error_slot() -> &'static Mutex<Option<String>> {
-    LAST_ERROR.get_or_init(|| Mutex::new(None))
+thread_local! {
+    static LAST_ERROR: RefCell<Option<String>> = RefCell::new(None);
 }
 
 fn set_last_error(msg: impl Into<String>) {
-    if let Ok(mut slot) = last_error_slot().lock() {
-        *slot = Some(msg.into());
-    }
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = Some(msg.into());
+    });
 }
 
 fn clear_last_error() {
-    if let Ok(mut slot) = last_error_slot().lock() {
-        *slot = None;
-    }
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
 }
 
 fn cstr_to_string(ptr: *const c_char, arg_name: &str) -> Result<String, String> {
@@ -110,16 +110,18 @@ fn parse_json_object_arg(
 }
 
 struct ClientHandle {
-    rt: tokio::runtime::Runtime,
+    rt: Arc<Runtime>,
     client: Option<Client>,
 }
 
 impl ClientHandle {
     fn new(address: &str) -> Result<Self, String> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| format!("failed to create runtime: {e}"))?;
+        let rt = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| format!("failed to create runtime: {e}"))?,
+        );
 
         let client = rt
             .block_on(Client::connect(address))
@@ -149,12 +151,12 @@ struct ProviderHandle {
 }
 
 struct StreamHandle {
-    rt: Handle,
+    rt: Arc<Runtime>,
     stream: saikuro::SaikuroStream,
 }
 
 struct ChannelHandle {
-    rt: Handle,
+    rt: Arc<Runtime>,
     channel: SaikuroChannel,
 }
 
@@ -200,10 +202,8 @@ pub unsafe extern "C" fn saikuro_string_free(ptr: *mut c_char) {
 
 #[no_mangle]
 pub extern "C" fn saikuro_last_error_message() -> *mut c_char {
-    let msg = last_error_slot()
-        .lock()
-        .ok()
-        .and_then(|slot| slot.clone())
+    let msg = LAST_ERROR
+        .with(|cell| cell.borrow().clone())
         .unwrap_or_else(|| "".to_owned());
     into_c_string_ptr(&msg)
 }
@@ -474,7 +474,7 @@ pub extern "C" fn saikuro_client_stream_json(
     };
 
     let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let rt = handle.rt.handle().clone();
+    let rt = handle.rt.clone();
     let client = match handle.client.as_ref() {
         Some(c) => c,
         None => {
@@ -593,7 +593,7 @@ pub extern "C" fn saikuro_client_channel_json(
     };
 
     let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let rt = handle.rt.handle().clone();
+    let rt = handle.rt.clone();
     let client = match handle.client.as_ref() {
         Some(c) => c,
         None => {

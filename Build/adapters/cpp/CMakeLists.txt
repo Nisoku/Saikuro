@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(saikuro_cpp_adapter LANGUAGES CXX)
 
 add_library(saikuro_cpp_adapter INTERFACE)
+target_compile_features(saikuro_cpp_adapter INTERFACE cxx_std_11)
 
 target_include_directories(saikuro_cpp_adapter
     INTERFACE

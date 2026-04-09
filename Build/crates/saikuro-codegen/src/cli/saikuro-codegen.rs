@@ -55,11 +55,37 @@ fn main() -> anyhow::Result<()> {
     fs::create_dir_all(&out_dir)?;
 
     for file in output.files {
-        let path = out_dir.join(&file.path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+        // Validate file.path is not absolute and does not contain ParentDir or RootDir
+        let rel_path = &file.path;
+        let rel_path_obj = Path::new(rel_path);
+        if rel_path_obj.is_absolute()
+            || rel_path_obj.components().any(|c| {
+                matches!(
+                    c,
+                    std::path::Component::ParentDir | std::path::Component::RootDir
+                )
+            })
+        {
+            anyhow::bail!("output file path '{rel_path}' is not allowed (absolute or contains parent/root dir)");
         }
-        fs::write(path, file.content)?;
+        let path = out_dir.join(rel_path_obj);
+        // Ensure the resulting path is inside out_dir
+        let canon_out_dir = out_dir.canonicalize()?;
+        let canon_path = if path.exists() {
+            path.canonicalize()?
+        } else {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            path.clone()
+        };
+        if !canon_path.starts_with(&canon_out_dir) {
+            anyhow::bail!(
+                "output file path '{:?}' escapes output directory",
+                canon_path
+            );
+        }
+        fs::write(&path, file.content)?;
     }
 
     Ok(())

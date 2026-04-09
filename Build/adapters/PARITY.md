@@ -8,7 +8,7 @@
 | partial | available indirectly or with reduced ergonomics |
 | no      | currently missing                               |
 
-## Runtime capability parity
+## Capability Parity
 
 | Capability                  | Rust    | TypeScript | Python | C#      | C       | C++     |
 |-----------------------------|---------|------------|--------|---------|---------|---------|
@@ -21,14 +21,14 @@
 | log forwarding helper       | yes     | yes        | yes    | yes     | yes     | yes     |
 | provider registration       | yes     | yes        | yes    | yes     | yes     | yes     |
 
-## Tooling parity
+## Tooling Parity
 
 | Capability                  | Rust    | TypeScript | Python | C#      | C       | C++     |
 |-----------------------------|---------|------------|--------|---------|---------|---------|
 | schema extractor CLI        | partial | yes        | yes    | yes     | no      | no      |
 | typed codegen output        | yes     | yes        | yes    | yes     | partial | yes     |
 
-## Test parity
+## Test Coverage
 
 | Test                        | Rust    | TypeScript | Python  | C#      | C       | C++     |
 |-----------------------------|---------|------------|---------|---------|---------|---------|
