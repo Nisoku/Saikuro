@@ -8,6 +8,7 @@ members = [
     "crates/saikuro-runtime",
     "crates/saikuro-codegen",
     "crates/saikuro-runtime-bin",
+    "adapters/c",
     "adapters/rust",
     "tests",
 ]

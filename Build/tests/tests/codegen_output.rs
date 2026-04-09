@@ -2,7 +2,7 @@
 
 use saikuro_codegen::{
     csharp::CSharpGenerator, generator::BindingGenerator, python::PythonGenerator,
-    typescript::TypeScriptGenerator,
+    rust::RustGenerator, typescript::TypeScriptGenerator,
 };
 use saikuro_core::schema::{
     ArgumentDescriptor, FieldDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, Schema,
@@ -920,5 +920,82 @@ fn csharp_channel_method_uses_channel_async() {
         client.content.contains("SaikuroChannel<string, string>"),
         "chat return type should be SaikuroChannel<string, string>. Content:\n{}",
         client.content
+    );
+}
+
+// Rust generator tests
+
+#[test]
+fn rust_empty_schema_produces_required_files() {
+    let schema = Schema::new();
+    let gen = RustGenerator;
+    let output = gen.generate(&schema).expect("generate");
+
+    let paths: Vec<_> = output.files.iter().map(|f| f.path.as_str()).collect();
+    assert!(paths.contains(&"types.rs"), "types.rs missing");
+    assert!(paths.contains(&"mod.rs"), "mod.rs missing");
+}
+
+#[test]
+fn rust_generates_client_per_namespace() {
+    let schema = make_schema_with_math();
+    let gen = RustGenerator;
+    let output = gen.generate(&schema).expect("generate");
+
+    let paths: Vec<_> = output.files.iter().map(|f| f.path.as_str()).collect();
+    assert!(paths.contains(&"math_client.rs"), "math_client.rs missing");
+}
+
+#[test]
+fn rust_private_functions_are_omitted() {
+    let schema = make_schema_with_math();
+    let gen = RustGenerator;
+    let output = gen.generate(&schema).expect("generate");
+
+    let client = output
+        .files
+        .iter()
+        .find(|f| f.path == "math_client.rs")
+        .expect("math_client.rs");
+
+    assert!(client.content.contains("pub async fn add"), "add missing");
+    assert!(client.content.contains("pub async fn sub"), "sub missing");
+    assert!(
+        !client.content.contains("pub async fn secret"),
+        "private fn 'secret' should not be generated"
+    );
+}
+
+#[test]
+fn rust_stream_and_channel_methods_use_adapter_primitives() {
+    let schema = make_schema_with_stream_and_channel();
+    let gen = RustGenerator;
+    let output = gen.generate(&schema).expect("generate");
+
+    let client = output
+        .files
+        .iter()
+        .find(|f| f.path == "events_client.rs")
+        .expect("events_client.rs");
+
+    assert!(
+        client.content.contains("Result<saikuro::SaikuroStream>"),
+        "stream method should return SaikuroStream"
+    );
+    assert!(
+        client.content.contains("Result<saikuro::SaikuroChannel>"),
+        "channel method should return SaikuroChannel"
+    );
+    assert!(
+        client
+            .content
+            .contains("self.client.stream(\"events.subscribe\""),
+        "stream method should call client.stream"
+    );
+    assert!(
+        client
+            .content
+            .contains("self.client.channel(\"events.chat\""),
+        "channel method should call client.channel"
     );
 }

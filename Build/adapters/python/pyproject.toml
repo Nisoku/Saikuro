@@ -13,6 +13,10 @@ authors = [
     { name = "NellowTCS" },
 ]
 keywords = ["ipc", "cross-language", "rpc", "msgpack"]
+dependencies = [
+    "websockets>=13.0",
+    "msgpack>=1.0",
+]
 
 [project.urls]
 Repository = "https://github.com/Nisoku/Saikuro"

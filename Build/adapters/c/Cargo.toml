@@ -1,0 +1,20 @@
+[package]
+name = "saikuro-c"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C adapter for Saikuro"
+keywords = ["ipc", "cross-language", "rpc", "ffi", "c"]
+
+[lib]
+name = "saikuro_c"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+saikuro = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+tokio = { workspace = true }

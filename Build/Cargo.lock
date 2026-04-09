@@ -795,6 +795,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "saikuro-c"
+version = "0.1.0"
+dependencies = [
+ "saikuro",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "saikuro-codegen"
 version = "0.1.0"
 dependencies = [

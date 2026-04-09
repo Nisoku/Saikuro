@@ -28,7 +28,7 @@ when opening a pull request.
 
 ## Project layout
 
-```
+```txt
 Build/
   Cargo.toml          # Rust workspace root
   crates/             # Core library crates

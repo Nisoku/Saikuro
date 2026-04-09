@@ -52,6 +52,18 @@ cd ../..
 dotnet test
 ```
 
+## Schema extractor CLI
+
+The repository includes a C# schema extractor tool for reflection-based schema
+generation:
+
+```bash
+cd tools/extractor
+dotnet run -- parityns
+```
+
+The tool emits schema JSON to stdout and is used by parity workflows.
+
 ## WASM / Blazor
 
 Compile with the `WASM` preprocessor symbol to exclude TCP and Unix socket
