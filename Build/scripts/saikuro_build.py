@@ -277,7 +277,8 @@ def adapter_checks(name: str) -> list[CommandSpec]:
             merged.extend(items)
         return merged
 
-    return adapters[name]
+    selected = adapters[name]
+    return selected() if callable(selected) else selected
 
 
 def run_specs(ui: Ui, specs: Iterable[CommandSpec]) -> list[CommandResult]:

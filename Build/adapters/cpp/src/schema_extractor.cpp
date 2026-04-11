@@ -122,29 +122,47 @@ bool parse_arg(const std::string& raw, Arg* out) {
     }
 
     std::vector<std::string> parts = split(arg, ' ');
+    while (!parts.empty() && trim(parts.back()).empty()) {
+        parts.pop_back();
+    }
     if (parts.empty()) {
         return false;
     }
 
-    std::string name = trim(parts.back());
-    if (name.empty()) {
-        return false;
+    std::string name;
+    std::string candidate = trim(parts.back());
+    std::string sigils;
+    while (!candidate.empty() && (candidate[0] == '*' || candidate[0] == '&')) {
+        sigils += candidate[0];
+        candidate.erase(0, 1);
     }
 
-    while (!name.empty() && (name[0] == '*' || name[0] == '&')) {
-        name.erase(0, 1);
+    static const std::regex ident_re("^[A-Za-z_][A-Za-z0-9_]*$");
+    if (!candidate.empty() && std::regex_match(candidate, ident_re)) {
+        name = candidate;
+        parts.pop_back();
+    } else {
+        sigils.clear();
     }
 
-    parts.pop_back();
     std::string type;
     for (size_t i = 0; i < parts.size(); ++i) {
+        const std::string part = trim(parts[i]);
+        if (part.empty()) {
+            continue;
+        }
         if (!type.empty()) {
             type += " ";
         }
-        type += parts[i];
+        type += part;
     }
-    if (arg.find('*') != std::string::npos) {
-        type += "*";
+
+    if (!sigils.empty()) {
+        type += sigils;
+    }
+
+    if (type.empty()) {
+        type = arg;
     }
 
     out->name = name.empty() ? "arg" : name;

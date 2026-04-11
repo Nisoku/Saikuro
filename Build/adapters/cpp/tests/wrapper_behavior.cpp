@@ -47,6 +47,9 @@ static std::string g_registered_name;
 
 static char* dup_string(const std::string& value) {
     char* out = static_cast<char*>(std::malloc(value.size() + 1));
+    if (out == nullptr) {
+        throw std::bad_alloc();
+    }
     std::memcpy(out, value.c_str(), value.size() + 1);
     return out;
 }
@@ -85,13 +88,15 @@ int saikuro_client_close(saikuro_client_t) {
 void saikuro_client_free(saikuro_client_t) {}
 
 char* saikuro_client_call_json(saikuro_client_t, const char* target, const char* args_json) {
-    g_last_call_target = target == nullptr ? "" : target;
-    g_last_call_args = args_json == nullptr ? "" : args_json;
-    if (std::strcmp(target, "math.fail") == 0) {
+    const char* safe_target = target == nullptr ? "" : target;
+    const char* safe_args = args_json == nullptr ? "" : args_json;
+    g_last_call_target = safe_target;
+    g_last_call_args = safe_args;
+    if (std::strcmp(safe_target, "math.fail") == 0) {
         g_last_error = "call failed";
         return nullptr;
     }
-    if (std::strcmp(target, "echo.roundtrip") == 0) {
+    if (std::strcmp(safe_target, "echo.roundtrip") == 0) {
         return dup_string(g_last_call_args);
     }
     return dup_string("42");

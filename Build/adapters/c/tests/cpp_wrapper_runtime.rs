@@ -2,6 +2,8 @@ use std::fs;
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -36,6 +38,10 @@ fn build_target_dir() -> PathBuf {
 
 fn compile_cpp(source: &str, output: &Path) {
     ensure_saikuro_c_built();
+    assert!(
+        check_gpp_available(),
+        "g++ is required for cpp_wrapper_runtime tests. Install g++ and ensure it is available on PATH"
+    );
 
     let root = repo_root();
     let target = build_target_dir();
@@ -62,6 +68,14 @@ fn compile_cpp(source: &str, output: &Path) {
     assert!(status.success(), "g++ compile failed");
 }
 
+fn check_gpp_available() -> bool {
+    Command::new("g++")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 fn ensure_saikuro_c_built() {
     let build_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let status = Command::new("cargo")
@@ -82,13 +96,22 @@ fn run_cpp(exe: &Path, args: &[&str]) {
     let mut cmd = Command::new(exe);
     cmd.args(args);
 
-    let existing = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+    let lib_path_var = if cfg!(windows) {
+        "PATH"
+    } else if cfg!(target_os = "macos") {
+        "DYLD_LIBRARY_PATH"
+    } else {
+        "LD_LIBRARY_PATH"
+    };
+    let sep = if cfg!(windows) { ';' } else { ':' };
+
+    let existing = std::env::var(lib_path_var).unwrap_or_default();
     let joined = if existing.is_empty() {
         target.display().to_string()
     } else {
-        format!("{}:{}", target.display(), existing)
+        format!("{}{}{}", target.display(), sep, existing)
     };
-    cmd.env("LD_LIBRARY_PATH", joined);
+    cmd.env(lib_path_var, joined);
 
     let output = cmd.output().expect("run compiled cpp test");
     assert!(
@@ -122,6 +145,9 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             let socket = SocketAddr::from(([127, 0, 0, 1], port));
             let runtime = SaikuroRuntime::builder().build();
             let handle = runtime.handle();
+            let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
+            let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+            let call_count = Arc::new(AtomicUsize::new(0));
 
             let mut functions = std::collections::HashMap::new();
             functions.insert(
@@ -180,23 +206,39 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
                 .register_schema(schema, "cpp-runtime-provider")
                 .expect("register schema");
 
+            let done_tx_closure = done_tx.clone();
+            let call_count_closure = call_count.clone();
             handle.register_fn_provider(
                 "cpp-runtime-provider",
                 vec!["math".to_owned()],
-                |env: Envelope| async move {
-                    match env.target.as_str() {
-                        "math.add" => {
-                            let a = match env.args.first() {
-                                Some(Value::Int(v)) => *v,
-                                _ => 0,
-                            };
-                            let b = match env.args.get(1) {
-                                Some(Value::Int(v)) => *v,
-                                _ => 0,
-                            };
-                            ResponseEnvelope::ok(env.id, Value::Int(a + b))
+                move |env: Envelope| {
+                    let done_tx_closure = done_tx_closure.clone();
+                    let call_count_closure = call_count_closure.clone();
+                    async move {
+                        match env.target.as_str() {
+                            "math.add" => {
+                                let seen = call_count_closure.fetch_add(1, Ordering::Relaxed) + 1;
+                                if seen >= 3 {
+                                    if let Some(tx) = done_tx_closure
+                                        .lock()
+                                        .expect("done sender mutex poisoned")
+                                        .take()
+                                    {
+                                        let _ = tx.send(());
+                                    }
+                                }
+                                let a = match env.args.first() {
+                                    Some(Value::Int(v)) => *v,
+                                    _ => 0,
+                                };
+                                let b = match env.args.get(1) {
+                                    Some(Value::Int(v)) => *v,
+                                    _ => 0,
+                                };
+                                ResponseEnvelope::ok(env.id, Value::Int(a + b))
+                            }
+                            _ => ResponseEnvelope::ok_empty(env.id),
                         }
-                        _ => ResponseEnvelope::ok_empty(env.id),
                     }
                 },
             );
@@ -207,8 +249,12 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
 
             let transport = listener.accept().await.expect("accept").expect("transport");
             handle.accept_transport(transport, "cpp-client".to_owned(), CapabilitySet::default());
-
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            assert!(
+                tokio::time::timeout(Duration::from_secs(5), done_rx)
+                    .await
+                    .is_ok(),
+                "timed out waiting for cpp client to issue call"
+            );
         });
     });
 
@@ -314,9 +360,18 @@ fn cpp_wrapper_provider_announce_and_dispatch_with_runtime() {
     let source = r#"
 #include <saikuro/saikuro.hpp>
 #include <cassert>
+#include <cstdio>
+#include <string>
 
-extern "C" char* add_cb(void*, const char*) {
-    return saikuro_string_dup("42");
+extern "C" char* add_cb(void*, const char* args_json) {
+    long long a = 0;
+    long long b = 0;
+    const char* raw = args_json == nullptr ? "[]" : args_json;
+    if (std::sscanf(raw, " [ %lld , %lld ] ", &a, &b) != 2) {
+        return saikuro_string_dup("0");
+    }
+    std::string sum = std::to_string(a + b);
+    return saikuro_string_dup(sum.c_str());
 }
 
 int main(int argc, char** argv) {

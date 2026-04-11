@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::net::{SocketAddr, TcpListener};
+use std::net::SocketAddr;
 use std::ptr;
 use std::thread;
 use std::time::Duration;
@@ -47,10 +47,6 @@ struct ScriptReport {
 }
 
 fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptReport>) {
-    let probe = TcpListener::bind("127.0.0.1:0").expect("probe port");
-    let port = probe.local_addr().expect("probe addr").port();
-    drop(probe);
-
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -59,11 +55,11 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
             .expect("create runtime");
 
         rt.block_on(async move {
-            let socket = SocketAddr::from(([127, 0, 0, 1], port));
+            let socket = SocketAddr::from(([127, 0, 0, 1], 0));
             let mut listener = TcpTransportListener::bind(socket)
                 .await
                 .expect("bind listener");
-            let _ = ready_tx.send(());
+            let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport = listener
                 .accept()
                 .await
@@ -156,11 +152,11 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
         })
     });
 
-    ready_rx
+    let address = ready_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("client scripted server did not become ready");
 
-    (format!("tcp://127.0.0.1:{port}"), handle)
+    (address, handle)
 }
 
 #[test]
@@ -258,10 +254,6 @@ unsafe extern "C" fn add_cb(
 }
 
 fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptReport>) {
-    let probe = TcpListener::bind("127.0.0.1:0").expect("probe port");
-    let port = probe.local_addr().expect("probe addr").port();
-    drop(probe);
-
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -270,11 +262,11 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
             .expect("create runtime");
 
         rt.block_on(async move {
-            let socket = SocketAddr::from(([127, 0, 0, 1], port));
+            let socket = SocketAddr::from(([127, 0, 0, 1], 0));
             let mut listener = TcpTransportListener::bind(socket)
                 .await
                 .expect("bind listener");
-            let _ = ready_tx.send(());
+            let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport = listener
                 .accept()
                 .await
@@ -316,11 +308,11 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
         })
     });
 
-    ready_rx
+    let address = ready_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("provider scripted server did not become ready");
 
-    (format!("tcp://127.0.0.1:{port}"), handle)
+    (address, handle)
 }
 
 #[test]
@@ -338,14 +330,8 @@ fn c_provider_announce_and_runtime_dispatch_roundtrip() {
         saikuro_provider_register(provider, c("add").as_ptr(), Some(add_cb), ptr::null_mut());
     assert_eq!(register_rc, 0, "provider register failed: {}", take_error());
 
-    let address_owned = address.clone();
-    let provider_addr = provider as usize;
-    let serve_thread = thread::spawn(move || {
-        saikuro_provider_serve(
-            provider_addr as *mut std::ffi::c_void,
-            c(&address_owned).as_ptr(),
-        )
-    });
+    let serve_rc = saikuro_provider_serve(provider as *mut std::ffi::c_void, c(&address).as_ptr());
+    assert_eq!(serve_rc, 0, "provider serve failed: {}", take_error());
 
     let report = server.join().expect("server thread");
     assert!(
@@ -356,9 +342,6 @@ fn c_provider_announce_and_runtime_dispatch_roundtrip() {
         report.saw_provider_response,
         "provider should respond to runtime call with callback value"
     );
-
-    let serve_rc = serve_thread.join().expect("serve thread join");
-    assert_eq!(serve_rc, 0, "provider serve failed: {}", take_error());
 
     saikuro_provider_free(provider);
 }

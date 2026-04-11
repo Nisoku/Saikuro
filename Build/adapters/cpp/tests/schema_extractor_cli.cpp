@@ -1,6 +1,8 @@
 #include <saikuro/schema_extractor.hpp>
 
 #include <cassert>
+#include <cstdlib>
+#include <iostream>
 #include <string>
 
 #ifndef SAIKURO_SCHEMA_FIXTURE
@@ -8,7 +10,11 @@
 #endif
 
 static void contains_or_fail(const std::string& text, const std::string& needle) {
-    assert(text.find(needle) != std::string::npos);
+    if (text.find(needle) == std::string::npos) {
+        std::cerr << "Expected to find substring: '" << needle << "'\n";
+        std::cerr << "Actual text:\n" << text << "\n";
+        std::abort();
+    }
 }
 
 int main() {

@@ -63,7 +63,9 @@ fn main() -> anyhow::Result<()> {
             || rel_path_obj.components().any(|c| {
                 matches!(
                     c,
-                    std::path::Component::ParentDir | std::path::Component::RootDir
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
                 )
             })
         {

@@ -95,15 +95,18 @@ public:
         Channel(const Channel&) = delete;
         Channel& operator=(const Channel&) = delete;
 
-        Channel(Channel&& other) noexcept : handle_(other.handle_) {
+        Channel(Channel&& other) noexcept : handle_(other.handle_), open_(other.open_) {
             other.handle_ = nullptr;
+            other.open_ = false;
         }
 
         Channel& operator=(Channel&& other) noexcept {
             if (this != &other) {
                 destroy();
                 handle_ = other.handle_;
+                open_ = other.open_;
                 other.handle_ = nullptr;
+                other.open_ = false;
             }
             return *this;
         }
@@ -122,12 +125,14 @@ public:
             if (saikuro_channel_close(handle_) != 0) {
                 throw Error(last_error());
             }
+            open_ = false;
         }
 
         void abort() {
             if (saikuro_channel_abort(handle_) != 0) {
                 throw Error(last_error());
             }
+            open_ = false;
         }
 
         bool next_json(std::string& out_item_json) {
@@ -147,12 +152,17 @@ public:
     private:
         void destroy() {
             if (handle_ != nullptr) {
+                if (open_) {
+                    (void)saikuro_channel_close(handle_);
+                }
                 saikuro_channel_free(handle_);
                 handle_ = nullptr;
+                open_ = false;
             }
         }
 
         saikuro_channel_t handle_ = nullptr;
+        bool open_ = true;
     };
 
     explicit Client(const std::string& address) {

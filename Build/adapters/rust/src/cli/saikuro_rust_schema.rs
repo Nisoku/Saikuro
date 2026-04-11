@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use serde_json::{json, Value};
-use syn::{FnArg, GenericArgument, Item, Pat, PathArguments, ReturnType, Type};
+use syn::{
+    FnArg, GenericArgument, ImplItem, Item, Pat, PathArguments, ReturnType, Signature, TraitItem,
+    Type,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "saikuro-rust-schema")]
@@ -105,57 +108,75 @@ fn two_type_args(seg: &syn::PathSegment) -> Option<(&Type, &Type)> {
     Some((first, second))
 }
 
+fn function_schema(sig: &Signature) -> Value {
+    let mut args = Vec::new();
+    for input in &sig.inputs {
+        let FnArg::Typed(typed) = input else {
+            continue;
+        };
+
+        let name = match &*typed.pat {
+            Pat::Ident(id) => id.ident.to_string(),
+            _ => "arg".to_owned(),
+        };
+
+        let ty = type_to_schema(&typed.ty);
+        let optional = is_option_type(&typed.ty);
+        args.push(json!({
+            "name": name,
+            "type": ty,
+            "optional": optional,
+        }));
+    }
+
+    let returns = match &sig.output {
+        ReturnType::Default => primitive("unit"),
+        ReturnType::Type(_, ty) => type_to_schema(ty),
+    };
+
+    json!({
+        "args": args,
+        "returns": returns,
+        "visibility": "public",
+        "capabilities": [],
+        "idempotent": false,
+    })
+}
+
 fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
     let file = syn::parse_file(source).map_err(|e| format!("failed to parse source: {e}"))?;
 
     let mut functions = serde_json::Map::new();
 
     for item in file.items {
-        let Item::Fn(func) = item else {
-            continue;
-        };
-
-        let mut args = Vec::new();
-        for input in &func.sig.inputs {
-            let FnArg::Typed(typed) = input else {
-                continue;
-            };
-
-            let name = match &*typed.pat {
-                Pat::Ident(id) => id.ident.to_string(),
-                _ => "arg".to_owned(),
-            };
-
-            let ty = type_to_schema(&typed.ty);
-            let optional = is_option_type(&typed.ty);
-            args.push(json!({
-                "name": name,
-                "type": ty,
-                "optional": optional,
-            }));
+        match item {
+            Item::Fn(func) => {
+                functions.insert(func.sig.ident.to_string(), function_schema(&func.sig));
+            }
+            Item::Impl(impl_block) => {
+                for impl_item in impl_block.items {
+                    if let ImplItem::Fn(method) = impl_item {
+                        functions
+                            .insert(method.sig.ident.to_string(), function_schema(&method.sig));
+                    }
+                }
+            }
+            Item::Trait(trait_item) => {
+                for trait_member in trait_item.items {
+                    if let TraitItem::Fn(method) = trait_member {
+                        functions
+                            .insert(method.sig.ident.to_string(), function_schema(&method.sig));
+                    }
+                }
+            }
+            _ => {}
         }
-
-        let returns = match &func.sig.output {
-            ReturnType::Default => primitive("unit"),
-            ReturnType::Type(_, ty) => type_to_schema(ty),
-        };
-
-        functions.insert(
-            func.sig.ident.to_string(),
-            json!({
-                "args": args,
-                "returns": returns,
-                "visibility": "public",
-                "capabilities": [],
-                "idempotent": false,
-            }),
-        );
     }
 
     Ok(json!({
         "version": 1,
         "namespaces": {
-            namespace: {
+            (namespace): {
                 "functions": functions
             }
         },

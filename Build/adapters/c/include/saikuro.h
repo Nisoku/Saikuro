@@ -23,7 +23,11 @@ typedef struct saikuro_channel* saikuro_channel_t;
  */
 typedef char* (*saikuro_provider_handler_fn)(void* user_data, const char* args_json);
 
-/* Shared string helpers */
+/* Shared string helpers.
+ * Ownership contract: functions returning char* transfer ownership to the caller.
+ * Free returned pointers with saikuro_string_free (including saikuro_string_dup,
+ * saikuro_last_error_message, and saikuro_client_call_json-style return values).
+ */
 char* saikuro_string_dup(const char* input);
 void saikuro_string_free(char* ptr);
 char* saikuro_last_error_message(void);

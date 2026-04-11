@@ -123,7 +123,7 @@ fn extract_schema(source: &str, namespace: &str) -> Value {
     json!({
         "version": 1,
         "namespaces": {
-            namespace: {
+            (namespace): {
                 "functions": functions
             }
         },

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace Saikuro.Tests;
@@ -77,9 +78,9 @@ public class SchemaExtractorTests
         return text.Substring(start, end - start + 1);
     }
 
-    private static string FindRepoRoot()
+    private static string FindRepoRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath)!);
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName, "Saikuro.sln")))

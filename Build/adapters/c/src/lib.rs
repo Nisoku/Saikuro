@@ -995,13 +995,13 @@ pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void 
     }
 }
 
-// Safety: The `user_data` pointer is captured and later used inside
-// asynchronous callbacks registered with the provider. Callers must ensure
-// that the `user_data` pointer remains valid for the entire lifetime of the
-// registered provider (i.e., until `saikuro_provider_free` is called). If
-// `user_data` is freed or becomes dangling while the provider remains
-// registered, subsequent callback invocations will dereference invalid
-// memory and cause undefined behavior.
+/// Safety: The `user_data` pointer is captured and later used inside
+/// asynchronous callbacks registered with the provider. Callers must ensure
+/// that the `user_data` pointer remains valid for the entire lifetime of the
+/// registered provider (i.e., until `saikuro_provider_free` is called). If
+/// `user_data` is freed or becomes dangling while the provider remains
+/// registered, subsequent callback invocations will dereference invalid
+/// memory and cause undefined behavior.
 #[no_mangle]
 pub extern "C" fn saikuro_provider_register(
     handle: *mut c_void,

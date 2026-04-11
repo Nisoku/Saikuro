@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::net::{SocketAddr, TcpListener};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -88,10 +88,6 @@ struct RuntimeHarness {
 
 impl RuntimeHarness {
     fn start() -> Self {
-        let probe = TcpListener::bind("127.0.0.1:0").expect("probe port");
-        let port = probe.local_addr().expect("probe addr").port();
-        drop(probe);
-
         let stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag_bg = stop_flag.clone();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
@@ -103,7 +99,7 @@ impl RuntimeHarness {
                 .expect("create test runtime");
 
             rt.block_on(async move {
-                let socket = SocketAddr::from(([127, 0, 0, 1], port));
+                let socket = SocketAddr::from(([127, 0, 0, 1], 0));
                 let runtime = Arc::new(SaikuroRuntime::builder().build());
                 let handle = runtime.handle();
 
@@ -138,7 +134,7 @@ impl RuntimeHarness {
                     },
                 );
 
-                let _ = ready_tx.send(());
+                let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
                 let mut peer_counter: u64 = 0;
                 loop {
                     tokio::select! {
@@ -166,12 +162,12 @@ impl RuntimeHarness {
             });
         });
 
-        ready_rx
+        let address = ready_rx
             .recv_timeout(Duration::from_secs(3))
             .expect("runtime did not become ready in time");
 
         Self {
-            address: format!("tcp://127.0.0.1:{port}"),
+            address,
             stop_flag,
             worker: Some(worker),
         }
@@ -243,5 +239,7 @@ fn c_client_reports_transport_error_when_namespace_missing() {
         "unexpected error message: {message}"
     );
 
+    let close_rc = saikuro_client_close(handle);
+    assert_eq!(close_rc, 0, "close should succeed: {}", take_last_error());
     saikuro_client_free(handle);
 }

@@ -11,9 +11,11 @@ use saikuro_core::schema::{
 };
 
 use crate::{
-    error::Result,
+    error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
 };
+
+use std::collections::HashMap;
 
 pub struct RustGenerator;
 
@@ -24,14 +26,26 @@ impl BindingGenerator for RustGenerator {
         output.add("types.rs", self.generate_types(schema)?);
 
         let mut mods = vec!["pub mod types;".to_owned(), "pub use types::*;".to_owned()];
+        let mut module_names = HashMap::new();
+        let mut file_names = HashMap::new();
+        let mut class_names = HashMap::new();
 
         let mut ns_keys: Vec<_> = schema.namespaces.keys().cloned().collect();
         ns_keys.sort();
         for ns_name in ns_keys {
             let ns_schema = &schema.namespaces[&ns_name];
-            let module_name = format!("{}_client", sanitize_ident(&ns_name));
-            let file_name = format!("{module_name}.rs");
-            let class_name = format!("{}Client", sanitize_then_pascal(&ns_name));
+            let module_name_base = format!("{}_client", sanitize_ident(&ns_name));
+            let module_name =
+                ensure_unique_name("module", &ns_name, &module_name_base, &mut module_names)?;
+            let file_name_base = format!("{module_name}.rs");
+            let file_name = ensure_unique_name("file", &ns_name, &file_name_base, &mut file_names)?;
+            let class_name_base = format!("{}Client", sanitize_then_pascal(&ns_name));
+            let class_name = ensure_unique_name(
+                "namespace client type",
+                &ns_name,
+                &class_name_base,
+                &mut class_names,
+            )?;
             output.add(
                 &file_name,
                 self.generate_namespace_client(&ns_name, &class_name, ns_schema)?,
@@ -58,27 +72,39 @@ impl RustGenerator {
 
         let mut type_keys: Vec<_> = schema.types.keys().cloned().collect();
         type_keys.sort();
+        let mut type_names = HashMap::new();
         for type_name in type_keys {
             let type_def = &schema.types[&type_name];
-            let safe_type_name = sanitize_type_name(&type_name);
+            let safe_type_name = ensure_unique_name(
+                "type",
+                &type_name,
+                &sanitize_type_name(&type_name),
+                &mut type_names,
+            )?;
             match type_def {
                 TypeDefinition::Record { fields } => {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
                     lines.push(format!("pub struct {safe_type_name} {{"));
-                    for (field_name, field_desc) in fields {
+                    let mut field_names = HashMap::new();
+                    let mut field_keys: Vec<_> = fields.keys().cloned().collect();
+                    field_keys.sort();
+                    for field_name in field_keys {
+                        let field_desc = &fields[&field_name];
                         let rust_type = Self::type_to_rust(&field_desc.r#type)?;
                         let final_type = if field_desc.optional {
                             format!("Option<{rust_type}>")
                         } else {
                             rust_type
                         };
+                        let safe_field_name = ensure_unique_name(
+                            &format!("field in type {safe_type_name}"),
+                            &field_name,
+                            &sanitize_ident(&field_name),
+                            &mut field_names,
+                        )?;
                         // Preserve original wire name via serde rename
-                        lines.push(format!("    #[serde(rename = \"{}\")]", field_name));
-                        lines.push(format!(
-                            "    pub {}: {},",
-                            sanitize_ident(field_name),
-                            final_type
-                        ));
+                        lines.push(format!("    #[serde(rename = {:?})]", field_name));
+                        lines.push(format!("    pub {safe_field_name}: {final_type},"));
                     }
                     lines.push("}".to_owned());
                     lines.push("".to_owned());
@@ -86,13 +112,17 @@ impl RustGenerator {
                 TypeDefinition::Enum { variants } => {
                     lines.push("#[derive(Debug, Clone, Serialize, Deserialize)]".to_owned());
                     lines.push(format!("pub enum {safe_type_name} {{"));
+                    let mut variant_names = HashMap::new();
                     for variant in variants {
+                        let safe_variant = ensure_unique_name(
+                            &format!("variant in enum {safe_type_name}"),
+                            variant,
+                            &sanitize_variant_preserve_leading(variant),
+                            &mut variant_names,
+                        )?;
                         // Preserve original variant wire name via serde rename
-                        lines.push(format!("    #[serde(rename = \"{}\")]", variant));
-                        lines.push(format!(
-                            "    {},",
-                            sanitize_variant_preserve_leading(variant)
-                        ));
+                        lines.push(format!("    #[serde(rename = {:?})]", variant));
+                        lines.push(format!("    {safe_variant},"));
                     }
                     lines.push("}".to_owned());
                     lines.push("".to_owned());
@@ -133,11 +163,21 @@ impl RustGenerator {
             "".to_owned(),
         ];
 
-        for (fn_name, fn_schema) in &ns.functions {
+        let mut fn_keys: Vec<_> = ns.functions.keys().cloned().collect();
+        fn_keys.sort();
+        let mut method_names = HashMap::new();
+        for fn_name in fn_keys {
+            let fn_schema = &ns.functions[&fn_name];
             if fn_schema.visibility == Visibility::Private {
                 continue;
             }
-            lines.push(self.generate_method(ns_name, fn_name, fn_schema)?);
+            let method_name = ensure_unique_name(
+                &format!("method in namespace {ns_name}"),
+                &fn_name,
+                &sanitize_ident(&fn_name),
+                &mut method_names,
+            )?;
+            lines.push(self.generate_method(ns_name, &fn_name, &method_name, fn_schema)?);
         }
 
         lines.push("}".to_owned());
@@ -150,16 +190,22 @@ impl RustGenerator {
         &self,
         ns_name: &str,
         fn_name: &str,
+        method_name: &str,
         schema: &FunctionSchema,
     ) -> Result<String> {
         let target = format!("{ns_name}.{fn_name}");
-        let method_name = sanitize_ident(fn_name);
 
         let mut params = vec![];
         let mut arg_pushes = vec![];
+        let mut arg_names = HashMap::new();
 
         for arg in &schema.args {
-            let arg_name = sanitize_ident(&arg.name);
+            let arg_name = ensure_unique_name(
+                &format!("argument in method {method_name}"),
+                &arg.name,
+                &sanitize_ident(&arg.name),
+                &mut arg_names,
+            )?;
             let arg_type = Self::type_to_rust(&arg.r#type)?;
             let final_type = if arg.optional {
                 format!("Option<{arg_type}>")
@@ -167,9 +213,15 @@ impl RustGenerator {
                 arg_type
             };
             params.push(format!("{arg_name}: {final_type}"));
-            arg_pushes.push(format!(
-                "        args.push(serde_json::to_value({arg_name}).map_err(|e| Error::Codec(e.to_string()))?);"
-            ));
+            if arg.optional {
+                arg_pushes.push(format!(
+                    "        if let Some(value) = {arg_name} {{ args.push(serde_json::to_value(value).map_err(|e| Error::Codec(e.to_string()))?); }}"
+                ));
+            } else {
+                arg_pushes.push(format!(
+                    "        args.push(serde_json::to_value({arg_name}).map_err(|e| Error::Codec(e.to_string()))?);"
+                ));
+            }
         }
 
         let mut lines = vec![];
@@ -188,7 +240,7 @@ impl RustGenerator {
                 lines.push("        let mut args = Vec::new();".to_owned());
                 lines.extend(arg_pushes);
                 lines.push(format!(
-                    "        self.client.stream(\"{target}\", args).await"
+                    "        self.client.stream({target:?}, args).await"
                 ));
                 lines.push("    }".to_owned());
             }
@@ -200,7 +252,7 @@ impl RustGenerator {
                 lines.push("        let mut args = Vec::new();".to_owned());
                 lines.extend(arg_pushes);
                 lines.push(format!(
-                    "        self.client.channel(\"{target}\", args).await"
+                    "        self.client.channel({target:?}, args).await"
                 ));
                 lines.push("    }".to_owned());
             }
@@ -213,7 +265,7 @@ impl RustGenerator {
                 lines.push("        let mut args = Vec::new();".to_owned());
                 lines.extend(arg_pushes);
                 lines.push(format!(
-                    "        let value = self.client.call(\"{target}\", args).await?;"
+                    "        let value = self.client.call({target:?}, args).await?;"
                 ));
                 lines.push(format!(
                     "        serde_json::from_value::<{return_type}>(value).map_err(|e| Error::Codec(e.to_string()))"
@@ -267,6 +319,25 @@ impl RustGenerator {
             ),
         })
     }
+}
+
+fn ensure_unique_name(
+    scope: &str,
+    raw_name: &str,
+    sanitized_name: &str,
+    seen: &mut HashMap<String, String>,
+) -> Result<String> {
+    if let Some(previous_raw) = seen.get(sanitized_name) {
+        if previous_raw != raw_name {
+            return Err(CodegenError::Schema(format!(
+                "name collision in {scope}: '{previous_raw}' and '{raw_name}' both sanitize to '{sanitized_name}'"
+            )));
+        }
+        return Ok(sanitized_name.to_owned());
+    }
+
+    seen.insert(sanitized_name.to_owned(), raw_name.to_owned());
+    Ok(sanitized_name.to_owned())
 }
 
 fn sanitize_ident(s: &str) -> String {
