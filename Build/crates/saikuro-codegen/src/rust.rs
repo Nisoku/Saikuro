@@ -363,23 +363,14 @@ fn sanitize_ident(s: &str) -> String {
 }
 
 fn sanitize_variant_preserve_leading(s: &str) -> String {
-    let ident = sanitize_ident(s);
-    let leading = ident.starts_with('_');
-    let body = to_pascal_case(ident.trim_start_matches('_'));
-    if leading {
-        format!("_{}", body)
-    } else {
-        // Avoid reserved keywords for variant names
-        let kw = rust_keywords();
-        if kw.contains(&body.as_str()) {
-            format!("{}_", body)
-        } else {
-            body
-        }
-    }
+    sanitize_pascal_preserve_leading(s)
 }
 
 fn sanitize_then_pascal(s: &str) -> String {
+    sanitize_pascal_preserve_leading(s)
+}
+
+fn sanitize_pascal_preserve_leading(s: &str) -> String {
     let ident = sanitize_ident(s);
     let leading = ident.starts_with('_');
     let body = to_pascal_case(ident.trim_start_matches('_'));

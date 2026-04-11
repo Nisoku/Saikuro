@@ -55,6 +55,7 @@ fn main() -> anyhow::Result<()> {
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     fs::create_dir_all(&out_dir)?;
+    let canon_out_dir = out_dir.canonicalize()?;
     let mut seen_rel_paths: HashSet<String> = HashSet::new();
     let mut seen_canon_paths: HashSet<PathBuf> = HashSet::new();
 
@@ -79,7 +80,6 @@ fn main() -> anyhow::Result<()> {
         }
         let path = out_dir.join(rel_path_obj);
         // Ensure the resulting path is inside out_dir
-        let canon_out_dir = out_dir.canonicalize()?;
         let canon_path = if path.exists() {
             path.canonicalize()?
         } else if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -90,8 +90,6 @@ fn main() -> anyhow::Result<()> {
             )
         } else {
             // No parent or empty parent means file is directly in out_dir
-            fs::create_dir_all(&out_dir)?;
-            let canon_out_dir = out_dir.canonicalize()?;
             canon_out_dir.join(
                 path.file_name()
                     .expect("file_name should exist after filtering ParentDir/RootDir"),

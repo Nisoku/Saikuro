@@ -35,6 +35,7 @@ def test_schema_cli_stdout_pretty_json() -> None:
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
 
     assert proc.returncode == 0, proc.stderr
@@ -61,6 +62,7 @@ def test_schema_cli_writes_output_file(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
 
     assert proc.returncode == 0, proc.stderr
@@ -70,7 +72,8 @@ def test_schema_cli_writes_output_file(tmp_path: Path) -> None:
     assert "parityns" in schema["namespaces"]
 
 
-def test_schema_cli_missing_file_returns_usage_error() -> None:
+def test_schema_cli_missing_file_returns_usage_error(tmp_path: Path) -> None:
+    missing_path = tmp_path / "nonexistent.py"
     proc = subprocess.run(
         [
             sys.executable,
@@ -78,11 +81,12 @@ def test_schema_cli_missing_file_returns_usage_error() -> None:
             "saikuro.cli",
             "--namespace",
             "parityns",
-            "does-not-exist.py",
+            str(missing_path),
         ],
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
 
     assert proc.returncode == 1
@@ -105,6 +109,7 @@ def test_schema_cli_extract_failure_returns_error(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
 
     assert proc.returncode == 2

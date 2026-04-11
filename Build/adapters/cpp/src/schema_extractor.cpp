@@ -45,11 +45,20 @@ std::vector<std::string> split(const std::string& text, char delimiter) {
     return out;
 }
 
+std::string remove_comments(const std::string& source) {
+    const std::regex block_comment(R"(/\*[\s\S]*?\*/)");
+    const std::regex line_comment(R"(//[^\n\r]*)");
+    const std::string no_block = std::regex_replace(source, block_comment, " ");
+    return std::regex_replace(no_block, line_comment, " ");
+}
+
 std::string json_escape(const std::string& value) {
     std::string out;
     out.reserve(value.size());
+    static const char* hex = "0123456789abcdef";
     for (size_t i = 0; i < value.size(); ++i) {
-        const char c = value[i];
+        const unsigned char ch = static_cast<unsigned char>(value[i]);
+        const char c = static_cast<char>(ch);
         switch (c) {
             case '\\':
                 out += "\\\\";
@@ -67,7 +76,13 @@ std::string json_escape(const std::string& value) {
                 out += "\\t";
                 break;
             default:
-                out += c;
+                if (ch < 0x20) {
+                    out += "\\u00";
+                    out += hex[(ch >> 4) & 0x0f];
+                    out += hex[ch & 0x0f];
+                } else {
+                    out += c;
+                }
                 break;
         }
     }
@@ -176,7 +191,8 @@ std::vector<Function> parse_functions(const std::string& source) {
         R"(([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
 
     std::vector<Function> functions;
-    std::sregex_iterator it(source.begin(), source.end(), proto);
+    const std::string clean_source = remove_comments(source);
+    std::sregex_iterator it(clean_source.begin(), clean_source.end(), proto);
     std::sregex_iterator end;
     for (; it != end; ++it) {
         const std::smatch match = *it;

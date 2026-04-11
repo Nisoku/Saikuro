@@ -112,12 +112,19 @@ def _missing_binary(cmd: list[str]) -> bool:
     return shutil.which(cmd[0]) is None
 
 
+def _resolve_binary(cmd: list[str]) -> str | None:
+    if not cmd:
+        return None
+    return shutil.which(cmd[0])
+
+
 def _has_dotnet_runtime_8() -> bool:
-    if shutil.which("dotnet") is None:
+    dotnet = _resolve_binary(["dotnet"])
+    if dotnet is None:
         return False
     try:
         proc = subprocess.run(
-            ["dotnet", "--list-runtimes"],
+            [dotnet, "--list-runtimes"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -135,17 +142,19 @@ def run_command(ui: Ui, spec: CommandSpec) -> CommandResult:
     ui.step(spec.label)
     ui.command(spec.cmd)
 
-    if _missing_binary(spec.cmd):
+    resolved_bin = _resolve_binary(spec.cmd)
+    if resolved_bin is None:
         msg = f"missing binary '{spec.cmd[0]}'"
         if spec.optional:
             ui.warning(f"{spec.label}: {msg}; skipping")
             return CommandResult(spec.label, True, True, " ".join(spec.cmd), spec.cwd, 0, msg)
         ui.error(f"{spec.label}: {msg}")
         return CommandResult(spec.label, False, False, " ".join(spec.cmd), spec.cwd, 127, msg)
+    resolved_cmd = [resolved_bin, *spec.cmd[1:]]
 
     try:
         proc = subprocess.run(
-            spec.cmd,
+            resolved_cmd,
             cwd=spec.cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -325,7 +334,7 @@ def summarize(ui: Ui, results: list[CommandResult]) -> int:
         ui.info(f"cwd: {result.cwd}")
         ui.info(f"cmd: {result.command}")
         if result.output_tail:
-            print(result.output_tail)
+            ui.info(result.output_tail)
 
     return 0 if failed == 0 else 1
 
