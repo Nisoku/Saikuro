@@ -103,7 +103,14 @@ impl RustGenerator {
                             &mut field_names,
                         )?;
                         // Preserve original wire name via serde rename
-                        lines.push(format!("    #[serde(rename = {:?})]", field_name));
+                        if field_desc.optional {
+                            lines.push(format!(
+                                "    #[serde(rename = {:?}, default, skip_serializing_if = \"Option::is_none\")]",
+                                field_name
+                            ));
+                        } else {
+                            lines.push(format!("    #[serde(rename = {:?})]", field_name));
+                        }
                         lines.push(format!("    pub {safe_field_name}: {final_type},"));
                     }
                     lines.push("}".to_owned());
@@ -424,7 +431,7 @@ fn rust_keywords() -> Vec<&'static str> {
         "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
         "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
         "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
-        "use", "where", "while", "async", "await", "dyn", "union",
+        "use", "where", "while", "async", "await", "dyn", "union", "try",
     ]
 }
 

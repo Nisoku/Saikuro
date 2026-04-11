@@ -143,6 +143,7 @@ public:
             }
             if (done != 0) {
                 out_item_json.clear();
+                open_ = false;
                 return false;
             }
             out_item_json = take_owned_c_string(raw);

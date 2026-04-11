@@ -273,7 +273,12 @@ def adapter_checks(name: str) -> list[CommandSpec]:
             CommandSpec("Python tests", ["pytest"], ROOT / "adapters" / "python"),
         ],
         "csharp": [
-            CommandSpec("C# restore", ["dotnet", "restore"], ROOT / "adapters" / "csharp" / "Saikuro" / "src", optional=True),
+            CommandSpec(
+                "C# restore",
+                ["dotnet", "restore", "src/Saikuro.csproj"],
+                ROOT / "adapters" / "csharp" / "Saikuro",
+                optional=True,
+            ),
             CommandSpec(
                 "C# build",
                 ["dotnet", "build", "src/Saikuro.csproj", "-c", "Release"],

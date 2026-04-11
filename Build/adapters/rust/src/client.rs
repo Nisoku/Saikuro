@@ -608,28 +608,30 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
             if let Some(slot) = pending.get(&id) {
                 if let PendingSlot::Channel(tx) = slot.value() {
                     let tx = tx.clone();
-                    drop(slot); // Drop DashMap guard before await
+                    drop(slot);
                     if is_stream_end {
-                        // Remove pending slot on stream end
                         pending.remove(&id);
                     } else if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
-                        let _ = tx
-                            .send(Err(Error::remote(
+                        if tx
+                            .try_send(Err(Error::remote(
                                 detail.code.to_string(),
                                 detail.message,
                                 None,
                             )))
-                            .await;
+                            .is_err()
+                        {
+                            warn!(id = %id, "channel receiver lagging or closed while sending error");
+                        }
                         pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if tx.send(Ok(value)).await.is_err() {
+                        if tx.try_send(Ok(value)).is_err() {
+                            warn!(id = %id, "channel receiver lagging or closed while sending value");
                             pending.remove(&id);
                         }
-                        // Keep slot alive for subsequent messages unless send failed
                     }
                 }
             }

@@ -27,7 +27,9 @@ fn map_c_type(raw: &str) -> Value {
     let normalized = raw
         .replace("const", "")
         .replace("volatile", "")
-        .replace("  ", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
         .trim()
         .to_string();
 

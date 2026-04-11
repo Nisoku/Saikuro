@@ -217,6 +217,15 @@ fn sanitize_ident(s: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
+
+    while result.contains("__") {
+        result = result.replace("__", "_");
+    }
+
+    while result.starts_with('_') {
+        result.remove(0);
+    }
+
     if result
         .chars()
         .next()
@@ -225,9 +234,24 @@ fn sanitize_ident(s: &str) -> String {
     {
         result.insert(0, '_');
     }
-    if result.is_empty() {
-        result.push('_');
+
+    if result
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_uppercase())
+        .unwrap_or(false)
+    {
+        result.insert(0, 's');
     }
+
+    if result.is_empty() {
+        result.push('s');
+    }
+
+    while result.contains("__") {
+        result = result.replace("__", "_");
+    }
+
     if CPP_RESERVED.contains(&result.as_str()) {
         result.push('_');
     }
@@ -249,7 +273,14 @@ fn escape_cpp_string_literal(s: &str) -> String {
             '\x0B' => out.push_str("\\v"),
             c if c.is_control() || (c as u32) < 0x20 || (c as u32) == 0x7F => {
                 use std::fmt::Write;
-                write!(out, "\\x{:02X}", c as u32).unwrap();
+                let code = c as u32;
+                if code <= 0xFF {
+                    write!(out, "\\x{:02X}", code).unwrap();
+                } else if code <= 0xFFFF {
+                    write!(out, "\\u{:04X}", code).unwrap();
+                } else {
+                    write!(out, "\\U{:08X}", code).unwrap();
+                }
             }
             _ => out.push(c),
         }

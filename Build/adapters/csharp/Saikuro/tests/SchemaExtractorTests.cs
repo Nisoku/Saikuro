@@ -63,11 +63,12 @@ public class SchemaExtractorTests
         };
 
         using var proc = Process.Start(psi)!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
         proc.WaitForExit();
+        Task.WaitAll(stdoutTask, stderrTask);
 
-        return (proc.ExitCode, stdout, stderr);
+        return (proc.ExitCode, stdoutTask.Result, stderrTask.Result);
     }
 
     private static string ExtractJson(string text)

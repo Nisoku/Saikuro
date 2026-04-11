@@ -250,7 +250,8 @@ unsafe extern "C" fn add_cb(
     _user_data: *mut std::ffi::c_void,
     _args_json: *const std::ffi::c_char,
 ) -> *mut std::ffi::c_char {
-    saikuro_string_dup(c("42").as_ptr())
+    let result = c("42");
+    saikuro_string_dup(result.as_ptr())
 }
 
 fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptReport>) {
@@ -276,9 +277,9 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
 
             let mut report = ScriptReport::default();
 
-            let announce_frame = rx
-                .recv()
+            let announce_frame = tokio::time::timeout(Duration::from_secs(5), rx.recv())
                 .await
+                .expect("timed out waiting for announce frame")
                 .expect("announce recv result")
                 .expect("announce frame");
             let announce = Envelope::from_msgpack(&announce_frame).expect("decode announce");
@@ -295,9 +296,9 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
                 .await
                 .expect("send call");
 
-            let response_frame = rx
-                .recv()
+            let response_frame = tokio::time::timeout(Duration::from_secs(5), rx.recv())
                 .await
+                .expect("timed out waiting for provider response frame")
                 .expect("response recv result")
                 .expect("response frame");
             let response =

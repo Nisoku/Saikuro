@@ -49,23 +49,36 @@ fn compile_cpp(source: &str, output: &Path) {
     let src_path = output.with_extension("cpp");
     fs::write(&src_path, source).expect("write cpp source");
 
-    let status = Command::new("g++")
-        .arg("-std=c++17")
+    let mut cmd = Command::new("g++");
+    cmd.arg("-std=c++17")
         .arg(&src_path)
         .arg("-I")
         .arg(root.join("Build/adapters/cpp/include"))
         .arg("-I")
         .arg(root.join("Build/adapters/c/include"))
         .arg("-L")
-        .arg(&target)
-        .arg(format!("-Wl,-rpath,{}", target.display()))
+        .arg(&target);
+
+    if cfg!(target_os = "linux") {
+        cmd.arg(format!("-Wl,-rpath,{}", target.display()));
+    } else if cfg!(target_os = "macos") {
+        cmd.arg("-Wl,-rpath,@loader_path")
+            .arg(format!("-Wl,-rpath,{}", target.display()));
+    }
+
+    let output = cmd
         .arg("-lsaikuro_c")
         .arg("-o")
         .arg(output)
-        .status()
+        .output()
         .expect("invoke g++");
 
-    assert!(status.success(), "g++ compile failed");
+    assert!(
+        output.status.success(),
+        "g++ compile failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn check_gpp_available() -> bool {

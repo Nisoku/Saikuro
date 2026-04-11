@@ -45,11 +45,126 @@ std::vector<std::string> split(const std::string& text, char delimiter) {
     return out;
 }
 
+bool is_ident_char(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+}
+
 std::string remove_comments(const std::string& source) {
-    const std::regex block_comment(R"(/\*[\s\S]*?\*/)");
-    const std::regex line_comment(R"(//[^\n\r]*)");
-    const std::string no_block = std::regex_replace(source, block_comment, " ");
-    return std::regex_replace(no_block, line_comment, " ");
+    std::string out;
+    out.reserve(source.size());
+
+    bool in_line_comment = false;
+    bool in_block_comment = false;
+    bool in_double_quote = false;
+    bool in_single_quote = false;
+    bool in_raw_string = false;
+    bool escaped = false;
+    std::string raw_delim;
+
+    for (size_t i = 0; i < source.size(); ++i) {
+        const char c = source[i];
+        const char next = (i + 1 < source.size()) ? source[i + 1] : '\0';
+
+        if (in_line_comment) {
+            if (c == '\n' || c == '\r') {
+                in_line_comment = false;
+                out += c;
+            }
+            continue;
+        }
+
+        if (in_block_comment) {
+            if (c == '*' && next == '/') {
+                in_block_comment = false;
+                ++i;
+                continue;
+            }
+            if (c == '\n' || c == '\r') {
+                out += c;
+            }
+            continue;
+        }
+
+        if (in_double_quote) {
+            out += c;
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        if (in_single_quote) {
+            out += c;
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '\'') {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if (in_raw_string) {
+            out += c;
+            const std::string terminator = ")" + raw_delim + "\"";
+            if (c == ')' && i + terminator.size() <= source.size()) {
+                if (source.substr(i, terminator.size()) == terminator) {
+                    for (size_t j = 1; j < terminator.size(); ++j) {
+                        out += source[i + j];
+                    }
+                    i += terminator.size() - 1;
+                    in_raw_string = false;
+                    raw_delim.clear();
+                }
+            }
+            continue;
+        }
+
+        if (c == '/' && next == '/') {
+            in_line_comment = true;
+            ++i;
+            continue;
+        }
+        if (c == '/' && next == '*') {
+            in_block_comment = true;
+            ++i;
+            continue;
+        }
+        if (c == '"') {
+            in_double_quote = true;
+            out += c;
+            continue;
+        }
+        if (c == 'R' && next == '"') {
+            size_t j = i + 2;
+            std::string delim;
+            while (j < source.size() && source[j] != '(') {
+                delim += source[j];
+                ++j;
+            }
+            if (j < source.size() && source[j] == '(') {
+                in_raw_string = true;
+                raw_delim = delim;
+                out.append(source, i, j - i + 1);
+                i = j;
+                continue;
+            }
+        }
+        if (c == '\'') {
+            in_single_quote = true;
+            out += c;
+            continue;
+        }
+
+        out += c;
+    }
+
+    return out;
 }
 
 std::string json_escape(const std::string& value) {
@@ -96,9 +211,16 @@ std::string map_cpp_type(const std::string& raw) {
     normalized = std::regex_replace(normalized, spaces, " ");
 
     const auto erase_word = [&normalized](const std::string& word) {
-        size_t pos = std::string::npos;
-        while ((pos = normalized.find(word)) != std::string::npos) {
-            normalized.erase(pos, word.size());
+        size_t pos = 0;
+        while ((pos = normalized.find(word, pos)) != std::string::npos) {
+            const bool left_ok = (pos == 0) || !is_ident_char(normalized[pos - 1]);
+            const size_t end = pos + word.size();
+            const bool right_ok = (end >= normalized.size()) || !is_ident_char(normalized[end]);
+            if (left_ok && right_ok) {
+                normalized.erase(pos, word.size());
+            } else {
+                pos = end;
+            }
         }
     };
 
@@ -130,7 +252,7 @@ std::string map_cpp_type(const std::string& raw) {
     return "any";
 }
 
-bool parse_arg(const std::string& raw, Arg* out) {
+bool parse_arg(const std::string& raw, size_t index, Arg* out) {
     const std::string arg = trim(raw);
     if (arg.empty() || arg == "void") {
         return false;
@@ -180,18 +302,30 @@ bool parse_arg(const std::string& raw, Arg* out) {
         type = arg;
     }
 
-    out->name = name.empty() ? "arg" : name;
+    out->name = name.empty() ? ("arg" + std::to_string(index)) : name;
     out->type = map_cpp_type(type);
     out->optional = false;
     return true;
 }
 
 std::vector<Function> parse_functions(const std::string& source) {
+    // This parser intentionally supports a pragmatic subset of C++ declarations:
+    // simple, semicolon-terminated function prototypes with non-nested parameter
+    // lists. Complex forms (e.g., function-pointer parameters and deeply nested
+    // template expressions with commas) are not fully supported by this regex.
     const std::regex proto(
         R"(([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
 
     std::vector<Function> functions;
     const std::string clean_source = remove_comments(source);
+
+    if (clean_source.find("(*") != std::string::npos ||
+        std::regex_search(clean_source, std::regex(R"(<[^>]*,[^>]*>)"))) {
+        std::cerr
+            << "warning: schema extractor parser supports only simple prototypes; "
+            << "function-pointer params or complex template commas may be skipped\n";
+    }
+
     std::sregex_iterator it(clean_source.begin(), clean_source.end(), proto);
     std::sregex_iterator end;
     for (; it != end; ++it) {
@@ -212,7 +346,7 @@ std::vector<Function> parse_functions(const std::string& source) {
         const std::vector<std::string> args = split(args_raw, ',');
         for (size_t i = 0; i < args.size(); ++i) {
             Arg parsed;
-            if (parse_arg(args[i], &parsed)) {
+            if (parse_arg(args[i], i, &parsed)) {
                 f.args.push_back(parsed);
             }
         }

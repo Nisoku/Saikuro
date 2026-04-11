@@ -62,6 +62,9 @@ fn main() -> anyhow::Result<()> {
     for file in output.files {
         // Validate file.path is not absolute and does not contain ParentDir or RootDir
         let rel_path = &file.path;
+        if rel_path.trim().is_empty() {
+            anyhow::bail!("output file path cannot be empty");
+        }
         if !seen_rel_paths.insert(rel_path.clone()) {
             anyhow::bail!("duplicate generated output path '{rel_path}'");
         }
@@ -73,10 +76,14 @@ fn main() -> anyhow::Result<()> {
                     std::path::Component::ParentDir
                         | std::path::Component::RootDir
                         | std::path::Component::Prefix(_)
+                        | std::path::Component::CurDir
                 )
             })
         {
             anyhow::bail!("output file path '{rel_path}' is not allowed (absolute or contains parent/root dir)");
+        }
+        if rel_path_obj.file_name().is_none() {
+            anyhow::bail!("output file path '{rel_path}' has no file name");
         }
         let path = out_dir.join(rel_path_obj);
         // Ensure the resulting path is inside out_dir

@@ -6,9 +6,10 @@
 //! - A `saikuro_generated.h` umbrella include.
 
 use saikuro_core::schema::{NamespaceSchema, Schema, Visibility};
+use std::collections::HashMap;
 
 use crate::{
-    error::Result,
+    error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
 };
 
@@ -30,6 +31,24 @@ impl BindingGenerator for CGenerator {
 
         let mut ns_keys: Vec<_> = schema.namespaces.keys().collect();
         ns_keys.sort();
+
+        let mut stem_to_names: HashMap<String, Vec<String>> = HashMap::new();
+        for ns_name in &ns_keys {
+            let stem = normalize_namespace_stem(ns_name);
+            stem_to_names
+                .entry(stem)
+                .or_default()
+                .push((*ns_name).clone());
+        }
+        for (stem, names) in stem_to_names {
+            if names.len() > 1 {
+                return Err(CodegenError::Schema(format!(
+                    "namespace collision after normalization: stem '{stem}' produced by [{}]",
+                    names.join(", ")
+                )));
+            }
+        }
+
         for ns_name in ns_keys {
             let ns_schema = &schema.namespaces[ns_name];
             let safe = normalize_namespace_stem(ns_name);

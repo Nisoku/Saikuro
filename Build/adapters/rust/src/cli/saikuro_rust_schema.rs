@@ -143,6 +143,39 @@ fn function_schema(sig: &Signature) -> Value {
     })
 }
 
+fn self_type_name(ty: &Type) -> String {
+    match ty {
+        Type::Path(tp) => tp
+            .path
+            .segments
+            .last()
+            .map(|s| s.ident.to_string())
+            .unwrap_or_else(|| "impl".to_owned()),
+        _ => "impl".to_owned(),
+    }
+}
+
+fn insert_function(functions: &mut serde_json::Map<String, Value>, key: String, schema: Value) {
+    if !functions.contains_key(&key) {
+        functions.insert(key, schema);
+        return;
+    }
+
+    let mut n = 2usize;
+    loop {
+        let candidate = format!("{key}#{n}");
+        if !functions.contains_key(&candidate) {
+            eprintln!(
+                "warning: duplicate extracted function name '{}', stored as '{}'",
+                key, candidate
+            );
+            functions.insert(candidate, schema);
+            break;
+        }
+        n += 1;
+    }
+}
+
 fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
     let file = syn::parse_file(source).map_err(|e| format!("failed to parse source: {e}"))?;
 
@@ -151,21 +184,27 @@ fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
     for item in file.items {
         match item {
             Item::Fn(func) => {
-                functions.insert(func.sig.ident.to_string(), function_schema(&func.sig));
+                insert_function(
+                    &mut functions,
+                    func.sig.ident.to_string(),
+                    function_schema(&func.sig),
+                );
             }
             Item::Impl(impl_block) => {
+                let ty_name = self_type_name(&impl_block.self_ty);
                 for impl_item in impl_block.items {
                     if let ImplItem::Fn(method) = impl_item {
-                        functions
-                            .insert(method.sig.ident.to_string(), function_schema(&method.sig));
+                        let key = format!("{}::{}", ty_name, method.sig.ident);
+                        insert_function(&mut functions, key, function_schema(&method.sig));
                     }
                 }
             }
             Item::Trait(trait_item) => {
+                let trait_name = trait_item.ident.to_string();
                 for trait_member in trait_item.items {
                     if let TraitItem::Fn(method) = trait_member {
-                        functions
-                            .insert(method.sig.ident.to_string(), function_schema(&method.sig));
+                        let key = format!("{}::{}", trait_name, method.sig.ident);
+                        insert_function(&mut functions, key, function_schema(&method.sig));
                     }
                 }
             }
