@@ -330,7 +330,7 @@ fn c_provider_announce_and_runtime_dispatch_roundtrip() {
         saikuro_provider_register(provider, c("add").as_ptr(), Some(add_cb), ptr::null_mut());
     assert_eq!(register_rc, 0, "provider register failed: {}", take_error());
 
-    let serve_rc = saikuro_provider_serve(provider as *mut std::ffi::c_void, c(&address).as_ptr());
+    let serve_rc = saikuro_provider_serve(provider, c(&address).as_ptr());
     assert_eq!(serve_rc, 0, "provider serve failed: {}", take_error());
 
     let report = server.join().expect("server thread");

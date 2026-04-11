@@ -80,16 +80,33 @@ public class SchemaExtractorTests
 
     private static string FindRepoRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath)!);
-        while (current is not null)
+        var startDirs = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(sourceFilePath))
         {
-            if (File.Exists(Path.Combine(current.FullName, "Saikuro.sln")))
+            var sourceDir = Path.GetDirectoryName(sourceFilePath);
+            if (!string.IsNullOrWhiteSpace(sourceDir))
             {
-                return current.FullName;
+                startDirs.Add(sourceDir);
             }
-            current = current.Parent;
         }
 
-        throw new InvalidOperationException("Could not locate repository root from test base directory.");
+        startDirs.Add(AppContext.BaseDirectory);
+        startDirs.Add(Directory.GetCurrentDirectory());
+
+        foreach (var start in startDirs.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var current = new DirectoryInfo(start);
+            while (current is not null)
+            {
+                if (File.Exists(Path.Combine(current.FullName, "Saikuro.sln")))
+                {
+                    return current.FullName;
+                }
+                current = current.Parent;
+            }
+        }
+
+        throw new InvalidOperationException("Could not locate repository root (searched from source path, base directory, and current directory).");
     }
 }
