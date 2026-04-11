@@ -41,6 +41,7 @@ def test_schema_cli_stdout_pretty_json() -> None:
     out = json.loads(proc.stdout)
     assert out["version"] == 1
     assert "parityns" in out["namespaces"]
+    assert "\n  " in proc.stdout
 
 
 def test_schema_cli_writes_output_file(tmp_path: Path) -> None:
@@ -86,3 +87,25 @@ def test_schema_cli_missing_file_returns_usage_error() -> None:
 
     assert proc.returncode == 1
     assert "file not found" in proc.stderr.lower()
+
+
+def test_schema_cli_extract_failure_returns_error(tmp_path: Path) -> None:
+    bad_fixture = tmp_path / "bad_fixture.py"
+    bad_fixture.write_text("def broken(:\n    pass\n", encoding="utf-8")
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "saikuro.cli",
+            "--namespace",
+            "parityns",
+            str(bad_fixture),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 2
+    assert "extraction error" in proc.stderr.lower()

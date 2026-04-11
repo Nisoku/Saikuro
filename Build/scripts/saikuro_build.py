@@ -156,6 +156,18 @@ def run_command(ui: Ui, spec: CommandSpec) -> CommandResult:
         ok = proc.returncode == 0
         out = _tail(proc.stdout)
     except subprocess.TimeoutExpired as e:
+        if spec.optional:
+            ui.warning(f"{spec.label} timed out after {e.timeout} seconds; marked optional")
+            return CommandResult(
+                label=spec.label,
+                ok=True,
+                skipped=True,
+                command=" ".join(spec.cmd),
+                cwd=spec.cwd,
+                returncode=124,
+                output_tail="<timeout>\n" + (e.output or ""),
+            )
+
         ui.error(f"{spec.label} timed out after {e.timeout} seconds")
         return CommandResult(
             label=spec.label,
@@ -203,7 +215,7 @@ def quality_checks() -> list[CommandSpec]:
             ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"],
             ROOT,
         ),
-        CommandSpec("Rust tests", ["cargo", "test", "--workspace"], ROOT),
+        CommandSpec("Rust tests", ["cargo", "test", "--workspace", "--all-features"], ROOT),
     ]
 
 

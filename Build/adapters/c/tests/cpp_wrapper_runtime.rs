@@ -1,9 +1,9 @@
 use std::fs;
-use std::net::{SocketAddr, TcpListener};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -131,9 +131,7 @@ fn temp_probe_path(stem: &str) -> PathBuf {
 }
 
 fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
-    let probe = TcpListener::bind("127.0.0.1:0").expect("probe port");
-    let port = probe.local_addr().expect("probe addr").port();
-    drop(probe);
+    let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -142,7 +140,7 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             .expect("runtime");
 
         rt.block_on(async move {
-            let socket = SocketAddr::from(([127, 0, 0, 1], port));
+            let socket = SocketAddr::from(([127, 0, 0, 1], 0));
             let runtime = SaikuroRuntime::builder().build();
             let handle = runtime.handle();
             let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
@@ -246,6 +244,7 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             let mut listener = TcpTransportListener::bind(socket)
                 .await
                 .expect("bind listener");
+            let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
 
             let transport = listener.accept().await.expect("accept").expect("transport");
             handle.accept_transport(transport, "cpp-client".to_owned(), CapabilitySet::default());
@@ -258,13 +257,15 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
         });
     });
 
-    (format!("tcp://127.0.0.1:{port}"), handle)
+    let address = ready_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("cpp runtime listener did not become ready");
+
+    (address, handle)
 }
 
 fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool>) {
-    let probe = TcpListener::bind("127.0.0.1:0").expect("probe port");
-    let port = probe.local_addr().expect("probe addr").port();
-    drop(probe);
+    let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -273,10 +274,11 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
             .expect("runtime");
 
         rt.block_on(async move {
-            let socket = SocketAddr::from(([127, 0, 0, 1], port));
+            let socket = SocketAddr::from(([127, 0, 0, 1], 0));
             let mut listener = TcpTransportListener::bind(socket)
                 .await
                 .expect("bind listener");
+            let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport = listener.accept().await.expect("accept").expect("transport");
             let (mut tx, mut rx) = transport.split();
 
@@ -311,7 +313,11 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
         })
     });
 
-    (format!("tcp://127.0.0.1:{port}"), handle)
+    let address = ready_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("scripted runtime listener did not become ready");
+
+    (address, handle)
 }
 
 #[test]

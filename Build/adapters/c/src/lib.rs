@@ -147,9 +147,11 @@ impl ClientHandle {
 /// C callback for provider functions.
 ///
 /// # Safety
-/// The returned pointer must be a heap-allocated, owned C string (e.g., from `malloc` or `strdup`).
-/// Ownership is transferred to Rust, which will free it using `CString::from_raw`. Returning a pointer
-/// to a stack or static buffer is undefined behavior.
+/// The returned pointer must be an owned C string allocated via `saikuro_string_dup`
+/// (or `CString::into_raw`-compatible allocation semantics).
+/// Ownership is transferred to Rust, which reclaims it with `CString::from_raw`.
+/// Returning strings from `malloc`/`strdup` is undefined behavior because allocator
+/// ownership does not match `CString::from_raw` expectations.
 type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
 
 struct ProviderHandle {
@@ -595,6 +597,15 @@ pub unsafe extern "C" fn saikuro_stream_next_json(
 ) -> c_int {
     clear_last_error();
 
+    unsafe {
+        if !out_done.is_null() {
+            *out_done = 1;
+        }
+        if !out_item_json.is_null() {
+            *out_item_json = ptr::null_mut();
+        }
+    }
+
     if stream.is_null() {
         set_last_error("stream must not be null");
         return 1;
@@ -617,11 +628,19 @@ pub unsafe extern "C" fn saikuro_stream_next_json(
                 0
             }
             Err(e) => {
+                unsafe {
+                    *out_done = 1;
+                    *out_item_json = ptr::null_mut();
+                }
                 set_last_error(format!("failed to serialize stream item: {e}"));
                 1
             }
         },
         Some(Err(e)) => {
+            unsafe {
+                *out_done = 1;
+                *out_item_json = ptr::null_mut();
+            }
             set_last_error(format!("stream receive failed: {e}"));
             1
         }
@@ -790,6 +809,15 @@ pub unsafe extern "C" fn saikuro_channel_next_json(
 ) -> c_int {
     clear_last_error();
 
+    unsafe {
+        if !out_done.is_null() {
+            *out_done = 1;
+        }
+        if !out_item_json.is_null() {
+            *out_item_json = ptr::null_mut();
+        }
+    }
+
     if channel.is_null() {
         set_last_error("channel must not be null");
         return 1;
@@ -812,11 +840,19 @@ pub unsafe extern "C" fn saikuro_channel_next_json(
                 0
             }
             Err(e) => {
+                unsafe {
+                    *out_done = 1;
+                    *out_item_json = ptr::null_mut();
+                }
                 set_last_error(format!("failed to serialize channel item: {e}"));
                 1
             }
         },
         Some(Err(e)) => {
+            unsafe {
+                *out_done = 1;
+                *out_item_json = ptr::null_mut();
+            }
             set_last_error(format!("channel receive failed: {e}"));
             1
         }

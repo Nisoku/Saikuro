@@ -46,11 +46,11 @@ add_test(NAME saikuro_cpp_schema_extractor_test COMMAND saikuro_cpp_schema_extra
 
 add_test(
     NAME saikuro_cpp_schema_cli_success_test
-    COMMAND saikuro-cpp-schema --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/schema_service.h
+    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/schema_service.h
 )
 
 add_test(
     NAME saikuro_cpp_schema_cli_missing_file_test
-    COMMAND saikuro-cpp-schema --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/does_not_exist.h
+    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/does_not_exist.h
 )
 set_tests_properties(saikuro_cpp_schema_cli_missing_file_test PROPERTIES WILL_FAIL TRUE)

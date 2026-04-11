@@ -1,5 +1,6 @@
 #![cfg(feature = "cli")]
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::{fs, path::PathBuf};
 
@@ -54,10 +55,15 @@ fn main() -> anyhow::Result<()> {
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     fs::create_dir_all(&out_dir)?;
+    let mut seen_rel_paths: HashSet<String> = HashSet::new();
+    let mut seen_canon_paths: HashSet<PathBuf> = HashSet::new();
 
     for file in output.files {
         // Validate file.path is not absolute and does not contain ParentDir or RootDir
         let rel_path = &file.path;
+        if !seen_rel_paths.insert(rel_path.clone()) {
+            anyhow::bail!("duplicate generated output path '{rel_path}'");
+        }
         let rel_path_obj = Path::new(rel_path);
         if rel_path_obj.is_absolute()
             || rel_path_obj.components().any(|c| {
@@ -96,6 +102,9 @@ fn main() -> anyhow::Result<()> {
                 "output file path '{:?}' escapes output directory",
                 canon_path
             );
+        }
+        if !seen_canon_paths.insert(canon_path.clone()) {
+            anyhow::bail!("duplicate generated output path '{rel_path}'");
         }
         fs::write(&path, file.content)?;
     }

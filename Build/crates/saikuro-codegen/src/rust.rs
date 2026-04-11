@@ -78,7 +78,7 @@ impl RustGenerator {
             let safe_type_name = ensure_unique_name(
                 "type",
                 &type_name,
-                &sanitize_type_name(&type_name),
+                &sanitize_type_name_pascal(&type_name),
                 &mut type_names,
             )?;
             match type_def {
@@ -215,7 +215,7 @@ impl RustGenerator {
             params.push(format!("{arg_name}: {final_type}"));
             if arg.optional {
                 arg_pushes.push(format!(
-                    "        if let Some(value) = {arg_name} {{ args.push(serde_json::to_value(value).map_err(|e| Error::Codec(e.to_string()))?); }}"
+                    "        if let Some(value) = {arg_name} {{ args.push(serde_json::to_value(value).map_err(|e| Error::Codec(e.to_string()))?); }} else {{ args.push(serde_json::Value::Null); }}"
                 ));
             } else {
                 arg_pushes.push(format!(
@@ -297,7 +297,7 @@ impl RustGenerator {
                 PrimitiveType::Any => "serde_json::Value".to_owned(),
                 PrimitiveType::Unit => "()".to_owned(),
             },
-            TypeDescriptor::Named { name } => sanitize_type_name(name),
+            TypeDescriptor::Named { name } => sanitize_type_name_pascal(name),
             TypeDescriptor::Option { inner } => format!("Option<{}>", Self::type_to_rust(inner)?),
             TypeDescriptor::Array { item } => format!("Vec<{}>", Self::type_to_rust(item)?),
             TypeDescriptor::Map { value } => {
@@ -347,6 +347,9 @@ fn sanitize_ident(s: &str) -> String {
         .collect();
     if out.is_empty() {
         out.push('_');
+    }
+    if out == "_" {
+        out = "_generated".to_owned();
     }
     if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
@@ -407,6 +410,20 @@ fn sanitize_type_name(s: &str) -> String {
         } else {
             ident
         }
+    }
+}
+
+fn sanitize_type_name_pascal(s: &str) -> String {
+    let ident = sanitize_type_name(s);
+    let leading = ident.starts_with('_');
+    let mut body = to_pascal_case(ident.trim_start_matches('_'));
+    if body.is_empty() {
+        body = "Generated".to_owned();
+    }
+    if leading {
+        format!("_{}", body)
+    } else {
+        body
     }
 }
 

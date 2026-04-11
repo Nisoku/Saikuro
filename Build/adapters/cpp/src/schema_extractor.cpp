@@ -173,16 +173,13 @@ bool parse_arg(const std::string& raw, Arg* out) {
 
 std::vector<Function> parse_functions(const std::string& source) {
     const std::regex proto(
-        R"(^\s*([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
+        R"(([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
 
     std::vector<Function> functions;
-    std::stringstream ss(source);
-    std::string line;
-    while (std::getline(ss, line)) {
-        std::smatch match;
-        if (!std::regex_search(line, match, proto)) {
-            continue;
-        }
+    std::sregex_iterator it(source.begin(), source.end(), proto);
+    std::sregex_iterator end;
+    for (; it != end; ++it) {
+        const std::smatch match = *it;
 
         const std::string returns = trim(match[1].str());
         const std::string name = match[2].str();
