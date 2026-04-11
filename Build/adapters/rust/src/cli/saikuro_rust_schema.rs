@@ -54,9 +54,8 @@ fn type_to_schema(ty: &Type) -> Value {
                 "bool" => primitive("bool"),
                 "String" | "str" => primitive("string"),
                 "f32" | "f64" => primitive("f64"),
-                "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize" => {
-                    primitive("i64")
-                }
+                "i8" | "i16" | "i32" | "i64" | "isize" => primitive("i64"),
+                "u8" | "u16" | "u32" | "u64" | "usize" => primitive("u64"),
                 "Vec" => {
                     let item = first_type_arg(seg)
                         .map(type_to_schema)
@@ -108,16 +107,40 @@ fn two_type_args(seg: &syn::PathSegment) -> Option<(&Type, &Type)> {
     Some((first, second))
 }
 
-fn function_schema(sig: &Signature) -> Value {
+fn vis_to_schema(vis: &syn::Visibility) -> &'static str {
+    match vis {
+        syn::Visibility::Public(_) => "public",
+        syn::Visibility::Inherited => "private",
+        syn::Visibility::Restricted(restricted) => {
+            let head = restricted
+                .path
+                .segments
+                .first()
+                .map(|s| s.ident.to_string())
+                .unwrap_or_default();
+            if restricted.in_token.is_none() && head == "crate" {
+                "crate"
+            } else if head == "crate" {
+                "pub(crate)"
+            } else if head == "super" {
+                "pub(super)"
+            } else {
+                "private"
+            }
+        }
+    }
+}
+
+fn function_schema(sig: &Signature, vis: Option<&syn::Visibility>) -> Value {
     let mut args = Vec::new();
-    for input in &sig.inputs {
+    for (index, input) in sig.inputs.iter().enumerate() {
         let FnArg::Typed(typed) = input else {
             continue;
         };
 
         let name = match &*typed.pat {
             Pat::Ident(id) => id.ident.to_string(),
-            _ => "arg".to_owned(),
+            _ => format!("arg{index}"),
         };
 
         let ty = type_to_schema(&typed.ty);
@@ -137,7 +160,7 @@ fn function_schema(sig: &Signature) -> Value {
     json!({
         "args": args,
         "returns": returns,
-        "visibility": "public",
+        "visibility": vis.map(vis_to_schema).unwrap_or("public"),
         "capabilities": [],
         "idempotent": false,
     })
@@ -187,15 +210,26 @@ fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
                 insert_function(
                     &mut functions,
                     func.sig.ident.to_string(),
-                    function_schema(&func.sig),
+                    function_schema(&func.sig, Some(&func.vis)),
                 );
             }
             Item::Impl(impl_block) => {
                 let ty_name = self_type_name(&impl_block.self_ty);
+                let trait_name = impl_block
+                    .trait_
+                    .as_ref()
+                    .and_then(|(_, path, _)| path.segments.last().map(|s| s.ident.to_string()));
                 for impl_item in impl_block.items {
                     if let ImplItem::Fn(method) = impl_item {
-                        let key = format!("{}::{}", ty_name, method.sig.ident);
-                        insert_function(&mut functions, key, function_schema(&method.sig));
+                        let key = match &trait_name {
+                            Some(name) => format!("{}::{}::{}", ty_name, name, method.sig.ident),
+                            None => format!("{}::{}", ty_name, method.sig.ident),
+                        };
+                        insert_function(
+                            &mut functions,
+                            key,
+                            function_schema(&method.sig, Some(&method.vis)),
+                        );
                     }
                 }
             }
@@ -204,7 +238,7 @@ fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
                 for trait_member in trait_item.items {
                     if let TraitItem::Fn(method) = trait_member {
                         let key = format!("{}::{}", trait_name, method.sig.ident);
-                        insert_function(&mut functions, key, function_schema(&method.sig));
+                        insert_function(&mut functions, key, function_schema(&method.sig, None));
                     }
                 }
             }

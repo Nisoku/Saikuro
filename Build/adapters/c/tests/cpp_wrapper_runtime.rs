@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex, Once};
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -90,18 +90,21 @@ fn check_gpp_available() -> bool {
 }
 
 fn ensure_saikuro_c_built() {
-    let build_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let status = Command::new("cargo")
-        .current_dir(build_root)
-        .arg("build")
-        .arg("-p")
-        .arg("saikuro-c")
-        .status()
-        .expect("run cargo build -p saikuro-c");
-    assert!(
-        status.success(),
-        "failed to build saikuro-c library for C++ runtime tests"
-    );
+    static BUILD_ONCE: Once = Once::new();
+    BUILD_ONCE.call_once(|| {
+        let build_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let status = Command::new("cargo")
+            .current_dir(build_root)
+            .arg("build")
+            .arg("-p")
+            .arg("saikuro-c")
+            .status()
+            .expect("run cargo build -p saikuro-c");
+        assert!(
+            status.success(),
+            "failed to build saikuro-c library for C++ runtime tests"
+        );
+    });
 }
 
 fn run_cpp(exe: &Path, args: &[&str]) {
@@ -259,7 +262,11 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
                 .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
 
-            let transport = listener.accept().await.expect("accept").expect("transport");
+            let transport = tokio::time::timeout(Duration::from_secs(60), listener.accept())
+                .await
+                .expect("timed out waiting for cpp client connection")
+                .expect("accept")
+                .expect("transport");
             handle.accept_transport(transport, "cpp-client".to_owned(), CapabilitySet::default());
             assert!(
                 tokio::time::timeout(Duration::from_secs(5), done_rx)
@@ -292,14 +299,19 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 .await
                 .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
-            let transport = listener.accept().await.expect("accept").expect("transport");
+            let transport =
+                match tokio::time::timeout(Duration::from_secs(60), listener.accept()).await {
+                    Ok(Ok(Some(transport))) => transport,
+                    Ok(Ok(None)) => return false,
+                    Ok(Err(_)) => return false,
+                    Err(_) => return false,
+                };
             let (mut tx, mut rx) = transport.split();
 
-            let frame = rx
-                .recv()
-                .await
-                .expect("announce recv")
-                .expect("announce frame");
+            let frame = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+                Ok(Ok(Some(frame))) => frame,
+                _ => return false,
+            };
             let announce = Envelope::from_msgpack(&frame).expect("decode announce");
             if announce.invocation_type != InvocationType::Announce {
                 return false;
@@ -315,11 +327,10 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 .await
                 .expect("send call");
 
-            let response = rx
-                .recv()
-                .await
-                .expect("response recv")
-                .expect("response frame");
+            let response = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+                Ok(Ok(Some(response))) => response,
+                _ => return false,
+            };
             let decoded = ResponseEnvelope::from_msgpack(&response).expect("decode response");
 
             decoded.ok && decoded.result == Some(Value::Int(42))

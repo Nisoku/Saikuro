@@ -53,7 +53,7 @@ impl BindingGenerator for CGenerator {
             let ns_schema = &schema.namespaces[ns_name];
             let safe = normalize_namespace_stem(ns_name);
             let file_name = format!("{safe}_client.h");
-            let src = self.generate_namespace_client(ns_name, &safe, ns_schema);
+            let src = self.generate_namespace_client(ns_name, &safe, ns_schema)?;
             output.add(&file_name, src);
             includes.push(format!("#include \"{file_name}\""));
         }
@@ -87,7 +87,12 @@ impl CGenerator {
         .join("\n")
     }
 
-    fn generate_namespace_client(&self, ns_name: &str, safe: &str, ns: &NamespaceSchema) -> String {
+    fn generate_namespace_client(
+        &self,
+        ns_name: &str,
+        safe: &str,
+        ns: &NamespaceSchema,
+    ) -> Result<String> {
         let guard = format!("SAIKURO_{}_CLIENT_H", safe.to_uppercase());
 
         let mut lines = vec![
@@ -101,6 +106,7 @@ impl CGenerator {
 
         let mut fn_keys: Vec<_> = ns.functions.keys().collect();
         fn_keys.sort();
+        let mut seen_names: HashMap<String, String> = HashMap::new();
         for fn_name in fn_keys {
             let fn_schema = &ns.functions[fn_name];
             if fn_schema.visibility == Visibility::Private {
@@ -108,7 +114,15 @@ impl CGenerator {
             }
 
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
+            if let Some(previous_raw) = seen_names.get(&c_fn_name) {
+                return Err(CodegenError::Schema(format!(
+                    "C wrapper name collision in namespace '{ns_name}': '{previous_raw}' and '{fn_name}' both sanitize to '{c_fn_name}'"
+                )));
+            }
+            seen_names.insert(c_fn_name.clone(), fn_name.clone());
+
             let target = format!("{ns_name}.{fn_name}");
+            let escaped_target = escape_c_string_literal(&target);
             let ownership_note = "*\n * Returned char* is owned by the caller and must be freed with saikuro_string_free().";
             if let Some(doc) = &fn_schema.doc {
                 let sanitized_doc = doc.replace("*/", "*\\/");
@@ -120,7 +134,7 @@ impl CGenerator {
                 "static inline char* {c_fn_name}(saikuro_client_t client, const char* args_json) {{"
             ));
             lines.push(format!(
-                "    return saikuro_client_call_json(client, \"{target}\", args_json);"
+                "    return saikuro_client_call_json(client, \"{escaped_target}\", args_json);"
             ));
             lines.push("}".to_owned());
             lines.push(String::new());
@@ -129,8 +143,27 @@ impl CGenerator {
         lines.push("#endif".to_owned());
         lines.push(String::new());
 
-        lines.join("\n")
+        Ok(lines.join("\n"))
     }
+}
+
+fn escape_c_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ if c.is_control() => {
+                use std::fmt::Write;
+                let _ = write!(out, "\\x{:02X}", c as u32);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 fn sanitize_ident(s: &str) -> String {

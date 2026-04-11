@@ -45,8 +45,161 @@ std::vector<std::string> split(const std::string& text, char delimiter) {
     return out;
 }
 
+std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
+    std::vector<std::string> out;
+    if (trim(text).empty()) {
+        return out;
+    }
+
+    std::string current;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    int angle_depth = 0;
+    bool in_single_quote = false;
+    bool in_double_quote = false;
+    bool escaped = false;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+
+        if (in_double_quote) {
+            current += c;
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        if (in_single_quote) {
+            current += c;
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '\'') {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            in_double_quote = true;
+            current += c;
+            continue;
+        }
+        if (c == '\'') {
+            in_single_quote = true;
+            current += c;
+            continue;
+        }
+
+        if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (c == '[') {
+            ++bracket_depth;
+        } else if (c == ']' && bracket_depth > 0) {
+            --bracket_depth;
+        } else if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>' && angle_depth > 0) {
+            --angle_depth;
+        }
+
+        if (c == ',' && paren_depth == 0 && bracket_depth == 0 && angle_depth == 0) {
+            out.push_back(current);
+            current.clear();
+            continue;
+        }
+
+        current += c;
+    }
+
+    out.push_back(current);
+    return out;
+}
+
+std::string strip_top_level_initializer(const std::string& text) {
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    int angle_depth = 0;
+    bool in_single_quote = false;
+    bool in_double_quote = false;
+    bool escaped = false;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+
+        if (in_double_quote) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        if (in_single_quote) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '\'') {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            in_double_quote = true;
+            continue;
+        }
+        if (c == '\'') {
+            in_single_quote = true;
+            continue;
+        }
+
+        if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (c == '[') {
+            ++bracket_depth;
+        } else if (c == ']' && bracket_depth > 0) {
+            --bracket_depth;
+        } else if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>' && angle_depth > 0) {
+            --angle_depth;
+        }
+
+        if (c == '=' && paren_depth == 0 && bracket_depth == 0 && angle_depth == 0) {
+            return trim(text.substr(0, i));
+        }
+    }
+
+    return trim(text);
+}
+
 bool is_ident_char(char c) {
     return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+}
+
+char next_non_space_char(const std::string& source, size_t start) {
+    for (size_t i = start; i < source.size(); ++i) {
+        const unsigned char ch = static_cast<unsigned char>(source[i]);
+        if (std::isspace(ch) == 0) {
+            return source[i];
+        }
+    }
+    return '\0';
 }
 
 std::string remove_comments(const std::string& source) {
@@ -75,6 +228,11 @@ std::string remove_comments(const std::string& source) {
 
         if (in_block_comment) {
             if (c == '*' && next == '/') {
+                const char prev = out.empty() ? '\0' : out.back();
+                const char upcoming = next_non_space_char(source, i + 2);
+                if (is_ident_char(prev) && is_ident_char(upcoming)) {
+                    out += ' ';
+                }
                 in_block_comment = false;
                 ++i;
                 continue;
@@ -228,10 +386,15 @@ std::string map_cpp_type(const std::string& raw) {
     erase_word("volatile");
     normalized = trim(normalized);
 
+    const std::string compact = std::regex_replace(normalized, spaces, "");
+
     if (normalized.find("char*") != std::string::npos ||
         normalized.find("char *") != std::string::npos ||
-        normalized.find("std::string") != std::string::npos ||
-        normalized.find("string") != std::string::npos) {
+        normalized.find("std::string") != std::string::npos) {
+        return "string";
+    }
+    static const std::regex plain_string_re(R"(^(string)([\*&]+)?$)");
+    if (compact.find('<') == std::string::npos && std::regex_match(compact, plain_string_re)) {
         return "string";
     }
     if (normalized.find("bool") != std::string::npos) {
@@ -253,7 +416,7 @@ std::string map_cpp_type(const std::string& raw) {
 }
 
 bool parse_arg(const std::string& raw, size_t index, Arg* out) {
-    const std::string arg = trim(raw);
+    const std::string arg = strip_top_level_initializer(raw);
     if (arg.empty() || arg == "void") {
         return false;
     }
@@ -310,9 +473,9 @@ bool parse_arg(const std::string& raw, size_t index, Arg* out) {
 
 std::vector<Function> parse_functions(const std::string& source) {
     // This parser intentionally supports a pragmatic subset of C++ declarations:
-    // simple, semicolon-terminated function prototypes with non-nested parameter
-    // lists. Complex forms (e.g., function-pointer parameters and deeply nested
-    // template expressions with commas) are not fully supported by this regex.
+    // simple, semicolon-terminated function prototypes. Argument tokenization is
+    // nesting-aware, but complex forms (e.g., function-pointer declarations) may
+    // still be skipped by the prototype regex.
     const std::regex proto(
         R"(([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
 
@@ -343,7 +506,7 @@ std::vector<Function> parse_functions(const std::string& source) {
         f.name = name;
         f.returns = map_cpp_type(returns);
 
-        const std::vector<std::string> args = split(args_raw, ',');
+        const std::vector<std::string> args = split_args_aware_of_nesting(args_raw);
         for (size_t i = 0; i < args.size(); ++i) {
             Arg parsed;
             if (parse_arg(args[i], i, &parsed)) {

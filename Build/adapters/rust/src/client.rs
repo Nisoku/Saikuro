@@ -6,7 +6,7 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
@@ -70,6 +70,7 @@ pub struct SaikuroChannel {
     id: InvocationId,
     send_tx: mpsc::Sender<Bytes>,
     receiver: mpsc::Receiver<StreamItem>,
+    outbound_seq: AtomicU64,
 }
 
 impl SaikuroChannel {
@@ -82,13 +83,24 @@ impl SaikuroChannel {
             id,
             send_tx,
             receiver,
+            outbound_seq: AtomicU64::new(0),
         }
+    }
+
+    fn next_seq(&self) -> u64 {
+        self.outbound_seq.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Close the channel by sending a StreamControl::End frame.
     pub async fn close(&self) -> Result<()> {
-        let mut envelope =
-            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![], None);
+        let mut envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![],
+            None,
+            Some(self.next_seq()),
+        );
         envelope.stream_control = Some(StreamControl::End);
         let bytes = envelope
             .to_msgpack()
@@ -101,8 +113,14 @@ impl SaikuroChannel {
 
     /// Abort the channel by sending a StreamControl::Abort frame.
     pub async fn abort(&self) -> Result<()> {
-        let mut envelope =
-            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![], None);
+        let mut envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![],
+            None,
+            Some(self.next_seq()),
+        );
         envelope.stream_control = Some(StreamControl::Abort);
         let bytes = envelope
             .to_msgpack()
@@ -115,8 +133,14 @@ impl SaikuroChannel {
 
     /// Send a value to the provider side of this channel.
     pub async fn send(&self, value: Value) -> Result<()> {
-        let envelope =
-            make_envelope_with_id(self.id, InvocationType::Channel, "", vec![value], None);
+        let envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![value],
+            None,
+            Some(self.next_seq()),
+        );
         let bytes = envelope
             .to_msgpack()
             .map_err(|e| Error::Codec(e.to_string()))?;
@@ -311,7 +335,10 @@ impl Client {
         let (tx, rx) = oneshot::channel();
         self.pending.insert(id, PendingSlot::Call(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
 
         let recv_fut = async {
             rx.await
@@ -353,7 +380,10 @@ impl Client {
         let (tx, rx) = mpsc::channel(128);
         self.pending.insert(id, PendingSlot::Stream(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
         Ok(SaikuroStream::new(rx))
     }
 
@@ -384,7 +414,10 @@ impl Client {
 
         let (tx, rx) = oneshot::channel();
         self.pending.insert(id, PendingSlot::Call(tx));
-        self.send_envelope(&batch_env).await?;
+        if let Err(e) = self.send_envelope(&batch_env).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
 
         let resp = rx
             .await
@@ -414,7 +447,10 @@ impl Client {
         let (tx, rx) = mpsc::channel(128);
         self.pending.insert(id, PendingSlot::Channel(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
         Ok(SaikuroChannel::new(id, self.send_tx.clone(), rx))
     }
 
@@ -427,7 +463,10 @@ impl Client {
         let (tx, rx) = oneshot::channel();
         self.pending.insert(id, PendingSlot::Call(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
 
         let resp = rx
             .await
@@ -616,20 +655,21 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
                         if tx
-                            .try_send(Err(Error::remote(
+                            .send(Err(Error::remote(
                                 detail.code.to_string(),
                                 detail.message,
                                 None,
                             )))
+                            .await
                             .is_err()
                         {
-                            warn!(id = %id, "channel receiver lagging or closed while sending error");
+                            warn!(id = %id, "channel receiver closed while sending error");
+                            pending.remove(&id);
                         }
-                        pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if tx.try_send(Ok(value)).is_err() {
-                            warn!(id = %id, "channel receiver lagging or closed while sending value");
+                        if tx.send(Ok(value)).await.is_err() {
+                            warn!(id = %id, "channel receiver closed while sending value");
                             pending.remove(&id);
                         }
                     }
@@ -669,7 +709,14 @@ fn make_envelope(
     args: Vec<Value>,
     capability: Option<saikuro_core::capability::CapabilityToken>,
 ) -> Envelope {
-    make_envelope_with_id(InvocationId::new(), inv_type, target, args, capability)
+    make_envelope_with_id(
+        InvocationId::new(),
+        inv_type,
+        target,
+        args,
+        capability,
+        None,
+    )
 }
 
 fn make_envelope_with_id(
@@ -678,6 +725,7 @@ fn make_envelope_with_id(
     target: &str,
     args: Vec<Value>,
     capability: Option<saikuro_core::capability::CapabilityToken>,
+    seq: Option<u64>,
 ) -> Envelope {
     let core_args: Vec<CoreValue> = args.into_iter().map(json_to_core).collect();
     Envelope {
@@ -690,7 +738,7 @@ fn make_envelope_with_id(
         capability,
         batch_items: None,
         stream_control: None,
-        seq: None,
+        seq,
     }
 }
 

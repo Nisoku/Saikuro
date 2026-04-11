@@ -3,6 +3,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <memory>
 #include <utility>
 
 extern "C" {
@@ -20,8 +21,8 @@ inline std::string take_owned_c_string(char* ptr) {
     if (ptr == nullptr) {
         return {};
     }
-    std::string out(ptr);
-    saikuro_string_free(ptr);
+    std::unique_ptr<char, decltype(&saikuro_string_free)> guard(ptr, &saikuro_string_free);
+    std::string out(guard.get());
     return out;
 }
 
@@ -143,7 +144,6 @@ public:
             }
             if (done != 0) {
                 out_item_json.clear();
-                open_ = false;
                 return false;
             }
             out_item_json = take_owned_c_string(raw);
