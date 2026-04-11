@@ -3,6 +3,10 @@
 //! All tests use [`InMemoryTransport`] so no network is required.
 
 use saikuro::{Client, InMemoryTransport, Provider};
+use saikuro_core::{
+    envelope::{Envelope, InvocationType, StreamControl},
+    ResponseEnvelope,
+};
 use serde_json::json;
 
 // Helpers
@@ -258,4 +262,331 @@ async fn in_memory_transport_sends_and_receives() {
     a.send(frame.clone()).await.unwrap();
     let received = b.recv().await.unwrap();
     assert_eq!(received, Some(frame));
+}
+
+#[tokio::test]
+async fn resource_roundtrip_with_simulated_runtime() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let runtime_task = tokio::spawn(async move {
+        let frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv")
+            .expect("resource request frame");
+        let env = Envelope::from_msgpack(&frame).expect("decode request envelope");
+        assert_eq!(env.invocation_type, InvocationType::Resource);
+        assert_eq!(env.target, "files.open");
+
+        let response =
+            ResponseEnvelope::ok(env.id, saikuro_core::value::Value::String("ok".into()));
+        runtime_side
+            .send(bytes::Bytes::from(
+                response.to_msgpack().expect("encode response"),
+            ))
+            .await
+            .expect("send response");
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    let result = client
+        .resource("files.open", vec![json!("/tmp/file")])
+        .await
+        .expect("resource should succeed");
+    assert_eq!(result, json!("ok"));
+
+    runtime_task.await.expect("runtime task");
+    client.close().await.expect("close client");
+}
+
+#[tokio::test]
+async fn stream_roundtrip_with_simulated_runtime() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let runtime_task = tokio::spawn(async move {
+        let frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv")
+            .expect("stream open frame");
+        let env = Envelope::from_msgpack(&frame).expect("decode stream envelope");
+        assert_eq!(env.invocation_type, InvocationType::Stream);
+        assert_eq!(env.target, "events.watch");
+
+        let item1 = ResponseEnvelope::stream_item(env.id, 0, saikuro_core::value::Value::Int(1));
+        runtime_side
+            .send(bytes::Bytes::from(
+                item1.to_msgpack().expect("encode item1"),
+            ))
+            .await
+            .expect("send item1");
+
+        let item2 = ResponseEnvelope::stream_item(env.id, 1, saikuro_core::value::Value::Int(2));
+        runtime_side
+            .send(bytes::Bytes::from(
+                item2.to_msgpack().expect("encode item2"),
+            ))
+            .await
+            .expect("send item2");
+
+        let end = ResponseEnvelope::stream_end(env.id, 2);
+        runtime_side
+            .send(bytes::Bytes::from(end.to_msgpack().expect("encode end")))
+            .await
+            .expect("send end");
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    let mut stream = client
+        .stream("events.watch", vec![])
+        .await
+        .expect("open stream");
+
+    assert_eq!(
+        stream.next().await.expect("item1").expect("ok item1"),
+        json!(1)
+    );
+    assert_eq!(
+        stream.next().await.expect("item2").expect("ok item2"),
+        json!(2)
+    );
+    assert!(stream.next().await.is_none(), "stream should end");
+
+    runtime_task.await.expect("runtime task");
+    client.close().await.expect("close client");
+}
+
+#[tokio::test]
+async fn channel_send_receive_and_close_with_simulated_runtime() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let runtime_task = tokio::spawn(async move {
+        let open_frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv")
+            .expect("channel open frame");
+        let open_env = Envelope::from_msgpack(&open_frame).expect("decode channel open");
+        assert_eq!(open_env.invocation_type, InvocationType::Channel);
+        assert_eq!(open_env.target, "chat.room");
+
+        let send_frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv send")
+            .expect("channel send frame");
+        let send_env = Envelope::from_msgpack(&send_frame).expect("decode channel send");
+        assert_eq!(send_env.invocation_type, InvocationType::Channel);
+        assert_eq!(send_env.id, open_env.id);
+        assert_eq!(send_env.args.len(), 1);
+
+        let outbound = ResponseEnvelope::stream_item(
+            open_env.id,
+            0,
+            saikuro_core::value::Value::String("pong".into()),
+        );
+        runtime_side
+            .send(bytes::Bytes::from(
+                outbound.to_msgpack().expect("encode outbound item"),
+            ))
+            .await
+            .expect("send outbound item");
+
+        let close_frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv close")
+            .expect("channel close frame");
+        let close_env = Envelope::from_msgpack(&close_frame).expect("decode close frame");
+        assert_eq!(close_env.id, open_env.id);
+        assert!(
+            close_env.stream_control.is_some(),
+            "close should set stream control"
+        );
+
+        let end = ResponseEnvelope::stream_end(open_env.id, 1);
+        runtime_side
+            .send(bytes::Bytes::from(end.to_msgpack().expect("encode end")))
+            .await
+            .expect("send end");
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    let mut channel = client
+        .channel("chat.room", vec![json!("room-1")])
+        .await
+        .expect("open channel");
+
+    channel
+        .send(json!("ping"))
+        .await
+        .expect("send channel item");
+    assert_eq!(
+        channel
+            .next()
+            .await
+            .expect("channel inbound")
+            .expect("channel ok"),
+        json!("pong")
+    );
+    channel.close().await.expect("close channel");
+    assert!(channel.next().await.is_none(), "channel should end");
+
+    runtime_task.await.expect("runtime task");
+    client.close().await.expect("close client");
+}
+
+#[tokio::test]
+async fn log_envelope_is_forwarded_to_runtime() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let runtime_task = tokio::spawn(async move {
+        let frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv")
+            .expect("log frame");
+        let env = Envelope::from_msgpack(&frame).expect("decode log envelope");
+        assert_eq!(env.invocation_type, InvocationType::Log);
+        assert_eq!(env.target, "$log");
+        assert_eq!(env.args.len(), 1);
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    client
+        .log("info", "tests", "hello", Some(json!({"k": "v"})))
+        .await
+        .expect("log should send");
+
+    runtime_task.await.expect("runtime task");
+    client.close().await.expect("close client");
+}
+
+#[tokio::test]
+async fn call_with_timeout_reports_timeout() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let _runtime_task = tokio::spawn(async move {
+        // Receive one call envelope and intentionally do not respond.
+        let _ = runtime_side.recv().await;
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    let err = client
+        .call_with_timeout(
+            "math.add",
+            vec![json!(1), json!(2)],
+            Some(std::time::Duration::from_millis(20)),
+        )
+        .await
+        .expect_err("call should time out");
+
+    assert!(matches!(err, saikuro::Error::Timeout { .. }));
+    client.close().await.expect("close client");
+}
+
+#[tokio::test]
+async fn client_acknowledges_announce_on_connect() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let announce_id = saikuro_core::invocation::InvocationId::new();
+    let announce = Envelope {
+        version: saikuro_core::PROTOCOL_VERSION,
+        invocation_type: InvocationType::Announce,
+        id: announce_id,
+        target: "$announce".into(),
+        args: vec![saikuro_core::value::Value::Null],
+        meta: Default::default(),
+        capability: None,
+        batch_items: None,
+        stream_control: None,
+        seq: None,
+    };
+
+    runtime_side
+        .send(bytes::Bytes::from(
+            announce.to_msgpack().expect("encode announce"),
+        ))
+        .await
+        .expect("send announce");
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+
+    let ack_frame = runtime_side
+        .recv()
+        .await
+        .expect("runtime recv ack")
+        .expect("ack frame");
+    let ack = ResponseEnvelope::from_msgpack(&ack_frame).expect("decode ack");
+    assert_eq!(ack.id, announce_id);
+    assert!(ack.ok, "announce ack should be ok");
+
+    client.close().await.expect("close client");
+}
+
+#[test]
+fn envelope_roundtrip_msgpack_preserves_fields() {
+    let original = Envelope::call(
+        "math.add",
+        vec![
+            saikuro_core::value::Value::Int(1),
+            saikuro_core::value::Value::Int(2),
+        ],
+    );
+
+    let bytes = original.to_msgpack().expect("encode envelope");
+    let decoded = Envelope::from_msgpack(&bytes).expect("decode envelope");
+
+    assert_eq!(decoded.invocation_type, original.invocation_type);
+    assert_eq!(decoded.id, original.id);
+    assert_eq!(decoded.target, original.target);
+    assert_eq!(decoded.args, original.args);
+}
+
+#[tokio::test]
+async fn channel_abort_sends_abort_control_frame() {
+    use saikuro::transport::AdapterTransport;
+
+    let (client_side, mut runtime_side) = InMemoryTransport::pair();
+
+    let runtime_task = tokio::spawn(async move {
+        let open_frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv")
+            .expect("channel open frame");
+        let open_env = Envelope::from_msgpack(&open_frame).expect("decode channel open");
+        assert_eq!(open_env.invocation_type, InvocationType::Channel);
+
+        let abort_frame = runtime_side
+            .recv()
+            .await
+            .expect("runtime recv abort")
+            .expect("channel abort frame");
+        let abort_env = Envelope::from_msgpack(&abort_frame).expect("decode abort frame");
+        assert_eq!(abort_env.id, open_env.id);
+        assert_eq!(abort_env.stream_control, Some(StreamControl::Abort));
+    });
+
+    let client = Client::from_transport(Box::new(client_side), None).expect("build client");
+    let channel = client
+        .channel("chat.room", vec![json!("room-1")])
+        .await
+        .expect("open channel");
+    channel.abort().await.expect("abort channel");
+
+    runtime_task.await.expect("runtime task");
+    client.close().await.expect("close client");
 }

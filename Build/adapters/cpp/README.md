@@ -17,6 +17,19 @@ The header wraps:
 Client helper APIs include `batch_json(...)`, `stream_json(...)`, `channel_json(...)`,
 `resource_json(...)`, and `log(...)`.
 
+## Schema extractor CLI
+
+The C++ adapter includes a header-based schema extractor CLI:
+
+- `saikuro-cpp-schema`
+
+Usage:
+
+```bash
+saikuro-cpp-schema --namespace parityns ./service.h
+saikuro-cpp-schema --namespace parityns --pretty ./service.h
+```
+
 ## Dependency
 
 This wrapper depends on the C adapter header and library:

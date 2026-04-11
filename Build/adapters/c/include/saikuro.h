@@ -39,6 +39,13 @@ char* saikuro_client_call_json(
     const char* args_json
 );
 
+char* saikuro_client_call_json_timeout(
+    saikuro_client_t handle,
+    const char* target,
+    const char* args_json,
+    int timeout_ms
+);
+
 int saikuro_client_cast_json(
     saikuro_client_t handle,
     const char* target,
@@ -66,6 +73,9 @@ int saikuro_channel_send_json(
     saikuro_channel_t channel,
     const char* item_json
 );
+
+int saikuro_channel_close(saikuro_channel_t channel);
+int saikuro_channel_abort(saikuro_channel_t channel);
 
 int saikuro_channel_next_json(
     saikuro_channel_t channel,

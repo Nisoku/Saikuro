@@ -10,6 +10,10 @@ rust-version = "1.75"
 keywords = ["ipc", "cross-language", "rpc", "msgpack", "saikuro"]
 categories = ["network-programming", "asynchronous"]
 
+[[bin]]
+name = "saikuro-rust-schema"
+path = "src/cli/saikuro_rust_schema.rs"
+
 [features]
 default = ["tcp", "unix", "ws"]
 tcp  = ["saikuro-transport/native-transport"]
@@ -32,6 +36,8 @@ tracing     = "0.1"
 thiserror   = "2.0"
 dashmap     = "6.1"
 uuid        = { version = "1.10", features = ["v4"] }
+clap        = { version = "4.5", features = ["derive"] }
+syn         = { version = "2.0", features = ["full"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -118,6 +118,18 @@ public:
             }
         }
 
+        void close() {
+            if (saikuro_channel_close(handle_) != 0) {
+                throw Error(last_error());
+            }
+        }
+
+        void abort() {
+            if (saikuro_channel_abort(handle_) != 0) {
+                throw Error(last_error());
+            }
+        }
+
         bool next_json(std::string& out_item_json) {
             char* raw = nullptr;
             int done = 0;
@@ -172,6 +184,23 @@ public:
 
     std::string call_json(const std::string& target, const std::string& args_json) const {
         char* result = saikuro_client_call_json(handle_, target.c_str(), args_json.c_str());
+        if (result == nullptr) {
+            throw Error(last_error());
+        }
+        return take_owned_c_string(result);
+    }
+
+    std::string call_json_timeout(
+        const std::string& target,
+        const std::string& args_json,
+        int timeout_ms
+    ) const {
+        char* result = saikuro_client_call_json_timeout(
+            handle_,
+            target.c_str(),
+            args_json.c_str(),
+            timeout_ms
+        );
         if (result == nullptr) {
             throw Error(last_error());
         }

@@ -46,3 +46,10 @@
 - [ ] Add HTTP transport (credit: u/emetah850 on Reddit)
 - [ ] Add support for custom transports (credit: u/rogerara on Reddit)
 - [O] Buildscripts (Python ofc) and more dev conveniences
+- [ ] Make WASM compilation of runtime work like how i imagined it
+- [ ] WasmHostTransport for WASM
+    - A transport that uses:
+        - postMessage (basic other stuff, logs for ex?)
+        - MessageChannel (transport and channels (hah))
+        - BroadcastChannel (discovery) 
+    - (can choose which of the three or use all three in diff places)

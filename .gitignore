@@ -30,3 +30,7 @@ __pycache__/
 site/
 build/
 .venv/
+# TODO: setup proper .vscode so we can keep this
+.vscode/ 
+
+Saikuro.sln

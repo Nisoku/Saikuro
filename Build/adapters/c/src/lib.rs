@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
 use std::thread_local;
+use std::time::Duration;
 
 use saikuro::{Client, Provider, SaikuroChannel, Value};
 use std::sync::Arc;
@@ -338,6 +339,84 @@ pub extern "C" fn saikuro_client_call_json(
 }
 
 #[no_mangle]
+pub extern "C" fn saikuro_client_call_json_timeout(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    timeout_ms: c_int,
+) -> *mut c_char {
+    clear_last_error();
+
+    if handle.is_null() {
+        set_last_error("handle must not be null");
+        return ptr::null_mut();
+    }
+    if timeout_ms < 0 {
+        set_last_error("timeout_ms must be non-negative");
+        return ptr::null_mut();
+    }
+
+    let target = match cstr_to_string(target, "target") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+
+    let args_json = match cstr_to_string(args_json, "args_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+
+    let args_value: serde_json::Value = match serde_json::from_str(&args_json) {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(format!("args_json must be valid JSON: {e}"));
+            return ptr::null_mut();
+        }
+    };
+
+    let args: Vec<Value> = match args_value {
+        serde_json::Value::Array(items) => items,
+        _ => {
+            set_last_error("args_json must be a JSON array");
+            return ptr::null_mut();
+        }
+    };
+
+    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
+    let client = match handle.client.as_ref() {
+        Some(c) => c,
+        None => {
+            set_last_error("client is already closed");
+            return ptr::null_mut();
+        }
+    };
+
+    let timeout = Duration::from_millis(timeout_ms as u64);
+    let result = handle
+        .rt
+        .block_on(client.call_with_timeout(target, args, Some(timeout)));
+    match result {
+        Ok(v) => match serde_json::to_string(&v) {
+            Ok(json) => into_c_string_ptr(&json),
+            Err(e) => {
+                set_last_error(format!("failed to serialize result: {e}"));
+                ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(format!("call failed: {e}"));
+            ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn saikuro_client_cast_json(
     handle: *mut c_void,
     target: *const c_char,
@@ -655,6 +734,44 @@ pub extern "C" fn saikuro_channel_send_json(
         Ok(()) => 0,
         Err(e) => {
             set_last_error(format!("channel send failed: {e}"));
+            1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn saikuro_channel_close(channel: *mut c_void) -> c_int {
+    clear_last_error();
+
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+
+    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
+    match channel.rt.block_on(channel.channel.close()) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(format!("channel close failed: {e}"));
+            1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn saikuro_channel_abort(channel: *mut c_void) -> c_int {
+    clear_last_error();
+
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+
+    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
+    match channel.rt.block_on(channel.channel.abort()) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(format!("channel abort failed: {e}"));
             1
         }
     }

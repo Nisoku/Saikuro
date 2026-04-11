@@ -25,26 +25,26 @@
 
 | Capability                  | Rust    | TypeScript | Python | C#      | C       | C++     |
 |-----------------------------|---------|------------|--------|---------|---------|---------|
-| schema extractor CLI        | partial | yes        | yes    | yes     | no      | no      |
-| typed codegen output        | yes     | yes        | yes    | yes     | partial | yes     |
+| schema extractor CLI        | yes     | yes        | yes    | yes     | yes     | yes     |
+| typed codegen output        | yes     | yes        | yes    | yes     | yes     | yes     |
 
 ## Test Coverage
 
 | Test                        | Rust    | TypeScript | Python  | C#      | C       | C++     |
 |-----------------------------|---------|------------|---------|---------|---------|---------|
-| call                        | yes     | yes        | yes     | yes     | no      | no      |
-| cast                        | yes     | yes        | yes     | yes     | no      | no      |
-| batch                       | yes     | yes        | yes     | yes     | partial | no      |
-| stream                      | partial | yes        | yes     | yes     | partial | no      |
-| channel                     | partial | yes        | yes     | yes     | partial | no      |
-| resource invocation helpers | partial | yes        | yes     | yes     | partial | no      |
-| log forwarding helper       | partial | yes        | yes     | yes     | partial | no      |
-| provider registration       | yes     | yes        | yes     | yes     | partial | no      |
-| schema extractor CLI        | no      | partial    | no      | partial | no      | no      |
-| typed codegen output        | no      | no         | no      | no      | yes     | yes     |
-| envelope roundtrip          | partial | yes        | yes     | yes     | no      | no      |
-| transport behavior          | yes     | yes        | yes     | yes     | no      | no      |
-| timeout and cancellation    | partial | yes        | yes     | yes     | no      | no      |
-| error mapping propagation   | yes     | yes        | yes     | yes     | partial | no      |
-| announce handshake          | partial | yes        | partial | partial | no      | no      |
-| core runtime integration    | yes     | yes        | yes     | yes     | partial | partial |
+| call                        | yes     | yes        | yes     | yes     | yes     | yes     |
+| cast                        | yes     | yes        | yes     | yes     | yes     | yes     |
+| batch                       | yes     | yes        | yes     | yes     | yes     | yes     |
+| stream                      | yes     | yes        | yes     | yes     | yes     | yes     |
+| channel                     | yes     | yes        | yes     | yes     | yes     | yes     |
+| resource invocation helpers | yes     | yes        | yes     | yes     | yes     | yes     |
+| log forwarding helper       | yes     | yes        | yes     | yes     | yes     | yes     |
+| provider registration       | yes     | yes        | yes     | yes     | yes     | yes     |
+| schema extractor CLI tests  | yes     | yes        | yes     | yes     | yes     | yes     |
+| typed codegen output        | yes     | yes        | yes     | yes     | yes     | yes     |
+| envelope roundtrip          | yes     | yes        | yes     | yes     | yes     | yes     |
+| transport behavior          | yes     | yes        | yes     | yes     | yes     | yes     |
+| timeout and cancellation    | yes     | yes        | yes     | yes     | yes     | yes     |
+| error mapping propagation   | yes     | yes        | yes     | yes     | yes     | yes     |
+| announce handshake          | yes     | yes        | yes     | yes     | yes     | yes     |
+| core runtime integration    | yes     | yes        | yes     | yes     | yes     | yes     |
