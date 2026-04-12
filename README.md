@@ -19,8 +19,8 @@ or in-memory).
 | TypeScript | (TBD)        | ✅     |
 | Python     | (TBD)        | ✅     |
 | C#         | (TBD)        | ✅     |
-| C          | (TBD)        | 🚧     |
-| C++        | (TBD)        | 🚧     |
+| C          | (TBD)        | ✅     |
+| C++        | (TBD)        | ✅     |
 
 ---
 
