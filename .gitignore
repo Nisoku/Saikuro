@@ -25,6 +25,10 @@ dist/
 bin/
 obj/
 .pytest_cache/
-__pycache__
+__pycache__/
 .ruff_cache/
 site/
+build/
+.venv/
+# TODO: setup proper .vscode so we can keep this
+.vscode/ 

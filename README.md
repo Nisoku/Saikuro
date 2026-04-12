@@ -12,12 +12,15 @@ or in-memory).
 ## Supported languages
 
 (Saikuro currently is not added to package managers yet. It will be added soon, once I finalize a few things!)
-| Language | Package name | Status |
+
+| Language   | Package name | Status |
 |------------|--------------|--------|
-| Rust | `saikuro` (crates.io) | ✅ |
-| TypeScript | `saikuro` (npm) | ✅ |
-| Python | `saikuro` (PyPI) | ✅ |
-| C# | `Saikuro` (NuGet) | ✅ |
+| Rust       | (TBD)        | ✅     |
+| TypeScript | (TBD)        | ✅     |
+| Python     | (TBD)        | ✅     |
+| C#         | (TBD)        | ✅     |
+| C          | (TBD)        | 🚧     |
+| C++        | (TBD)        | 🚧     |
 
 ---
 
@@ -67,7 +70,7 @@ async def main():
 
 ## Repository layout
 
-```
+```txt
 Build/
   Cargo.toml          # Rust workspace root
   crates/             # Internal library crates
@@ -91,7 +94,16 @@ Docs/                 Documentation site
 
 ## Documentation
 
-Full documentation is available at the project's GitHub Pages site.
+Full documentation is available at the project's GitHub Pages site:
+
+- https://nisoku.github.io/Saikuro/docs/
+- Adapter docs index: https://nisoku.github.io/Saikuro/docs/adapters/
+
+Repository docs sources:
+
+- `Docs/docs/index.md`
+- `Docs/docs/adapters/index.md`
+- `Docs/docs/guide/`
 
 ---
 

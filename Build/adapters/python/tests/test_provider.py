@@ -2,6 +2,8 @@
 Tests for SaikuroProvider
 """
 
+import asyncio
+
 import pytest
 from saikuro.provider import SaikuroProvider
 from saikuro.envelope import Envelope, InvocationType
@@ -272,3 +274,23 @@ class TestSchemaDict:
         p.register_function("secret", lambda: 0, capabilities=["admin"])
         fn = p.schema_dict()["namespaces"]["math"]["functions"]["secret"]
         assert fn["capabilities"] == ["admin"]
+
+
+class TestProviderAnnounceHandshake:
+    @pytest.mark.asyncio
+    async def test_serve_on_transport_sends_announce_and_accepts_ack(self):
+        provider_transport, runtime_transport = InMemoryTransport.pair()
+        p = SaikuroProvider("math")
+        p.register_function("add", lambda a, b: a + b)
+
+        task = asyncio.create_task(p.serve_on_transport(provider_transport))
+
+        announce = await runtime_transport.recv()
+        assert announce is not None
+        assert announce["type"] == "announce"
+        assert announce["target"] == "$saikuro.announce"
+
+        await runtime_transport.send({"id": announce["id"], "ok": True})
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task

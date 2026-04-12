@@ -30,7 +30,7 @@ Call, cast, stream, channel, batch, and resource. Use the right primitive for th
 :::
 
 ::: card Language Adapters
-Thin clients for TypeScript, Python, C#, and Rust. They handle serialization and expose a consistent API. The runtime handles the rest.
+Thin adapters for TypeScript, Python, C#, Rust, C, and C++. They handle serialization and expose a consistent API while the runtime handles routing and policy.
 :::
 
 ::: card Dev-Mode Discovery

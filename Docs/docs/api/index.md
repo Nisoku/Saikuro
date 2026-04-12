@@ -1,9 +1,11 @@
 ---
-title: "Protocol & Envelope Reference"
-description: "The Saikuro wire format: MessagePack envelopes, error codes, and message ordering"
+title: "Core Protocol & Runtime Reference"
+description: "Shared wire format and runtime behavior for all adapters"
 ---
 
 Everything Saikuro sends over the wire is a MessagePack-encoded envelope. This page documents the full shape of every message type.
+
+This is the shared core reference only (protocol/runtime behavior that applies across all adapters). Adapter-specific client/provider APIs now live under the Adapters section.
 
 ## Encoding
 

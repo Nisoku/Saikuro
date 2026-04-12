@@ -234,6 +234,6 @@ async def test_add():
 
 ## Next Steps
 
-- [Language Adapters](./adapters): Adapter-specific transport options and configuration
+- [Language Adapters](../adapters/): Adapter-specific transport options and configuration
 - [Protocol Reference](../api/): How the wire format works at the byte level
 - [Examples](./examples): Real patterns with different transport configurations

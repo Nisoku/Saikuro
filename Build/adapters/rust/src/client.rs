@@ -1,12 +1,12 @@
 //! Saikuro async client.
 //!
-//! Multiplexes call/cast/stream/batch over one transport connection using
+//! Multiplexes call/cast/stream/channel/resource/log/batch over one transport connection using
 //! invocation IDs as correlation keys.
 //!
 
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
@@ -21,7 +21,7 @@ use saikuro_core::{
     value::Value as CoreValue,
     PROTOCOL_VERSION,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{debug, error, warn};
 
 use crate::{
@@ -41,6 +41,7 @@ pub struct ClientOptions {
 // An async stream of values received from a provider.
 
 type StreamItem = Result<Value>;
+type ChannelSendTx = Arc<Mutex<Option<mpsc::Sender<Bytes>>>>;
 
 /// An async stream of values yielded by a provider-side stream function.
 ///
@@ -62,6 +63,93 @@ impl SaikuroStream {
     }
 }
 
+/// A bidirectional channel opened with [`Client::channel`].
+///
+/// Use [`SaikuroChannel::send`] to push items to the provider and
+/// [`SaikuroChannel::next`] to receive items from the provider.
+pub struct SaikuroChannel {
+    id: InvocationId,
+    send_tx: ChannelSendTx,
+    receiver: mpsc::Receiver<StreamItem>,
+    outbound_seq: AtomicU64,
+}
+
+impl SaikuroChannel {
+    fn new(id: InvocationId, send_tx: ChannelSendTx, receiver: mpsc::Receiver<StreamItem>) -> Self {
+        Self {
+            id,
+            send_tx,
+            receiver,
+            outbound_seq: AtomicU64::new(0),
+        }
+    }
+
+    fn next_seq(&self) -> u64 {
+        self.outbound_seq.fetch_add(1, Ordering::Relaxed)
+    }
+
+    async fn send_channel_envelope(&self, envelope: &Envelope) -> Result<()> {
+        let bytes = envelope
+            .to_msgpack()
+            .map_err(|e| Error::Codec(e.to_string()))?;
+        let send_tx = self.send_tx.lock().await.clone();
+        let send_tx =
+            send_tx.ok_or_else(|| Error::Transport("client send channel closed".into()))?;
+        send_tx
+            .send(Bytes::from(bytes))
+            .await
+            .map_err(|_| Error::Transport("client send channel closed".into()))
+    }
+
+    /// Close the channel by sending a StreamControl::End frame.
+    pub async fn close(&self) -> Result<()> {
+        let mut envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![],
+            None,
+            Some(self.next_seq()),
+        );
+        envelope.stream_control = Some(StreamControl::End);
+        self.send_channel_envelope(&envelope).await
+    }
+
+    /// Abort the channel by sending a StreamControl::Abort frame.
+    pub async fn abort(&self) -> Result<()> {
+        let mut envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![],
+            None,
+            Some(self.next_seq()),
+        );
+        envelope.stream_control = Some(StreamControl::Abort);
+        self.send_channel_envelope(&envelope).await
+    }
+
+    /// Send a value to the provider side of this channel.
+    pub async fn send(&self, value: Value) -> Result<()> {
+        let envelope = make_envelope_with_id(
+            self.id,
+            InvocationType::Channel,
+            "",
+            vec![value],
+            None,
+            Some(self.next_seq()),
+        );
+        self.send_channel_envelope(&envelope).await
+    }
+
+    /// Receive the next inbound channel item.
+    ///
+    /// Returns `None` when the channel is closed.
+    pub async fn next(&mut self) -> Option<StreamItem> {
+        self.receiver.recv().await
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Internal routing
 // ---------------------------------------------------------------------------
@@ -71,6 +159,8 @@ enum PendingSlot {
     Call(oneshot::Sender<ResponseEnvelope>),
     /// An open stream accumulating items.
     Stream(mpsc::Sender<StreamItem>),
+    /// An open bidirectional channel accumulating inbound items.
+    Channel(mpsc::Sender<StreamItem>),
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +178,8 @@ pub struct Client {
     send_tx: mpsc::Sender<Bytes>,
     /// Pending calls and open streams, keyed by invocation ID.
     pending: Arc<DashMap<InvocationId, PendingSlot>>,
+    /// Channel-specific outbound sender handles to invalidate on shutdown.
+    channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>>,
     /// Background I/O task handle.
     recv_task: Option<tokio::task::JoinHandle<()>>,
     /// Whether the client is still connected.
@@ -126,6 +218,7 @@ impl Client {
     ) -> Result<Self> {
         let options = options.unwrap_or_default();
         let pending: Arc<DashMap<InvocationId, PendingSlot>> = Arc::new(DashMap::new());
+        let channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>> = Arc::new(DashMap::new());
         let connected = Arc::new(AtomicBool::new(true));
 
         // Outbound frame channel: callers push frames here; the I/O task
@@ -134,6 +227,7 @@ impl Client {
         let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(256);
 
         let pending_recv = pending.clone();
+        let channel_senders_recv = channel_senders.clone();
         let connected_recv = connected.clone();
 
         let recv_task = tokio::spawn(async move {
@@ -170,7 +264,13 @@ impl Client {
                     result = transport.recv() => {
                         match result {
                             Ok(Some(frame)) => {
-                                handle_inbound(frame, &mut *transport, &pending_recv).await;
+                                handle_inbound(
+                                    frame,
+                                    &mut *transport,
+                                    &pending_recv,
+                                    &channel_senders_recv,
+                                )
+                                .await;
                             }
                             Ok(None) => {
                                 debug!("client: transport closed");
@@ -187,12 +287,14 @@ impl Client {
 
             connected_recv.store(false, Ordering::SeqCst);
             teardown_pending(&pending_recv);
+            channel_senders_recv.clear();
             let _ = transport.close().await;
         });
 
         Ok(Self {
             send_tx,
             pending,
+            channel_senders,
             recv_task: Some(recv_task),
             connected,
             options,
@@ -206,6 +308,16 @@ impl Client {
 
     /// Gracefully close the client.
     pub async fn close(mut self) -> Result<()> {
+        let channels: Vec<ChannelSendTx> = self
+            .channel_senders
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+        for channel_send in channels {
+            let _ = channel_send.lock().await.take();
+        }
+        self.channel_senders.clear();
+
         drop(self.send_tx);
         if let Some(task) = self.recv_task.take() {
             let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
@@ -237,7 +349,10 @@ impl Client {
         let (tx, rx) = oneshot::channel();
         self.pending.insert(id, PendingSlot::Call(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
 
         let recv_fut = async {
             rx.await
@@ -279,7 +394,10 @@ impl Client {
         let (tx, rx) = mpsc::channel(128);
         self.pending.insert(id, PendingSlot::Stream(tx));
 
-        self.send_envelope(&envelope).await?;
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
         Ok(SaikuroStream::new(rx))
     }
 
@@ -310,7 +428,10 @@ impl Client {
 
         let (tx, rx) = oneshot::channel();
         self.pending.insert(id, PendingSlot::Call(tx));
-        self.send_envelope(&batch_env).await?;
+        if let Err(e) = self.send_envelope(&batch_env).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
 
         let resp = rx
             .await
@@ -323,6 +444,79 @@ impl Client {
             Value::Array(items) => Ok(items),
             other => Ok(vec![other]),
         }
+    }
+
+    /// Open a bidirectional channel.
+    ///
+    /// Use the returned [`SaikuroChannel`] to send and receive values.
+    pub async fn channel(
+        &self,
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<SaikuroChannel> {
+        let target = target.into();
+        let envelope = make_envelope(InvocationType::Channel, &target, args, None);
+        let id = envelope.id;
+
+        let (tx, rx) = mpsc::channel(128);
+        self.pending.insert(id, PendingSlot::Channel(tx));
+        let channel_send = Arc::new(Mutex::new(Some(self.send_tx.clone())));
+        self.channel_senders.insert(id, channel_send.clone());
+
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            self.channel_senders.remove(&id);
+            return Err(e);
+        }
+        Ok(SaikuroChannel::new(id, channel_send, rx))
+    }
+
+    /// Invoke a resource-producing function and return the resource payload.
+    pub async fn resource(&self, target: impl Into<String>, args: Vec<Value>) -> Result<Value> {
+        let target = target.into();
+        let envelope = make_envelope(InvocationType::Resource, &target, args, None);
+        let id = envelope.id;
+
+        let (tx, rx) = oneshot::channel();
+        self.pending.insert(id, PendingSlot::Call(tx));
+
+        if let Err(e) = self.send_envelope(&envelope).await {
+            self.pending.remove(&id);
+            return Err(e);
+        }
+
+        let resp = rx
+            .await
+            .map_err(|_| Error::Transport("pending resource call dropped".into()))?;
+
+        response_to_result(resp)
+    }
+
+    /// Forward a structured log record to the runtime log sink.
+    ///
+    /// This is fire-and-forget and does not wait for a response.
+    pub async fn log(
+        &self,
+        level: impl Into<String>,
+        name: impl Into<String>,
+        msg: impl Into<String>,
+        fields: Option<Value>,
+    ) -> Result<()> {
+        let mut record = serde_json::Map::new();
+        record.insert("level".to_owned(), Value::String(level.into()));
+        record.insert("name".to_owned(), Value::String(name.into()));
+        record.insert("msg".to_owned(), Value::String(msg.into()));
+        if let Some(extra) = fields {
+            record.insert("fields".to_owned(), extra);
+        }
+
+        let envelope = make_envelope(
+            InvocationType::Log,
+            "$log",
+            vec![Value::Object(record)],
+            None,
+        );
+        self.send_envelope(&envelope).await
     }
 
     // -----------------------------------------------------------------------
@@ -395,9 +589,10 @@ async fn handle_inbound(
     frame: Bytes,
     transport: &mut dyn AdapterTransport,
     pending: &DashMap<InvocationId, PendingSlot>,
+    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
 ) {
     if let Ok(resp) = ResponseEnvelope::from_msgpack(&frame) {
-        route_response(resp, pending);
+        route_response(resp, pending, channel_senders).await;
         return;
     }
 
@@ -421,7 +616,11 @@ async fn handle_inbound(
     warn!("client: received undecodable inbound frame");
 }
 
-fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, PendingSlot>) {
+async fn route_response(
+    resp: ResponseEnvelope,
+    pending: &DashMap<InvocationId, PendingSlot>,
+    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
+) {
     let id = resp.id;
     let is_stream_end = resp
         .stream_control
@@ -433,6 +632,7 @@ fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, Pendin
     let slot_type = pending.get(&id).map(|s| match s.value() {
         PendingSlot::Call(_) => "call",
         PendingSlot::Stream(_) => "stream",
+        PendingSlot::Channel(_) => "channel",
     });
 
     match slot_type {
@@ -444,23 +644,73 @@ fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, Pendin
         Some("stream") => {
             if let Some(slot) = pending.get(&id) {
                 if let PendingSlot::Stream(tx) = slot.value() {
+                    let tx = tx.clone();
+                    drop(slot);
                     if is_stream_end {
-                        drop(slot);
                         pending.remove(&id);
                     } else if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "stream error")
                         });
-                        let _ = tx.try_send(Err(Error::remote(
-                            detail.code.to_string(),
-                            detail.message,
-                            None,
-                        )));
-                        drop(slot);
+                        if tx
+                            .send(Err(Error::remote(
+                                detail.code.to_string(),
+                                detail.message,
+                                None,
+                            )))
+                            .await
+                            .is_err()
+                        {
+                            warn!(id = %id, "stream receiver closed while sending error");
+                        }
                         pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        let _ = tx.try_send(Ok(value));
+                        if tx.send(Ok(value)).await.is_err() {
+                            warn!(id = %id, "stream receiver closed while sending value");
+                            pending.remove(&id);
+                        }
+                    }
+                }
+            }
+        }
+        Some("channel") => {
+            if let Some(slot) = pending.get(&id) {
+                if let PendingSlot::Channel(tx) = slot.value() {
+                    let tx = tx.clone();
+                    drop(slot);
+                    if is_stream_end {
+                        pending.remove(&id);
+                        if let Some((_, sender)) = channel_senders.remove(&id) {
+                            let _ = sender.lock().await.take();
+                        }
+                    } else if is_error {
+                        let detail = resp.error.unwrap_or_else(|| {
+                            ErrorDetail::new(ErrorCode::Internal, "channel error")
+                        });
+                        if tx
+                            .try_send(Err(Error::remote(
+                                detail.code.to_string(),
+                                detail.message,
+                                None,
+                            )))
+                            .is_err()
+                        {
+                            warn!(id = %id, "channel receiver closed while sending error");
+                        }
+                        pending.remove(&id);
+                        if let Some((_, sender)) = channel_senders.remove(&id) {
+                            let _ = sender.lock().await.take();
+                        }
+                    } else {
+                        let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
+                        if tx.try_send(Ok(value)).is_err() {
+                            warn!(id = %id, "channel receiver closed while sending value");
+                            pending.remove(&id);
+                            if let Some((_, sender)) = channel_senders.remove(&id) {
+                                let _ = sender.lock().await.take();
+                            }
+                        }
                     }
                 }
             }
@@ -480,6 +730,9 @@ fn teardown_pending(pending: &DashMap<InvocationId, PendingSlot>) {
                 PendingSlot::Stream(tx) => {
                     let _ = tx.try_send(Err(Error::Transport("connection lost".into())));
                 }
+                PendingSlot::Channel(tx) => {
+                    let _ = tx.try_send(Err(Error::Transport("connection lost".into())));
+                }
             }
         }
     }
@@ -495,18 +748,36 @@ fn make_envelope(
     args: Vec<Value>,
     capability: Option<saikuro_core::capability::CapabilityToken>,
 ) -> Envelope {
+    make_envelope_with_id(
+        InvocationId::new(),
+        inv_type,
+        target,
+        args,
+        capability,
+        None,
+    )
+}
+
+fn make_envelope_with_id(
+    id: InvocationId,
+    inv_type: InvocationType,
+    target: &str,
+    args: Vec<Value>,
+    capability: Option<saikuro_core::capability::CapabilityToken>,
+    seq: Option<u64>,
+) -> Envelope {
     let core_args: Vec<CoreValue> = args.into_iter().map(json_to_core).collect();
     Envelope {
         version: PROTOCOL_VERSION,
         invocation_type: inv_type,
-        id: InvocationId::new(),
+        id,
         target: target.to_owned(),
         args: core_args,
         meta: Default::default(),
         capability,
         batch_items: None,
         stream_control: None,
-        seq: None,
+        seq,
     }
 }
 

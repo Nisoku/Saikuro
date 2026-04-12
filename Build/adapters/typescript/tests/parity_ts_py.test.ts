@@ -35,7 +35,7 @@ describe("Schema parity: TypeScript ↔ Python (basic)", () => {
       encoding: "utf-8",
       env: {
         ...process.env,
-        PYTHONPATH: resolve(__dirname, "../../.."),
+        PYTHONPATH: resolve(__dirname, "../../python"),
         PYTHONUNBUFFERED: "1",
       },
     });

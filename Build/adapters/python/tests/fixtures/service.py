@@ -1,7 +1,7 @@
 import json
 from typing import AsyncIterator, Optional
 
-from adapters.python.saikuro import schema as s
+from saikuro import schema as s
 
 sb = s.SchemaBuilder("parityns")
 

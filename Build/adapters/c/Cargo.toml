@@ -1,0 +1,31 @@
+[package]
+name = "saikuro-c"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C adapter for Saikuro"
+keywords = ["ipc", "cross-language", "rpc", "ffi", "c"]
+
+[lib]
+name = "saikuro_c"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "saikuro-c-schema"
+path = "src/cli/saikuro_c_schema.rs"
+
+[dependencies]
+saikuro = { workspace = true, default-features = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+tokio = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+regex = "1.11"
+
+[dev-dependencies]
+saikuro-core = { workspace = true }
+saikuro-runtime = { workspace = true }
+saikuro-transport = { workspace = true }

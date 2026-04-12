@@ -721,6 +721,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "regex-automata"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,6 +791,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bytes",
+ "clap",
  "dashmap",
  "futures",
  "rmp-serde",
@@ -786,12 +799,28 @@ dependencies = [
  "saikuro-transport",
  "serde",
  "serde_json",
+ "syn",
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "saikuro-c"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "regex",
+ "saikuro",
+ "saikuro-core",
+ "saikuro-runtime",
+ "saikuro-transport",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

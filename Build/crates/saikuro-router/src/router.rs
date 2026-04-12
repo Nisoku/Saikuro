@@ -254,6 +254,44 @@ impl InvocationRouter {
     async fn dispatch_channel_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
+        // If a channel with this id already exists, treat as data frame
+        if let Some(channel) = self.streams.get_channel(&id) {
+            // Map the Envelope to a ResponseEnvelope for channel data delivery
+            let resp = ResponseEnvelope {
+                id,
+                ok: true,
+                result: envelope.args.first().cloned(),
+                error: None,
+                seq: envelope.seq,
+                stream_control: envelope.stream_control,
+            };
+            if let Err(e) = channel.inbound_tx.send(resp).await {
+                return error_response(
+                    id,
+                    SaikuroError::ProviderUnavailable(format!("channel data delivery failed: {e}"))
+                        .into(),
+                );
+            }
+            // If this is a terminal frame, clean up the channel and return ok_empty
+            if matches!(
+                envelope.stream_control,
+                Some(StreamControl::End | StreamControl::Abort)
+            ) {
+                self.streams.remove_channel(&id);
+                return ResponseEnvelope::ok_empty(id);
+            }
+            // For non-terminal frames, do not return a response (one-way)
+            return ResponseEnvelope {
+                id,
+                ok: true,
+                result: None,
+                error: None,
+                seq: None,
+                stream_control: None,
+            };
+        }
+
+        // Otherwise, open a new channel as before
         let provider = match self.resolve_namespace(&envelope.target) {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),

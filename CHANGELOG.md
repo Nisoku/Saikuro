@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Uncommited]
-
 ---
 
 ## [Uncommited-0.1.0] - 2026-03-05 - 2026-03-06
@@ -25,9 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Python adapter version requirement corrected from `>=3.10` to `>=3.11` in `quickstart.md` and `adapters.md`
+- Python adapter version requirement corrected from `>=3.10` to `>=3.11` in `quickstart.md` and adapter docs
 - TypeScript `package.json` and Python `pyproject.toml` license field corrected to `Apache-2.0`
-- Rust adapter `adapters.md` section updated to match actual `Vec<serde_json::Value>` API
+- Rust adapter docs updated to match actual `Vec<serde_json::Value>` API
 
 ---
 
