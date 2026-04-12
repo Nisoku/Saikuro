@@ -30,10 +30,17 @@ fn repo_root() -> PathBuf {
 }
 
 fn build_target_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("target")
-        .join("debug")
+    let exe = std::env::current_exe().expect("resolve current test executable path");
+    let exe_dir = exe.parent().expect("test executable directory");
+
+    if exe_dir.file_name().and_then(|s| s.to_str()) == Some("deps") {
+        return exe_dir
+            .parent()
+            .expect("target profile directory")
+            .to_path_buf();
+    }
+
+    exe_dir.to_path_buf()
 }
 
 fn compile_cpp(source: &str, output: &Path) {
@@ -129,10 +136,32 @@ fn run_cpp(exe: &Path, args: &[&str]) {
     };
     cmd.env(lib_path_var, joined);
 
-    let output = cmd.output().expect("run compiled cpp test");
+    let mut child = cmd.spawn().expect("spawn compiled cpp test");
+    let timeout = Duration::from_secs(30);
+    let poll_interval = Duration::from_millis(20);
+    let start = std::time::Instant::now();
+
+    let timed_out = loop {
+        if child.try_wait().expect("poll compiled cpp test").is_some() {
+            break false;
+        }
+        if start.elapsed() >= timeout {
+            break true;
+        }
+        thread::sleep(poll_interval);
+    };
+
+    if timed_out {
+        let _ = child.kill();
+    }
+    let output = child
+        .wait_with_output()
+        .expect("collect compiled cpp test output");
+
     assert!(
-        output.status.success(),
-        "cpp program failed:\nstdout:\n{}\nstderr:\n{}",
+        !timed_out && output.status.success(),
+        "cpp program failed{}:\nstdout:\n{}\nstderr:\n{}",
+        if timed_out { " (timed out)" } else { "" },
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );

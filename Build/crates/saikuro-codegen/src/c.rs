@@ -33,14 +33,27 @@ impl BindingGenerator for CGenerator {
         ns_keys.sort();
 
         let mut stem_to_names: HashMap<String, Vec<String>> = HashMap::new();
+        let mut folded_stem_to_names: HashMap<String, Vec<String>> = HashMap::new();
         for ns_name in &ns_keys {
             let stem = normalize_namespace_stem(ns_name);
             stem_to_names
-                .entry(stem)
+                .entry(stem.clone())
+                .or_default()
+                .push((*ns_name).clone());
+            folded_stem_to_names
+                .entry(stem.to_ascii_uppercase())
                 .or_default()
                 .push((*ns_name).clone());
         }
         for (stem, names) in stem_to_names {
+            if names.len() > 1 {
+                return Err(CodegenError::Schema(format!(
+                    "namespace collision after normalization: stem '{stem}' produced by [{}]",
+                    names.join(", ")
+                )));
+            }
+        }
+        for (stem, names) in folded_stem_to_names {
             if names.len() > 1 {
                 return Err(CodegenError::Schema(format!(
                     "namespace collision after normalization: stem '{stem}' produced by [{}]",

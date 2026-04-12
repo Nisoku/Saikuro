@@ -85,6 +85,8 @@ impl CppGenerator {
         let mut fn_items: Vec<_> = ns.functions.iter().collect();
         fn_items.sort_by_key(|(k, _)| *k);
         let mut seen_methods: HashSet<String> = HashSet::new();
+        seen_methods.insert(sanitize_ident(class_name));
+        seen_methods.insert("client_".to_owned());
         for (fn_name, fn_schema) in fn_items {
             if fn_schema.visibility == Visibility::Private {
                 continue;

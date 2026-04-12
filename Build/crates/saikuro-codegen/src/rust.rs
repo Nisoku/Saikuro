@@ -428,7 +428,10 @@ fn sanitize_then_pascal(s: &str) -> String {
 fn sanitize_pascal_preserve_leading(s: &str) -> String {
     let ident = sanitize_ident(s);
     let leading = ident.starts_with('_');
-    let body = to_pascal_case(ident.trim_start_matches('_'));
+    let mut body = to_pascal_case(ident.trim_start_matches('_'));
+    if body.is_empty() {
+        body = "Empty".to_owned();
+    }
     if leading {
         format!("_{}", body)
     } else {
@@ -464,7 +467,7 @@ fn sanitize_type_name_pascal(s: &str) -> String {
     let leading = ident.starts_with('_');
     let mut body = to_pascal_case(ident.trim_start_matches('_'));
     if body.is_empty() {
-        body = "Generated".to_owned();
+        body = "Empty".to_owned();
     }
     if leading {
         format!("_{}", body)

@@ -21,7 +21,7 @@ use saikuro_core::{
     value::Value as CoreValue,
     PROTOCOL_VERSION,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{debug, error, warn};
 
 use crate::{
@@ -41,6 +41,7 @@ pub struct ClientOptions {
 // An async stream of values received from a provider.
 
 type StreamItem = Result<Value>;
+type ChannelSendTx = Arc<Mutex<Option<mpsc::Sender<Bytes>>>>;
 
 /// An async stream of values yielded by a provider-side stream function.
 ///
@@ -68,17 +69,13 @@ impl SaikuroStream {
 /// [`SaikuroChannel::next`] to receive items from the provider.
 pub struct SaikuroChannel {
     id: InvocationId,
-    send_tx: mpsc::Sender<Bytes>,
+    send_tx: ChannelSendTx,
     receiver: mpsc::Receiver<StreamItem>,
     outbound_seq: AtomicU64,
 }
 
 impl SaikuroChannel {
-    fn new(
-        id: InvocationId,
-        send_tx: mpsc::Sender<Bytes>,
-        receiver: mpsc::Receiver<StreamItem>,
-    ) -> Self {
+    fn new(id: InvocationId, send_tx: ChannelSendTx, receiver: mpsc::Receiver<StreamItem>) -> Self {
         Self {
             id,
             send_tx,
@@ -89,6 +86,19 @@ impl SaikuroChannel {
 
     fn next_seq(&self) -> u64 {
         self.outbound_seq.fetch_add(1, Ordering::Relaxed)
+    }
+
+    async fn send_channel_envelope(&self, envelope: &Envelope) -> Result<()> {
+        let bytes = envelope
+            .to_msgpack()
+            .map_err(|e| Error::Codec(e.to_string()))?;
+        let send_tx = self.send_tx.lock().await.clone();
+        let send_tx =
+            send_tx.ok_or_else(|| Error::Transport("client send channel closed".into()))?;
+        send_tx
+            .send(Bytes::from(bytes))
+            .await
+            .map_err(|_| Error::Transport("client send channel closed".into()))
     }
 
     /// Close the channel by sending a StreamControl::End frame.
@@ -102,13 +112,7 @@ impl SaikuroChannel {
             Some(self.next_seq()),
         );
         envelope.stream_control = Some(StreamControl::End);
-        let bytes = envelope
-            .to_msgpack()
-            .map_err(|e| Error::Codec(e.to_string()))?;
-        self.send_tx
-            .send(Bytes::from(bytes))
-            .await
-            .map_err(|_| Error::Transport("client send channel closed".into()))
+        self.send_channel_envelope(&envelope).await
     }
 
     /// Abort the channel by sending a StreamControl::Abort frame.
@@ -122,13 +126,7 @@ impl SaikuroChannel {
             Some(self.next_seq()),
         );
         envelope.stream_control = Some(StreamControl::Abort);
-        let bytes = envelope
-            .to_msgpack()
-            .map_err(|e| Error::Codec(e.to_string()))?;
-        self.send_tx
-            .send(Bytes::from(bytes))
-            .await
-            .map_err(|_| Error::Transport("client send channel closed".into()))
+        self.send_channel_envelope(&envelope).await
     }
 
     /// Send a value to the provider side of this channel.
@@ -141,13 +139,7 @@ impl SaikuroChannel {
             None,
             Some(self.next_seq()),
         );
-        let bytes = envelope
-            .to_msgpack()
-            .map_err(|e| Error::Codec(e.to_string()))?;
-        self.send_tx
-            .send(Bytes::from(bytes))
-            .await
-            .map_err(|_| Error::Transport("client send channel closed".into()))
+        self.send_channel_envelope(&envelope).await
     }
 
     /// Receive the next inbound channel item.
@@ -186,6 +178,8 @@ pub struct Client {
     send_tx: mpsc::Sender<Bytes>,
     /// Pending calls and open streams, keyed by invocation ID.
     pending: Arc<DashMap<InvocationId, PendingSlot>>,
+    /// Channel-specific outbound sender handles to invalidate on shutdown.
+    channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>>,
     /// Background I/O task handle.
     recv_task: Option<tokio::task::JoinHandle<()>>,
     /// Whether the client is still connected.
@@ -224,6 +218,7 @@ impl Client {
     ) -> Result<Self> {
         let options = options.unwrap_or_default();
         let pending: Arc<DashMap<InvocationId, PendingSlot>> = Arc::new(DashMap::new());
+        let channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>> = Arc::new(DashMap::new());
         let connected = Arc::new(AtomicBool::new(true));
 
         // Outbound frame channel: callers push frames here; the I/O task
@@ -232,6 +227,7 @@ impl Client {
         let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(256);
 
         let pending_recv = pending.clone();
+        let channel_senders_recv = channel_senders.clone();
         let connected_recv = connected.clone();
 
         let recv_task = tokio::spawn(async move {
@@ -268,7 +264,13 @@ impl Client {
                     result = transport.recv() => {
                         match result {
                             Ok(Some(frame)) => {
-                                handle_inbound(frame, &mut *transport, &pending_recv).await;
+                                handle_inbound(
+                                    frame,
+                                    &mut *transport,
+                                    &pending_recv,
+                                    &channel_senders_recv,
+                                )
+                                .await;
                             }
                             Ok(None) => {
                                 debug!("client: transport closed");
@@ -285,12 +287,14 @@ impl Client {
 
             connected_recv.store(false, Ordering::SeqCst);
             teardown_pending(&pending_recv);
+            channel_senders_recv.clear();
             let _ = transport.close().await;
         });
 
         Ok(Self {
             send_tx,
             pending,
+            channel_senders,
             recv_task: Some(recv_task),
             connected,
             options,
@@ -304,6 +308,16 @@ impl Client {
 
     /// Gracefully close the client.
     pub async fn close(mut self) -> Result<()> {
+        let channels: Vec<ChannelSendTx> = self
+            .channel_senders
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+        for channel_send in channels {
+            let _ = channel_send.lock().await.take();
+        }
+        self.channel_senders.clear();
+
         drop(self.send_tx);
         if let Some(task) = self.recv_task.take() {
             let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
@@ -446,12 +460,15 @@ impl Client {
 
         let (tx, rx) = mpsc::channel(128);
         self.pending.insert(id, PendingSlot::Channel(tx));
+        let channel_send = Arc::new(Mutex::new(Some(self.send_tx.clone())));
+        self.channel_senders.insert(id, channel_send.clone());
 
         if let Err(e) = self.send_envelope(&envelope).await {
             self.pending.remove(&id);
+            self.channel_senders.remove(&id);
             return Err(e);
         }
-        Ok(SaikuroChannel::new(id, self.send_tx.clone(), rx))
+        Ok(SaikuroChannel::new(id, channel_send, rx))
     }
 
     /// Invoke a resource-producing function and return the resource payload.
@@ -572,9 +589,10 @@ async fn handle_inbound(
     frame: Bytes,
     transport: &mut dyn AdapterTransport,
     pending: &DashMap<InvocationId, PendingSlot>,
+    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
 ) {
     if let Ok(resp) = ResponseEnvelope::from_msgpack(&frame) {
-        route_response(resp, pending).await;
+        route_response(resp, pending, channel_senders).await;
         return;
     }
 
@@ -598,7 +616,11 @@ async fn handle_inbound(
     warn!("client: received undecodable inbound frame");
 }
 
-async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, PendingSlot>) {
+async fn route_response(
+    resp: ResponseEnvelope,
+    pending: &DashMap<InvocationId, PendingSlot>,
+    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
+) {
     let id = resp.id;
     let is_stream_end = resp
         .stream_control
@@ -622,23 +644,32 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
         Some("stream") => {
             if let Some(slot) = pending.get(&id) {
                 if let PendingSlot::Stream(tx) = slot.value() {
+                    let tx = tx.clone();
+                    drop(slot);
                     if is_stream_end {
-                        drop(slot);
                         pending.remove(&id);
                     } else if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "stream error")
                         });
-                        let _ = tx.try_send(Err(Error::remote(
-                            detail.code.to_string(),
-                            detail.message,
-                            None,
-                        )));
-                        drop(slot);
+                        if tx
+                            .send(Err(Error::remote(
+                                detail.code.to_string(),
+                                detail.message,
+                                None,
+                            )))
+                            .await
+                            .is_err()
+                        {
+                            warn!(id = %id, "stream receiver closed while sending error");
+                        }
                         pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        let _ = tx.try_send(Ok(value));
+                        if tx.send(Ok(value)).await.is_err() {
+                            warn!(id = %id, "stream receiver closed while sending value");
+                            pending.remove(&id);
+                        }
                     }
                 }
             }
@@ -650,27 +681,35 @@ async fn route_response(resp: ResponseEnvelope, pending: &DashMap<InvocationId, 
                     drop(slot);
                     if is_stream_end {
                         pending.remove(&id);
+                        if let Some((_, sender)) = channel_senders.remove(&id) {
+                            let _ = sender.lock().await.take();
+                        }
                     } else if is_error {
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
                         if tx
-                            .send(Err(Error::remote(
+                            .try_send(Err(Error::remote(
                                 detail.code.to_string(),
                                 detail.message,
                                 None,
                             )))
-                            .await
                             .is_err()
                         {
                             warn!(id = %id, "channel receiver closed while sending error");
-                            pending.remove(&id);
+                        }
+                        pending.remove(&id);
+                        if let Some((_, sender)) = channel_senders.remove(&id) {
+                            let _ = sender.lock().await.take();
                         }
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if tx.send(Ok(value)).await.is_err() {
+                        if tx.try_send(Ok(value)).is_err() {
                             warn!(id = %id, "channel receiver closed while sending value");
                             pending.remove(&id);
+                            if let Some((_, sender)) = channel_senders.remove(&id) {
+                                let _ = sender.lock().await.take();
+                            }
                         }
                     }
                 }

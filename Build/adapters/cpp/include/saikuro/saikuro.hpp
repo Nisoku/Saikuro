@@ -117,12 +117,18 @@ public:
         }
 
         void send_json(const std::string& item_json) {
+            if (!open_) {
+                throw Error("channel is closed");
+            }
             if (saikuro_channel_send_json(handle_, item_json.c_str()) != 0) {
                 throw Error(last_error());
             }
         }
 
         void close() {
+            if (!open_) {
+                return;
+            }
             if (saikuro_channel_close(handle_) != 0) {
                 throw Error(last_error());
             }
@@ -130,6 +136,9 @@ public:
         }
 
         void abort() {
+            if (!open_) {
+                return;
+            }
             if (saikuro_channel_abort(handle_) != 0) {
                 throw Error(last_error());
             }
@@ -143,6 +152,7 @@ public:
                 throw Error(last_error());
             }
             if (done != 0) {
+                open_ = false;
                 out_item_json.clear();
                 return false;
             }

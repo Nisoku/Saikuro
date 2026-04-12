@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <fstream>
+#include <iostream>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -387,29 +388,29 @@ std::string map_cpp_type(const std::string& raw) {
     normalized = trim(normalized);
 
     const std::string compact = std::regex_replace(normalized, spaces, "");
+    const bool is_container = compact.find('<') != std::string::npos;
 
-    if (normalized.find("char*") != std::string::npos ||
-        normalized.find("char *") != std::string::npos ||
-        normalized.find("std::string") != std::string::npos) {
+    static const std::regex plain_char_ptr_re(R"(^char(\*|\*const|const\*)+$)");
+    static const std::regex plain_string_re(R"(^(std::string|string)([\*&]+)?$)");
+    static const std::regex plain_bool_re(R"(^bool([\*&]+)?$)");
+    static const std::regex plain_float_re(R"(^(float|double)([\*&]+)?$)");
+    static const std::regex plain_int_re(R"(^(int|long|short|size_t)([\*&]+)?$)");
+
+    if (!is_container &&
+        (std::regex_match(compact, plain_char_ptr_re) ||
+         std::regex_match(compact, plain_string_re))) {
         return "string";
     }
-    static const std::regex plain_string_re(R"(^(string)([\*&]+)?$)");
-    if (compact.find('<') == std::string::npos && std::regex_match(compact, plain_string_re)) {
-        return "string";
-    }
-    if (normalized.find("bool") != std::string::npos) {
+    if (!is_container && std::regex_match(compact, plain_bool_re)) {
         return "bool";
     }
-    if (normalized.find("float") != std::string::npos || normalized.find("double") != std::string::npos) {
+    if (!is_container && std::regex_match(compact, plain_float_re)) {
         return "f64";
     }
     if (normalized == "void") {
         return "unit";
     }
-    if (normalized.find("int") != std::string::npos ||
-        normalized.find("long") != std::string::npos ||
-        normalized.find("short") != std::string::npos ||
-        normalized.find("size_t") != std::string::npos) {
+    if (!is_container && std::regex_match(compact, plain_int_re)) {
         return "i64";
     }
     return "any";
