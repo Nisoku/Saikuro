@@ -94,7 +94,16 @@ Docs/                 Documentation site
 
 ## Documentation
 
-Full documentation is available at the project's GitHub Pages site.
+Full documentation is available at the project's GitHub Pages site:
+
+- https://nisoku.github.io/Saikuro/docs/
+- Adapter docs index: https://nisoku.github.io/Saikuro/docs/adapters/
+
+Repository docs sources:
+
+- `Docs/docs/index.md`
+- `Docs/docs/adapters/index.md`
+- `Docs/docs/guide/`
 
 ---
 

@@ -147,5 +147,5 @@ All of that is invisible to you. From your code's perspective, you just called a
 
 - [Core Concepts](./concepts): Understand providers, namespaces, and the runtime
 - [Invocation Primitives](../guide/invocations): Beyond request/response: streams, channels, and more
-- [Language Adapters](../guide/adapters): C# and Rust adapter usage
+- [Language Adapters](../adapters/): C, C++, C#, Python, Rust, and TypeScript usage
 - [Examples](../guide/examples): Real patterns for real projects

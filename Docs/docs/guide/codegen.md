@@ -266,4 +266,4 @@ Add the generated files to version control so consumers don't need the codegen t
 ## Next Steps
 
 - [Schema Reference](./schema): All schema fields, including `idempotent`, `capabilities`, and custom types
-- [Language Adapters](./adapters): Provider and client API for each language
+- [Language Adapters](../adapters/): Provider and client API for each language

@@ -242,5 +242,5 @@ python -m saikuro extract --provider provider.py --out schema.json
 
 - [Code Generation](./codegen): Generate typed client stubs from a frozen schema
 - [Transports](./transports): How the protocol moves between processes
-- [Language Adapters](./adapters): Schema usage in TypeScript, Python, C#, and Rust
+- [Language Adapters](../adapters/): Schema usage in TypeScript, Python, C#, Rust, C, and C++
 - [Protocol Reference](../api/): The full wire format including schema envelope
