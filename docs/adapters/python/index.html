@@ -5,19 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta name="description" content="Generate typed client bindings from a Saikuro schema">
-<link rel="canonical" href="https://nisoku.github.io/Saikuro/docs/guide/codegen/">
-<meta property="og:title" content="Code Generation : Saikuro">
-<meta property="og:description" content="Generate typed client bindings from a Saikuro schema">
-<meta property="og:url" content="https://nisoku.github.io/Saikuro/docs/guide/codegen/">
+    <meta name="description" content="Async Python adapter for Saikuro">
+<link rel="canonical" href="https://nisoku.github.io/Saikuro/docs/adapters/python/">
+<meta property="og:title" content="Python Adapter : Saikuro">
+<meta property="og:description" content="Async Python adapter for Saikuro">
+<meta property="og:url" content="https://nisoku.github.io/Saikuro/docs/adapters/python/">
 <meta property="og:site_name" content="Saikuro">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Code Generation : Saikuro">
-<meta name="twitter:description" content="Generate typed client bindings from a Saikuro schema">
+<meta name="twitter:title" content="Python Adapter : Saikuro">
+<meta name="twitter:description" content="Async Python adapter for Saikuro">
 
 
-    <title>Code Generation : Saikuro</title>
+    <title>Python Adapter : Saikuro</title>
     
 
     
@@ -158,7 +158,7 @@
       
     </li>
     
-    <li class="active-parent">
+    <li class="">
       <a href="#" class="" >
          <svg class="lucide-icon icon-book-open" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M12 7v14" />
@@ -199,8 +199,8 @@
       
     </li>
     
-    <li class="active">
-      <a href="../../guide/codegen" class="active" >
+    <li class="">
+      <a href="../../guide/codegen" class="" >
          <svg class="lucide-icon icon-cpu" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M12 20v2" />
   <path d="M12 2v2" />
@@ -257,7 +257,7 @@
       
     </li>
     
-    <li class="">
+    <li class="active-parent">
       <a href="../../adapters/" class="" >
          <svg class="lucide-icon icon-code" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="m16 18 6-6-6-6" />
@@ -425,8 +425,8 @@
       
     </li>
     
-    <li class="collapsible" data-nav-id="/adapters/python/" aria-expanded="false">
-      <a href="../../adapters/python/" class="" >
+    <li class="active collapsible" data-nav-id="/adapters/python/" aria-expanded="true">
+      <a href="../../adapters/python/" class="active" >
          <svg class="lucide-icon icon-code" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="m16 18 6-6-6-6" />
   <path d="m8 6-6 6 6 6" />
@@ -438,7 +438,7 @@
         
       </a>
       
-        <ul class="submenu" style="display: none;">
+        <ul class="submenu" style="display: block;">
           
     <li class="">
       <a href="../../adapters/python/api-reference/" class="" >
@@ -633,7 +633,7 @@
         <div class="page-header">
             <div class="header-left">
                 
-                <h1>Code Generation</h1>
+                <h1>Python Adapter</h1>
             </div>
             
             <div class="header-right">
@@ -666,267 +666,62 @@
         <main class="content-area">
             <div class="content-layout">
                 <div class="main-content">
-                    <p>Code generation turns a frozen schema into typed client stubs so callers get autocomplete, type checking, and inline doc comments without writing any glue code by hand.</p>
-<h2 id="what-gets-generated">What Gets Generated</h2>
-<p>For each language target, the generator produces one file per namespace plus a shared types file:</p>
-<div class="table-wrapper"><table>
-<thead>
-<tr>
-<th>Language</th>
-<th>Types file</th>
-<th>Client file per namespace</th>
-<th>Index / re-export</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>TypeScript</td>
-<td><code>types.ts</code></td>
-<td><code>&lt;Namespace&gt;Client.ts</code></td>
-<td><code>index.ts</code></td>
-</tr>
-<tr>
-<td>Python</td>
-<td><code>types.py</code></td>
-<td><code>&lt;namespace&gt;_client.py</code></td>
-<td><code>__init__.py</code></td>
-</tr>
-<tr>
-<td>C#</td>
-<td><code>Types.cs</code></td>
-<td><code>&lt;Namespace&gt;Client.cs</code></td>
-<td><code>Generated.cs</code></td>
-</tr>
-</tbody>
-</table>
-</div><p>Private functions are never emitted. Public and internal functions both appear in the generated stubs.</p>
-<h2 id="running-the-generator">Running the Generator</h2>
-<p>Pass a schema file and a target language to <code>saikuro-codegen</code>:</p>
-<pre class="hljs"><code>saikuro-codegen --schema schema.json --lang typescript --out ./generated
-saikuro-codegen --schema schema.json --lang python    --out ./generated
-saikuro-codegen --schema schema.json --lang csharp    --out ./generated
+                    <p>The Python adapter provides async provider and client APIs for Saikuro. Python 3.11+ is required.</p>
+<h2 id="install">Install</h2>
+<pre class="hljs"><code>pip install @nisoku/saikuro
 </code></pre>
-<p>Generate for multiple languages at once (each gets its own subdirectory):</p>
-<pre class="hljs"><code>saikuro-codegen --schema schema.json \
-  --lang typescript --lang python --lang csharp \
-  --out ./generated
-<span class="hljs-comment"># writes ./generated/typescript/, ./generated/python/, ./generated/csharp/</span>
+<p>For WebSocket support:</p>
+<pre class="hljs"><code>pip install <span class="hljs-string">&quot;saikuro[websocket]&quot;</span>
 </code></pre>
-<p><code>--out</code> is created if it does not exist. Pass <code>--quiet</code> to suppress progress output.</p>
-<h2 id="typescript-example">TypeScript Example</h2>
-<p>Given this schema:</p>
-<pre class="hljs"><code><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;namespaces&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">&quot;math&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">&quot;functions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-        <span class="hljs-attr">&quot;add&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-          <span class="hljs-attr">&quot;args&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-            <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;a&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;i64&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;optional&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-            <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;b&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;i64&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;optional&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span> <span class="hljs-punctuation">}</span>
-          <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;returns&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;i64&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;visibility&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;public&quot;</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;capabilities&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;idempotent&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;doc&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Add two integers.&quot;</span>
-        <span class="hljs-punctuation">}</span>
-      <span class="hljs-punctuation">}</span>
-    <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;types&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span>
-<span class="hljs-punctuation">}</span>
-</code></pre>
-<p>The generator produces <code>MathClient.ts</code>:</p>
-<pre class="hljs"><code><span class="hljs-comment">// AUTO-GENERATED by saikuro-codegen. DO NOT EDIT.</span>
-<span class="hljs-keyword">import</span> { <span class="hljs-title class_">Client</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;saikuro&#x27;</span>;
-
-<span class="hljs-keyword">export</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MathClient</span> {
-  <span class="hljs-title function_">constructor</span>(<span class="hljs-params"><span class="hljs-keyword">private</span> <span class="hljs-keyword">readonly</span> <span class="hljs-attr">client</span>: <span class="hljs-title class_">Client</span></span>) {}
-
-  <span class="hljs-comment">/** Add two integers. */</span>
-  <span class="hljs-keyword">async</span> <span class="hljs-title function_">add</span>(<span class="hljs-attr">a</span>: <span class="hljs-built_in">number</span>, <span class="hljs-attr">b</span>: <span class="hljs-built_in">number</span>): <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-built_in">number</span>&gt; {
-    <span class="hljs-keyword">return</span> <span class="hljs-variable language_">this</span>.<span class="hljs-property">client</span>.<span class="hljs-title function_">call</span>(<span class="hljs-string">&#x27;math.add&#x27;</span>, [a, b]);
-  }
-}
-</code></pre>
-<p>Use it like this:</p>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { <span class="hljs-title class_">Client</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;saikuro&#x27;</span>;
-<span class="hljs-keyword">import</span> { <span class="hljs-title class_">MathClient</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./generated/MathClient&#x27;</span>;
-
-<span class="hljs-keyword">const</span> client = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Client</span>();
-<span class="hljs-keyword">await</span> client.<span class="hljs-title function_">connect</span>();
-<span class="hljs-keyword">const</span> math = <span class="hljs-keyword">new</span> <span class="hljs-title class_">MathClient</span>(client);
-
-<span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> math.<span class="hljs-title function_">add</span>(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>);
-<span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(result); <span class="hljs-comment">// 3</span>
-</code></pre>
-<h2 id="python-example">Python Example</h2>
-<p>The generator produces <code>math_client.py</code>:</p>
-<pre class="hljs"><code><span class="hljs-comment"># AUTO-GENERATED by saikuro-codegen. DO NOT EDIT.</span>
+<h2 id="client">Client</h2>
+<pre class="hljs"><code><span class="hljs-keyword">import</span> asyncio
 <span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> Client
 
-<span class="hljs-keyword">class</span> <span class="hljs-title class_">MathClient</span>:
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, client: Client</span>) -&gt; <span class="hljs-literal">None</span>:
-        <span class="hljs-variable language_">self</span>._client = client
+<span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">main</span>():
+    client = <span class="hljs-keyword">await</span> Client.connect(<span class="hljs-string">&quot;tcp://127.0.0.1:7700&quot;</span>)
+    result = <span class="hljs-keyword">await</span> client.call(<span class="hljs-string">&quot;math.add&quot;</span>, [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>])
+    <span class="hljs-built_in">print</span>(result)
 
-    <span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">add</span>(<span class="hljs-params">self, a: <span class="hljs-built_in">int</span>, b: <span class="hljs-built_in">int</span></span>) -&gt; <span class="hljs-built_in">int</span>:
-        <span class="hljs-string">&quot;&quot;&quot;Add two integers.&quot;&quot;&quot;</span>
-        <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> <span class="hljs-variable language_">self</span>._client.call(<span class="hljs-string">&#x27;math.add&#x27;</span>, [a, b])
+asyncio.run(main())
 </code></pre>
-<p>Use it:</p>
-<pre class="hljs"><code><span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> Client
-<span class="hljs-keyword">from</span> generated <span class="hljs-keyword">import</span> MathClient
+<h2 id="provider">Provider</h2>
+<pre class="hljs"><code><span class="hljs-keyword">import</span> asyncio
+<span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> Provider
 
-client = Client()
-<span class="hljs-keyword">await</span> client.connect()
-math = MathClient(client)
+<span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">main</span>():
+    provider = Provider(<span class="hljs-string">&quot;math&quot;</span>)
 
-result = <span class="hljs-keyword">await</span> math.add(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)
-<span class="hljs-built_in">print</span>(result)  <span class="hljs-comment"># 3</span>
+<span class="hljs-meta">    @provider.register(<span class="hljs-params"><span class="hljs-string">&quot;add&quot;</span></span>)</span>
+    <span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">add</span>(<span class="hljs-params">args</span>):
+        a, b = args
+        <span class="hljs-keyword">return</span> a + b
+
+    <span class="hljs-keyword">await</span> provider.serve(<span class="hljs-string">&quot;tcp://127.0.0.1:7700&quot;</span>)
+
+asyncio.run(main())
 </code></pre>
-<h2 id="c-example">C# Example</h2>
-<p>The generator produces <code>MathClient.cs</code>:</p>
-<pre class="hljs"><code><span class="hljs-comment">// AUTO-GENERATED by saikuro-codegen. DO NOT EDIT.</span>
-<span class="hljs-keyword">using</span> Saikuro;
-
-<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">MathClient</span>
-{
-    <span class="hljs-keyword">private</span> <span class="hljs-keyword">readonly</span> Client _client;
-
-    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">MathClient</span>(<span class="hljs-params">Client client</span>)</span> =&gt; _client = client;
-
-    <span class="hljs-comment"><span class="hljs-doctag">///</span> <span class="hljs-doctag">&lt;summary&gt;</span>Add two integers.<span class="hljs-doctag">&lt;/summary&gt;</span></span>
-    <span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;<span class="hljs-built_in">long</span>&gt; <span class="hljs-title">AddAsync</span>(<span class="hljs-params"><span class="hljs-built_in">long</span> a, <span class="hljs-built_in">long</span> b</span>)</span>
-        =&gt; _client.CallAsync&lt;<span class="hljs-built_in">long</span>&gt;(<span class="hljs-string">&quot;math.add&quot;</span>, <span class="hljs-keyword">new</span> <span class="hljs-built_in">object</span>[] { a, b });
-}
-</code></pre>
-<p>Use it:</p>
-<pre class="hljs"><code><span class="hljs-keyword">var</span> client = <span class="hljs-keyword">new</span> Client();
-<span class="hljs-keyword">await</span> client.ConnectAsync();
-<span class="hljs-keyword">var</span> math = <span class="hljs-keyword">new</span> MathClient(client);
-
-<span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> math.AddAsync(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>);
-Console.WriteLine(result); <span class="hljs-comment">// 3</span>
-</code></pre>
-<h2 id="custom-types">Custom Types</h2>
-<p>Types defined in the <code>types</code> section of the schema become dataclasses, interfaces, or records in the generated code.</p>
-<p>Schema:</p>
-<pre class="hljs"><code><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;types&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">&quot;User&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;record&quot;</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">&quot;fields&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-        <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span>   <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;optional&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-        <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;optional&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span> <span class="hljs-punctuation">}</span>
-      <span class="hljs-punctuation">}</span>
-    <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;namespaces&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">&quot;users&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">&quot;functions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-        <span class="hljs-attr">&quot;get&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-          <span class="hljs-attr">&quot;args&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;id&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;primitive&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;optional&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;returns&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;named&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;User&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;visibility&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;public&quot;</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;capabilities&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;idempotent&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span>
-        <span class="hljs-punctuation">}</span>
-      <span class="hljs-punctuation">}</span>
-    <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">}</span>
-<span class="hljs-punctuation">}</span>
-</code></pre>
-<p>TypeScript generates:</p>
-<pre class="hljs"><code><span class="hljs-comment">// types.ts</span>
-<span class="hljs-keyword">export</span> <span class="hljs-keyword">interface</span> <span class="hljs-title class_">User</span> {
-  <span class="hljs-attr">id</span>: <span class="hljs-built_in">string</span>;
-  <span class="hljs-attr">name</span>: <span class="hljs-built_in">string</span>;
-}
-
-<span class="hljs-comment">// UsersClient.ts</span>
-<span class="hljs-keyword">import</span> { <span class="hljs-title class_">User</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./types&#x27;</span>;
-<span class="hljs-comment">// ...</span>
-<span class="hljs-keyword">async</span> <span class="hljs-title function_">get</span>(<span class="hljs-attr">id</span>: <span class="hljs-built_in">string</span>): <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-title class_">User</span>&gt; { ... }
-</code></pre>
-<p>Python generates:</p>
-<pre class="hljs"><code><span class="hljs-comment"># types.py</span>
-<span class="hljs-keyword">from</span> dataclasses <span class="hljs-keyword">import</span> dataclass
-
-<span class="hljs-meta">@dataclass</span>
-<span class="hljs-keyword">class</span> <span class="hljs-title class_">User</span>:
-    <span class="hljs-built_in">id</span>: <span class="hljs-built_in">str</span>
-    name: <span class="hljs-built_in">str</span>
-</code></pre>
-<p>C# generates:</p>
-<pre class="hljs"><code><span class="hljs-comment">// Types.cs</span>
-<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">User</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> Id, <span class="hljs-built_in">string</span> Name</span>)</span>;
-</code></pre>
-<h2 id="visibility-filtering">Visibility Filtering</h2>
-<p>The <code>visibility</code> field on each function controls whether it appears in generated stubs:</p>
-<div class="table-wrapper"><table>
-<thead>
-<tr>
-<th>Visibility</th>
-<th>Generated</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>public</code></td>
-<td>Yes</td>
-</tr>
-<tr>
-<td><code>internal</code></td>
-<td>Yes</td>
-</tr>
-<tr>
-<td><code>private</code></td>
-<td>No</td>
-</tr>
-</tbody>
-</table>
-</div><p>Private functions are never part of the public surface and are excluded from all output.</p>
-<h2 id="doc-comments">doc Comments</h2>
-<p>If a function has a <code>doc</code> field in the schema, the generator emits it as a doc comment in the target language:</p>
-<ul>
-<li>TypeScript: <code>/** ... */</code></li>
-<li>Python: <code>&quot;&quot;&quot;...&quot;&quot;&quot;</code></li>
-<li>C#: <code>/// &lt;summary&gt;...&lt;/summary&gt;</code></li>
-</ul>
-<p>This is the only place <code>doc</code> has any effect. It has no impact on routing or validation at runtime.</p>
-<h2 id="using-codegen-in-a-build-pipeline">Using Codegen in a Build Pipeline</h2>
-<p>The cleanest approach is to commit the schema to your repo and regenerate stubs as part of your build:</p>
-<pre class="hljs"><code><span class="hljs-comment"># Extract the schema from your provider (TypeScript example)</span>
-npx saikuro extract --provider src/math-provider.ts --out schema.json
-
-<span class="hljs-comment"># Generate stubs for each consumer language</span>
-saikuro-codegen --schema schema.json --lang python --out clients/python/generated
-saikuro-codegen --schema schema.json --lang csharp --out clients/csharp/Generated
-</code></pre>
-<p>Add the generated files to version control so consumers don’t need the codegen tool installed.</p>
 <h2 id="next-steps">Next Steps</h2>
 <ul>
-<li><a href="./schema">Schema Reference</a>: All schema fields, including <code>idempotent</code>, <code>capabilities</code>, and custom types</li>
-<li><a href="../adapters/">Language Adapters</a>: Provider and client API for each language</li>
+<li><a href="../../guide/codegen">Code Generation</a>: Generate Python stubs from schema</li>
+<li><a href="./api-reference">Python API Reference</a>: Client and provider method reference</li>
+<li><a href="./examples">Python examples</a>: Python with TypeScript and Rust patterns</li>
 </ul>
 
 
                     
                     <div class="page-navigation">
                         
-                        <a href="../../guide/schema" class="prev-page">
+                        <a href="../../adapters/csharp/examples/" class="prev-page">
                             <svg class="lucide-icon icon-arrow-left page-nav-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="m12 19-7-7 7-7" />
   <path d="M19 12H5" />
 </svg>
-                            <span><small>Previous</small><strong>Schema</strong></span>
+                            <span><small>Previous</small><strong>Examples</strong></span>
                         </a>
                         
                         
-                        <a href="../../guide/transports" class="next-page">
-                            <span><small>Next</small><strong>Transports</strong></span>
+                        <a href="../../adapters/python/api-reference/" class="next-page">
+                            <span><small>Next</small><strong>API Reference</strong></span>
                             <svg class="lucide-icon icon-arrow-right page-nav-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M5 12h14" />
   <path d="m12 5 7 7-7 7" />
@@ -949,39 +744,15 @@ saikuro-codegen --schema schema.json --lang csharp --out clients/csharp/Generate
     <ul class="toc-list">
       
         <li class="toc-item toc-level-2">
-          <a href="#what-gets-generated" class="toc-link">What Gets Generated</a>
+          <a href="#install" class="toc-link">Install</a>
         </li>
       
         <li class="toc-item toc-level-2">
-          <a href="#running-the-generator" class="toc-link">Running the Generator</a>
+          <a href="#client" class="toc-link">Client</a>
         </li>
       
         <li class="toc-item toc-level-2">
-          <a href="#typescript-example" class="toc-link">TypeScript Example</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#python-example" class="toc-link">Python Example</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#c-example" class="toc-link">C# Example</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#custom-types" class="toc-link">Custom Types</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#visibility-filtering" class="toc-link">Visibility Filtering</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#doc-comments" class="toc-link">doc Comments</a>
-        </li>
-      
-        <li class="toc-item toc-level-2">
-          <a href="#using-codegen-in-a-build-pipeline" class="toc-link">Using Codegen in a Build Pipeline</a>
+          <a href="#provider" class="toc-link">Provider</a>
         </li>
       
         <li class="toc-item toc-level-2">
@@ -996,7 +767,7 @@ saikuro-codegen --schema schema.json --lang csharp --out clients/csharp/Generate
 
             <div class="page-footer-actions">
                 
-                <a href="https://github.com/Nisoku/Saikuro/edit/main/Docs/docs/guide/codegen/index.md" target="_blank" rel="noopener noreferrer" class="edit-link">
+                <a href="https://github.com/Nisoku/Saikuro/edit/main/Docs/docs/adapters/python/index.md" target="_blank" rel="noopener noreferrer" class="edit-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg> Edit this page
                 </a>
                 
