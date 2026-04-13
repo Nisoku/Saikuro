@@ -38,7 +38,7 @@
 - [ ] Awk (Yes, really. Text processing god.)
 - [ ] GDScript (So useful for Godot)
 - [ ] Gleam (Another new lang, really cute mascot hehe)
-
+- [ ] Jakt (from SerenityOS: https://github.com/SerenityOS/jakt)
 ## Features
 
 - [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
