@@ -8,6 +8,7 @@
 - [ ] AssemblyScript (lol this technically isn't needed since TS adapter but we could have a wasm-specific adapter using it (I don't know AS but it's really similar to TS from what i've heard))
 - [ ] Swift Adapter (Ladybird would benefit from it (bit too late for that but either way))
 - [ ] Lua (super useful, especially for games and game engines and so much more (Picotility might benefit hehe))
+- [ ] AppleScript (yes really, it's powerful but painful to write in)
 
 ### Need help
 
@@ -41,6 +42,7 @@
 - [ ] Jakt (from SerenityOS: https://github.com/SerenityOS/jakt)
 - [ ] Luau (yes that one)
 - [ ] Assembly (this would be peak but silly but still peak.)
+
 ## Features
 
 - [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
