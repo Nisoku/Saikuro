@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## 2026‑04‑11
+
+### Commits
+
+- **21ce672**
+- **2618ba5**  
+- **3e2d88a**
+
+### Added
+
+- Full **C and C++ adapters** using a stable C ABI, including:
+  - complete provider + client implementations  
+  - schema extractor CLI for both C and C++  
+  - wrapper runtime for C++  
+  - CMake build system for C++ adapter  
+  - C adapter Rust bridge (`saikuro_c_schema.rs`, `lib.rs`)  
+  - C++ adapter headers (`saikuro.hpp`, `schema_extractor.hpp`)  
+  - end‑to‑end integration tests for C and C++ adapters  
+  - parity table (`Build/adapters/PARITY.md`) covering capabilities, tooling, and test coverage across all languages  
+- New documentation pages for C and C++ adapters:
+  - `Docs/docs/adapters/c/`  
+  - `Docs/docs/adapters/cpp/`  
+- Codegen support for C and C++ added to `saikuro-codegen` (`c.rs`, `cpp.rs`)  
+- Updated `.gitignore` to include `.venv`, `.ruff_cache`, and `.vscode/`  
+- Updated workspace to include `crates/saikuro-runtime-bin` and C adapter crates  
+
+### Changed
+
+- README updated to mark **C** and **C++** adapters as fully implemented  
+- TODO list updated to remove completed C/C++ items  
+- C# GitHub Actions workflow updated to run tests from the correct project path  
+
+### Fixed
+
+- Various small cleanup fixes across adapters and tests as part of the C/C++ integration  
+- Ensured schema extractor CLIs for C and C++ behave consistently with Rust/TS/Python/C#  
+
 ---
 
 ## [Uncommited-0.1.0] - 2026-03-05 - 2026-03-06
