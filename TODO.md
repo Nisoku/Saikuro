@@ -53,6 +53,7 @@
 - [ ] VB.NET
 - [ ] Zsh
 - [ ] Nushell
+- [ ] [Tungsten](https://github.com/RickIsGone/tungsten) (beta)
 
 ## Transports
 
