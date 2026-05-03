@@ -1,147 +1,147 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/c/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/c/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/c/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/c/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/c/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/c/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/cpp/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/cpp/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/cpp/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/cpp/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/cpp/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/cpp/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/csharp/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/csharp/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/csharp/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/csharp/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/csharp/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/python/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/python/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/python/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/python/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/python/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/python/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/rust/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/rust/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/rust/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/rust/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/rust/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/rust/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/typescript/api-reference/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/typescript/api-reference/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/typescript/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/typescript/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/adapters/typescript/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/adapters/typescript/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/api/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/api/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/getting-started/concepts/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/getting-started/concepts/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/getting-started/quickstart/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/getting-started/quickstart/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/adapters/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/adapters/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/codegen/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/codegen/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/examples/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/invocations/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/invocations/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/schema/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/schema/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/guide/transports/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/guide/transports/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nisoku.github.io/Saikuro/docs/</loc>
+    <loc>https://nisoku.org/Saikuro/docs/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
