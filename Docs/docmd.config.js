@@ -2,7 +2,7 @@
 module.exports = {
   // Core Metadata
   siteTitle: "Saikuro",
-  siteUrl: "https://nisoku.github.io/Saikuro/docs",
+  siteUrl: "https://nisoku.org/Saikuro/docs",
 
   // Branding
   logo: {
