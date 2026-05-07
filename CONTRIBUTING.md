@@ -38,7 +38,6 @@ Build/
     saikuro-router/
     saikuro-runtime/
     saikuro-codegen/
-    saikuro-runtime-bin/
   tests/              # Rust integration tests
   adapters/
     rust/             # Standalone saikuro crate (end-user API)

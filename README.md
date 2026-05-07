@@ -80,7 +80,7 @@ Build/
     saikuro-router/     Invocation router
     saikuro-runtime/    Embeddable runtime
     saikuro-codegen/    Binding code-generator
-    saikuro-runtime-bin/ Standalone server binary
+    saikuro-runtime/   Orchestration core (includes standalone server binary)
   tests/              # Rust integration tests
   adapters/
     rust/             Rust adapter (saikuro crate)

@@ -64,8 +64,8 @@
 
 ## Features
 
-- [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
 - [O] Buildscripts (Python ofc) and more dev conveniences
+- [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
 - [ ] Make WASM compilation of runtime work like how i imagined it
 - [ ] WasmHostTransport for WASM
     - A transport that uses:

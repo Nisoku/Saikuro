@@ -879,8 +879,10 @@ dependencies = [
 name = "saikuro-runtime"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bytes",
+ "clap",
  "dashmap",
  "futures",
  "parking_lot",
@@ -895,27 +897,11 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-test",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "saikuro-runtime-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "saikuro-core",
- "saikuro-runtime",
- "saikuro-transport",
- "serde",
- "serde_json",
- "tokio",
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
  "tungstenite",
+ "uuid",
 ]
 
 [[package]]

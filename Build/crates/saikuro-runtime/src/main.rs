@@ -31,7 +31,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use saikuro_core::capability::CapabilitySet;
-use saikuro_runtime_lib::{config::RuntimeMode, RuntimeConfig, SaikuroRuntime};
+use saikuro_runtime::{config::RuntimeMode, RuntimeConfig, SaikuroRuntime};
 use saikuro_transport::tcp::{TcpTransport, TcpTransportListener};
 use saikuro_transport::traits::TransportListener;
 use tokio::{signal, sync::watch};
@@ -251,7 +251,7 @@ async fn main() -> Result<()> {
 /// Accept loop for the raw TCP listener.
 async fn run_tcp_listener(
     listener: &mut TcpTransportListener,
-    handle: saikuro_runtime_lib::RuntimeHandle,
+    handle: saikuro_runtime::RuntimeHandle,
     shutdown: &mut watch::Receiver<bool>,
 ) {
     loop {
@@ -292,7 +292,7 @@ async fn run_tcp_listener(
 #[cfg(feature = "ws-transport")]
 async fn run_ws_listener(
     listener: tokio::net::TcpListener,
-    handle: saikuro_runtime_lib::RuntimeHandle,
+    handle: saikuro_runtime::RuntimeHandle,
     shutdown: &mut watch::Receiver<bool>,
 ) {
     use saikuro_transport::websocket::WebSocketTransport;
@@ -347,7 +347,7 @@ async fn run_ws_listener(
 #[cfg(all(feature = "native-transport", target_family = "unix"))]
 async fn run_unix_listener(
     listener: &mut saikuro_transport::unix::UnixTransportListener,
-    handle: saikuro_runtime_lib::RuntimeHandle,
+    handle: saikuro_runtime::RuntimeHandle,
     shutdown: &mut watch::Receiver<bool>,
 ) {
     use saikuro_transport::traits::TransportListener as _;
