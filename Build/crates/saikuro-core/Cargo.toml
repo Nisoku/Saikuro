@@ -18,7 +18,3 @@ bytes = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
-
-[dev-dependencies]
-tokio = { workspace = true }
-tokio-test = { workspace = true }

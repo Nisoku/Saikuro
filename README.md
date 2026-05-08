@@ -31,17 +31,18 @@ or in-memory).
 ```rust
 use saikuro::{Provider, Result};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut provider = Provider::new("math");
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async {
+        let mut provider = Provider::new("math");
 
-    provider.register("add", |args: Vec<serde_json::Value>| async move {
-        let a = args[0].as_i64().unwrap_or(0);
-        let b = args[1].as_i64().unwrap_or(0);
-        Ok(serde_json::json!(a + b))
-    });
+        provider.register("add", |args: Vec<serde_json::Value>| async move {
+            let a = args[0].as_i64().unwrap_or(0);
+            let b = args[1].as_i64().unwrap_or(0);
+            Ok(serde_json::json!(a + b))
+        });
 
-    provider.serve("tcp://127.0.0.1:7700").await
+        provider.serve("tcp://127.0.0.1:7700").await
+    })
 }
 ```
 
@@ -80,7 +81,7 @@ Build/
     saikuro-router/     Invocation router
     saikuro-runtime/    Embeddable runtime
     saikuro-codegen/    Binding code-generator
-    saikuro-runtime/   Orchestration core (includes standalone server binary)
+    saikuro-runtime/    Orchestration core (includes standalone server binary)
   tests/              # Rust integration tests
   adapters/
     rust/             Rust adapter (saikuro crate)

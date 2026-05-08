@@ -54,7 +54,7 @@ mod tcp_impl {
         pub async fn connect(addr: std::net::SocketAddr) -> Result<Self> {
             use saikuro_transport::traits::Transport;
             let transport = TcpTransport::new(
-                tokio::net::TcpStream::connect(addr)
+                saikuro_exec::net::TcpStream::connect(addr)
                     .await
                     .map_err(|e| Error::Transport(e.to_string()))?,
             )
@@ -263,7 +263,7 @@ fn parse_host_port(s: &str) -> Result<(String, &str)> {
 /// let (provider_t, client_t) = InMemoryTransport::pair();
 ///
 /// // Spawn the provider on one side, connect the client on the other.
-/// tokio::spawn(async move {
+/// saikuro_exec::spawn(async move {
 ///     let mut provider = Provider::new("math");
 ///     provider.register("add", |args: Vec<serde_json::Value>| async move {
 ///         Ok(serde_json::json!(args[0].as_i64().unwrap_or(0) + args[1].as_i64().unwrap_or(0)))
@@ -272,8 +272,8 @@ fn parse_host_port(s: &str) -> Result<(String, &str)> {
 /// });
 /// ```
 pub struct InMemoryTransport {
-    sender: tokio::sync::mpsc::Sender<Bytes>,
-    receiver: tokio::sync::mpsc::Receiver<Bytes>,
+    sender: saikuro_exec::mpsc::Sender<Bytes>,
+    receiver: saikuro_exec::mpsc::Receiver<Bytes>,
 }
 
 impl InMemoryTransport {
@@ -281,8 +281,8 @@ impl InMemoryTransport {
     ///
     /// Bytes sent on one side are received on the other.
     pub fn pair() -> (Self, Self) {
-        let (a_tx, b_rx) = tokio::sync::mpsc::channel(256);
-        let (b_tx, a_rx) = tokio::sync::mpsc::channel(256);
+        let (a_tx, b_rx) = saikuro_exec::mpsc::channel(256);
+        let (b_tx, a_rx) = saikuro_exec::mpsc::channel(256);
         (
             Self {
                 sender: a_tx,

@@ -5,14 +5,14 @@
 //! TypeScript, …) that has registered its schema and is listening for work.
 //!
 //! The [`ProviderRegistry`] maps namespace names to [`ProviderHandle`]s.
-//! Each handle wraps a tokio MPSC sender so the router can dispatch work
+//! Each handle wraps a MPSC sender so the router can dispatch work
 //! without blocking.
 
 use async_trait::async_trait;
 use dashmap::DashMap;
 use saikuro_core::{envelope::Envelope, ResponseEnvelope};
+use saikuro_exec::{mpsc, oneshot};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
 use crate::error::{Result, RouterError};

@@ -6,7 +6,7 @@
 //! `Bytes` objects with zero copying.
 use async_trait::async_trait;
 use bytes::Bytes;
-use tokio::sync::mpsc;
+use saikuro_exec::mpsc;
 use tracing::trace;
 
 use crate::{

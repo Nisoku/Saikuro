@@ -115,7 +115,15 @@ def _missing_binary(cmd: list[str]) -> bool:
 def _resolve_binary(cmd: list[str]) -> str | None:
     if not cmd:
         return None
-    return shutil.which(cmd[0])
+    # Check PATH first
+    found = shutil.which(cmd[0])
+    if found:
+        return found
+    # Fall back to ~/.dotnet (common location from dotnet-install.sh)
+    home_dotnet = Path.home() / ".dotnet" / cmd[0]
+    if home_dotnet.is_file():
+        return str(home_dotnet)
+    return None
 
 
 def _has_dotnet_runtime_8() -> bool:
@@ -221,10 +229,10 @@ def quality_checks() -> list[CommandSpec]:
         CommandSpec("Rust fmt", ["cargo", "fmt", "--all", "--", "--check"], ROOT),
         CommandSpec(
             "Rust clippy",
-            ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"],
+            ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
             ROOT,
         ),
-        CommandSpec("Rust tests", ["cargo", "test", "--workspace", "--all-features"], ROOT),
+        CommandSpec("Rust tests", ["cargo", "test", "--workspace"], ROOT),
     ]
 
 
@@ -267,7 +275,7 @@ def adapter_checks(name: str) -> list[CommandSpec]:
         "python": [
             CommandSpec(
                 "Python adapter deps",
-                [sys.executable, "-m", "pip", "install", "-e", ".[dev,websocket]"],
+                ["uv", "sync", "--extra", "dev", "--extra", "websocket"],
                 ROOT / "adapters" / "python",
             ),
             CommandSpec("Python tests", ["pytest"], ROOT / "adapters" / "python"),

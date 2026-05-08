@@ -28,7 +28,7 @@ obj/
 __pycache__/
 .ruff_cache/
 site/
-# build/
+Build/adapters/cpp/build/
 .venv/
 # TODO: setup proper .vscode so we can keep this
 .vscode/ 

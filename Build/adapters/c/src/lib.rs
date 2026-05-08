@@ -5,8 +5,8 @@ use std::thread_local;
 use std::time::Duration;
 
 use saikuro::{Client, Provider, SaikuroChannel, Value};
+use saikuro_exec::Runtime;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 // TODO: Modularize a bit haha
 
@@ -118,7 +118,7 @@ struct ClientHandle {
 impl ClientHandle {
     fn new(address: &str) -> Result<Self, String> {
         let rt = Arc::new(
-            tokio::runtime::Builder::new_current_thread()
+            saikuro_exec::new_runtime()
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to create runtime: {e}"))?,
@@ -155,7 +155,7 @@ impl ClientHandle {
 type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
 
 struct ProviderHandle {
-    rt: tokio::runtime::Runtime,
+    rt: saikuro_exec::Runtime,
     provider: Option<Provider>,
 }
 
@@ -171,7 +171,7 @@ struct ChannelHandle {
 
 impl ProviderHandle {
     fn new(namespace: &str) -> Result<Self, String> {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::new_runtime()
             .enable_all()
             .build()
             .map_err(|e| format!("failed to create runtime: {e}"))?;

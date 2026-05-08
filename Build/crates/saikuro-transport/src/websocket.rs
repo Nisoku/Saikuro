@@ -20,7 +20,7 @@ use crate::{
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 #[cfg(not(target_arch = "wasm32"))]
-use tokio::net::TcpStream;
+use saikuro_exec::net::TcpStream;
 
 /// A WebSocket transport connection.
 ///

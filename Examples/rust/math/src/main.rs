@@ -9,8 +9,11 @@
 use saikuro::{Client, Error, InMemoryTransport, Provider, Result};
 use serde_json::Value as JsonValue;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     // provider setup
 
     let mut provider = Provider::new("math");
@@ -46,19 +49,22 @@ async fn main() -> Result<()> {
 
     let (provider_transport, client_transport) = InMemoryTransport::pair();
 
-    tokio::spawn(async move {
+    saikuro_exec::spawn(async move {
         let _ = provider.serve_on(Box::new(provider_transport)).await;
     });
 
     // Give the provider task a chance to start and send its announce frame.
-    tokio::task::yield_now().await;
+    saikuro_exec::yield_now().await;
 
     let client = Client::from_transport(Box::new(client_transport), None)?;
 
     // call
 
     let sum = client
-        .call("math.add", vec![serde_json::json!(10), serde_json::json!(32)])
+        .call(
+            "math.add",
+            vec![serde_json::json!(10), serde_json::json!(32)],
+        )
         .await?;
     println!("math.add(10, 32) = {sum}");
     assert_eq!(sum, serde_json::json!(42.0));
@@ -93,10 +99,7 @@ async fn main() -> Result<()> {
     // cast (fire-and-forget)
 
     client
-        .cast(
-            "math.add",
-            vec![serde_json::json!(1), serde_json::json!(1)],
-        )
+        .cast("math.add", vec![serde_json::json!(1), serde_json::json!(1)])
         .await?;
     println!("cast sent (no response expected)");
 

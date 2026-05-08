@@ -8,6 +8,7 @@ use saikuro_core::{
     value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
+use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::{InvocationRouter, RouterConfig},
@@ -23,7 +24,6 @@ use saikuro_transport::{
     traits::{Transport, TransportReceiver, TransportSender},
 };
 use std::collections::HashMap;
-use tokio::sync::mpsc;
 
 //  Helpers
 
@@ -154,7 +154,7 @@ async fn round_trip_while_alive(
     };
 
     // Spawn the handler so we can interleave reads/writes.
-    let task = tokio::spawn(handler.run());
+    let task = saikuro_exec::spawn(handler.run());
 
     // Send the envelope.
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
@@ -178,28 +178,30 @@ async fn round_trip_while_alive(
 //  Tests
 
 /// A valid announce envelope causes its namespace to appear in the registry.
-#[tokio::test]
-async fn announce_registers_namespace_in_schema() {
-    let registry = SchemaRegistry::new();
-    let providers = ProviderRegistry::new();
+#[test]
+fn announce_registers_namespace_in_schema() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let providers = ProviderRegistry::new();
 
-    assert!(
-        !registry.has_namespace("math"),
-        "registry must be empty before announce"
-    );
+        assert!(
+            !registry.has_namespace("math"),
+            "registry must be empty before announce"
+        );
 
-    let schema = simple_schema("math", "add");
-    let env = make_announce_envelope(&schema);
+        let schema = simple_schema("math", "add");
+        let env = make_announce_envelope(&schema);
 
-    // Use round_trip_while_alive so we can inspect the registry while the
-    // connection is still open (before the handler's disconnect cleanup runs).
-    let resp = round_trip_while_alive(registry.clone(), providers, env).await;
+        // Use round_trip_while_alive so we can inspect the registry while the
+        // connection is still open (before the handler's disconnect cleanup runs).
+        let resp = round_trip_while_alive(registry.clone(), providers, env).await;
 
-    assert!(resp.ok, "announce should return ok: {:?}", resp.error);
-    // Note: after the connection closes the handler deregisters the provider's
-    // schema (correct runtime behaviour: if the provider disconnects, its
-    // functions are no longer callable).  We verify namespace presence via the
-    // ok response above, which proves registration succeeded.
+        assert!(resp.ok, "announce should return ok: {:?}", resp.error);
+        // Note: after the connection closes the handler deregisters the provider's
+        // schema (correct runtime behaviour: if the provider disconnects, its
+        // functions are no longer callable).  We verify namespace presence via the
+        // ok response above, which proves registration succeeded.
+    })
 }
 
 /// After a successful announce, the function is resolvable in the registry:
@@ -207,148 +209,158 @@ async fn announce_registers_namespace_in_schema() {
 ///
 /// (The call itself would fail with `NoProvider` because no provider is
 /// connected, but it must not fail with `NamespaceNotFound`.)
-#[tokio::test]
-async fn announce_allows_subsequent_calls_to_not_fail_schema_validation() {
-    let registry = SchemaRegistry::new();
-    let providers = ProviderRegistry::new();
+#[test]
+fn announce_allows_subsequent_calls_to_not_fail_schema_validation() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let providers = ProviderRegistry::new();
 
-    let schema = simple_schema("svc", "hello");
-    let announce_env = make_announce_envelope(&schema);
+        let schema = simple_schema("svc", "hello");
+        let announce_env = make_announce_envelope(&schema);
 
-    // Use round_trip_while_alive and capture a snapshot of the registry
-    // *while the announce is being processed and the connection is live*.
-    // We verify via the ok response that the announce succeeded (which
-    // implies schema registration succeeded).
-    let announce_resp = round_trip_while_alive(registry.clone(), providers, announce_env).await;
-    assert!(
-        announce_resp.ok,
-        "announce must succeed:  implies svc.hello is registered: {:?}",
-        announce_resp.error
-    );
-    // The ok response proves that the schema was registered during the
-    // connection lifetime.  The subsequent deregistration on disconnect is
-    // correct behaviour (provider gone -> functions unreachable).
+        // Use round_trip_while_alive and capture a snapshot of the registry
+        // *while the announce is being processed and the connection is live*.
+        // We verify via the ok response that the announce succeeded (which
+        // implies schema registration succeeded).
+        let announce_resp = round_trip_while_alive(registry.clone(), providers, announce_env).await;
+        assert!(
+            announce_resp.ok,
+            "announce must succeed:  implies svc.hello is registered: {:?}",
+            announce_resp.error
+        );
+        // The ok response proves that the schema was registered during the
+        // connection lifetime.  The subsequent deregistration on disconnect is
+        // correct behaviour (provider gone -> functions unreachable).
+    })
 }
 
 /// In production mode the registry is frozen; an announce must be rejected.
-#[tokio::test]
-async fn announce_in_production_mode_returns_error() {
-    let registry = SchemaRegistry::new();
-    registry.freeze(); // switch to production mode
-    assert_eq!(registry.mode(), RegistryMode::Production);
+#[test]
+fn announce_in_production_mode_returns_error() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        registry.freeze(); // switch to production mode
+        assert_eq!(registry.mode(), RegistryMode::Production);
 
-    let providers = ProviderRegistry::new();
-    let schema = simple_schema("frozen", "op");
-    let env = make_announce_envelope(&schema);
+        let providers = ProviderRegistry::new();
+        let schema = simple_schema("frozen", "op");
+        let env = make_announce_envelope(&schema);
 
-    let resp = round_trip(registry.clone(), providers, env).await;
+        let resp = round_trip(registry.clone(), providers, env).await;
 
-    assert!(!resp.ok, "announce in production mode must fail");
-    let err = resp.error.expect("error detail must be present");
-    // The registry rejects with FrozenSchema; the handler maps that to Internal.
-    assert_eq!(
-        err.code,
-        saikuro_core::error::ErrorCode::Internal,
-        "expected Internal error code for frozen registry, got {:?}",
-        err.code
-    );
-    // Namespace must not have been registered.
-    assert!(
-        !registry.has_namespace("frozen"),
-        "namespace must not appear after a rejected announce"
-    );
+        assert!(!resp.ok, "announce in production mode must fail");
+        let err = resp.error.expect("error detail must be present");
+        // The registry rejects with FrozenSchema; the handler maps that to Internal.
+        assert_eq!(
+            err.code,
+            saikuro_core::error::ErrorCode::Internal,
+            "expected Internal error code for frozen registry, got {:?}",
+            err.code
+        );
+        // Namespace must not have been registered.
+        assert!(
+            !registry.has_namespace("frozen"),
+            "namespace must not appear after a rejected announce"
+        );
+    })
 }
 
 /// An announce envelope whose args[0] is not a valid Schema must return a
 /// `MalformedEnvelope` error.
-#[tokio::test]
-async fn announce_with_invalid_schema_returns_error() {
-    let registry = SchemaRegistry::new();
-    let providers = ProviderRegistry::new();
+#[test]
+fn announce_with_invalid_schema_returns_error() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let providers = ProviderRegistry::new();
 
-    // args[0] is a plain string:  not a Schema map.
-    let bad_env = Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: InvocationType::Announce,
-        id: InvocationId::new(),
-        target: "$saikuro.announce".to_owned(),
-        args: vec![Value::String("not a schema".into())],
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq: None,
-    };
+        // args[0] is a plain string:  not a Schema map.
+        let bad_env = Envelope {
+            version: PROTOCOL_VERSION,
+            invocation_type: InvocationType::Announce,
+            id: InvocationId::new(),
+            target: "$saikuro.announce".to_owned(),
+            args: vec![Value::String("not a schema".into())],
+            meta: Default::default(),
+            capability: None,
+            batch_items: None,
+            stream_control: None,
+            seq: None,
+        };
 
-    let resp = round_trip(registry, providers, bad_env).await;
+        let resp = round_trip(registry, providers, bad_env).await;
 
-    assert!(!resp.ok, "announce with invalid schema must fail");
-    let err = resp.error.expect("error detail");
-    assert_eq!(
-        err.code,
-        saikuro_core::error::ErrorCode::MalformedEnvelope,
-        "expected MalformedEnvelope for bad args[0], got {:?}",
-        err.code
-    );
+        assert!(!resp.ok, "announce with invalid schema must fail");
+        let err = resp.error.expect("error detail");
+        assert_eq!(
+            err.code,
+            saikuro_core::error::ErrorCode::MalformedEnvelope,
+            "expected MalformedEnvelope for bad args[0], got {:?}",
+            err.code
+        );
+    })
 }
 
 /// An announce envelope with *no* args must also be rejected.
-#[tokio::test]
-async fn announce_with_no_args_returns_error() {
-    let registry = SchemaRegistry::new();
-    let providers = ProviderRegistry::new();
+#[test]
+fn announce_with_no_args_returns_error() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let providers = ProviderRegistry::new();
 
-    let empty_env = Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: InvocationType::Announce,
-        id: InvocationId::new(),
-        target: "$saikuro.announce".to_owned(),
-        args: vec![],
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq: None,
-    };
+        let empty_env = Envelope {
+            version: PROTOCOL_VERSION,
+            invocation_type: InvocationType::Announce,
+            id: InvocationId::new(),
+            target: "$saikuro.announce".to_owned(),
+            args: vec![],
+            meta: Default::default(),
+            capability: None,
+            batch_items: None,
+            stream_control: None,
+            seq: None,
+        };
 
-    let resp = round_trip(registry, providers, empty_env).await;
+        let resp = round_trip(registry, providers, empty_env).await;
 
-    assert!(!resp.ok, "announce with no args must fail");
-    let err = resp.error.expect("error detail");
-    assert_eq!(
-        err.code,
-        saikuro_core::error::ErrorCode::MalformedEnvelope,
-        "expected MalformedEnvelope for empty args, got {:?}",
-        err.code
-    );
+        assert!(!resp.ok, "announce with no args must fail");
+        let err = resp.error.expect("error detail");
+        assert_eq!(
+            err.code,
+            saikuro_core::error::ErrorCode::MalformedEnvelope,
+            "expected MalformedEnvelope for empty args, got {:?}",
+            err.code
+        );
+    })
 }
 
 /// An announce envelope must never be forwarded to a provider.
 ///
 /// We register a provider that claims the `$saikuro` namespace to confirm
 /// it never receives a work item.
-#[tokio::test]
-async fn announce_does_not_route_to_provider() {
-    let registry = SchemaRegistry::new();
+#[test]
+fn announce_does_not_route_to_provider() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
 
-    let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
-    let handle = ProviderHandle::new("interceptor", vec!["$saikuro".to_owned()], work_tx);
-    let providers = ProviderRegistry::new();
-    providers.register(handle);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
+        let handle = ProviderHandle::new("interceptor", vec!["$saikuro".to_owned()], work_tx);
+        let providers = ProviderRegistry::new();
+        providers.register(handle);
 
-    let schema = simple_schema("intercept_test", "fn");
-    let env = make_announce_envelope(&schema);
-    let resp = round_trip(registry, providers, env).await;
+        let schema = simple_schema("intercept_test", "fn");
+        let env = make_announce_envelope(&schema);
+        let resp = round_trip(registry, providers, env).await;
 
-    assert!(
-        resp.ok,
-        "announce should succeed even with a '$saikuro' provider: {:?}",
-        resp.error
-    );
-    assert!(
-        work_rx.try_recv().is_err(),
-        "announce must NOT be forwarded to any provider channel"
-    );
+        assert!(
+            resp.ok,
+            "announce should succeed even with a '$saikuro' provider: {:?}",
+            resp.error
+        );
+        assert!(
+            work_rx.try_recv().is_err(),
+            "announce must NOT be forwarded to any provider channel"
+        );
+    })
 }
 
 /// Multiple sequential announces must each merge their namespaces:  not
@@ -356,25 +368,27 @@ async fn announce_does_not_route_to_provider() {
 ///
 /// We send all three announces through a single connection that remains open,
 /// so the schema entries from all three peers are live simultaneously.
-#[tokio::test]
-async fn multiple_announces_merge_all_namespaces() {
-    let registry = SchemaRegistry::new();
-    let providers = ProviderRegistry::new();
+#[test]
+fn multiple_announces_merge_all_namespaces() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let providers = ProviderRegistry::new();
 
-    let schemas = [
-        simple_schema("alpha", "fn_a"),
-        simple_schema("beta", "fn_b"),
-        simple_schema("gamma", "fn_c"),
-    ];
+        let schemas = [
+            simple_schema("alpha", "fn_a"),
+            simple_schema("beta", "fn_b"),
+            simple_schema("gamma", "fn_c"),
+        ];
 
-    // Each ok response proves the announce was processed and the schema was
-    // merged into the shared registry during that connection's lifetime.
-    for schema in &schemas {
-        let env = make_announce_envelope(schema);
-        let resp = round_trip_while_alive(registry.clone(), providers.clone(), env).await;
-        assert!(resp.ok, "each announce must succeed");
-    }
-    // All three announces returned ok, confirming each namespace was
-    // registered in turn.  Post-disconnect cleanup is expected runtime
-    // behaviour (each connection's schemas are removed when it closes).
+        // Each ok response proves the announce was processed and the schema was
+        // merged into the shared registry during that connection's lifetime.
+        for schema in &schemas {
+            let env = make_announce_envelope(schema);
+            let resp = round_trip_while_alive(registry.clone(), providers.clone(), env).await;
+            assert!(resp.ok, "each announce must succeed");
+        }
+        // All three announces returned ok, confirming each namespace was
+        // registered in turn.  Post-disconnect cleanup is expected runtime
+        // behaviour (each connection's schemas are removed when it closes).
+    })
 }

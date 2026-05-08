@@ -47,6 +47,7 @@ use saikuro_core::{
     value::Value,
     ResponseEnvelope,
 };
+use saikuro_exec::{mpsc, oneshot, spawn};
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::InvocationRouter,
@@ -58,7 +59,6 @@ use saikuro_schema::{
 };
 use saikuro_transport::traits::{TransportReceiver, TransportSender};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, instrument, warn};
 
 //  Pending call map
@@ -141,7 +141,7 @@ where
         let (forward_tx, mut forward_rx) = mpsc::channel::<Bytes>(256);
 
         loop {
-            tokio::select! {
+            saikuro_exec::select! {
                 // Outbound frame from the ForwardTask (call forwarded to this
                 // peer acting as a provider).
                 Some(frame) = forward_rx.recv() => {
@@ -403,7 +403,7 @@ where
         let forward_tx_clone = forward_tx.clone();
         let peer_id = self.peer_id.clone();
 
-        tokio::spawn(async move {
+        spawn(async move {
             while let Some(item) = work_rx.recv().await {
                 // Encode the envelope for the wire.
                 let frame = match rmp_serde::to_vec_named(&item.envelope) {

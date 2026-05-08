@@ -8,11 +8,11 @@
 use dashmap::DashMap;
 use saikuro_core::invocation::InvocationId;
 use saikuro_core::ResponseEnvelope;
+use saikuro_exec::mpsc;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
-use tokio::sync::mpsc;
 
 // Stream state
 

@@ -20,11 +20,8 @@ use saikuro_core::{
     log::{LogLevel, LogRecord, LogSink},
     ResponseEnvelope,
 };
+use saikuro_exec::{mpsc, oneshot, timeout};
 use std::{sync::Arc, time::Duration};
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
-};
 use tracing::{debug, instrument, warn};
 
 use crate::{

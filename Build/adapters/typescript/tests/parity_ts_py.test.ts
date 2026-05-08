@@ -9,9 +9,40 @@ import {
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const pyAdapterRoot = resolve(__dirname, "../../python");
+const venvPython = resolve(pyAdapterRoot, ".venv/bin/python3");
+
+function getPythonBin(): string {
+  if (existsSync(venvPython)) return venvPython;
+  return "python3";
+}
+
+function getDotnetBin(): string {
+  // Check PATH first
+  const pathDirs = (process.env.PATH || "").split(":");
+  for (const dir of pathDirs) {
+    const candidate = resolve(dir, "dotnet");
+    if (existsSync(candidate)) return "dotnet";
+  }
+  // Check DOTNET_ROOT
+  const root = process.env.DOTNET_ROOT;
+  if (root) {
+    const candidate = resolve(root, "dotnet");
+    if (existsSync(candidate)) return candidate;
+  }
+  // Check ~/.dotnet (common install location from dotnet-install.sh)
+  const home = process.env.HOME;
+  if (home) {
+    const candidate = resolve(home, ".dotnet", "dotnet");
+    if (existsSync(candidate)) return candidate;
+  }
+  return "dotnet";
+}
 
 describe("Schema parity: TypeScript ↔ Python (basic)", () => {
   it(
@@ -31,7 +62,7 @@ describe("Schema parity: TypeScript ↔ Python (basic)", () => {
       __dirname,
       "../../python/tests/fixtures/service.py",
     );
-    const res = spawnSync("python3", [pyFixture], {
+    const res = spawnSync(getPythonBin(), [pyFixture], {
       encoding: "utf-8",
       env: {
         ...process.env,
@@ -47,7 +78,7 @@ describe("Schema parity: TypeScript ↔ Python (basic)", () => {
     // Also run the C# schema extractor tool (dotnet) to produce a schema for
     // parity checks. The small extractor exe prints JSON to stdout.
     const csRes = spawnSync(
-      "dotnet",
+      getDotnetBin(),
       [
         "run",
         "--project",

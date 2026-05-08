@@ -15,8 +15,8 @@ saikuro-router    = { workspace = true }
 saikuro-runtime   = { workspace = true, features = ["native-transport"] }
 saikuro-codegen   = { workspace = true }
 saikuro           = { workspace = true }
+saikuro-exec      = { workspace = true }
 
-tokio         = { workspace = true }
 bytes         = { workspace = true }
 rmp-serde     = { workspace = true }
 serde_json    = { workspace = true }

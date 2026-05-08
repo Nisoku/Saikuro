@@ -30,17 +30,12 @@ futures     = { workspace = true }
 pin-project-lite = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
-tokio-stream = { workspace = true }
-
-# tokio: on native we want the full suite; on wasm32 only sync + io features
-# compile. We depend on it unconditionally and cfg-gate the native-only APIs.
-tokio = { workspace = true }
-tokio-util = { workspace = true }
+saikuro-exec = { workspace = true }
+tokio-util  = { version = "0.7", features = ["codec"] }
 
 # WebSocket support:  optional
 tokio-tungstenite = { version = "0.24", optional = true }
 tungstenite       = { version = "0.24", optional = true }
 
 [dev-dependencies]
-tokio-test = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -31,10 +31,10 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use saikuro_core::capability::CapabilitySet;
+use saikuro_exec::{signal, sleep, spawn, timeout, watch};
 use saikuro_runtime::{config::RuntimeMode, RuntimeConfig, SaikuroRuntime};
 use saikuro_transport::tcp::{TcpTransport, TcpTransportListener};
 use saikuro_transport::traits::TransportListener;
-use tokio::{signal, sync::watch};
 use tracing::{error, info, warn};
 
 // CLI
@@ -125,8 +125,11 @@ impl From<CliMode> for RuntimeMode {
 
 // Main
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let args = Args::parse();
 
     init_logging(&args.log_level, args.json_logs);
@@ -173,7 +176,7 @@ async fn main() -> Result<()> {
                 info!(addr = %listener.local_addr(), "TCP listener ready");
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
-                listener_tasks.push(tokio::spawn(async move {
+                listener_tasks.push(spawn(async move {
                     run_tcp_listener(&mut listener, h, &mut rx).await;
                 }));
             }
@@ -188,13 +191,13 @@ async fn main() -> Result<()> {
     #[cfg(feature = "ws-transport")]
     if !args.no_ws {
         let addr = SocketAddr::new(args.bind, args.ws_port);
-        match tokio::net::TcpListener::bind(addr).await {
+        match net::TcpListener::bind(addr).await {
             Ok(listener) => {
                 let actual_addr = listener.local_addr()?;
                 info!(addr = %actual_addr, "WebSocket listener ready");
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
-                listener_tasks.push(tokio::spawn(async move {
+                listener_tasks.push(spawn(async move {
                     run_ws_listener(listener, h, &mut rx).await;
                 }));
             }
@@ -214,7 +217,7 @@ async fn main() -> Result<()> {
                 info!(path = %unix_path.display(), "Unix socket listener ready");
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
-                listener_tasks.push(tokio::spawn(async move {
+                listener_tasks.push(spawn(async move {
                     run_unix_listener(&mut listener, h, &mut rx).await;
                 }));
             }
@@ -239,7 +242,7 @@ async fn main() -> Result<()> {
 
     // Give listeners a moment to exit cleanly.
     for task in listener_tasks {
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), task).await;
+        let _ = timeout(std::time::Duration::from_secs(5), task).await;
     }
 
     info!("saikuro-runtime stopped");
@@ -255,7 +258,7 @@ async fn run_tcp_listener(
     shutdown: &mut watch::Receiver<bool>,
 ) {
     loop {
-        tokio::select! {
+        saikuro_exec::select! {
             result = listener.accept() => {
                 match result {
                     Ok(Some(transport)) => {
@@ -270,7 +273,7 @@ async fn run_tcp_listener(
                     Err(e) => {
                         error!(error = %e, "TCP accept error");
                         // Brief back-off to avoid a tight error loop.
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        sleep(std::time::Duration::from_millis(50)).await;
                     }
                 }
             }
@@ -291,24 +294,21 @@ async fn run_tcp_listener(
 /// `WsTransportListener` type (the caller is expected to do the upgrade).
 #[cfg(feature = "ws-transport")]
 async fn run_ws_listener(
-    listener: tokio::net::TcpListener,
+    listener: net::TcpListener,
     handle: saikuro_runtime::RuntimeHandle,
     shutdown: &mut watch::Receiver<bool>,
 ) {
     use saikuro_transport::websocket::WebSocketTransport;
 
     loop {
-        tokio::select! {
+        saikuro_exec::select! {
             result = listener.accept() => {
                 match result {
                     Ok((stream, peer_addr)) => {
                         let url = format!("ws://{peer_addr}");
                         info!(peer = %peer_addr, "WebSocket TCP stream accepted; upgrading");
                         let h = handle.clone();
-                        tokio::spawn(async move {
-                            // Wrap the plain TcpStream in MaybeTlsStream::Plain so
-                            // the resulting WebSocketStream type matches what
-                            // WebSocketTransport::from_stream expects.
+                        spawn(async move {
                             use tokio_tungstenite::MaybeTlsStream;
                             let maybe_tls = MaybeTlsStream::Plain(stream);
                             match tokio_tungstenite::accept_async(maybe_tls).await {
@@ -329,7 +329,7 @@ async fn run_ws_listener(
                     }
                     Err(e) => {
                         error!(error = %e, "WebSocket TCP accept error");
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        sleep(std::time::Duration::from_millis(50)).await;
                     }
                 }
             }
@@ -353,7 +353,7 @@ async fn run_unix_listener(
     use saikuro_transport::traits::TransportListener as _;
 
     loop {
-        tokio::select! {
+        saikuro_exec::select! {
             result = listener.accept() => {
                 match result {
                     Ok(Some(transport)) => {
@@ -367,7 +367,7 @@ async fn run_unix_listener(
                     }
                     Err(e) => {
                         error!(error = %e, "Unix accept error");
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        sleep(std::time::Duration::from_millis(50)).await;
                     }
                 }
             }
@@ -421,7 +421,7 @@ async fn wait_for_shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
-    tokio::select! {
+    saikuro_exec::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
     }

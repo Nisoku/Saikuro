@@ -21,6 +21,6 @@ python saikuro_build.py adapter typescript
 python saikuro_build.py adapter python
 python saikuro_build.py adapter csharp
 
-# Everything
+# Run everything
 python saikuro_build.py all
 ```

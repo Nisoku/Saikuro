@@ -232,36 +232,38 @@ fn all_error_codes_survive_msgpack_roundtrip() {
 
 // Router-level error propagation
 
-#[tokio::test]
-async fn provider_returns_error_response_to_caller() {
-    use saikuro_core::envelope::Envelope;
-    use saikuro_router::{
-        provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-        router::InvocationRouter,
-    };
-    use tokio::sync::mpsc;
+#[test]
+fn provider_returns_error_response_to_caller() {
+    saikuro_exec::block_on(async {
+        use saikuro_core::envelope::Envelope;
+        use saikuro_exec::mpsc;
+        use saikuro_router::{
+            provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
+            router::InvocationRouter,
+        };
 
-    let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
-    let handle = ProviderHandle::new("failing", vec!["fail".to_owned()], work_tx);
-    let registry = ProviderRegistry::new();
-    registry.register(handle);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
+        let handle = ProviderHandle::new("failing", vec!["fail".to_owned()], work_tx);
+        let registry = ProviderRegistry::new();
+        registry.register(handle);
 
-    // Provider always returns an error.
-    tokio::spawn(async move {
-        while let Some(item) = work_rx.recv().await {
-            if let Some(tx) = item.response_tx {
-                let detail = ErrorDetail::new(ErrorCode::ProviderError, "injected failure");
-                let _ = tx.send(ResponseEnvelope::err(item.envelope.id, detail));
+        // Provider always returns an error.
+        saikuro_exec::spawn(async move {
+            while let Some(item) = work_rx.recv().await {
+                if let Some(tx) = item.response_tx {
+                    let detail = ErrorDetail::new(ErrorCode::ProviderError, "injected failure");
+                    let _ = tx.send(ResponseEnvelope::err(item.envelope.id, detail));
+                }
             }
-        }
-    });
+        });
 
-    let router = InvocationRouter::with_providers(registry);
-    let env = Envelope::call("fail.op", vec![]);
-    let resp = router.dispatch(env).await;
+        let router = InvocationRouter::with_providers(registry);
+        let env = Envelope::call("fail.op", vec![]);
+        let resp = router.dispatch(env).await;
 
-    assert!(!resp.ok, "call to failing provider should not be ok");
-    let err = resp.error.expect("error detail");
-    assert_eq!(err.code, ErrorCode::ProviderError);
-    assert_eq!(err.message, "injected failure");
+        assert!(!resp.ok, "call to failing provider should not be ok");
+        let err = resp.error.expect("error detail");
+        assert_eq!(err.code, ErrorCode::ProviderError);
+        assert_eq!(err.message, "injected failure");
+    })
 }
