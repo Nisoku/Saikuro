@@ -33,8 +33,8 @@ use clap::Parser;
 use saikuro_core::capability::CapabilitySet;
 use saikuro_exec::{signal, sleep, spawn, timeout, watch};
 use saikuro_runtime::{config::RuntimeMode, RuntimeConfig, SaikuroRuntime};
-use saikuro_transport::tcp::{TcpTransport, TcpTransportListener};
-use saikuro_transport::traits::TransportListener;
+use saikuro_transport::tcp::TcpTransportListener;
+use saikuro_transport::traits::{Transport, TransportListener};
 use tracing::{error, info, warn};
 
 // CLI
@@ -177,7 +177,10 @@ async fn async_main() -> Result<()> {
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
                 listener_tasks.push(spawn(async move {
-                    run_tcp_listener(&mut listener, h, &mut rx).await;
+                    run_listener("TCP", &mut listener, h, &mut rx, |_| {
+                        format!("tcp-{}", uuid_short())
+                    })
+                    .await;
                 }));
             }
             Err(e) => {
@@ -190,15 +193,18 @@ async fn async_main() -> Result<()> {
     // WebSocket listener.
     #[cfg(feature = "ws-transport")]
     if !args.no_ws {
+        use saikuro_transport::websocket::WsTransportListener;
         let addr = SocketAddr::new(args.bind, args.ws_port);
-        match net::TcpListener::bind(addr).await {
-            Ok(listener) => {
-                let actual_addr = listener.local_addr()?;
-                info!(addr = %actual_addr, "WebSocket listener ready");
+        match WsTransportListener::bind(addr).await {
+            Ok(mut listener) => {
+                info!(addr = %listener.local_addr(), "WebSocket listener ready");
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
                 listener_tasks.push(spawn(async move {
-                    run_ws_listener(listener, h, &mut rx).await;
+                    run_listener("WebSocket", &mut listener, h, &mut rx, |_| {
+                        format!("ws-{}", uuid_short())
+                    })
+                    .await;
                 }));
             }
             Err(e) => {
@@ -212,13 +218,16 @@ async fn async_main() -> Result<()> {
     #[cfg(all(feature = "native-transport", target_family = "unix"))]
     if let Some(unix_path) = &args.unix {
         use saikuro_transport::unix::UnixTransportListener;
-        match UnixTransportListener::bind(unix_path) {
+        match UnixTransportListener::bind(unix_path).await {
             Ok(mut listener) => {
                 info!(path = %unix_path.display(), "Unix socket listener ready");
                 let h = handle.clone();
                 let mut rx = shutdown_rx.clone();
                 listener_tasks.push(spawn(async move {
-                    run_unix_listener(&mut listener, h, &mut rx).await;
+                    run_listener("Unix", &mut listener, h, &mut rx, |_t| {
+                        format!("unix-{}", uuid_short())
+                    })
+                    .await;
                 }));
             }
             Err(e) => {
@@ -249,131 +258,45 @@ async fn async_main() -> Result<()> {
     Ok(())
 }
 
-// Transport accept loops
+// Transport accept loop
 
-/// Accept loop for the raw TCP listener.
-async fn run_tcp_listener(
-    listener: &mut TcpTransportListener,
-    handle: saikuro_runtime::RuntimeHandle,
-    shutdown: &mut watch::Receiver<bool>,
-) {
-    loop {
-        saikuro_exec::select! {
-            result = listener.accept() => {
-                match result {
-                    Ok(Some(transport)) => {
-                        let peer_id = peer_id_from_tcp(&transport);
-                        info!(peer = %peer_id, "TCP connection accepted");
-                        handle.accept_transport(transport, peer_id, CapabilitySet::default());
-                    }
-                    Ok(None) => {
-                        info!("TCP listener closed");
-                        break;
-                    }
-                    Err(e) => {
-                        error!(error = %e, "TCP accept error");
-                        // Brief back-off to avoid a tight error loop.
-                        sleep(std::time::Duration::from_millis(50)).await;
-                    }
-                }
-            }
-            _ = shutdown.changed() => {
-                if *shutdown.borrow() {
-                    info!("TCP listener shutting down");
-                    break;
-                }
-            }
-        }
-    }
-}
-
-/// Accept loop for the WebSocket listener.
+/// Generic accept loop for any [`TransportListener`].
 ///
-/// We own a raw `tokio::net::TcpListener` here and perform the WebSocket
-/// upgrade ourselves because `saikuro-transport` does not provide a
-/// `WsTransportListener` type (the caller is expected to do the upgrade).
-#[cfg(feature = "ws-transport")]
-async fn run_ws_listener(
-    listener: net::TcpListener,
+/// Accepts connections in a loop until the listener is closed or a shutdown
+/// signal is received. New connections are handed to the runtime via
+/// [`RuntimeHandle::accept_transport`].
+async fn run_listener<L>(
+    name: &str,
+    listener: &mut L,
     handle: saikuro_runtime::RuntimeHandle,
     shutdown: &mut watch::Receiver<bool>,
-) {
-    use saikuro_transport::websocket::WebSocketTransport;
-
-    loop {
-        saikuro_exec::select! {
-            result = listener.accept() => {
-                match result {
-                    Ok((stream, peer_addr)) => {
-                        let url = format!("ws://{peer_addr}");
-                        info!(peer = %peer_addr, "WebSocket TCP stream accepted; upgrading");
-                        let h = handle.clone();
-                        spawn(async move {
-                            use tokio_tungstenite::MaybeTlsStream;
-                            let maybe_tls = MaybeTlsStream::Plain(stream);
-                            match tokio_tungstenite::accept_async(maybe_tls).await {
-                                Ok(ws_stream) => {
-                                    let transport = WebSocketTransport::from_stream(
-                                        ws_stream,
-                                        url.clone(),
-                                    );
-                                    let peer_id = format!("ws-{peer_addr}");
-                                    info!(peer = %peer_id, "WebSocket connection ready");
-                                    h.accept_transport(transport, peer_id, CapabilitySet::default());
-                                }
-                                Err(e) => {
-                                    warn!(peer = %peer_addr, error = %e, "WebSocket upgrade failed");
-                                }
-                            }
-                        });
-                    }
-                    Err(e) => {
-                        error!(error = %e, "WebSocket TCP accept error");
-                        sleep(std::time::Duration::from_millis(50)).await;
-                    }
-                }
-            }
-            _ = shutdown.changed() => {
-                if *shutdown.borrow() {
-                    info!("WebSocket listener shutting down");
-                    break;
-                }
-            }
-        }
-    }
-}
-
-/// Accept loop for the Unix domain socket listener.
-#[cfg(all(feature = "native-transport", target_family = "unix"))]
-async fn run_unix_listener(
-    listener: &mut saikuro_transport::unix::UnixTransportListener,
-    handle: saikuro_runtime::RuntimeHandle,
-    shutdown: &mut watch::Receiver<bool>,
-) {
-    use saikuro_transport::traits::TransportListener as _;
-
+    peer_id: impl Fn(&L::Output) -> String,
+) where
+    L: TransportListener,
+    L::Output: Transport,
+{
     loop {
         saikuro_exec::select! {
             result = listener.accept() => {
                 match result {
                     Ok(Some(transport)) => {
-                        let peer_id = format!("unix-{}", uuid_short());
-                        info!(peer = %peer_id, path = %listener.path().display(), "Unix connection accepted");
-                        handle.accept_transport(transport, peer_id, CapabilitySet::default());
+                        let id = peer_id(&transport);
+                        info!(peer = %id, "{name} connection accepted");
+                        handle.accept_transport(transport, id, CapabilitySet::default());
                     }
                     Ok(None) => {
-                        info!("Unix listener closed");
+                        info!("{name} listener closed");
                         break;
                     }
                     Err(e) => {
-                        error!(error = %e, "Unix accept error");
+                        error!(error = %e, "{name} accept error");
                         sleep(std::time::Duration::from_millis(50)).await;
                     }
                 }
             }
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
-                    info!("Unix listener shutting down");
+                    info!("{name} listener shutting down");
                     break;
                 }
             }
@@ -382,13 +305,6 @@ async fn run_unix_listener(
 }
 
 // Helpers
-
-/// Build a stable peer ID string from a TCP transport's peer address.
-fn peer_id_from_tcp(_t: &TcpTransport) -> String {
-    // TcpTransport does not expose peer_addr publicly, so we use the
-    // description plus a short unique suffix.
-    format!("tcp-{}", uuid_short())
-}
 
 /// Return a short (8-char) random hex string for peer IDs.
 fn uuid_short() -> String {

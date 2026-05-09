@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
+    to_pascal_case,
 };
 
 pub struct CppGenerator;
@@ -123,18 +124,6 @@ impl CppGenerator {
 
         Ok(lines.join("\n"))
     }
-}
-
-fn to_pascal_case(s: &str) -> String {
-    s.split('_')
-        .map(|part| {
-            let mut c = part.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
 }
 
 // TODO: Don't use such a hacky (subjectively) thing to sanitize identifiers.

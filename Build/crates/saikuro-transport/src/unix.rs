@@ -143,7 +143,7 @@ impl UnixTransportListener {
     /// Bind a listener on the given socket path.
     ///
     /// If a stale socket file already exists at the path it is removed first.
-    pub fn bind(path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn bind(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_owned();
         // Remove any stale socket from a previous run.
         if path.exists() {

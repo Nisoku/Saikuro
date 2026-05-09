@@ -53,5 +53,8 @@ pub use unix::UnixTransport;
 #[cfg(feature = "ws-transport")]
 pub use websocket::WebSocketTransport;
 
+#[cfg(all(feature = "ws-transport", not(target_arch = "wasm32")))]
+pub use websocket::WsTransportListener;
+
 #[cfg(target_arch = "wasm32")]
 pub use wasm_host::WasmHostTransport;

@@ -301,6 +301,7 @@ pub struct WasmHostListener {
     connect_rx: mpsc::Receiver<String>,
     _base_channel: SendWrapper<BroadcastChannel>,
     _handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>>,
+    closed: bool,
 }
 
 impl WasmHostListener {
@@ -326,6 +327,7 @@ impl WasmHostListener {
             connect_rx: rx,
             _base_channel: SendWrapper::new(base),
             _handler: SendWrapper::new(handler),
+            closed: false,
         })
     }
 }
@@ -335,11 +337,13 @@ impl TransportListener for WasmHostListener {
     type Output = WasmHostTransport;
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
-        let conn_id = self
-            .connect_rx
-            .recv()
-            .await
-            .ok_or_else(|| TransportError::ConnectionLost("listener closed".into()))?;
+        if self.closed {
+            return Ok(None);
+        }
+        let conn_id = match self.connect_rx.recv().await {
+            Some(id) => id,
+            None => return Ok(None),
+        };
 
         let private_name = format!("{}:{}", self.base_name, conn_id);
         let private = BroadcastChannel::new(&private_name)
@@ -357,10 +361,7 @@ impl TransportListener for WasmHostListener {
     async fn close(&mut self) -> Result<()> {
         self._base_channel.set_onmessage(None);
         self._base_channel.close();
-        // Also close the connect channel so accept() returns None.
-        // (We can't close the receiver directly, but dropping the
-        // sender would signal EOF.  Since we own both sides we just
-        // stop listening.)
+        self.closed = true;
         Ok(())
     }
 }

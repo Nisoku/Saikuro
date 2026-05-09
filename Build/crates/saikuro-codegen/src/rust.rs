@@ -13,6 +13,7 @@ use saikuro_core::schema::{
 use crate::{
     error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
+    to_pascal_case,
 };
 
 use std::collections::HashMap;
@@ -484,16 +485,4 @@ fn rust_keywords() -> Vec<&'static str> {
         "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
         "use", "where", "while", "async", "await", "dyn", "union", "try",
     ]
-}
-
-fn to_pascal_case(s: &str) -> String {
-    s.split('_')
-        .map(|part| {
-            let mut c = part.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
 }
