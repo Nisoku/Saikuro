@@ -1006,6 +1006,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "saikuro-storage"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "dashmap",
+ "futures",
+ "js-sys",
+ "parking_lot 0.12.5",
+ "rmp-serde",
+ "saikuro-core",
+ "saikuro-exec",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "saikuro-tests"
 version = "0.1.0"
 dependencies = [

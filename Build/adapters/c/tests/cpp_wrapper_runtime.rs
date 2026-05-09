@@ -297,12 +297,11 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
                 .expect("accept")
                 .expect("transport");
             handle.accept_transport(transport, "cpp-client".to_owned(), CapabilitySet::default());
-            assert!(
-                saikuro_exec::timeout(Duration::from_secs(5), done_rx)
-                    .await
-                    .is_ok(),
-                "timed out waiting for cpp client to issue call"
-            );
+            match saikuro_exec::timeout(Duration::from_secs(5), done_rx).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => panic!("oneshot was canceled before completion"),
+                Err(_) => panic!("timed out waiting for cpp client to issue call"),
+            }
         });
     });
 

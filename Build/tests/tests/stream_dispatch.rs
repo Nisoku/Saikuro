@@ -207,7 +207,7 @@ fn stream_abort_control_removes_state() {
         };
         let result = router.route_stream_item(abort).await;
         // Should succeed in routing the abort frame.
-        let _ = result;
+        assert!(result.is_ok());
 
         // Subsequent routing should fail:  state has been removed.
         let extra = ResponseEnvelope::stream_item(id, 1, Value::Null);

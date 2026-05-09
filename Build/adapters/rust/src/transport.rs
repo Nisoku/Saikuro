@@ -189,7 +189,7 @@ mod wasm_host_impl {
     use super::*;
     use saikuro_transport::{
         traits::{Transport, TransportReceiver, TransportSender},
-        wasm_host::{WasmHostReceiver, WasmHostSender, WasmHostConnector},
+        wasm_host::{WasmHostConnector, WasmHostReceiver, WasmHostSender},
     };
 
     const DEFAULT_WASM_HOST_CHANNEL: &str = "saikuro";
@@ -227,7 +227,9 @@ mod wasm_host_impl {
         }
     }
 
-    pub async fn connect_wasm_host(channel_name: Option<&str>) -> Result<Box<dyn AdapterTransport>> {
+    pub async fn connect_wasm_host(
+        channel_name: Option<&str>,
+    ) -> Result<Box<dyn AdapterTransport>> {
         let channel = channel_name.unwrap_or(DEFAULT_WASM_HOST_CHANNEL);
         Ok(Box::new(WasmHostAdapter::connect(channel).await?))
     }
@@ -278,9 +280,10 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     if address == "wasm-host" || address.starts_with("wasm-host://") {
         #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
         {
-            let channel_name = address.strip_prefix("wasm-host://").map(|s| {
-                if s.is_empty() { None } else { Some(s) }
-            }).flatten();
+            let channel_name = address
+                .strip_prefix("wasm-host://")
+                .map(|s| if s.is_empty() { None } else { Some(s) })
+                .flatten();
             return wasm_host_impl::connect_wasm_host(channel_name).await;
         }
         #[cfg(not(all(feature = "wasm", target_arch = "wasm32")))]

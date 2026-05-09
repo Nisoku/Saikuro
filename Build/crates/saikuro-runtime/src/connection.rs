@@ -38,6 +38,7 @@
 
 use bytes::Bytes;
 use dashmap::DashMap;
+use futures::future::FutureExt;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
@@ -57,7 +58,6 @@ use saikuro_schema::{
     registry::SchemaRegistry,
     validator::InvocationValidator,
 };
-use futures::future::FutureExt;
 use saikuro_transport::traits::{TransportReceiver, TransportSender};
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument, warn};

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/saikuro-core",
     "crates/saikuro-schema",
+    "crates/saikuro-storage",
     "crates/saikuro-transport",
     "crates/saikuro-router",
     "crates/saikuro-runtime",
@@ -55,6 +56,7 @@ chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 # Internal crates
 saikuro-core      = { path = "crates/saikuro-core" }
 saikuro-schema    = { path = "crates/saikuro-schema" }
+saikuro-storage   = { path = "crates/saikuro-storage", default-features = false }
 saikuro-transport = { path = "crates/saikuro-transport", default-features = false }
 saikuro-router    = { path = "crates/saikuro-router", default-features = false }
 saikuro-runtime   = { path = "crates/saikuro-runtime", default-features = false }

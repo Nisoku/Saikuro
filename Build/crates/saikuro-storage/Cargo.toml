@@ -1,0 +1,42 @@
+[package]
+name = "saikuro-storage"
+description = "Storage backend abstraction for Saikuro: agnostic file system and key-value access"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
+
+[features]
+default = ["native-storage"]
+native-storage = ["inmemory", "saikuro-exec/tokio-runtime"]
+inmemory = ["dashmap", "parking_lot"]
+wasm-storage = ["inmemory", "saikuro-exec/wasm-runtime", "dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
+
+[dependencies]
+saikuro-core = { workspace = true }
+saikuro-exec = { workspace = true, default-features = false }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+rmp-serde = { workspace = true }
+bytes = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+dashmap = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "BroadcastChannel",
+    "MessageEvent",
+] }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
