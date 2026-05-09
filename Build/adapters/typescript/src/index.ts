@@ -71,6 +71,9 @@ export {
   InMemoryTransport,
   WebSocketTransport,
   NodeStreamTransport,
+  BroadcastChannelTransport,
+  BroadcastChannelConnector,
+  BroadcastChannelListener,
   makeTransport,
 } from "./transport";
 

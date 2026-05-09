@@ -331,6 +331,232 @@ export class NodeStreamTransport implements Transport {
   }
 }
 
+//  BroadcastChannel Transport (browser/WASM in-page communication)
+
+/**
+ * Creates a transport from an already-connected BroadcastChannel.
+ */
+function makeTransportFromChannel(
+  channel: BroadcastChannel,
+): BroadcastChannelTransport {
+  const t = new BroadcastChannelTransport(channel.name);
+  (t as unknown as { _channel: BroadcastChannel })._channel = channel;
+  (t as unknown as { _connected: boolean })._connected = true;
+  (t as unknown as { _setupMessageHandler: () => void })._setupMessageHandler();
+  return t;
+}
+
+/**
+ * Generate a short random ID for connection negotiation.
+ * Format: 8 hex chars (4 from timestamp, 4 random).
+ * Not guaranteed to be universally unique, but should be good enough for
+ * avoiding collisions in the connection handshake.
+ */
+function generateShortId(): string {
+  const now = Date.now() & 0xffff;
+  const rand = Math.floor(Math.random() * 0x10000);
+  return `${now.toString(16).padStart(4, "0")}${rand.toString(16).padStart(4, "0")}`;
+}
+
+/**
+ * A transport backed by the browser's BroadcastChannel API.
+ *
+ * Uses the same connection negotiation protocol as the Rust WasmHostTransport:
+ * 1. Connector generates a random connection ID
+ * 2. Connector sends `{ type: "connect", id: conn_id }` on base channel
+ * 3. Listener receives, opens private channel `{base}:{conn_id}`
+ * 4. Listener sends `{ type: "accept", id: conn_id }` on private channel
+ * 5. Both sides communicate on private channel from then on
+ *
+ * This transport is for communication between different JavaScript/WASM contexts
+ * in the same browser origin (e.g., main page ↔ Worker, or JS ↔ Rust WASM).
+ */
+export class BroadcastChannelTransport implements Transport {
+  private _channel: BroadcastChannel | undefined = undefined;
+  private readonly _messageHandlers = new Set<
+    (msg: Record<string, unknown>) => void
+  >();
+  private _closeHandler: ((err?: Error) => void) | undefined = undefined;
+  private readonly _baseChannel: string;
+  private _connected = false;
+  private _closed = false;
+
+  /**
+   * Create a BroadcastChannelTransport for the "wasm-host://" scheme.
+   *
+   * Call `connect()` to perform the rendezvous handshake.
+   */
+  constructor(baseChannel: string) {
+    this._baseChannel = baseChannel;
+  }
+
+  private _setupMessageHandler(): void {
+    const ch = this._channel;
+    if (!ch) return;
+    ch.onmessage = (ev: MessageEvent) => {
+      try {
+        let msg: Record<string, unknown>;
+        if (ev.data instanceof ArrayBuffer) {
+          const bytes = new Uint8Array(ev.data);
+          msg = decode(bytes) as Record<string, unknown>;
+        } else if (ev.data instanceof Uint8Array) {
+          msg = decode(ev.data) as Record<string, unknown>;
+        } else {
+          return;
+        }
+        const handlers = Array.from(this._messageHandlers);
+        for (const h of handlers) h(msg);
+      } catch (err) {
+        log.error("broadcast channel frame decode error", {
+          err: String(err),
+        });
+      }
+    };
+  }
+
+  /**
+   * Connect as a client using the rendezvous protocol.
+   * This generates a connection ID and waits for a listener to accept.
+   */
+  connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this._connected) {
+        resolve();
+        return;
+      }
+
+      const connId = generateShortId();
+      const privateName = `${this._baseChannel}:${connId}`;
+      const privateChannel = new BroadcastChannel(privateName);
+
+      const timeoutId = setTimeout(() => {
+        privateChannel.close();
+        reject(new Error("BroadcastChannelTransport: connect timeout"));
+      }, 10000);
+
+      const acceptHandler = (_ev: MessageEvent) => {
+        clearTimeout(timeoutId);
+        privateChannel.removeEventListener("message", acceptHandler);
+        this._channel = privateChannel;
+        this._connected = true;
+        this._setupMessageHandler();
+        resolve();
+      };
+      privateChannel.addEventListener("message", acceptHandler, {
+        once: true,
+      });
+
+      const baseChannel = new BroadcastChannel(this._baseChannel);
+      baseChannel.postMessage({ type: "connect", id: connId });
+      baseChannel.close();
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this._closed) return;
+    this._closed = true;
+    this._connected = false;
+    this._channel?.close();
+    this._channel = undefined;
+    this._closeHandler?.();
+  }
+
+  async send(obj: Record<string, unknown>): Promise<void> {
+    const ch = this._channel;
+    if (!this._connected || !ch) {
+      throw new Error("BroadcastChannelTransport: not connected");
+    }
+    const payload = encode(obj);
+    const buffer = payload.buffer.slice(
+      payload.byteOffset,
+      payload.byteOffset + payload.byteLength,
+    );
+    ch.postMessage(buffer);
+  }
+
+  async recv(): Promise<Record<string, unknown> | null> {
+    return null;
+  }
+
+  onMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.add(handler);
+  }
+
+  offMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.delete(handler);
+  }
+
+  onClose(handler: (err?: Error) => void): void {
+    this._closeHandler = handler;
+  }
+}
+
+/**
+ * Connector for initiating BroadcastChannel connections.
+ * Matches the Rust WasmHostConnector behavior.
+ */
+export class BroadcastChannelConnector {
+  private readonly _channelName: string;
+
+  constructor(channelName: string) {
+    this._channelName = channelName;
+  }
+
+  connect(): Promise<BroadcastChannelTransport> {
+    const t = new BroadcastChannelTransport(this._channelName);
+    return t.connect().then(() => t);
+  }
+}
+
+/**
+ * Listener for accepting incoming BroadcastChannel connections.
+ * Matches the Rust WasmHostListener behavior.
+ */
+export class BroadcastChannelListener {
+  private readonly _baseChannel: BroadcastChannel;
+  private readonly _connectQueue: Array<(t: BroadcastChannelTransport) => void> =
+    [];
+  private _closed = false;
+
+  constructor(channelName: string) {
+    this._baseChannel = new BroadcastChannel(channelName);
+    this._baseChannel.onmessage = (ev: MessageEvent) => {
+      const data = ev.data as { type?: string; id?: string };
+      if (data.type === "connect" && data.id) {
+        const privateName = `${channelName}:${data.id}`;
+        const privateChannel = new BroadcastChannel(privateName);
+
+        privateChannel.postMessage({ type: "accept", id: data.id });
+
+        const transport = makeTransportFromChannel(privateChannel);
+
+        const queued = this._connectQueue.shift();
+        if (queued) {
+          queued(transport);
+        }
+      }
+    };
+  }
+
+  /**
+   * Wait for the next incoming connection.
+   */
+  accept(): Promise<BroadcastChannelTransport> {
+    return new Promise((resolve) => {
+      if (this._closed) {
+        throw new Error("BroadcastChannelListener is closed");
+      }
+      this._connectQueue.push(resolve);
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this._closed) return;
+    this._closed = true;
+    this._baseChannel.close();
+  }
+}
+
 //  Factory
 
 /**
@@ -340,6 +566,8 @@ export class NodeStreamTransport implements Transport {
  *   - `unix:///path/to/socket`
  *   - `tcp://host:port`
  *   - `ws://host:port/path`  or  `wss://host:port/path`
+ *   - `wasm-host://channel-name` (BroadcastChannel for same-origin browser contexts)
+ *   - `wasm-host` (uses default channel "saikuro")
  */
 export function makeTransport(address: string): Transport {
   if (address.startsWith("unix://")) {
@@ -355,8 +583,18 @@ export function makeTransport(address: string): Transport {
   if (address.startsWith("ws://") || address.startsWith("wss://")) {
     return new WebSocketTransport(address);
   }
+  if (address === "wasm-host" || address.startsWith("wasm-host://")) {
+    let channelName = "saikuro";
+    if (address.startsWith("wasm-host://")) {
+      const rest = address.slice("wasm-host://".length);
+      if (rest.length > 0) {
+        channelName = rest;
+      }
+    }
+    return new BroadcastChannelTransport(channelName);
+  }
   throw new Error(
     `unsupported transport address: "${address}"\n` +
-      "Supported schemes: unix://, tcp://, ws://, wss://",
+      "Supported schemes: unix://, tcp://, ws://, wss://, wasm-host://",
   );
 }

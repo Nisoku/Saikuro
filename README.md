@@ -79,9 +79,8 @@ Build/
     saikuro-schema/     Schema registry & validation
     saikuro-transport/  Transport backends
     saikuro-router/     Invocation router
-    saikuro-runtime/    Embeddable runtime
+    saikuro-runtime/    Embeddable runtime (includes standalone server binary)
     saikuro-codegen/    Binding code-generator
-    saikuro-runtime/    Orchestration core (includes standalone server binary)
   tests/              # Rust integration tests
   adapters/
     rust/             Rust adapter (saikuro crate)
@@ -97,8 +96,8 @@ Docs/                 Documentation site
 
 Full documentation is available at the project's GitHub Pages site:
 
-- https://nisoku.org/Saikuro/docs/
-- Adapter docs index: https://nisoku.org/Saikuro/docs/adapters/
+- <https://nisoku.org/Saikuro/docs/>
+- Adapter docs index: <https://nisoku.org/Saikuro/docs/adapters/>
 
 Repository docs sources:
 

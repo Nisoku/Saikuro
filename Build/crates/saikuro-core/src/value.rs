@@ -250,7 +250,7 @@ mod tests {
     };
     use std::collections::HashMap;
 
-    /// Regression: Schema → msgpack bytes → Value → msgpack bytes → Schema must round-trip.
+    /// Regression: Schema -> msgpack bytes -> Value -> msgpack bytes -> Schema must round-trip.
     #[test]
     fn schema_round_trip_via_value() {
         let mut functions = HashMap::new();

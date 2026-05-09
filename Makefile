@@ -2,6 +2,7 @@
 
 export DOTNET_ROOT := $(HOME)/.dotnet
 export PATH := $(DOTNET_ROOT):$(PATH)
+export PYTHON := python3
 
 # Rust
 
@@ -20,14 +21,14 @@ clippy:
 # dotnet
 
 dotnet-install:
-	@if ! command -v dotnet &> /dev/null; then \
+	@if ! command -v dotnet >/dev/null 2>&1; then \
 		echo "Installing dotnet SDK..."; \
 		curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0; \
 		echo "dotnet installed."; \
 	else \
 		echo "dotnet already installed"; \
 	fi
-	@if ! command -v dotnet &> /dev/null; then \
+	@if ! command -v dotnet >/dev/null 2>&1; then \
 		echo "Add ~/.dotnet to your PATH or run: export PATH=\"$$HOME/.dotnet:\$$PATH\""; \
 		exit 1; \
 	fi
@@ -68,4 +69,4 @@ check: fmt clippy test python-test ts-test
 # CI
 
 ci:
-	cd Build && python3 scripts/saikuro_build.py all
+	cd Build && {{PYTHON}} scripts/saikuro_build.py all

@@ -559,7 +559,7 @@ describe("SaikuroClient.batch", () => {
     const client = SaikuroClient.fromTransport(clientTransport);
     await client.open();
 
-    // "ok" is registered; "missing" is not → null result.
+    // "ok" is registered; "missing" is not -> null result.
     const stop = makeBatchServer(serverTransport, {
       ok: () => "fine",
     });

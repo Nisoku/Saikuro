@@ -19,10 +19,11 @@ default = ["tcp", "unix", "ws"]
 tcp  = ["saikuro-transport/native-transport"]
 unix = ["saikuro-transport/native-transport"]
 ws   = ["saikuro-transport/ws-transport"]
+wasm = ["saikuro-transport/wasm-runtime"]
 
 [dependencies]
 saikuro-core      = { path = "../../crates/saikuro-core" }
-saikuro-transport = { path = "../../crates/saikuro-transport" }
+saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
 
 serde       = { version = "1.0", features = ["derive"] }
 serde_json  = "1.0"

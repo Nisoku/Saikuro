@@ -24,7 +24,7 @@ clippy:
 # dotnet
 
 dotnet-install:
-    if ! command -v dotnet &>/dev/null; then \
+    if ! command -v dotnet >/dev/null 2>&1; then \
         echo "Installing dotnet SDK..."; \
         curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0; \
         echo "dotnet installed."; \
@@ -68,4 +68,4 @@ check: fmt clippy test python-test ts-test
 # CI
 
 ci:
-    cd {{BUILD_DIR}} && python3 ../scripts/saikuro_build.py all
+    cd {{BUILD_DIR}} && {{PYTHON}} scripts/saikuro_build.py all

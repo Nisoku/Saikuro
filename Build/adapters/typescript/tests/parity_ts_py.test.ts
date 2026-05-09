@@ -44,7 +44,7 @@ function getDotnetBin(): string {
   return "dotnet";
 }
 
-describe("Schema parity: TypeScript ↔ Python (basic)", () => {
+describe("Schema parity: TypeScript <-> Python (basic)", () => {
   it(
     "TS extractor and Python builder produce compatible schemas for fixture",
     async () => {

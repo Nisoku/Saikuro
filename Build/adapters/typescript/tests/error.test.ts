@@ -27,97 +27,97 @@ const p = (
 ) => ({ code, message }) as const;
 
 describe("SaikuroError.fromPayload :  subclass mapping", () => {
-  it("FunctionNotFound → FunctionNotFoundError", () => {
+  it("FunctionNotFound -> FunctionNotFoundError", () => {
     expect(SaikuroError.fromPayload(p("FunctionNotFound"))).toBeInstanceOf(
       FunctionNotFoundError,
     );
   });
 
-  it("NamespaceNotFound → FunctionNotFoundError", () => {
+  it("NamespaceNotFound -> FunctionNotFoundError", () => {
     expect(SaikuroError.fromPayload(p("NamespaceNotFound"))).toBeInstanceOf(
       FunctionNotFoundError,
     );
   });
 
-  it("InvalidArguments → InvalidArgumentsError", () => {
+  it("InvalidArguments -> InvalidArgumentsError", () => {
     expect(SaikuroError.fromPayload(p("InvalidArguments"))).toBeInstanceOf(
       InvalidArgumentsError,
     );
   });
 
-  it("CapabilityDenied → CapabilityDeniedError", () => {
+  it("CapabilityDenied -> CapabilityDeniedError", () => {
     expect(SaikuroError.fromPayload(p("CapabilityDenied"))).toBeInstanceOf(
       CapabilityDeniedError,
     );
   });
 
-  it("ConnectionLost → TransportError", () => {
+  it("ConnectionLost -> TransportError", () => {
     expect(SaikuroError.fromPayload(p("ConnectionLost"))).toBeInstanceOf(
       TransportError,
     );
   });
 
-  it("Timeout → SaikuroTimeoutError", () => {
+  it("Timeout -> SaikuroTimeoutError", () => {
     expect(SaikuroError.fromPayload(p("Timeout"))).toBeInstanceOf(
       SaikuroTimeoutError,
     );
   });
 
-  it("NoProvider → NoProviderError", () => {
+  it("NoProvider -> NoProviderError", () => {
     expect(SaikuroError.fromPayload(p("NoProvider"))).toBeInstanceOf(
       NoProviderError,
     );
   });
 
-  it("ProviderUnavailable → ProviderUnavailableError", () => {
+  it("ProviderUnavailable -> ProviderUnavailableError", () => {
     expect(SaikuroError.fromPayload(p("ProviderUnavailable"))).toBeInstanceOf(
       ProviderUnavailableError,
     );
   });
 
-  it("ProviderError → ProviderError", () => {
+  it("ProviderError -> ProviderError", () => {
     expect(SaikuroError.fromPayload(p("ProviderError"))).toBeInstanceOf(
       ProviderError,
     );
   });
 
-  it("MalformedEnvelope → MalformedEnvelopeError", () => {
+  it("MalformedEnvelope -> MalformedEnvelopeError", () => {
     expect(SaikuroError.fromPayload(p("MalformedEnvelope"))).toBeInstanceOf(
       MalformedEnvelopeError,
     );
   });
 
-  it("MessageTooLarge → MessageTooLargeError", () => {
+  it("MessageTooLarge -> MessageTooLargeError", () => {
     expect(SaikuroError.fromPayload(p("MessageTooLarge"))).toBeInstanceOf(
       MessageTooLargeError,
     );
   });
 
-  it("BufferOverflow → BufferOverflowError", () => {
+  it("BufferOverflow -> BufferOverflowError", () => {
     expect(SaikuroError.fromPayload(p("BufferOverflow"))).toBeInstanceOf(
       BufferOverflowError,
     );
   });
 
-  it("StreamClosed → StreamClosedError", () => {
+  it("StreamClosed -> StreamClosedError", () => {
     expect(SaikuroError.fromPayload(p("StreamClosed"))).toBeInstanceOf(
       StreamClosedError,
     );
   });
 
-  it("ChannelClosed → ChannelClosedError", () => {
+  it("ChannelClosed -> ChannelClosedError", () => {
     expect(SaikuroError.fromPayload(p("ChannelClosed"))).toBeInstanceOf(
       ChannelClosedError,
     );
   });
 
-  it("OutOfOrder → OutOfOrderError", () => {
+  it("OutOfOrder -> OutOfOrderError", () => {
     expect(SaikuroError.fromPayload(p("OutOfOrder"))).toBeInstanceOf(
       OutOfOrderError,
     );
   });
 
-  it("Internal (unmapped) → base SaikuroError", () => {
+  it("Internal (unmapped) -> base SaikuroError", () => {
     expect(SaikuroError.fromPayload(p("Internal"))).toBeInstanceOf(
       SaikuroError,
     );

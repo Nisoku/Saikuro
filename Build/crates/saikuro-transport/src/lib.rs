@@ -3,12 +3,13 @@
 //! This crate defines the [`Transport`] trait and provides concrete
 //! implementations:
 //!
-//! | Backend            | Feature flag        | Platforms         |
+//! | Backend            | Feature flag         | Platforms         |
 //! |--------------------|---------------------|-------------------|
 //! | [`memory`]         | always on           | native + wasm32   |
 //! | [`unix`]           | `native-transport`  | Unix only         |
 //! | [`tcp`]            | `native-transport`  | native only       |
 //! | [`websocket`]      | `ws-transport`      | native + wasm32   |
+//! | [`wasm_host`]      | always on (wasm32)  | wasm32 only       |
 //! (idk, tables are cool-looking don't ask)
 
 pub mod error;
@@ -31,6 +32,9 @@ pub mod unix;
 #[cfg(feature = "ws-transport")]
 pub mod websocket;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_host;
+
 pub use error::TransportError;
 pub use memory::MemoryTransport;
 pub use selector::{TransportConfig, TransportKind, TransportSelector};
@@ -48,3 +52,6 @@ pub use unix::UnixTransport;
 
 #[cfg(feature = "ws-transport")]
 pub use websocket::WebSocketTransport;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_host::WasmHostTransport;

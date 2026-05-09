@@ -1,18 +1,16 @@
 //! WASM backend for saikuro-exec.
 //!
-//! Provides the same public API as the tokio backend, but backed by
-//! `futures` channels and `wasm_bindgen_futures` for single-threaded WASM
-//! execution. The mpsc/types are wrapped so that callers see a tokio-
-//! compatible API (e.g. `recv()` returns `Option<T>`, `send()` is inherent).
+//! Backed by `futures` channels and `wasm_bindgen_futures` for single-threaded
+//! WASM execution. This is the default backend when compiling to WASM.
 
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use futures::channel::{mpsc as inner_mpsc, oneshot as inner_oneshot};
+use futures::channel::oneshot as inner_oneshot;
 
-/// Spawn a future on the JS/WASM executor
+/// Spawn a future on the JS/WASM executor.
 pub fn spawn<F, T>(fut: F) -> JoinHandle<T>
 where
     F: Future<Output = T> + 'static,
@@ -20,34 +18,79 @@ where
 {
     let (tx, rx) = inner_oneshot::channel();
     wasm_bindgen_futures::spawn_local(async move {
-        let res = fut.await;
-        let _ = tx.send(res);
+        let _ = tx.send(fut.await);
     });
     JoinHandle { rx }
 }
 
-// Wrapped mpsc
 pub mod mpsc {
-    use std::error::Error;
-    use std::fmt;
-    use std::sync::{Arc, Mutex};
-
+    use futures::channel::mpsc as inner;
+    use futures::lock::Mutex;
     use futures::stream::StreamExt;
+    use std::sync::Arc;
 
-    use super::inner_mpsc;
+    #[derive(Debug)]
+    pub struct SendError<T>(pub T);
 
-    pub fn channel<T>(buffer: usize) -> (Sender<T>, Receiver<T>) {
-        let (tx, rx) = inner_mpsc::channel(buffer);
-        (
-            Sender {
-                inner: Arc::new(Mutex::new(tx)),
-            },
-            Receiver { inner: rx },
-        )
+    impl<T> SendError<T> {
+        pub fn into_inner(self) -> T {
+            self.0
+        }
+        pub fn is_disconnected(&self) -> bool {
+            true
+        }
     }
 
+    impl<T> std::fmt::Display for SendError<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "send failed: channel is disconnected")
+        }
+    }
+
+    impl<T: std::fmt::Debug> std::error::Error for SendError<T> {}
+
+    pub enum TrySendError<T> {
+        Full(T),
+        Disconnected(T),
+    }
+
+    impl<T> TrySendError<T> {
+        pub fn into_inner(self) -> T {
+            match self {
+                TrySendError::Full(v) => v,
+                TrySendError::Disconnected(v) => v,
+            }
+        }
+        pub fn is_full(&self) -> bool {
+            matches!(self, TrySendError::Full(_))
+        }
+        pub fn is_disconnected(&self) -> bool {
+            matches!(self, TrySendError::Disconnected(_))
+        }
+    }
+
+    impl<T> std::fmt::Debug for TrySendError<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                TrySendError::Full(_) => write!(f, "TrySendError::Full(..)"),
+                TrySendError::Disconnected(_) => write!(f, "TrySendError::Disconnected(..)"),
+            }
+        }
+    }
+
+    impl<T> std::fmt::Display for TrySendError<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                TrySendError::Full(_) => write!(f, "send failed: channel is full"),
+                TrySendError::Disconnected(_) => write!(f, "send failed: channel is disconnected"),
+            }
+        }
+    }
+
+    impl<T: std::fmt::Debug> std::error::Error for TrySendError<T> {}
+
     pub struct Sender<T> {
-        inner: Arc<Mutex<inner_mpsc::Sender<T>>>,
+        inner: Arc<Mutex<inner::Sender<T>>>,
     }
 
     impl<T> Clone for Sender<T> {
@@ -58,107 +101,85 @@ pub mod mpsc {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct SendError;
-
-    impl fmt::Display for SendError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "channel closed")
-        }
+    pub struct Receiver<T> {
+        inner: inner::Receiver<T>,
     }
 
-    impl Error for SendError {}
+    pub fn channel<T>(buffer: usize) -> (Sender<T>, Receiver<T>) {
+        let (tx, rx) = inner::channel(buffer);
+        (
+            Sender {
+                inner: Arc::new(Mutex::new(tx)),
+            },
+            Receiver { inner: rx },
+        )
+    }
 
-    impl<T: 'static> Sender<T> {
-        pub async fn send(&self, value: T) -> Result<(), SendError> {
-            let mut to_send = Some(value);
+    impl<T> Sender<T> {
+        pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
+            let mut value = Some(value);
             loop {
-                let (ok, retry_value) = {
-                    let mut sender = self.inner.lock().unwrap();
-                    match sender.try_send(to_send.take().unwrap()) {
-                        Ok(()) => (true, None),
-                        Err(e) => {
-                            if sender.is_closed() {
-                                return Err(SendError);
-                            }
-                            (false, Some(e.into_inner()))
-                        }
+                let mut guard = self.inner.lock().await;
+                match guard.try_send(value.take().unwrap()) {
+                    Ok(()) => return Ok(()),
+                    Err(e) if e.is_full() => {
+                        value = Some(e.into_inner());
+                        drop(guard);
+                        super::yield_now().await;
                     }
-                };
-                if ok {
-                    return Ok(());
+                    Err(e) => {
+                        return Err(SendError(e.into_inner()));
+                    }
                 }
-                to_send = retry_value;
-                super::yield_now().await;
             }
         }
 
         pub fn is_closed(&self) -> bool {
-            self.inner.lock().unwrap().is_closed()
+            if let Some(guard) = self.inner.try_lock() {
+                guard.is_closed()
+            } else {
+                false
+            }
         }
-    }
 
-    pub struct Receiver<T> {
-        inner: inner_mpsc::Receiver<T>,
+        pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+            if let Some(mut guard) = self.inner.try_lock() {
+                guard.try_send(value).map_err(|e| {
+                    if e.is_full() {
+                        TrySendError::Full(e.into_inner())
+                    } else {
+                        TrySendError::Disconnected(e.into_inner())
+                    }
+                })
+            } else {
+                Err(TrySendError::Full(value))
+            }
+        }
     }
 
     impl<T> Receiver<T> {
-        pub async fn recv(&mut self) -> Option<T> {
-            self.inner.next().await
+        pub fn recv(&mut self) -> impl futures::future::Future<Output = Option<T>> + futures::future::FusedFuture + '_ {
+            self.inner.next()
         }
     }
 }
 
-// Wrapped oneshot
 pub mod oneshot {
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-
-    use super::inner_oneshot;
-
-    pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-        let (tx, rx) = inner_oneshot::channel();
-        (Sender { inner: tx }, Receiver { inner: rx })
-    }
-
-    pub struct Sender<T> {
-        inner: inner_oneshot::Sender<T>,
-    }
-
-    impl<T> Sender<T> {
-        pub fn send(self, value: T) -> Result<(), T> {
-            self.inner.send(value)
-        }
-    }
-
-    pub struct Receiver<T> {
-        inner: inner_oneshot::Receiver<T>,
-    }
-
-    impl<T> Future for Receiver<T> {
-        type Output = Result<T, ()>;
-
-        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            Pin::new(&mut self.inner).poll(cx).map_err(|_| ())
-        }
-    }
+    pub use futures::channel::oneshot::{channel, Canceled, Receiver, Sender};
 }
 
-// Wrapped sync
 pub mod sync {
     pub use futures::lock::Mutex;
 }
 
-// Wrapped signal
-/// TODO: Implement signal handling for WASM
+/// TODO: Implement signal handling for WASM.
 pub mod signal {
     pub async fn ctrl_c() -> Result<(), ()> {
         Err(())
     }
 }
 
-// Wrapped watch (waker-based)
+// Watch channel
 pub mod watch {
     use std::fmt;
     use std::future::Future;
@@ -226,14 +247,9 @@ pub mod watch {
             let mut inner = self.receiver.inner.lock().unwrap();
             if inner.changed {
                 inner.changed = false;
-                return Poll::Ready(Ok(()));
-            }
-            inner.wakers.push(cx.waker().clone());
-            if inner.changed {
-                inner.wakers.pop();
-                inner.changed = false;
                 Poll::Ready(Ok(()))
             } else {
+                inner.wakers.push(cx.waker().clone());
                 Poll::Pending
             }
         }
@@ -255,10 +271,9 @@ impl<T> Future for JoinHandle<T> {
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-        match Pin::new(&mut this.rx).poll(cx) {
+        match Pin::new(&mut self.get_mut().rx).poll(cx) {
             Poll::Ready(Ok(v)) => Poll::Ready(v),
-            Poll::Ready(Err(_)) => panic!("JoinHandle dropped the sender without sending a value"),
+            Poll::Ready(Err(_)) => panic!("JoinHandle: sender dropped without sending"),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -274,12 +289,12 @@ where
     F: Future<Output = T>,
 {
     use futures::future::{Either, FutureExt};
+    futures::pin_mut!(fut);
     let delay = wasm_timer::Delay::new(dur).fuse();
     futures::pin_mut!(delay);
-    futures::pin_mut!(fut);
     match futures::future::select(fut, delay).await {
         Either::Left((res, _)) => Ok(res),
-        Either::Right((_, _)) => Err(()),
+        Either::Right(_) => Err(()),
     }
 }
 
@@ -301,6 +316,5 @@ pub fn block_on<F>(_future: F) -> F::Output
 where
     F: Future + 'static,
 {
-    // TODO: implement a single-threaded block_on
-    panic!("block_on is not supported on wasm-runtime yet")
+    panic!("block_on is not supported on wasm-runtime")
 }

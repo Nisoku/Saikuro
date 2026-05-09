@@ -278,7 +278,8 @@ def adapter_checks(name: str) -> list[CommandSpec]:
                 ["uv", "sync", "--extra", "dev", "--extra", "websocket"],
                 ROOT / "adapters" / "python",
             ),
-            CommandSpec("Python tests", ["pytest"], ROOT / "adapters" / "python"),
+            # Run tests through `uv` so they execute inside the synced environment.
+            CommandSpec("Python tests", ["uv", "run", "pytest"], ROOT / "adapters" / "python"),
         ],
         "csharp": [
             CommandSpec(

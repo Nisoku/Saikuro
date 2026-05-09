@@ -57,6 +57,7 @@ use saikuro_schema::{
     registry::SchemaRegistry,
     validator::InvocationValidator,
 };
+use futures::future::FutureExt;
 use saikuro_transport::traits::{TransportReceiver, TransportSender};
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument, warn};
@@ -144,16 +145,24 @@ where
             saikuro_exec::select! {
                 // Outbound frame from the ForwardTask (call forwarded to this
                 // peer acting as a provider).
-                Some(frame) = forward_rx.recv() => {
-                    if let Err(e) = self.sender.send(frame).await {
-                        error!(peer = %self.peer_id, "send error on forwarded call: {e}");
-                        break;
+                frame_opt = forward_rx.recv() => {
+                    match frame_opt {
+                        Some(frame) => {
+                            if let Err(e) = self.sender.send(frame).await {
+                                error!(peer = %self.peer_id, "send error on forwarded call: {e}");
+                                break;
+                            }
+                        }
+                        None => {
+                            info!(peer = %self.peer_id, "forward channel closed");
+                            break;
+                        }
                     }
                 }
 
                 // Inbound frame from the peer (either a new request OR a
                 // response to a previously forwarded call).
-                incoming = self.receiver.recv() => {
+                incoming = self.receiver.recv().fuse() => {
                     match incoming {
                         Ok(Some(frame)) => {
                             if frame.len() > self.max_message_size {

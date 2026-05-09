@@ -383,6 +383,7 @@ class InMemoryTransport(BaseTransport):
 
 
 #  Factory function
+_memory_channels: dict[str, "InMemoryTransport"] = {}
 
 
 def make_transport(address: str) -> BaseTransport:
@@ -394,8 +395,25 @@ def make_transport(address: str) -> BaseTransport:
       - ``tcp://host:port``         - TCP
       - ``ws://host:port/path``     - WebSocket (plain)
       - ``wss://host:port/path``    - WebSocket (TLS)
-      - ``memory://``               - In-memory (testing only; returns one half)
+      - ``memory://``               - In-memory (testing only; creates default channel)
+      - ``memory://channel-name``   - In-memory with named channel
+
+    In-memory channels work as pairs:
+      - First call to ``memory://foo`` creates a pair and returns side A
+      - Second call to ``memory://foo`` returns side B, connected to A
+      - For tests, prefer ``InMemoryTransport.pair()`` for direct control
     """
+    global _memory_channels
+
+    if address == "memory://" or address.startswith("memory://"):
+        name = address[len("memory://") :] if len(address) > len("memory://") else "default"
+        if name in _memory_channels:
+            return _memory_channels.pop(name)
+        else:
+            a, b = InMemoryTransport.pair()
+            _memory_channels[name] = b
+            return a
+
     if address.startswith("unix://"):
         path = address[len("unix://") :]
         return UnixSocketTransport(path)
@@ -407,5 +425,5 @@ def make_transport(address: str) -> BaseTransport:
         return WebSocketTransport(address)
     raise ValueError(
         f"unsupported transport address: {address!r}\n"
-        "Supported schemes: unix://, tcp://, ws://, wss://"
+        "Supported schemes: unix://, tcp://, ws://, wss://, memory://"
     )

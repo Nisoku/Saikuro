@@ -31,6 +31,9 @@ pub enum TransportKind {
     Tcp,
     /// WebSocket:  cross-machine and WASM-compatible.
     WebSocket,
+    /// BroadcastChannel host transport:  WASM in-browser communication.
+    #[cfg(target_arch = "wasm32")]
+    WasmHost,
 }
 
 /// User-supplied transport configuration.
@@ -94,9 +97,12 @@ impl TransportSelector {
             return (TransportKind::Memory, None);
         }
 
-        // WASM: only WebSocket is available for remote targets.
+        // WASM: prefer MessageChannel host transport for in-realm communication.
         #[cfg(target_arch = "wasm32")]
         {
+            if addr == "wasm-host" || addr.starts_with("wasm-host://") {
+                return (TransportKind::WasmHost, Some(addr.to_owned()));
+            }
             let ws_url = if addr.starts_with("ws://") || addr.starts_with("wss://") {
                 addr.to_owned()
             } else {
