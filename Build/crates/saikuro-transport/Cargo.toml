@@ -16,7 +16,7 @@ keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 # The in-memory transport is always compiled; it has zero OS dependencies.
 [features]
 default = ["native-transport"]
-native-transport = []
+native-transport = ["saikuro-exec/tokio-runtime"]
 ws-transport = ["dep:tokio-tungstenite", "dep:tungstenite"]
 
 [dependencies]
@@ -30,8 +30,7 @@ futures     = { workspace = true }
 pin-project-lite = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
-saikuro-exec = { workspace = true }
-tokio-util  = { version = "0.7", features = ["codec"] }
+saikuro-exec = { workspace = true, default-features = false }
 
 # WebSocket support:  optional
 tokio-tungstenite = { version = "0.24", optional = true }

@@ -55,9 +55,9 @@ chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 # Internal crates
 saikuro-core      = { path = "crates/saikuro-core" }
 saikuro-schema    = { path = "crates/saikuro-schema" }
-saikuro-transport = { path = "crates/saikuro-transport" }
-saikuro-router    = { path = "crates/saikuro-router" }
+saikuro-transport = { path = "crates/saikuro-transport", default-features = false }
+saikuro-router    = { path = "crates/saikuro-router", default-features = false }
 saikuro-runtime   = { path = "crates/saikuro-runtime" }
 saikuro-codegen   = { path = "crates/saikuro-codegen" }
-saikuro-exec      = { path = "crates/saikuro-exec" }
+saikuro-exec      = { path = "crates/saikuro-exec", default-features = false }
 saikuro           = { path = "adapters/rust", default-features = false }

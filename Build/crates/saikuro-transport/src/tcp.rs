@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use saikuro_exec::net::{TcpListener, TcpStream};
+use saikuro_exec::tokio_util::codec::Framed;
 use std::net::SocketAddr;
-use tokio_util::codec::Framed;
 use tracing::{debug, trace};
 
 use crate::{

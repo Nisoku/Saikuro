@@ -72,4 +72,6 @@ pub async fn yield_now() {
     tokio::task::yield_now().await
 }
 
+pub use tokio_util;
+
 // Re-export select macro via a thin wrapper macro in crate root if needed.

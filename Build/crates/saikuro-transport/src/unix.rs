@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use saikuro_exec::net::{UnixListener, UnixStream};
+use saikuro_exec::tokio_util::codec::Framed;
 use std::path::{Path, PathBuf};
-use tokio_util::codec::Framed;
 use tracing::{debug, trace};
 
 use crate::{

@@ -15,15 +15,16 @@ required-features = ["native-transport"]
 
 [features]
 default = ["native-transport"]
-native-transport = ["saikuro-transport/native-transport"]
+native-transport = ["saikuro-transport/native-transport", "saikuro-exec/tokio-runtime"]
 ws-transport = ["saikuro-transport/ws-transport", "dep:tokio-tungstenite", "dep:tungstenite"]
+wasm-runtime = ["saikuro-exec/wasm-runtime"]
 
 [dependencies]
 saikuro-core      = { workspace = true }
 saikuro-schema    = { workspace = true }
 saikuro-transport = { workspace = true }
 saikuro-router    = { workspace = true }
-saikuro-exec      = { workspace = true }
+saikuro-exec      = { workspace = true, default-features = false }
 
 serde       = { workspace = true }
 serde_json  = { workspace = true }

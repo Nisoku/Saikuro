@@ -5,7 +5,7 @@
 //! a simple 4-byte big-endian length prefix before every frame:
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio_util::codec::{Decoder, Encoder};
+use saikuro_exec::tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::{Result, TransportError};
 

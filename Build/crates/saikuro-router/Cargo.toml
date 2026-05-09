@@ -20,7 +20,7 @@ futures     = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
 dashmap     = { workspace = true }
-saikuro-exec = { workspace = true }
+saikuro-exec = { workspace = true, default-features = false }
 uuid        = { workspace = true }
 
 [dev-dependencies]

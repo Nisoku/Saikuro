@@ -12,6 +12,7 @@
 //! (idk, tables are cool-looking don't ask)
 
 pub mod error;
+#[cfg(feature = "native-transport")]
 pub mod framing;
 pub mod memory;
 pub mod selector;
