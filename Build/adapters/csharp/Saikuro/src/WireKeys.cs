@@ -70,12 +70,12 @@ internal static class WireKey
     /// <summary>Build the outer schema announcement dictionary.</summary>
     internal static Dictionary<string, object?> BuildSchemaDict(
         string ns, Dictionary<string, object?> functions) => new()
-    {
-        [Version] = 1,
-        [Namespaces] = new Dictionary<string, object?>
         {
-            [ns] = new Dictionary<string, object?> { [Functions] = functions },
-        },
-        [Types] = new Dictionary<string, object?>(),
-    };
+            [Version] = 1,
+            [Namespaces] = new Dictionary<string, object?>
+            {
+                [ns] = new Dictionary<string, object?> { [Functions] = functions },
+            },
+            [Types] = new Dictionary<string, object?>(),
+        };
 }

@@ -1,0 +1,43 @@
+name: Full
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  all:
+    name: All checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Install npm deps
+        run: npm ci
+        working-directory: Build/adapters/typescript
+      - name: Install Python test deps
+        run: python3 -m pip install msgpack websockets
+      - name: Install Python adapter deps
+        run: uv sync --extra dev --extra websocket
+        working-directory: Build/adapters/python
+      - name: Run all checks
+        run: just check

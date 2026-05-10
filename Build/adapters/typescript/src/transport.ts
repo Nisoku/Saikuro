@@ -308,16 +308,6 @@ export class NodeStreamTransport extends BaseTransport {
 /**
  * Creates a transport from an already-connected BroadcastChannel.
  */
-function makeTransportFromChannel(
-  channel: BroadcastChannel,
-): BroadcastChannelTransport {
-  const t = new BroadcastChannelTransport(channel.name);
-  (t as unknown as { _channel: BroadcastChannel })._channel = channel;
-  (t as unknown as { _connected: boolean })._connected = true;
-  (t as unknown as { _setupMessageHandler: () => void })._setupMessageHandler();
-  return t;
-}
-
 /**
  * Generate a short random ID for connection negotiation.
  * Format: 8 hex chars (4 from timestamp, 4 random).
@@ -357,6 +347,15 @@ export class BroadcastChannelTransport extends BaseTransport {
   constructor(baseChannel: string) {
     super();
     this._baseChannel = baseChannel;
+  }
+
+  /** Create a transport already wired to a connected BroadcastChannel. */
+  static fromChannel(channel: BroadcastChannel): BroadcastChannelTransport {
+    const t = new BroadcastChannelTransport(channel.name);
+    t._channel = channel;
+    t._connected = true;
+    t._setupMessageHandler();
+    return t;
   }
 
   private _setupMessageHandler(): void {
@@ -484,7 +483,7 @@ export class BroadcastChannelListener {
 
         privateChannel.postMessage({ type: "accept", id: data.id });
 
-        const transport = makeTransportFromChannel(privateChannel);
+        const transport = BroadcastChannelTransport.fromChannel(privateChannel);
 
         const queued = this._connectQueue.shift();
         if (queued) {

@@ -93,11 +93,7 @@ impl StorageError {
 
 impl From<serde_json::Error> for StorageError {
     fn from(e: serde_json::Error) -> Self {
-        if e.is_io() {
-            StorageError::Io(io::Error::other(e))
-        } else {
-            StorageError::Deserialization(e.to_string())
-        }
+        StorageError::Deserialization(e.to_string())
     }
 }
 

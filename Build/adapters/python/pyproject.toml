@@ -30,6 +30,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "anyio[trio]>=4.0",
+    "ruff>=0.9.0",
 ]
 websocket = [
     "websockets>=16.0",

@@ -173,10 +173,6 @@ class TcpTransport(_StreamTransport):
         )
 
 
-#  WebSocket transport
-
-import websockets
-
 
 class WebSocketTransport(BaseTransport):
     """

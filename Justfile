@@ -1,75 +1,52 @@
-#!/usr/bin/env -S just --justfile
-
 # Saikuro Development Commands
+#
+#   just              List available commands
+#   just rust check   Run all Rust checks
+#   just check        Run all language checks
 
-# Set defaults
-export PYTHON := "python3"
-export BUILD_DIR := "Build"
-export DOTNET_ROOT := env_var("HOME") + "/.dotnet"
+scripts := "Build/scripts"
 
-# Rust
+# Language-specific commands
+rust *args:
+    cd {{scripts}} && python3 rust.py {{args}}
 
-rust-setup:
-    rustup target add wasm32-unknown-unknown
+python *args:
+    cd {{scripts}} && python3 python.py {{args}}
 
-build:
-    cd {{BUILD_DIR}} && cargo build --workspace
+typescript *args:
+    cd {{scripts}} && python3 typescript.py {{args}}
 
-test:
-    cd {{BUILD_DIR}} && cargo test --workspace
+csharp *args:
+    cd {{scripts}} && python3 csharp.py {{args}}
 
-wasm-check:
-    cd {{BUILD_DIR}} && cargo check --target wasm32-unknown-unknown -p saikuro-tests
+c *args:
+    cd {{scripts}} && python3 c.py {{args}}
 
-wasm-test:
-    cd {{BUILD_DIR}} && wasm-pack test --headless --firefox -p saikuro-tests
+cpp *args:
+    cd {{scripts}} && python3 cpp.py {{args}}
 
-fmt:
-    cd {{BUILD_DIR}} && cargo fmt --all
+# Meta commands
+setup:
+    cd {{scripts}} && python3 rust.py setup
+    cd {{scripts}} && python3 python.py setup
+    cd {{scripts}} && python3 typescript.py setup
+    cd {{scripts}} && python3 cpp.py setup
 
-clippy:
-    cd {{BUILD_DIR}} && cargo clippy --workspace -- -D warnings
+check:
+    cd {{scripts}} && python3 rust.py check
+    cd {{scripts}} && python3 python.py check
+    cd {{scripts}} && python3 typescript.py check
+    cd {{scripts}} && python3 csharp.py check
+    cd {{scripts}} && python3 c.py check
+    cd {{scripts}} && python3 cpp.py check
 
-# dotnet
+all: setup check
 
+# Utilities
 dotnet-install:
-    if ! command -v dotnet >/dev/null 2>&1; then \
+    @if ! command -v dotnet >/dev/null 2>&1; then \
         echo "Installing dotnet SDK..."; \
         curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0; \
-        echo "dotnet installed."; \
     else \
         echo "dotnet already installed"; \
     fi
-
-# Python (using uv)
-
-python-setup:
-    cd {{BUILD_DIR}}/adapters/python && uv sync --extra dev --extra websocket
-
-python-test:
-    cd {{BUILD_DIR}}/adapters/python && uv run pytest
-
-python-lint:
-    cd {{BUILD_DIR}}/adapters/python && uv run ruff check .
-
-# TypeScript
-
-ts-setup:
-    cd {{BUILD_DIR}}/adapters/typescript && npm install
-
-ts-test:
-    cd {{BUILD_DIR}}/adapters/typescript && npm test
-
-ts-lint:
-    cd {{BUILD_DIR}}/adapters/typescript && npm run lint
-
-ts-typecheck:
-    cd {{BUILD_DIR}}/adapters/typescript && npm run typecheck
-
-# All
-
-setup: rust-setup python-setup ts-setup dotnet-install
-    cd {{BUILD_DIR}} && cargo build --workspace
-
-check: fmt clippy test wasm-check python-test ts-test
-    @echo "All checks passed!"

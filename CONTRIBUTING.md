@@ -18,14 +18,17 @@ when opening a pull request.
 
 ## Prerequisites
 
-| Tool            | Minimum version   | Notes                                    |
-|-----------------|-------------------|------------------------------------------|
-| Rust toolchain  | 1.75              | Install via [rustup](https://rustup.rs/) |
-| Node.js         | 22 (see `.nvmrc`) | Required for the TypeScript adapter      |
-| Python          | 3.11              | Required for the Python adapter          |
-| uv              | latest            | Python package manager (replaces pip)    |
-| just (optional) | latest            | Task runner (alternative: make)          |
-| .NET SDK        | 8.0               | Required for the C# adapter (optional)   |
+| Tool            | Minimum version   | Notes                                                 |
+|-----------------|-------------------|-------------------------------------------------------|
+| Rust toolchain  | 1.75              | Install via [rustup](https://rustup.rs/)              |
+| Node.js         | 22 (see `.nvmrc`) | Required for the TypeScript adapter                   |
+| Python          | 3.11              | Required for the Python adapter                       |
+| uv              | latest            | Python package manager                                |
+| just            | latest            | Task runner                                           |
+| .NET SDK        | 8.0               | Required for the C# adapter                           |
+| C toolchain     | -                 | Required for the C adapter (`clang` or `gcc`)         |
+| CMake           | 3.20              | Required for the C++ header tests                     |
+| wasm-pack       | latest            | Required for WASM tests (`cargo install wasm-pack`)   |
 
 ---
 
@@ -49,6 +52,14 @@ Build/
     python/           # PyPI package (uses uv)
     csharp/           # NuGet package
     c/                # C adapter
+  scripts/            # Per-language build/check scripts
+    rust.py
+    python.py
+    typescript.py
+    csharp.py
+    c.py
+    cpp.py
+    saikuro_build.py   # Orchestrator (runs all language checks)
 Examples/
   rust/math/         # Example Rust provider/client
 Docs/                 # Documentation site
@@ -58,7 +69,7 @@ Docs/                 # Documentation site
 
 ## Quick setup
 
-### Option 1: Using just
+### Using just
 
 ```bash
 # Install just (if not installed)
@@ -70,36 +81,7 @@ cd Saikuro
 just setup
 ```
 
-### Option 2: Using make
-
-```bash
-git clone https://github.com/Nisoku/Saikuro.git
-cd Saikuro
-make setup
-```
-
-### Option 3: Manual setup
-
-```bash
-git clone https://github.com/Nisoku/Saikuro.git
-cd Saikuro
-
-# Install uv (Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Rust workspace
-cd Build && cargo build --workspace
-
-# Python adapter (using uv)
-cd Build/adapters/python
-uv venv && uv pip install -e ".[dev,websocket]"
-
-# TypeScript adapter
-cd Build/adapters/typescript
-npm install
-```
-
-### Option 4: Dev Container (VS Code)
+### Dev Container (VS Code)
 
 1. Install the "Dev Containers" extension
 2. Open the repo in VS Code
@@ -113,79 +95,71 @@ npm install
 ### Rust workspace
 
 ```bash
-cd Build
-cargo build --workspace
+just rust build
 ```
 
 ### TypeScript adapter
 
 ```bash
-cd Build/adapters/typescript
-npm ci
-npm run build
+just typescript setup
+just typescript build
 ```
 
-### Python adapter (using uv)
+### Python adapter
 
 ```bash
-cd Build/adapters/python
-uv pip install -e ".[dev,websocket]"
+just python setup
+cd Build/adapters/python && uv run python ...  # or use your IDE
 ```
 
 ### C# adapter
 
 ```bash
-cd Build/adapters/csharp/Saikuro/src
-dotnet build
+just csharp check   # builds + runs tests + format check
 ```
 
 ---
 
 ## Running the tests
 
-### All tests (recommended)
+### Everything (recommended)
+
+Runs formatters, linters, typecheckers, and tests for all languages:
 
 ```bash
-# Using just
 just check
-
-# Using make
-make check
-
-# Using build script directly
-cd Build && python3 scripts/saikuro_build.py all
 ```
 
-### Rust
+Or via the Python orchestrator:
 
 ```bash
-# All workspace crates + integration tests
-cd Build
-cargo test --workspace
-
-# Integration tests only
-cargo test -p saikuro-tests
+cd Build && python3 scripts/saikuro_build.py
 ```
 
-### TypeScript
+### Per-language checks
 
 ```bash
-cd Build/adapters/typescript
-npm test
+just rust check       # fmt + clippy + tests + wasm compilation check
+just python check     # ruff lint + pytest
+just typescript check # eslint + tsc + tests + build
+just csharp check     # dotnet format + build + tests
+just c check          # build + test C adapter
+just cpp check        # cmake configure + header compile test
 ```
 
-### Python (using uv)
+### Individual subcommands
 
 ```bash
-cd Build/adapters/python
-uv run pytest
-```
-
-### C#
-
-```bash
-cd Build/adapters/csharp/Saikuro
-dotnet test
+just rust fmt_check
+just rust lint
+just rust test
+just rust wasm_check
+just python lint
+just python test
+just typescript lint
+just typescript typecheck
+just typescript test
+just typescript build
 ```
 
 ---
@@ -194,15 +168,15 @@ dotnet test
 
 - **Rust**: `cargo fmt` and `cargo clippy -- -D warnings` must pass.
 - **TypeScript**: `npm run lint` (ESLint) and `npm run typecheck` (tsc) must pass.
-- **Python**: PEP 8; use `ruff` (`uv run ruff check .`).
-- **C#**: standard .NET conventions; `dotnet format` is acceptable but `csharpier` is preferred.
+- **Python**: PEP 8; use `ruff` (`uvx ruff check .`).
+- **C#**: standard .NET conventions; `dotnet format` must pass.
 
 ---
 
 ## Opening a pull request
 
 1. Fork the repository and create a feature branch off `main`.
-2. Make your changes, ensuring all tests pass locally (`just check` or `make check`).
+2. Make your changes, ensuring all tests pass locally (`just check`).
 3. Add or update tests as appropriate.
 4. Update `CHANGELOG.md`.
 5. Open a pull request with a clear description of what the change does and why.

@@ -98,7 +98,7 @@ internal static class StreamControlExt
 
 // ResourceHandle
 
-    /// <summary>Opaque reference to large or external data.</summary>
+/// <summary>Opaque reference to large or external data.</summary>
 public sealed class ResourceHandle
 {
     public string Id { get; init; } = "";
@@ -136,7 +136,7 @@ public sealed class ResourceHandle
 
 // Envelope (outbound)
 
-    /// <summary>Outbound invocation envelope. Serialised to/from a MessagePack map.</summary>
+/// <summary>Outbound invocation envelope. Serialised to/from a MessagePack map.</summary>
 public sealed record Envelope
 {
     public uint Version { get; init; } = Protocol.Version;
@@ -300,7 +300,7 @@ public sealed record Envelope
 
 // ResponseEnvelope (inbound) 
 
-    /// <summary>Inbound response envelope.</summary>
+/// <summary>Inbound response envelope.</summary>
 public sealed class ResponseEnvelope
 {
     public string Id { get; init; } = "";

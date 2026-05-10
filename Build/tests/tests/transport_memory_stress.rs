@@ -92,19 +92,24 @@ fn backpressure_sender_blocks_until_drain() {
         }
 
         // The 257th send would block if nobody is receiving.
-        // Spawn a drainer to unblock us.
+        // Spawn a drainer that signals after it has freed enough space
+        // and keeps the receiver alive until the sender is done.
+        let (ready_tx, ready_rx) = saikuro_exec::oneshot::channel();
+        let (done_tx, done_rx) = saikuro_exec::oneshot::channel();
         let drainer = saikuro_exec::spawn(async move {
-            // Receive enough to let the sender proceed.
             for _ in 0..128 {
                 receiver.recv().await.unwrap().unwrap();
             }
+            let _ = ready_tx.send(());
+            // Keep receiver alive, sender needs it for "final".
+            let _ = done_rx.await;
+            drop(receiver);
         });
-        // Give the executor a chance to run the drainer so it begins
-        // consuming queued messages before we attempt the blocking send.
-        saikuro_exec::yield_now().await;
 
-        // This send should eventually succeed after the drainer runs.
+        // Wait until the drainer has freed enough space.
+        ready_rx.await.unwrap();
         sender.send(Bytes::from_static(b"final")).await.unwrap();
+        let _ = done_tx.send(());
         drainer.await.unwrap();
     })
 }

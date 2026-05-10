@@ -3,30 +3,21 @@ set -e
 
 echo "Saikuro Development Environment Setup"
 
-# Rust toolchain (stable)
+# Rust toolchain
 echo "Setting up Rust..."
 rustup default stable
 rustup component add rustfmt clippy
 rustup target add wasm32-unknown-unknown
 
-# Python with uv
-echo "Setting up Python..."
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.cargo/bin:$PATH"
+# Install just
+echo "Installing just..."
+cargo install just
 
-cd Build/adapters/python
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev,websocket]"
-
-# Node.js/TypeScript
-echo "Setting up TypeScript..."
-cd ../typescript
-npm install
+# Project setup via just
+just setup
 
 # Build Rust workspace
 echo "Building Rust workspace..."
-cd ../../Build
-cargo build --workspace
+cargo build --manifest-path Build/Cargo.toml --workspace
 
 echo "Setup complete"
