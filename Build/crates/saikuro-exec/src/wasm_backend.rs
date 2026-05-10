@@ -117,13 +117,13 @@ pub mod mpsc {
 
     impl<T> Sender<T> {
         pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
-            let mut value = Some(value);
+            let mut value = value;
             loop {
                 let mut guard = self.inner.lock().await;
-                match guard.try_send(value.take().unwrap()) {
+                match guard.try_send(value) {
                     Ok(()) => return Ok(()),
                     Err(e) if e.is_full() => {
-                        value = Some(e.into_inner());
+                        value = e.into_inner();
                         drop(guard);
                         super::yield_now().await;
                     }
@@ -216,7 +216,7 @@ pub mod watch {
 
     impl<T: Clone> Sender<T> {
         pub fn send(&self, val: T) {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             inner.value = val;
             inner.changed = true;
             for w in inner.wakers.drain(..) {
@@ -231,7 +231,11 @@ pub mod watch {
 
     impl<T: Clone> Receiver<T> {
         pub fn borrow(&self) -> T {
-            self.inner.lock().unwrap().value.clone()
+            self.inner
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .value
+                .clone()
         }
 
         pub fn changed(&mut self) -> ChangedFuture<'_, T> {
@@ -247,7 +251,11 @@ pub mod watch {
         type Output = Result<(), ()>;
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let mut inner = self.receiver.inner.lock().unwrap();
+            let mut inner = self
+                .receiver
+                .inner
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if inner.changed {
                 inner.changed = false;
                 Poll::Ready(Ok(()))

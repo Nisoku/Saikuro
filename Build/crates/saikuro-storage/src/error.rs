@@ -69,6 +69,26 @@ impl StorageError {
     pub fn not_supported(msg: impl Into<String>) -> Self {
         StorageError::OperationNotSupported(msg.into())
     }
+
+    pub fn key_already_exists(key: impl Into<String>) -> Self {
+        StorageError::KeyAlreadyExists(key.into())
+    }
+
+    pub fn namespace_already_exists(ns: impl Into<String>) -> Self {
+        StorageError::NamespaceAlreadyExists(ns.into())
+    }
+
+    pub fn backend_not_available(msg: impl Into<String>) -> Self {
+        StorageError::BackendNotAvailable(msg.into())
+    }
+
+    pub fn quota_exceeded(msg: impl Into<String>) -> Self {
+        StorageError::QuotaExceeded(msg.into())
+    }
+
+    pub fn timeout(msg: impl Into<String>) -> Self {
+        StorageError::Timeout(msg.into())
+    }
 }
 
 impl From<serde_json::Error> for StorageError {

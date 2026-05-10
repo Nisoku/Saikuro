@@ -644,33 +644,33 @@ public class SchemaExtractor
         foreach (var fn in functions)
         {
             var argList = fn
-                .Args.Select(arg => new Dictionary<string, object?>
-                {
-                    ["name"] = arg.Name,
-                    ["type"] = SerializeType(arg.Type),
-                    ["optional"] = arg.Optional,
-                })
+            .Args.Select(arg => new Dictionary<string, object?>
+            {
+                [WireKey.Name] = arg.Name,
+                [WireKey.Type] = SerializeType(arg.Type),
+                [WireKey.Optional] = arg.Optional,
+            })
                 .ToList();
 
             var returns = fn.IsGenerator
                 ? new Dictionary<string, object>
                 {
-                    ["kind"] = "stream",
-                    ["item"] = SerializeType(fn.Returns),
+                    [WireKey.Kind] = "stream",
+                    [WireKey.Item] = SerializeType(fn.Returns),
                 }
                 : SerializeType(fn.Returns);
 
             var schemaFn = new Dictionary<string, object?>
             {
-                ["args"] = argList,
-                ["returns"] = returns,
-                ["visibility"] = fn.Visibility,
-                ["capabilities"] = fn.Capabilities,
+                [WireKey.Args] = argList,
+                [WireKey.Returns] = returns,
+                [WireKey.Visibility] = fn.Visibility,
+                [WireKey.Capabilities] = fn.Capabilities,
             };
 
             if (!string.IsNullOrEmpty(fn.Doc))
             {
-                schemaFn["doc"] = fn.Doc;
+                schemaFn[WireKey.Doc] = fn.Doc;
             }
 
             schemaFunctions[fn.Name] = schemaFn;
@@ -678,15 +678,15 @@ public class SchemaExtractor
 
         return new Dictionary<string, object>
         {
-            ["version"] = 1,
-            ["namespaces"] = new Dictionary<string, object>
+            [WireKey.Version] = 1,
+            [WireKey.Namespaces] = new Dictionary<string, object>
             {
                 [namespaceName] = new Dictionary<string, object>
                 {
-                    ["functions"] = schemaFunctions,
+                    [WireKey.Functions] = schemaFunctions,
                 },
             },
-            ["types"] = new Dictionary<string, object>(),
+            [WireKey.Types] = new Dictionary<string, object>(),
         };
     }
 
@@ -696,42 +696,42 @@ public class SchemaExtractor
         {
             PrimitiveTypeDescriptor p => new Dictionary<string, string>
             {
-                ["kind"] = p.Kind,
-                ["type"] = p.Type,
+                [WireKey.Kind] = p.Kind,
+                [WireKey.Type] = p.Type,
             },
             ListTypeDescriptor l => new Dictionary<string, object>
             {
-                ["kind"] = l.Kind,
-                ["item"] = SerializeType(l.Item),
+                [WireKey.Kind] = l.Kind,
+                [WireKey.Item] = SerializeType(l.Item),
             },
             MapTypeDescriptor m => new Dictionary<string, object>
             {
-                ["kind"] = m.Kind,
-                ["key"] = SerializeType(m.Key),
-                ["value"] = SerializeType(m.Value),
+                [WireKey.Kind] = m.Kind,
+                [WireKey.Key] = SerializeType(m.Key),
+                [WireKey.Value] = SerializeType(m.Value),
             },
             OptionalTypeDescriptor o => new Dictionary<string, object>
             {
-                ["kind"] = o.Kind,
-                ["inner"] = SerializeType(o.Inner),
+                [WireKey.Kind] = o.Kind,
+                [WireKey.Inner] = SerializeType(o.Inner),
             },
             NamedTypeDescriptor n => new Dictionary<string, string>
             {
-                ["kind"] = n.Kind,
-                ["name"] = n.Name,
+                [WireKey.Kind] = n.Kind,
+                [WireKey.Name] = n.Name,
             },
             StreamTypeDescriptor s => new Dictionary<string, object>
             {
-                ["kind"] = s.Kind,
-                ["item"] = SerializeType(s.Item),
+                [WireKey.Kind] = s.Kind,
+                [WireKey.Item] = SerializeType(s.Item),
             },
             ChannelTypeDescriptor c => new Dictionary<string, object>
             {
-                ["kind"] = c.Kind,
-                ["send"] = SerializeType(c.Send),
-                ["recv"] = SerializeType(c.Recv),
+                [WireKey.Kind] = c.Kind,
+                [WireKey.Send] = SerializeType(c.Send),
+                [WireKey.Recv] = SerializeType(c.Recv),
             },
-            _ => new Dictionary<string, string> { ["kind"] = "primitive", ["type"] = "any" },
+            _ => new Dictionary<string, string> { [WireKey.Kind] = "primitive", [WireKey.Type] = "any" },
         };
     }
 }

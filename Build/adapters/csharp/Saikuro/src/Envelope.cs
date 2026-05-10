@@ -109,11 +109,11 @@ public sealed class ResourceHandle
     /// <summary>Decode from a raw MessagePack map (as decoded by the transport layer).</summary>
     public static ResourceHandle? FromMap(Dictionary<string, object?> map)
     {
-        if (!map.TryGetValue("id", out var rawId) || rawId is not string id)
+        if (!map.TryGetValue(WireKey.Id, out var rawId) || rawId is not string id)
             return null;
 
-        string? mime = map.TryGetValue("mime_type", out var m) && m is string ms ? ms : null;
-        long? size = map.TryGetValue("size", out var s)
+        string? mime = map.TryGetValue(WireKey.MimeType, out var m) && m is string ms ? ms : null;
+        long? size = map.TryGetValue(WireKey.Size, out var s)
             ? s switch
             {
                 long l => l,
@@ -122,7 +122,7 @@ public sealed class ResourceHandle
                 _ => (long?)null,
             }
             : null;
-        string? uri = map.TryGetValue("uri", out var u2) && u2 is string us ? us : null;
+        string? uri = map.TryGetValue(WireKey.Uri, out var u2) && u2 is string us ? us : null;
 
         return new ResourceHandle
         {
@@ -219,34 +219,34 @@ public sealed record Envelope
     {
         var d = new Dictionary<string, object?>
         {
-            ["version"] = (int)Version,
-            ["type"] = Type.ToWire(),
-            ["id"] = Id,
-            ["target"] = Target,
-            ["args"] = Args,
+            [WireKey.Version] = (int)Version,
+            [WireKey.Type] = Type.ToWire(),
+            [WireKey.Id] = Id,
+            [WireKey.Target] = Target,
+            [WireKey.Args] = Args,
         };
         if (Meta is { Count: > 0 })
-            d["meta"] = Meta;
+            d[WireKey.Meta] = Meta;
         if (Capability is not null)
-            d["capability"] = Capability;
+            d[WireKey.Capability] = Capability;
         if (BatchItems is not null)
-            d["batch_items"] = BatchItems.Select(e => e.ToMsgpackDict()).ToList();
+            d[WireKey.BatchItems] = BatchItems.Select(e => e.ToMsgpackDict()).ToList();
         if (StreamControlValue.HasValue)
-            d["stream_control"] = StreamControlValue.Value.ToWire();
+            d[WireKey.StreamControl] = StreamControlValue.Value.ToWire();
         if (Seq.HasValue)
-            d["seq"] = (long)Seq.Value;
+            d[WireKey.Seq] = (long)Seq.Value;
         return d;
     }
 
     /// <summary>Deserialise from a raw MessagePack map.</summary>
     public static Envelope FromMsgpackDict(Dictionary<string, object?> d)
     {
-        var typeStr = (string)d["type"]!;
+        var typeStr = (string)d[WireKey.Type]!;
         var sc =
-            d.TryGetValue("stream_control", out var scRaw) && scRaw is string scs
+            d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
                 ? StreamControlExt.FromWire(scs)
                 : (StreamControl?)null;
-        var seq = d.TryGetValue("seq", out var seqRaw)
+        var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
             ? seqRaw switch
             {
                 long l => (ulong)l,
@@ -256,15 +256,15 @@ public sealed record Envelope
             }
             : null;
         var args =
-            d.TryGetValue("args", out var argsRaw) && argsRaw is IList<object?> al
+            d.TryGetValue(WireKey.Args, out var argsRaw) && argsRaw is IList<object?> al
                 ? (IReadOnlyList<object?>)al.ToList()
                 : (IReadOnlyList<object?>)[];
         var meta =
-            d.TryGetValue("meta", out var metaRaw) && metaRaw is Dictionary<string, object?> md
+            d.TryGetValue(WireKey.Meta, out var metaRaw) && metaRaw is Dictionary<string, object?> md
                 ? md
                 : null;
         List<Envelope>? items = null;
-        if (d.TryGetValue("batch_items", out var biRaw) && biRaw is System.Collections.IList biList)
+        if (d.TryGetValue(WireKey.BatchItems, out var biRaw) && biRaw is System.Collections.IList biList)
             items = biList
                 .Cast<object?>()
                 .OfType<Dictionary<string, object?>>()
@@ -273,15 +273,15 @@ public sealed record Envelope
 
         return new Envelope
         {
-            Version = d.TryGetValue("version", out var v)
+            Version = d.TryGetValue(WireKey.Version, out var v)
                 ? (uint)Convert.ToInt32(v)
                 : Protocol.Version,
             Type = InvocationTypeExt.FromWire(typeStr),
-            Id = (string)d["id"]!,
-            Target = (string)d["target"]!,
+            Id = (string)d[WireKey.Id]!,
+            Target = (string)d[WireKey.Target]!,
             Args = args,
             Meta = meta,
-            Capability = d.TryGetValue("capability", out var cap) ? cap as string : null,
+            Capability = d.TryGetValue(WireKey.Capability, out var cap) ? cap as string : null,
             BatchItems = items,
             StreamControlValue = sc,
             Seq = seq,
@@ -316,14 +316,14 @@ public sealed class ResponseEnvelope
     public static ResponseEnvelope FromMsgpackDict(Dictionary<string, object?> d)
     {
         ErrorPayload? err = null;
-        if (d.TryGetValue("error", out var errRaw) && errRaw is Dictionary<string, object?> em)
+        if (d.TryGetValue(WireKey.Error, out var errRaw) && errRaw is Dictionary<string, object?> em)
             err = ErrorPayload.FromMap(em);
 
         var sc =
-            d.TryGetValue("stream_control", out var scRaw) && scRaw is string scs
+            d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
                 ? StreamControlExt.FromWire(scs)
                 : (StreamControl?)null;
-        var seq = d.TryGetValue("seq", out var seqRaw)
+        var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
             ? seqRaw switch
             {
                 long l => (ulong)l,
@@ -335,9 +335,9 @@ public sealed class ResponseEnvelope
 
         return new ResponseEnvelope
         {
-            Id = (string)d["id"]!,
-            Ok = (bool)d["ok"]!,
-            Result = d.TryGetValue("result", out var res) ? res : null,
+            Id = (string)d[WireKey.Id]!,
+            Ok = (bool)d[WireKey.Ok]!,
+            Result = d.TryGetValue(WireKey.Result, out var res) ? res : null,
             Error = err,
             Seq = seq,
             StreamControlValue = sc,
@@ -358,10 +358,10 @@ public sealed class ErrorPayload
     public static ErrorPayload FromMap(Dictionary<string, object?> d) =>
         new()
         {
-            Code = d.TryGetValue("code", out var c) && c is string cs ? cs : "Internal",
-            Message = d.TryGetValue("message", out var m) && m is string ms ? ms : "",
+            Code = d.TryGetValue(WireKey.Code, out var c) && c is string cs ? cs : "Internal",
+            Message = d.TryGetValue(WireKey.Message, out var m) && m is string ms ? ms : "",
             Details =
-                d.TryGetValue("details", out var det) && det is Dictionary<string, object?> dm
+                d.TryGetValue(WireKey.Details, out var det) && det is Dictionary<string, object?> dm
                     ? dm
                     : new Dictionary<string, object?>(),
         };

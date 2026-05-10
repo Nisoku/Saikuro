@@ -33,3 +33,4 @@ Build/adapters/cpp/build/
 # TODO: setup proper .vscode so we can keep this
 .vscode/ 
 .DS_Store
+build_cpp/

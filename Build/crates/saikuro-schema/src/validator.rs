@@ -57,7 +57,10 @@ pub enum ValidationError {
         visibility: Visibility,
     },
 
-    #[error("batch envelope must contain at least one item")]
+    #[error("batch envelope has no items field")]
+    MissingBatch,
+
+    #[error("batch envelope has an empty items list")]
     EmptyBatch,
 
     #[error("batch item at index {index}: {source}")]
@@ -89,7 +92,7 @@ impl ValidationError {
             },
             Self::ArgumentArity { .. } | Self::ArgumentType { .. } => ErrorCode::InvalidArguments,
             Self::VisibilityDenied { .. } => ErrorCode::CapabilityDenied,
-            Self::EmptyBatch => ErrorCode::MalformedEnvelope,
+            Self::MissingBatch | Self::EmptyBatch => ErrorCode::MalformedEnvelope,
             Self::BatchItem { source, .. } => source.error_code(),
         }
     }
@@ -194,7 +197,7 @@ impl InvocationValidator {
         // Batch-specific: must have items, must not have a target.
         if envelope.invocation_type == InvocationType::Batch {
             match &envelope.batch_items {
-                None => return Err(ValidationError::EmptyBatch),
+                None => return Err(ValidationError::MissingBatch),
                 Some(items) if items.is_empty() => return Err(ValidationError::EmptyBatch),
                 _ => {}
             }

@@ -11,7 +11,10 @@ use saikuro_core::schema::{
 
 use crate::{
     error::Result,
-    generator::{generate_types_from_schema, BindingGenerator, GeneratorOutput},
+    generator::{
+        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
+        GeneratorOutput,
+    },
     to_pascal_case,
 };
 
@@ -20,25 +23,20 @@ pub struct PythonGenerator;
 impl BindingGenerator for PythonGenerator {
     fn generate(&self, schema: &Schema) -> Result<GeneratorOutput> {
         let mut output = GeneratorOutput::default();
-
-        // types.py
-        let types_src = self.generate_types(schema)?;
-        output.add("types.py", types_src);
-
-        // per-namespace client stubs
-        let mut init_imports = vec!["from .types import *".to_owned()];
-
-        for (ns_name, ns_schema) in &schema.namespaces {
-            let file_name = format!("{ns_name}_client.py");
-            let class_name = to_pascal_case(ns_name);
-            let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
-            output.add(&file_name, src);
-            init_imports.push(format!("from .{ns_name}_client import {class_name}Client"));
+        let ns_pairs = generate_types_and_namespace_clients(
+            schema,
+            &mut output,
+            "types.py",
+            self.generate_types(schema)?,
+            |ns| format!("{}_client.py", ns),
+            to_pascal_case,
+            |ns, class_name, ns_schema| self.generate_namespace_client(ns, class_name, ns_schema),
+        )?;
+        let mut imports = vec!["from .types import *".to_owned()];
+        for (ns_name, class_name) in &ns_pairs {
+            imports.push(format!("from .{ns_name}_client import {class_name}Client"));
         }
-
-        // __init__.py
-        output.add("__init__.py", init_imports.join("\n") + "\n");
-
+        output.add("__init__.py", imports.join("\n") + "\n");
         Ok(output)
     }
 }

@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 pub type JoinHandle<T> = tokio::task::JoinHandle<T>;
@@ -45,16 +46,20 @@ pub mod runtime {
     pub use tokio::runtime::{Builder, Runtime};
 }
 
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
 pub fn block_on<F>(future: F) -> F::Output
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build tokio runtime")
-        .block_on(future)
+    let rt = RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build tokio runtime")
+    });
+    rt.block_on(future)
 }
 
 pub async fn sleep(dur: Duration) {

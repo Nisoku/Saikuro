@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use saikuro_core::schema::{FieldDescriptor, Schema, TypeDefinition, TypeDescriptor};
+use saikuro_core::schema::{
+    FieldDescriptor, NamespaceSchema, Schema, TypeDefinition, TypeDescriptor,
+};
 
 use crate::error::Result;
 
@@ -89,4 +91,32 @@ pub fn generate_types_from_schema(
         }
     }
     Ok(lines.join("\n"))
+}
+
+/// Shared namespace client file generation.
+///
+/// C#, Python, and TypeScript backends all follow the same pattern:
+/// 1. Add a types file to the output.
+/// 2. Iterate over schema namespaces, generating a client file per namespace.
+/// 3. Return a list of `(namespace_name, class_name)` pairs so the caller can
+///    build an umbrella/index file with the correct names.
+pub fn generate_types_and_namespace_clients(
+    schema: &Schema,
+    output: &mut GeneratorOutput,
+    types_file_name: &str,
+    types_content: String,
+    ns_file_name_fn: impl Fn(&str) -> String,
+    ns_class_name_fn: impl Fn(&str) -> String,
+    ns_client_fn: impl Fn(&str, &str, &NamespaceSchema) -> Result<String>,
+) -> Result<Vec<(String, String)>> {
+    output.add(types_file_name, types_content);
+    let mut ns_pairs = Vec::new();
+    for (ns_name, ns_schema) in &schema.namespaces {
+        let class_name = ns_class_name_fn(ns_name);
+        let file_name = ns_file_name_fn(ns_name);
+        let src = ns_client_fn(ns_name, &class_name, ns_schema)?;
+        output.add(&file_name, src);
+        ns_pairs.push((ns_name.clone(), class_name));
+    }
+    Ok(ns_pairs)
 }

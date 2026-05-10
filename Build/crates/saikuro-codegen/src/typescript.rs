@@ -11,7 +11,10 @@ use saikuro_core::schema::{
 
 use crate::{
     error::Result,
-    generator::{generate_types_from_schema, BindingGenerator, GeneratorOutput},
+    generator::{
+        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
+        GeneratorOutput,
+    },
     to_pascal_case,
 };
 
@@ -20,27 +23,22 @@ pub struct TypeScriptGenerator;
 impl BindingGenerator for TypeScriptGenerator {
     fn generate(&self, schema: &Schema) -> Result<GeneratorOutput> {
         let mut output = GeneratorOutput::default();
-
-        // types.ts
-        let types_src = self.generate_types(schema)?;
-        output.add("types.ts", types_src);
-
-        // per-namespace client stubs
+        let ns_pairs = generate_types_and_namespace_clients(
+            schema,
+            &mut output,
+            "types.ts",
+            self.generate_types(schema)?,
+            |ns| format!("{}Client.ts", to_pascal_case(ns)),
+            |ns| format!("{}Client", to_pascal_case(ns)),
+            |ns, class_name, ns_schema| self.generate_namespace_client(ns, class_name, ns_schema),
+        )?;
         let mut index_exports = vec!["export * from './types';".to_owned()];
-
-        for (ns_name, ns_schema) in &schema.namespaces {
-            let class_name = format!("{}Client", to_pascal_case(ns_name));
-            let file_name = format!("{}Client.ts", to_pascal_case(ns_name));
-            let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
-            output.add(&file_name, src);
+        for (_, class_name) in &ns_pairs {
             index_exports.push(format!(
                 "export {{ {class_name} }} from './{class_name}';\n"
             ));
         }
-
-        // index.ts
         output.add("index.ts", index_exports.join("\n") + "\n");
-
         Ok(output)
     }
 }

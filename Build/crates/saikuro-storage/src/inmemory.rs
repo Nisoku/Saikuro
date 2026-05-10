@@ -45,19 +45,25 @@ impl InMemoryStorage {
         Self { config, namespaces }
     }
 
-    /// Get or create a namespace.
+    /// Look up a namespace, returns an error if it doesn't exist.
+    fn get_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
+        self.namespaces
+            .get(namespace)
+            .map(|ns| ns.clone())
+            .ok_or_else(|| StorageError::namespace_not_found(namespace))
+    }
+
+    /// Get or create a namespace (write operations).
     fn get_or_create_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
-        if let Some(ns) = self.namespaces.get(namespace) {
-            return Ok(ns.clone());
-        }
-
         if !self.config.auto_create_namespaces {
-            return Err(StorageError::namespace_not_found(namespace));
+            return self.get_namespace(namespace);
         }
 
-        let ns = Arc::new(NamespaceStore::new());
-        self.namespaces.insert(namespace.to_owned(), ns.clone());
-        Ok(ns)
+        Ok(self
+            .namespaces
+            .entry(namespace.to_owned())
+            .or_insert_with(|| Arc::new(NamespaceStore::new()))
+            .clone())
     }
 }
 
@@ -74,12 +80,12 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn exists(&self, namespace: &str, key: &str) -> Result<bool> {
-        let ns = self.get_or_create_namespace(namespace)?;
+        let ns = self.get_namespace(namespace)?;
         Ok(ns.contains_key(key))
     }
 
     async fn get(&self, namespace: &str, key: &str) -> Result<Option<Bytes>> {
-        let ns = self.get_or_create_namespace(namespace)?;
+        let ns = self.get_namespace(namespace)?;
         Ok(ns.get(key).map(|v| v.clone()))
     }
 
@@ -96,7 +102,7 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn list_keys(&self, namespace: &str) -> Result<Vec<String>> {
-        let ns = self.get_or_create_namespace(namespace)?;
+        let ns = self.get_namespace(namespace)?;
         Ok(ns.iter().map(|entry| entry.key().clone()).collect())
     }
 
@@ -109,12 +115,14 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn create_namespace(&self, namespace: &str) -> Result<()> {
-        if self.namespaces.contains_key(namespace) {
-            return Err(StorageError::NamespaceAlreadyExists(namespace.to_owned()));
+        use dashmap::mapref::entry::Entry;
+        match self.namespaces.entry(namespace.to_owned()) {
+            Entry::Occupied(_) => Err(StorageError::NamespaceAlreadyExists(namespace.to_owned())),
+            Entry::Vacant(e) => {
+                e.insert(Arc::new(NamespaceStore::new()));
+                Ok(())
+            }
         }
-        self.namespaces
-            .insert(namespace.to_owned(), Arc::new(NamespaceStore::new()));
-        Ok(())
     }
 
     async fn delete_namespace(&self, namespace: &str) -> Result<()> {
@@ -123,7 +131,7 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn clear_namespace(&self, namespace: &str) -> Result<()> {
-        let ns = self.get_or_create_namespace(namespace)?;
+        let ns = self.get_namespace(namespace)?;
         ns.clear();
         Ok(())
     }

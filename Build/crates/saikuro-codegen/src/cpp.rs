@@ -281,11 +281,11 @@ fn escape_cpp_string_literal(s: &str) -> String {
                 use std::fmt::Write;
                 let code = c as u32;
                 if code <= 0xFF {
-                    write!(out, "\\x{:02X}", code).unwrap();
+                    let _ = write!(out, "\\x{:02X}", code);
                 } else if code <= 0xFFFF {
-                    write!(out, "\\u{:04X}", code).unwrap();
+                    let _ = write!(out, "\\u{:04X}", code);
                 } else {
-                    write!(out, "\\U{:08X}", code).unwrap();
+                    let _ = write!(out, "\\U{:08X}", code);
                 }
             }
             _ => out.push(c),

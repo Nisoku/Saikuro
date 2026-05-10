@@ -206,15 +206,21 @@ impl Envelope {
 
     /// Return the namespace portion of `target` (everything before the last `.`).
     pub fn namespace(&self) -> Option<&str> {
-        let dot = self.target.rfind('.')?;
-        Some(&self.target[..dot])
+        split_target(&self.target).map(|(ns, _)| ns)
     }
 
     /// Return the function name portion of `target` (everything after the last `.`).
     pub fn function_name(&self) -> Option<&str> {
-        let dot = self.target.rfind('.')?;
-        Some(&self.target[dot + 1..])
+        split_target(&self.target).map(|(_, fn_name)| fn_name)
     }
+}
+
+/// Split a `"namespace.function"` target string into its two components.
+///
+/// Returns `None` when `target` contains no dot separator.
+pub fn split_target(target: &str) -> Option<(&str, &str)> {
+    let dot = target.rfind('.')?;
+    Some((&target[..dot], &target[dot + 1..]))
 }
 
 /// The envelope carrying a response back to a caller.

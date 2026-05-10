@@ -346,12 +346,12 @@ impl InvocationRouter {
     fn dispatch_log(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
-        // args[0] must be the serialised LogRecord (a map value).
-        let record = envelope.args.into_iter().next().and_then(|v| {
-            // The value arrives as a MessagePack map; deserialise it.
-            let bytes = rmp_serde::to_vec_named(&v).ok()?;
-            rmp_serde::from_slice::<LogRecord>(&bytes).ok()
-        });
+        // args[0] is the LogRecord as a Value::Map.
+        let record = envelope
+            .args
+            .into_iter()
+            .next()
+            .and_then(|v| LogRecord::try_from(v).ok());
 
         match record {
             Some(r) => {
@@ -373,7 +373,12 @@ impl InvocationRouter {
     /// This is called when the client sends a follow-up message on an already-
     /// opened channel (i.e. a `Channel`-type envelope whose ID matches an
     /// existing channel state entry).
-    pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
+    /// Route a channel item in the given direction.
+    async fn route_channel_item(
+        &self,
+        response: ResponseEnvelope,
+        pick_tx: impl FnOnce(&ChannelState) -> &mpsc::Sender<ResponseEnvelope>,
+    ) -> Result<()> {
         let id = response.id;
         let state = self
             .streams
@@ -389,8 +394,7 @@ impl InvocationRouter {
             Some(StreamControl::End) | Some(StreamControl::Abort)
         );
 
-        state
-            .inbound_tx
+        pick_tx(&state)
             .send(response)
             .await
             .map_err(|_| RouterError::ChannelClosed(id.to_string()))?;
@@ -403,39 +407,17 @@ impl InvocationRouter {
         Ok(())
     }
 
+    pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
+        self.route_channel_item(response, |s| &s.inbound_tx).await
+    }
+
     /// Route an outbound channel item (provider -> client direction) to the
     /// appropriate open channel's outbound queue.
     ///
     /// Called by the provider adapter when it wants to push a message to the
     /// client side of an open channel.
     pub async fn route_channel_outbound(&self, response: ResponseEnvelope) -> Result<()> {
-        let id = response.id;
-        let state = self
-            .streams
-            .get_channel(&id)
-            .ok_or_else(|| RouterError::ChannelNotFound(id.to_string()))?;
-
-        if state.is_closed() {
-            return Err(RouterError::ChannelClosed(id.to_string()));
-        }
-
-        let is_terminal = matches!(
-            response.stream_control,
-            Some(StreamControl::End) | Some(StreamControl::Abort)
-        );
-
-        state
-            .outbound_tx
-            .send(response)
-            .await
-            .map_err(|_| RouterError::ChannelClosed(id.to_string()))?;
-
-        if is_terminal {
-            state.mark_closed();
-            self.streams.remove_channel(&id);
-        }
-
-        Ok(())
+        self.route_channel_item(response, |s| &s.outbound_tx).await
     }
 
     /// Route an inbound stream item to the appropriate open stream.
@@ -501,8 +483,7 @@ impl InvocationRouter {
 //  Helpers
 
 fn namespace_of(target: &str) -> Option<&str> {
-    let dot = target.rfind('.')?;
-    Some(&target[..dot])
+    saikuro_core::envelope::split_target(target).map(|(ns, _)| ns)
 }
 
 fn error_response(id: InvocationId, detail: ErrorDetail) -> ResponseEnvelope {

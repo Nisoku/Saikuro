@@ -60,7 +60,7 @@ public abstract class TypeDescriptor
         public Primitive(string type) => Type = type;
 
         public override Dictionary<string, object?> ToWire() =>
-            new() { ["kind"] = "primitive", ["type"] = Type };
+            new() { [WireKey.Kind] = "primitive", [WireKey.Type] = Type };
     }
 
     /// <summary>Homogeneous list of <see cref="Item"/>.</summary>
@@ -71,7 +71,7 @@ public abstract class TypeDescriptor
         public List(TypeDescriptor item) => Item = item;
 
         public override Dictionary<string, object?> ToWire() =>
-            new() { ["kind"] = "list", ["item"] = Item.ToWire() };
+            new() { [WireKey.Kind] = "list", [WireKey.Item] = Item.ToWire() };
     }
 
     /// <summary>Map with typed keys and values.</summary>
@@ -89,9 +89,9 @@ public abstract class TypeDescriptor
         public override Dictionary<string, object?> ToWire() =>
             new()
             {
-                ["kind"] = "map",
-                ["key"] = Key.ToWire(),
-                ["value"] = Value.ToWire(),
+                [WireKey.Kind] = "map",
+                [WireKey.Key] = Key.ToWire(),
+                [WireKey.Value] = Value.ToWire(),
             };
     }
 
@@ -103,7 +103,7 @@ public abstract class TypeDescriptor
         public Optional(TypeDescriptor inner) => Inner = inner;
 
         public override Dictionary<string, object?> ToWire() =>
-            new() { ["kind"] = "optional", ["inner"] = Inner.ToWire() };
+            new() { [WireKey.Kind] = "optional", [WireKey.Inner] = Inner.ToWire() };
     }
 
     /// <summary>Named (user-defined) type.</summary>
@@ -114,7 +114,7 @@ public abstract class TypeDescriptor
         public Named(string name) => Name = name;
 
         public override Dictionary<string, object?> ToWire() =>
-            new() { ["kind"] = "named", ["name"] = Name };
+            new() { [WireKey.Kind] = "named", [WireKey.Name] = Name };
     }
 
     /// <summary>Server-to-client stream of items.</summary>
@@ -125,7 +125,7 @@ public abstract class TypeDescriptor
         public Stream(TypeDescriptor item) => Item = item;
 
         public override Dictionary<string, object?> ToWire() =>
-            new() { ["kind"] = "stream", ["item"] = Item.ToWire() };
+            new() { [WireKey.Kind] = "stream", [WireKey.Item] = Item.ToWire() };
     }
 
     /// <summary>Bidirectional channel.</summary>
@@ -143,9 +143,9 @@ public abstract class TypeDescriptor
         public override Dictionary<string, object?> ToWire() =>
             new()
             {
-                ["kind"] = "channel",
-                ["send"] = Send.ToWire(),
-                ["recv"] = Recv.ToWire(),
+                [WireKey.Kind] = "channel",
+                [WireKey.Send] = Send.ToWire(),
+                [WireKey.Recv] = Recv.ToWire(),
             };
     }
 
@@ -285,42 +285,42 @@ public sealed class SaikuroProvider
                 {
                     var wireArg = new Dictionary<string, object?>
                     {
-                        ["name"] = a.Name,
-                        ["type"] = (a.Type ?? T.Any()).ToWire(),
+                        [WireKey.Name] = a.Name,
+                        [WireKey.Type] = (a.Type ?? T.Any()).ToWire(),
                     };
                     if (a.Optional)
-                        wireArg["optional"] = true;
+                        wireArg[WireKey.Optional] = true;
                     if (a.Doc is not null)
-                        wireArg["doc"] = a.Doc;
+                        wireArg[WireKey.Doc] = a.Doc;
                     if (a.Default is not null)
-                        wireArg["default"] = a.Default;
+                        wireArg[WireKey.Default] = a.Default;
                     argList.Add(wireArg);
                 }
             }
 
             var fn = new Dictionary<string, object?>
             {
-                ["args"] = argList,
-                ["returns"] = (opts.Returns ?? T.Any()).ToWire(),
-                ["visibility"] = opts.Visibility,
-                ["capabilities"] =
+                [WireKey.Args] = argList,
+                [WireKey.Returns] = (opts.Returns ?? T.Any()).ToWire(),
+                [WireKey.Visibility] = opts.Visibility,
+                [WireKey.Capabilities] =
                     (IReadOnlyList<object?>)(opts.Capabilities?.Cast<object?>().ToList() ?? []),
             };
             if (opts.Doc is not null)
-                fn["doc"] = opts.Doc;
+                fn[WireKey.Doc] = opts.Doc;
             if (opts.Idempotent.HasValue)
-                fn["idempotent"] = opts.Idempotent.Value;
+                fn[WireKey.Idempotent] = opts.Idempotent.Value;
             functions[name] = fn;
         }
 
         return new Dictionary<string, object?>
         {
-            ["version"] = 1,
-            ["namespaces"] = new Dictionary<string, object?>
+            [WireKey.Version] = 1,
+            [WireKey.Namespaces] = new Dictionary<string, object?>
             {
-                [_namespace] = new Dictionary<string, object?> { ["functions"] = functions },
+                [_namespace] = new Dictionary<string, object?> { [WireKey.Functions] = functions },
             },
-            ["types"] = new Dictionary<string, object?>(),
+            [WireKey.Types] = new Dictionary<string, object?>(),
         };
     }
 
@@ -406,10 +406,10 @@ public sealed class SaikuroProvider
                     .SendAsync(
                         new Dictionary<string, object?>
                         {
-                            ["id"] = envelope.Id,
-                            ["ok"] = true,
-                            ["result"] = item,
-                            ["seq"] = (long)seq,
+                            [WireKey.Id] = envelope.Id,
+                            [WireKey.Ok] = true,
+                            [WireKey.Result] = item,
+                            [WireKey.Seq] = (long)seq,
                         },
                         ct
                     )
@@ -421,10 +421,10 @@ public sealed class SaikuroProvider
                 .SendAsync(
                     new Dictionary<string, object?>
                     {
-                        ["id"] = envelope.Id,
-                        ["ok"] = true,
-                        ["seq"] = (long)seq,
-                        ["stream_control"] = "end",
+                        [WireKey.Id] = envelope.Id,
+                        [WireKey.Ok] = true,
+                        [WireKey.Seq] = (long)seq,
+                        [WireKey.StreamControl] = "end",
                     },
                     ct
                 )
@@ -438,10 +438,10 @@ public sealed class SaikuroProvider
                 .SendAsync(
                     new Dictionary<string, object?>
                     {
-                        ["id"] = envelope.Id,
-                        ["ok"] = false,
-                        ["seq"] = (long)seq,
-                        ["stream_control"] = "abort",
+                        [WireKey.Id] = envelope.Id,
+                        [WireKey.Ok] = false,
+                        [WireKey.Seq] = (long)seq,
+                        [WireKey.StreamControl] = "abort",
                     },
                     ct
                 )
@@ -539,7 +539,7 @@ public sealed class SaikuroProvider
             try
             {
                 var ack = await transport.RecvAsync(linked.Token).ConfigureAwait(false);
-                if (ack is not null && ack.TryGetValue("ok", out var okVal) && okVal is true)
+                if (ack is not null && ack.TryGetValue(WireKey.Ok, out var okVal) && okVal is true)
                     Log.Debug("schema announce acknowledged");
                 else
                     Log.Warn("schema announce rejected by runtime");
@@ -566,9 +566,9 @@ public sealed class SaikuroProvider
         transport.SendAsync(
             new Dictionary<string, object?>
             {
-                ["id"] = id,
-                ["ok"] = true,
-                ["result"] = result,
+                [WireKey.Id] = id,
+                [WireKey.Ok] = true,
+                [WireKey.Result] = result,
             },
             ct
         );
@@ -582,15 +582,15 @@ public sealed class SaikuroProvider
         CancellationToken ct = default
     )
     {
-        var error = new Dictionary<string, object?> { ["code"] = code, ["message"] = message };
+        var error = new Dictionary<string, object?> { [WireKey.Code] = code, [WireKey.Message] = message };
         if (details is { Count: > 0 })
-            error["details"] = details;
+            error[WireKey.Details] = details;
         return transport.SendAsync(
             new Dictionary<string, object?>
             {
-                ["id"] = id,
-                ["ok"] = false,
-                ["error"] = error,
+                [WireKey.Id] = id,
+                [WireKey.Ok] = false,
+                [WireKey.Error] = error,
             },
             ct
         );

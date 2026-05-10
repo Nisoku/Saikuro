@@ -16,7 +16,7 @@ use saikuro_core::{
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::{InvocationRouter, RouterConfig},
+    router::InvocationRouter,
 };
 use saikuro_schema::{
     capability_engine::CapabilityEngine,
@@ -198,14 +198,7 @@ impl RuntimeHandle {
     // Helpers
 
     fn build_router(&self) -> InvocationRouter {
-        InvocationRouter::new(
-            self.provider_registry.clone(),
-            RouterConfig {
-                call_timeout: self.config.call_timeout,
-                stream_channel_capacity: self.config.stream_buffer_capacity,
-                channel_capacity: self.config.stream_buffer_capacity,
-            },
-        )
+        InvocationRouter::new(self.provider_registry.clone(), self.config.router_config())
     }
 
     pub fn is_shutdown(&self) -> bool {

@@ -10,7 +10,16 @@
 //! | [`tcp`]            | `native-transport`  | native only       |
 //! | [`websocket`]      | `ws-transport`      | native + wasm32   |
 //! | [`wasm_host`]      | always on (wasm32)  | wasm32 only       |
-//! (idk, tables are cool-looking don't ask)
+
+/// Maximum allowed frame size (16 MiB). Frames larger than this are rejected
+/// to prevent memory exhaustion from malformed or malicious peers.
+pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
+
+/// Default channel capacity for in-memory transports.
+///
+/// This bounds memory usage and provides backpressure: if the receiver is
+/// slow the sender's `send` call will yield until space frees up.
+pub const DEFAULT_CHANNEL_CAPACITY: usize = 256;
 
 pub mod error;
 #[cfg(feature = "native-transport")]

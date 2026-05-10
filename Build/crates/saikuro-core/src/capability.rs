@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
 
+/// Sentinel token value that grants access to all capabilities.
+pub const WILDCARD_TOKEN: &str = "*";
+
 /// A single capability token :  a namespaced, human-readable permission string.
 ///
 /// By convention tokens are dot-separated: `"<namespace>.<permission>"`.
@@ -80,14 +83,15 @@ impl CapabilitySet {
     pub fn all_powerful() -> Self {
         // Sentinel: we use a special token that the capability engine
         // recognises as granting everything.
-        Self::from_tokens([CapabilityToken::new("*")])
+        Self::from_tokens([CapabilityToken::new(WILDCARD_TOKEN)])
     }
 
     /// Return `true` if this set grants the given capability.
     ///
     /// The wildcard token `"*"` grants every capability.
     pub fn grants(&self, required: &CapabilityToken) -> bool {
-        self.tokens.contains(&CapabilityToken::new("*")) || self.tokens.contains(required)
+        self.tokens.contains(&CapabilityToken::new(WILDCARD_TOKEN))
+            || self.tokens.contains(required)
     }
 
     /// Return `true` if this set satisfies *all* of the required capabilities.

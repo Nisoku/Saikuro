@@ -40,7 +40,7 @@ impl BindingGenerator for RustGenerator {
                 ensure_unique_name("module", &ns_name, &module_name_base, &mut module_names)?;
             let file_name_base = format!("{module_name}.rs");
             let file_name = ensure_unique_name("file", &ns_name, &file_name_base, &mut file_names)?;
-            let class_name_base = format!("{}Client", sanitize_then_pascal(&ns_name));
+            let class_name_base = format!("{}Client", sanitize_pascal_preserve_leading(&ns_name));
             let class_name = ensure_unique_name(
                 "namespace client type",
                 &ns_name,
@@ -129,7 +129,7 @@ impl RustGenerator {
                         let safe_variant = ensure_unique_name(
                             &format!("variant in enum {safe_type_name}"),
                             variant,
-                            &sanitize_variant_preserve_leading(variant),
+                            &sanitize_pascal_preserve_leading(variant),
                             &mut variant_names,
                         )?;
                         // Preserve original variant wire name via serde rename
@@ -411,19 +411,10 @@ fn sanitize_ident(s: &str) -> String {
         out.insert(0, '_');
     }
     // Avoid Rust reserved keywords by appending an underscore.
-    let kw = rust_keywords();
-    if kw.contains(&out.as_str()) {
+    if RUST_KEYWORDS.contains(&out.as_str()) {
         out.push('_');
     }
     out
-}
-
-fn sanitize_variant_preserve_leading(s: &str) -> String {
-    sanitize_pascal_preserve_leading(s)
-}
-
-fn sanitize_then_pascal(s: &str) -> String {
-    sanitize_pascal_preserve_leading(s)
 }
 
 fn sanitize_pascal_preserve_leading(s: &str) -> String {
@@ -437,8 +428,7 @@ fn sanitize_pascal_preserve_leading(s: &str) -> String {
         format!("_{}", body)
     } else {
         // Avoid reserved keywords
-        let kw = rust_keywords();
-        if kw.contains(&body.as_str()) {
+        if RUST_KEYWORDS.contains(&body.as_str()) {
             format!("{}_", body)
         } else {
             body
@@ -454,8 +444,7 @@ fn sanitize_type_name(s: &str) -> String {
         format!("_{}", ident)
     } else {
         // Avoid reserved keywords for type names
-        let kw = rust_keywords();
-        if kw.contains(&ident.as_str()) {
+        if RUST_KEYWORDS.contains(&ident.as_str()) {
             format!("{}_", ident)
         } else {
             ident
@@ -477,12 +466,9 @@ fn sanitize_type_name_pascal(s: &str) -> String {
     }
 }
 
-fn rust_keywords() -> Vec<&'static str> {
-    // A conservative list of Rust keywords to avoid; include common strict keywords.
-    vec![
-        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
-        "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
-        "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
-        "use", "where", "while", "async", "await", "dyn", "union", "try",
-    ]
-}
+const RUST_KEYWORDS: &[&str] = &[
+    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for",
+    "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
+    "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
+    "while", "async", "await", "dyn", "union", "try",
+];

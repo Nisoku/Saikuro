@@ -126,9 +126,6 @@ public:
         }
 
         void close() {
-            if (!open_) {
-                return;
-            }
             if (saikuro_channel_close(handle_) != 0) {
                 throw Error(last_error());
             }
@@ -136,9 +133,6 @@ public:
         }
 
         void abort() {
-            if (!open_) {
-                return;
-            }
             if (saikuro_channel_abort(handle_) != 0) {
                 throw Error(last_error());
             }

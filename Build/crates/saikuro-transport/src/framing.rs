@@ -9,9 +9,7 @@ use saikuro_exec::tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::{Result, TransportError};
 
-/// Maximum allowed frame size (16 MiB).  Frames larger than this are rejected
-/// to prevent memory exhaustion from malformed or malicious peers.
-pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
+pub use crate::MAX_FRAME_SIZE;
 
 /// Tokio codec that frames a byte stream into discrete length-prefixed messages.
 #[derive(Debug, Clone, Default)]

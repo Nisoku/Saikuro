@@ -62,7 +62,7 @@ pub struct TransportConfig {
 }
 
 fn default_max_message_size() -> usize {
-    16 * 1024 * 1024
+    crate::MAX_FRAME_SIZE
 }
 
 fn default_send_buffer() -> usize {

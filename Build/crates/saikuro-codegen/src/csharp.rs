@@ -11,7 +11,10 @@ use saikuro_core::schema::{
 
 use crate::{
     error::Result,
-    generator::{generate_types_from_schema, BindingGenerator, GeneratorOutput},
+    generator::{
+        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
+        GeneratorOutput,
+    },
     to_camel_case, to_pascal_case,
 };
 
@@ -20,26 +23,17 @@ pub struct CSharpGenerator;
 impl BindingGenerator for CSharpGenerator {
     fn generate(&self, schema: &Schema) -> Result<GeneratorOutput> {
         let mut output = GeneratorOutput::default();
-
-        // Types.cs
-        let types_src = self.generate_types(schema)?;
-        output.add("Types.cs", types_src);
-
-        // per-namespace client files
-        let mut client_names: Vec<String> = vec![];
-
-        for (ns_name, ns_schema) in &schema.namespaces {
-            let class_name = format!("{}Client", to_pascal_case(ns_name));
-            let file_name = format!("{class_name}.cs");
-            let src = self.generate_namespace_client(ns_name, &class_name, ns_schema)?;
-            output.add(&file_name, src);
-            client_names.push(class_name);
-        }
-
-        // Generated.cs: a simple index listing all clients
-        let generated_src = self.generate_index(&client_names);
-        output.add("Generated.cs", generated_src);
-
+        let ns_pairs = generate_types_and_namespace_clients(
+            schema,
+            &mut output,
+            "Types.cs",
+            self.generate_types(schema)?,
+            |ns| format!("{}Client.cs", to_pascal_case(ns)),
+            |ns| format!("{}Client", to_pascal_case(ns)),
+            |ns, class_name, ns_schema| self.generate_namespace_client(ns, class_name, ns_schema),
+        )?;
+        let client_names: Vec<_> = ns_pairs.into_iter().map(|(_, name)| name).collect();
+        output.add("Generated.cs", self.generate_index(&client_names));
         Ok(output)
     }
 }
@@ -58,20 +52,17 @@ impl CSharpGenerator {
             header,
             |type_name, fields| {
                 let mut lines = vec![format!("public sealed record {type_name}(")];
-                let field_lines: Vec<String> = fields
-                    .iter()
-                    .map(|(field_name, field_desc)| {
-                        let cs_type = CSharpGenerator::type_to_cs(&field_desc.r#type)
-                            .unwrap_or_else(|_| "object?".to_owned());
-                        let nullable = if field_desc.optional {
-                            format!("{cs_type}?")
-                        } else {
-                            cs_type
-                        };
-                        let pascal = to_pascal_case(field_name);
-                        format!("    {nullable} {pascal}")
-                    })
-                    .collect();
+                let mut field_lines = Vec::new();
+                for (field_name, field_desc) in fields {
+                    let cs_type = CSharpGenerator::type_to_cs(&field_desc.r#type)?;
+                    let nullable = if field_desc.optional {
+                        format!("{cs_type}?")
+                    } else {
+                        cs_type
+                    };
+                    let pascal = to_pascal_case(field_name);
+                    field_lines.push(format!("    {nullable} {pascal}"));
+                }
                 lines.push(field_lines.join(",\n"));
                 lines.push(");".to_owned());
                 lines.push(String::new());

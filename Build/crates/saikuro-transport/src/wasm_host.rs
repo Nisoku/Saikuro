@@ -44,7 +44,7 @@ use crate::{
     },
 };
 
-const DEFAULT_CHANNEL_CAPACITY: usize = 256;
+use crate::DEFAULT_CHANNEL_CAPACITY;
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 // helpers

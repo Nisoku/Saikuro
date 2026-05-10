@@ -14,6 +14,25 @@ use std::sync::{
     Arc,
 };
 
+/// Extension trait for atomic sequence-number advancement.
+///
+/// Replaces three identical load/compare/store patterns in `StreamState`
+/// and `ChannelState`.
+trait TryAdvanceSeq {
+    fn try_advance(&self, seq: u64) -> bool;
+}
+
+impl TryAdvanceSeq for AtomicU64 {
+    fn try_advance(&self, seq: u64) -> bool {
+        let expected = self.load(Ordering::Acquire);
+        if seq != expected {
+            return false;
+        }
+        self.store(expected + 1, Ordering::Release);
+        true
+    }
+}
+
 // Stream state
 
 /// Lifecycle state for an open server-to-client stream.
@@ -38,12 +57,7 @@ impl StreamState {
     /// Record receipt of the next item.  Returns `false` if the sequence
     /// number is out of order (caller should produce an `OutOfOrder` error).
     pub fn advance_seq(&self, seq: u64) -> bool {
-        let expected = self.next_seq.load(Ordering::Acquire);
-        if seq != expected {
-            return false;
-        }
-        self.next_seq.store(expected + 1, Ordering::Release);
-        true
+        self.next_seq.try_advance(seq)
     }
 
     pub fn mark_closed(&self) {
@@ -86,21 +100,11 @@ impl ChannelState {
     }
 
     pub fn advance_inbound(&self, seq: u64) -> bool {
-        let expected = self.inbound_seq.load(Ordering::Acquire);
-        if seq != expected {
-            return false;
-        }
-        self.inbound_seq.store(expected + 1, Ordering::Release);
-        true
+        self.inbound_seq.try_advance(seq)
     }
 
     pub fn advance_outbound(&self, seq: u64) -> bool {
-        let expected = self.outbound_seq.load(Ordering::Acquire);
-        if seq != expected {
-            return false;
-        }
-        self.outbound_seq.store(expected + 1, Ordering::Release);
-        true
+        self.outbound_seq.try_advance(seq)
     }
 
     pub fn mark_closed(&self) {

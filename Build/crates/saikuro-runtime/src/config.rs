@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use saikuro_router::router::RouterConfig;
 use saikuro_schema::registry::RegistryMode;
 use saikuro_transport::selector::TransportConfig;
 
@@ -36,6 +37,16 @@ pub struct RuntimeConfig {
     /// Enable structured JSON logging via `tracing-subscriber`.
     #[serde(default)]
     pub json_logs: bool,
+}
+
+impl RuntimeConfig {
+    pub fn router_config(&self) -> RouterConfig {
+        RouterConfig {
+            call_timeout: self.call_timeout,
+            stream_channel_capacity: self.stream_buffer_capacity,
+            channel_capacity: self.stream_buffer_capacity,
+        }
+    }
 }
 
 impl Default for RuntimeConfig {

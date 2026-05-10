@@ -25,6 +25,7 @@
 use std::{
     net::{IpAddr, SocketAddr},
     path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
     sync::Arc,
 };
 
@@ -32,6 +33,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use saikuro_core::capability::CapabilitySet;
 use saikuro_exec::{signal, sleep, spawn, timeout, watch};
+
+/// Milliseconds to wait before retrying after an accept error.
+const ACCEPT_BACKOFF_MS: u64 = 50;
 use saikuro_runtime::{config::RuntimeMode, RuntimeConfig, SaikuroRuntime};
 use saikuro_transport::tcp::TcpTransportListener;
 use saikuro_transport::traits::{Transport, TransportListener};
@@ -290,7 +294,7 @@ async fn run_listener<L>(
                     }
                     Err(e) => {
                         error!(error = %e, "{name} accept error");
-                        sleep(std::time::Duration::from_millis(50)).await;
+                        sleep(std::time::Duration::from_millis(ACCEPT_BACKOFF_MS)).await;
                     }
                 }
             }
@@ -306,16 +310,22 @@ async fn run_listener<L>(
 
 // Helpers
 
-/// Return a short (8-char) random hex string for peer IDs.
+/// Monotonically increasing counter for peer IDs.
+static PEER_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Return a short (8-char) hex string for peer IDs.
+///
+/// Combines sub-second timestamp bits with a monotonic counter so IDs remain
+/// unique even under high-frequency concurrent calls or a system clock
+/// before Unix epoch.
 fn uuid_short() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    // Simple approach: use current nanoseconds XOR a thread-local counter.
-    // Good enough for log correlation; not a security primitive.
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    format!("{nanos:08x}")
+        .map(|d| d.subsec_nanos() as u64)
+        .unwrap_or(0);
+    let count = PEER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{:04x}{:04x}", nanos, count & 0xFFFF)
 }
 
 /// Wait for Ctrl-C (SIGINT) or SIGTERM.

@@ -329,20 +329,20 @@ public sealed class SaikuroClient : IAsyncDisposable
         var ts = DateTimeOffset.UtcNow.ToString("O");
         var logRecord = new Dictionary<string, object?>
         {
-            ["ts"] = ts,
-            ["level"] = level,
-            ["name"] = name,
-            ["msg"] = msg,
+            [WireKey.Ts] = ts,
+            [WireKey.Level] = level,
+            [WireKey.Name] = name,
+            [WireKey.Msg] = msg,
         };
         if (fields is { Count: > 0 })
-            logRecord["fields"] = fields;
+            logRecord[WireKey.Fields] = fields;
         var envelope = new Dictionary<string, object?>
         {
-            ["version"] = (int)Protocol.Version,
-            ["type"] = "log",
-            ["id"] = $"log-{ts}",
-            ["target"] = "$log",
-            ["args"] = new object?[] { logRecord },
+            [WireKey.Version] = (int)Protocol.Version,
+            [WireKey.Type] = "log",
+            [WireKey.Id] = $"log-{ts}",
+            [WireKey.Target] = "$log",
+            [WireKey.Args] = new object?[] { logRecord },
         };
         return _transport.SendAsync(envelope, ct);
     }
@@ -456,11 +456,11 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var d = new Dictionary<string, object?>
         {
-            ["version"] = (int)Protocol.Version,
-            ["type"] = "channel",
-            ["id"] = channelId,
-            ["target"] = "",
-            ["args"] = new object?[] { value },
+            [WireKey.Version] = (int)Protocol.Version,
+            [WireKey.Type] = "channel",
+            [WireKey.Id] = channelId,
+            [WireKey.Target] = "",
+            [WireKey.Args] = new object?[] { value },
         };
         return _transport.SendAsync(d);
     }

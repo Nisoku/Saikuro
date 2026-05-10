@@ -46,13 +46,7 @@ std::vector<std::string> split(const std::string& text, char delimiter) {
     return out;
 }
 
-std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
-    std::vector<std::string> out;
-    if (trim(text).empty()) {
-        return out;
-    }
-
-    std::string current;
+struct NestingState {
     int paren_depth = 0;
     int bracket_depth = 0;
     int angle_depth = 0;
@@ -60,11 +54,14 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
     bool in_double_quote = false;
     bool escaped = false;
 
-    for (size_t i = 0; i < text.size(); ++i) {
-        const char c = text[i];
+    bool is_top_level() const {
+        return paren_depth == 0 && bracket_depth == 0 && angle_depth == 0;
+    }
 
+    // Process one character. Returns true if `c` is `delimiter` at top level
+    // and outside any quotes.
+    bool process(char c, char delimiter) {
         if (in_double_quote) {
-            current += c;
             if (escaped) {
                 escaped = false;
             } else if (c == '\\') {
@@ -72,11 +69,10 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
             } else if (c == '"') {
                 in_double_quote = false;
             }
-            continue;
+            return false;
         }
 
         if (in_single_quote) {
-            current += c;
             if (escaped) {
                 escaped = false;
             } else if (c == '\\') {
@@ -84,18 +80,16 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
             } else if (c == '\'') {
                 in_single_quote = false;
             }
-            continue;
+            return false;
         }
 
         if (c == '"') {
             in_double_quote = true;
-            current += c;
-            continue;
+            return false;
         }
         if (c == '\'') {
             in_single_quote = true;
-            current += c;
-            continue;
+            return false;
         }
 
         if (c == '(') {
@@ -112,13 +106,26 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
             --angle_depth;
         }
 
-        if (c == ',' && paren_depth == 0 && bracket_depth == 0 && angle_depth == 0) {
+        return c == delimiter && is_top_level();
+    }
+};
+
+std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
+    std::vector<std::string> out;
+    if (trim(text).empty()) {
+        return out;
+    }
+
+    NestingState state;
+    std::string current;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (state.process(text[i], ',')) {
             out.push_back(current);
             current.clear();
-            continue;
+        } else {
+            current += text[i];
         }
-
-        current += c;
     }
 
     out.push_back(current);
@@ -126,62 +133,10 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
 }
 
 std::string strip_top_level_initializer(const std::string& text) {
-    int paren_depth = 0;
-    int bracket_depth = 0;
-    int angle_depth = 0;
-    bool in_single_quote = false;
-    bool in_double_quote = false;
-    bool escaped = false;
+    NestingState state;
 
     for (size_t i = 0; i < text.size(); ++i) {
-        const char c = text[i];
-
-        if (in_double_quote) {
-            if (escaped) {
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                in_double_quote = false;
-            }
-            continue;
-        }
-
-        if (in_single_quote) {
-            if (escaped) {
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '\'') {
-                in_single_quote = false;
-            }
-            continue;
-        }
-
-        if (c == '"') {
-            in_double_quote = true;
-            continue;
-        }
-        if (c == '\'') {
-            in_single_quote = true;
-            continue;
-        }
-
-        if (c == '(') {
-            ++paren_depth;
-        } else if (c == ')' && paren_depth > 0) {
-            --paren_depth;
-        } else if (c == '[') {
-            ++bracket_depth;
-        } else if (c == ']' && bracket_depth > 0) {
-            --bracket_depth;
-        } else if (c == '<') {
-            ++angle_depth;
-        } else if (c == '>' && angle_depth > 0) {
-            --angle_depth;
-        }
-
-        if (c == '=' && paren_depth == 0 && bracket_depth == 0 && angle_depth == 0) {
+        if (state.process(text[i], '=')) {
             return trim(text.substr(0, i));
         }
     }
