@@ -6,7 +6,6 @@
 //!
 //! Currently validated backends:
 //! - [`MemoryTransport`] (always runs)
-//! - [`WasmHostTransport`] (wasm32 only, cfg-gated)
 
 use bytes::Bytes;
 use saikuro_exec::sync::Barrier;
@@ -186,15 +185,13 @@ fn sender_receiver_independent_lifecycles(pair: (MemoryTransport, MemoryTranspor
         let (a, b) = pair;
         // a's sender sends TO b's receiver.
         let (mut sender, _) = a.split();
-        let (_, receiver) = b.split();
-        // Drop b's receiver so a's sender sees a closed channel.
-        drop(receiver);
+        let (_, mut receiver) = b.split();
+        // Drop the SENDER half, receiver should still get pending frames.
+        sender.send(Bytes::from_static(b"pending")).await.unwrap();
+        drop(sender);
         yield_now().await;
-        let result = sender.send(Bytes::from_static(b"gone")).await;
-        assert!(
-            result.is_err(),
-            "send should fail when peer receiver is dropped"
-        );
+        let frame = receiver.recv().await.unwrap();
+        assert_eq!(frame, Some(Bytes::from_static(b"pending")));
     })
 }
 

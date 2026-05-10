@@ -322,7 +322,7 @@ fn uuid_short() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos() as u64)
+        .map(|d| d.subsec_nanos() as u64 & 0xFFFF)
         .unwrap_or(0);
     let count = PEER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("{:04x}{:04x}", nanos, count & 0xFFFF)

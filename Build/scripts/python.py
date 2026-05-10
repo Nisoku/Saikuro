@@ -1,6 +1,6 @@
 """Python adapter commands."""
 
-import subprocess, sys
+import os, subprocess, sys
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parents[1] / "adapters" / "python"
@@ -22,22 +22,24 @@ def lint() -> int:
     if result.returncode == 0:
         return 0
     print(result.stdout, result.stderr, sep="", end="", flush=True)
+    if os.environ.get("CI"):
+        return result.returncode
     subprocess.run(["uvx", "ruff", "check", ".", "--fix"], cwd=DIR)
     print("[WARN] Python lint issues auto-fixed. Stage changes before committing.", flush=True)
-    return 0
+    return result.returncode
 
 
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
     if cmd == "check":
-        exit(sum([lint(), run(CMDS["test"])]))
-    if cmd == "lint":
-        lint()
-        return
-    if cmd in CMDS:
-        exit(run(CMDS[cmd]))
-    print(f"Usage: {sys.argv[0]} <check|lint|{'|'.join(CMDS)}>")
-    exit(1)
+        sys.exit(sum([lint(), run(CMDS["test"])]))
+    elif cmd == "lint":
+        sys.exit(lint())
+    elif cmd in CMDS:
+        sys.exit(run(CMDS[cmd]))
+    else:
+        print(f"Usage: {sys.argv[0]} <check|lint|{'|'.join(CMDS)}>")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -37,7 +37,9 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
     public string InvocationId => _id;
 
     void IDeliverable.Deliver(ResponseEnvelope resp) => _ch.Writer.TryWrite(resp);
-    void IDeliverable.Close() => _ch.Writer.TryComplete();
+    void IDeliverable.Close() => _ch.Writer.TryComplete(
+        new TransportException("ConnectionLost", "transport closed", new Dictionary<string, object?>())
+    );
 
     public async IAsyncEnumerator<T> GetAsyncEnumerator(
         CancellationToken cancellationToken = default

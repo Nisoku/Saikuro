@@ -117,6 +117,10 @@ export class InMemoryTransport extends BaseTransport {
 
   async send(obj: Record<string, unknown>): Promise<void> {
     if (this._closed) throw new Error("transport is closed");
+    const peer = this._peer;
+    if (peer && !peer._closed) {
+      peer._inbox.push(obj);
+    }
     for (const h of Array.from(this._peer?._messageHandlers ?? [])) h(obj);
   }
 
@@ -471,6 +475,7 @@ export class BroadcastChannelListener {
   private readonly _baseChannel: BroadcastChannel;
   private readonly _connectQueue: Array<(t: BroadcastChannelTransport) => void> =
     [];
+  private readonly _pendingConnections: BroadcastChannelTransport[] = [];
   private _closed = false;
 
   constructor(channelName: string) {
@@ -488,6 +493,8 @@ export class BroadcastChannelListener {
         const queued = this._connectQueue.shift();
         if (queued) {
           queued(transport);
+        } else {
+          this._pendingConnections.push(transport);
         }
       }
     };
@@ -497,11 +504,17 @@ export class BroadcastChannelListener {
    * Wait for the next incoming connection.
    */
   accept(): Promise<BroadcastChannelTransport> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (this._closed) {
-        throw new Error("BroadcastChannelListener is closed");
+        reject(new Error("BroadcastChannelListener is closed"));
+        return;
       }
-      this._connectQueue.push(resolve);
+      const pending = this._pendingConnections.shift();
+      if (pending) {
+        resolve(pending);
+      } else {
+        this._connectQueue.push(resolve);
+      }
     });
   }
 
@@ -509,6 +522,10 @@ export class BroadcastChannelListener {
     if (this._closed) return;
     this._closed = true;
     this._baseChannel.close();
+    for (const resolve of this._connectQueue.splice(0)) {
+      resolve(new BroadcastChannelTransport(""));
+    }
+    this._pendingConnections.length = 0;
   }
 }
 

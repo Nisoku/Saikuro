@@ -66,7 +66,11 @@ class BaseSaikuroHandle<T = unknown>
 
   /** @internal Called when the transport closes while still open. */
   _close(): void {
-    this._enqueue(null);
+    this._done = true;
+    for (const resolve of this._waiters.splice(0)) {
+      this._buffer.push(null as unknown as ResponseEnvelope);
+      resolve(null);
+    }
   }
 
   private _enqueue(item: ResponseEnvelope | null): void {

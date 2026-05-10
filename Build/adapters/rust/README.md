@@ -9,6 +9,7 @@ writing Rust services that connect to a Saikuro runtime.
 ```toml
 [dependencies]
 saikuro = "0.1"
+saikuro-exec = "0.1"
 ```
 
 Feature flags (all enabled by default):

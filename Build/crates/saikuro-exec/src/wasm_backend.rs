@@ -194,6 +194,8 @@ pub mod watch {
         let inner = Arc::new(Mutex::new(Inner {
             value: initial,
             changed: false,
+            closed: false,
+            senders: 1,
             wakers: Vec::new(),
         }));
         (
@@ -207,6 +209,8 @@ pub mod watch {
     struct Inner<T> {
         value: T,
         changed: bool,
+        closed: bool,
+        senders: usize,
         wakers: Vec<Waker>,
     }
 
@@ -221,6 +225,30 @@ pub mod watch {
             inner.changed = true;
             for w in inner.wakers.drain(..) {
                 w.wake();
+            }
+        }
+    }
+
+    impl<T> Clone for Sender<T> {
+        fn clone(&self) -> Self {
+            let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            guard.senders += 1;
+            drop(guard);
+            Sender {
+                inner: self.inner.clone(),
+            }
+        }
+    }
+
+    impl<T> Drop for Sender<T> {
+        fn drop(&mut self) {
+            let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            guard.senders -= 1;
+            if guard.senders == 0 {
+                guard.closed = true;
+                for w in guard.wakers.drain(..) {
+                    w.wake();
+                }
             }
         }
     }
@@ -259,9 +287,18 @@ pub mod watch {
             if inner.changed {
                 inner.changed = false;
                 Poll::Ready(Ok(()))
+            } else if inner.closed {
+                Poll::Ready(Err(()))
             } else {
                 inner.wakers.push(cx.waker().clone());
-                Poll::Pending
+                if inner.closed {
+                    Poll::Ready(Err(()))
+                } else if inner.changed {
+                    inner.changed = false;
+                    Poll::Ready(Ok(()))
+                } else {
+                    Poll::Pending
+                }
             }
         }
     }

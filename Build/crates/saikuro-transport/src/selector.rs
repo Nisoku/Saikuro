@@ -9,7 +9,7 @@
 //! | Target is the same process                    | In-memory         |
 //! | Target is on the same machine (Unix)          | Unix socket       |
 //! | Target is on the same machine (non-Unix)      | TCP loopback      |
-//! | Target is remote, WASM context                | WebSocket         |
+//! | Target is remote, WASM context                | BroadcastChannel  |
 //! | Target is remote, native context              | TCP               |
 //!
 //! The user can override any of these choices by supplying an explicit
@@ -97,7 +97,7 @@ impl TransportSelector {
             return (TransportKind::Memory, None);
         }
 
-        // WASM: prefer MessageChannel host transport for in-realm communication.
+        // WASM: prefer BroadcastChannel host transport for in-realm communication.
         #[cfg(target_arch = "wasm32")]
         {
             if addr == "wasm-host" || addr.starts_with("wasm-host://") {

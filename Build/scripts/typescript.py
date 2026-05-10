@@ -26,20 +26,24 @@ def lint() -> int:
     print(result.stdout, result.stderr, sep="", end="", flush=True)
     subprocess.run(["npm", "run", "lint:fix"], cwd=DIR)
     print("[WARN] TypeScript lint issues auto-fixed. Stage changes before committing.", flush=True)
-    return 0
+    return result.returncode
 
 
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
     if cmd == "check":
-        exit(sum([lint(), run(CMDS["typecheck"]), run(CMDS["test"]), run(CMDS["build"])]))
-    if cmd == "lint":
-        lint()
-        return
-    if cmd in CMDS:
-        exit(run(CMDS[cmd]))
-    print(f"Usage: {sys.argv[0]} <check|lint|{'|'.join(CMDS)}>")
-    exit(1)
+        steps = [("lint", lint), ("typecheck", lambda: run(CMDS["typecheck"])), ("test", lambda: run(CMDS["test"])), ("build", lambda: run(CMDS["build"]))]
+        for name, step in steps:
+            code = step()
+            if code != 0:
+                print(f"[FAIL] {name} exited with code {code}", flush=True)
+                sys.exit(code)
+        sys.exit(0)
+    elif cmd in CMDS:
+        sys.exit(run(CMDS[cmd]))
+    else:
+        print(f"Usage: {sys.argv[0]} <check|lint|{'|'.join(CMDS)}>")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

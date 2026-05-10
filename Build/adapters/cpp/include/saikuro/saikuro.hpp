@@ -30,27 +30,20 @@ inline std::string last_error() {
     return take_owned_c_string(saikuro_last_error_message());
 }
 
-// CRTP base: move-only RAII handle with custom destroy and optional move_from hook.
+// CRTP base: move-only RAII handle with custom destroy.
 template<typename Derived, typename Handle>
 class MoveOnlyHandle {
 public:
-    MoveOnlyHandle() = default;
-    explicit MoveOnlyHandle(Handle handle) : handle_(handle) {}
-
     MoveOnlyHandle(const MoveOnlyHandle&) = delete;
     MoveOnlyHandle& operator=(const MoveOnlyHandle&) = delete;
 
-    MoveOnlyHandle(MoveOnlyHandle&& other) noexcept : handle_(other.handle_) {
-        static_cast<Derived*>(this)->move_from(static_cast<Derived&>(other));
-        other.handle_ = nullptr;
-    }
+    MoveOnlyHandle(MoveOnlyHandle&& other) noexcept
+        : handle_(std::exchange(other.handle_, nullptr)) {}
 
     MoveOnlyHandle& operator=(MoveOnlyHandle&& other) noexcept {
         if (this != &other) {
             destroy();
-            handle_ = other.handle_;
-            static_cast<Derived*>(this)->move_from(static_cast<Derived&>(other));
-            other.handle_ = nullptr;
+            handle_ = std::exchange(other.handle_, nullptr);
         }
         return *this;
     }
@@ -58,6 +51,9 @@ public:
     ~MoveOnlyHandle() { destroy(); }
 
 protected:
+    MoveOnlyHandle() = default;
+    explicit MoveOnlyHandle(Handle handle) : handle_(handle) {}
+
     Handle handle_ = nullptr;
 
     void destroy() {
@@ -66,8 +62,6 @@ protected:
             handle_ = nullptr;
         }
     }
-
-    void move_from(Derived&) {} // default no-op for most derived classes
 
     template<typename Fn>
     bool next_json_from(std::string& out_item_json, Fn c_next_fn) {
@@ -143,15 +137,21 @@ public:
             return true;
         }
 
+    public:
+        Channel(Channel&&) = default;
+        Channel& operator=(Channel&& other) noexcept {
+            if (this != &other) {
+                MoveOnlyHandle::operator=(std::move(other));
+                open_ = std::exchange(other.open_, false);
+            }
+            return *this;
+        }
+
     private:
         friend class MoveOnlyHandle<Channel, saikuro_channel_t>;
         void destroy_impl() {
             if (open_) { (void)saikuro_channel_close(handle_); }
             saikuro_channel_free(handle_);
-        }
-        void move_from(Channel& other) {
-            open_ = other.open_;
-            other.open_ = false;
         }
 
         bool open_ = true;
@@ -241,7 +241,7 @@ public:
 private:
     friend class MoveOnlyHandle<Client, saikuro_client_t>;
     void destroy_impl() {
-        saikuro_client_close(handle_);
+        (void)saikuro_client_close(handle_);
         saikuro_client_free(handle_);
     }
 };

@@ -60,6 +60,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - run: just rust test
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
       - run: just rust wasm_check
 
   adapter:

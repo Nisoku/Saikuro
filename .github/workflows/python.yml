@@ -23,7 +23,7 @@ jobs:
       - uses: taiki-e/install-action@just
       - uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
+          version: "0.6.0"
       - name: Setup Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
       - name: Install dependencies

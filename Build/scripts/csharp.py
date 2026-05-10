@@ -64,20 +64,20 @@ def fmt_check() -> int:
     print(result.stdout, result.stderr, sep="", end="", flush=True)
     subprocess.run(["dotnet", "format", project], cwd=DIR)
     print("[WARN] C# format issues auto-fixed. Stage the changes before committing.", flush=True)
-    return 0
+    return result.returncode
 
 
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
     if cmd == "check":
-        exit(sum([fmt_check(), run(CMDS["build"]), run(CMDS["test"])]))
-    if cmd == "fmt_check":
-        fmt_check()
-        return
-    if cmd in CMDS:
-        exit(run(CMDS[cmd]))
-    print(f"Usage: {sys.argv[0]} <check|fmt_check|{'|'.join(CMDS)}>")
-    exit(1)
+        sys.exit(sum([fmt_check(), run(CMDS["build"]), run(CMDS["test"])]))
+    elif cmd == "fmt_check":
+        sys.exit(fmt_check())
+    elif cmd in CMDS:
+        sys.exit(run(CMDS[cmd]))
+    else:
+        print(f"Usage: {sys.argv[0]} <check|fmt_check|{'|'.join(CMDS)}>")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

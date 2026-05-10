@@ -314,13 +314,13 @@ export class SchemaExtractor {
       return { kind: "primitive", type: "any" };
     }
 
-    if (type.flags & ts.TypeFlags.Object) {
-      return this.typeToObjectType(type, name);
-    }
-
     if (asAny.typeArguments ?? asAny.aliasTypeArguments) {
       const ref = this.typeToReference(type, name);
       if (ref) return ref;
+    }
+
+    if (type.flags & ts.TypeFlags.Object) {
+      return this.typeToObjectType(type, name);
     }
 
     return { kind: "named", name };
@@ -329,7 +329,7 @@ export class SchemaExtractor {
   private typeToPrimitive(name: string): TypeDescriptor | undefined {
     switch (name) {
       case "boolean": return { kind: "primitive", type: "bool" };
-      case "number":  return { kind: "primitive", type: "i64" };
+      case "number":  return { kind: "primitive", type: "f64" };
       case "string":  return { kind: "primitive", type: "string" };
       case "Uint8Array": case "ArrayBuffer": return { kind: "primitive", type: "bytes" };
       case "null": case "undefined": case "void": case "never":

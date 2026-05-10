@@ -351,23 +351,23 @@ impl TypeConverter for RustClientTypeConverter {
     }
 
     fn wrap_option(&self, inner: &str) -> String {
-        format!("Option<{inner}>")
+        RustTypeConverter.wrap_option(inner)
     }
 
     fn wrap_array(&self, inner: &str) -> String {
-        format!("Vec<{inner}>")
+        RustTypeConverter.wrap_array(inner)
     }
 
     fn wrap_map(&self, value: &str) -> String {
-        format!("std::collections::HashMap<String, {value}>")
+        RustTypeConverter.wrap_map(value)
     }
 
     fn wrap_stream(&self, item: &str) -> String {
-        format!("saikuro::SaikuroStream /* item: {item} */")
+        RustTypeConverter.wrap_stream(item)
     }
 
     fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
-        format!("saikuro::SaikuroChannel /* in: {inbound}, out: {outbound} */")
+        RustTypeConverter.wrap_channel(inbound, outbound)
     }
 }
 

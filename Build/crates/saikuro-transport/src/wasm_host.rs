@@ -316,6 +316,10 @@ impl WasmHostListener {
         let handler_tx = tx;
         let handler: Closure<dyn FnMut(MessageEvent)> = Closure::new(move |event: MessageEvent| {
             let data = event.data();
+            let msg_type = get_field(&data, "type");
+            if msg_type.as_deref() != Some("connect") {
+                return;
+            }
             if let Some(conn_id) = get_field(&data, "id") {
                 let _ = handler_tx.try_send(conn_id);
             }

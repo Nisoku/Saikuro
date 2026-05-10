@@ -66,10 +66,17 @@ public static class TypeDescriptorFactory
                 return FromSystemType(type.GetGenericArguments()[0]);
 
             // IAsyncEnumerable<T> - stream
-            if (genericDef == typeof(IAsyncEnumerable<>) || genericDef == typeof(IEnumerable<>))
+            if (genericDef == typeof(IAsyncEnumerable<>))
             {
                 var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
                 return new TypeDescriptor.Stream(FromSystemType(itemType));
+            }
+
+            // IEnumerable<T> - list
+            if (genericDef == typeof(IEnumerable<>))
+            {
+                var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                return new TypeDescriptor.List(FromSystemType(itemType));
             }
 
             // IDictionary / Dictionary

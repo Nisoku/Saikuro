@@ -13,6 +13,8 @@ use crate::error::{Error, Result};
 /// - `tcp://host:port`
 /// - `ws://host:port`  (requires `ws` feature)
 /// - `unix:///path/to/socket`  (requires `unix` feature, Unix only)
+/// - `wasm-host://channel-name` (WASM only, feature `wasm`)
+/// - `wasm-host` (uses default channel "saikuro")
 pub struct Address(pub String);
 
 impl<S: Into<String>> From<S> for Address {
@@ -282,8 +284,7 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
         {
             let channel_name = address
                 .strip_prefix("wasm-host://")
-                .map(|s| if s.is_empty() { None } else { Some(s) })
-                .flatten();
+                .filter(|s| !s.is_empty());
             return wasm_host_impl::connect_wasm_host(channel_name).await;
         }
         #[cfg(not(all(feature = "wasm", target_arch = "wasm32")))]

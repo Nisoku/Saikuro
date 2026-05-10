@@ -5,10 +5,14 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/csharp/**"
+      - "Build/scripts/csharp.py"
+      - "Justfile"
       - ".github/workflows/csharp.yml"
   pull_request:
     paths:
       - "Build/adapters/csharp/**"
+      - "Build/scripts/csharp.py"
+      - "Justfile"
       - ".github/workflows/csharp.yml"
 
 jobs:

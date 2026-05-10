@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import threading
 import msgpack
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -331,6 +332,13 @@ class InMemoryTransport(BaseTransport):
             self._closed = True
             # Unblock any coroutine waiting in recv().
             await self._recv_queue.put(self._EOF)
+            # Remove from global registry if this is a named memory transport.
+            global _memory_channels, _memory_channels_lock
+            with _memory_channels_lock:
+                for name, transport in list(_memory_channels.items()):
+                    if transport is self:
+                        _memory_channels.pop(name, None)
+                        break
 
     async def send(self, obj: dict) -> None:
         if self._closed:
@@ -349,6 +357,7 @@ class InMemoryTransport(BaseTransport):
 
 #  Factory function
 _memory_channels: dict[str, "InMemoryTransport"] = {}
+_memory_channels_lock = threading.Lock()
 
 
 def make_transport(address: str) -> BaseTransport:
@@ -368,16 +377,17 @@ def make_transport(address: str) -> BaseTransport:
       - Second call to ``memory://foo`` returns side B, connected to A
       - For tests, prefer ``InMemoryTransport.pair()`` for direct control
     """
-    global _memory_channels
+    global _memory_channels, _memory_channels_lock
 
     if address == "memory://" or address.startswith("memory://"):
         name = address[len("memory://") :] if len(address) > len("memory://") else "default"
-        if name in _memory_channels:
-            return _memory_channels.pop(name)
-        else:
-            a, b = InMemoryTransport.pair()
-            _memory_channels[name] = b
-            return a
+        with _memory_channels_lock:
+            if name in _memory_channels:
+                return _memory_channels.pop(name)
+            else:
+                a, b = InMemoryTransport.pair()
+                _memory_channels[name] = b
+                return a
 
     if address.startswith("unix://"):
         path = address[len("unix://") :]

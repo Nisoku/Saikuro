@@ -114,7 +114,7 @@ pub trait TypeConverter {
 /// implements [`TypeConverter`] to supply the language-specific mappings.
 pub fn convert_type(desc: &TypeDescriptor, conv: &impl TypeConverter) -> String {
     match desc {
-        TypeDescriptor::Primitive { r#type } => conv.primitive_name(&r#type.clone()).to_owned(),
+        TypeDescriptor::Primitive { r#type } => conv.primitive_name(r#type).to_owned(),
         TypeDescriptor::Named { name } => conv.named_type(name),
         TypeDescriptor::Option { inner } => conv.wrap_option(&convert_type(inner, conv)),
         TypeDescriptor::Array { item } => conv.wrap_array(&convert_type(item, conv)),

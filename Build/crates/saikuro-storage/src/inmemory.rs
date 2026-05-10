@@ -37,6 +37,9 @@ impl InMemoryStorage {
     pub fn with_config(config: StorageConfig) -> Self {
         let namespaces = DashMap::new();
 
+        if config.cleanup != super::config::CleanupPolicy::Never {
+            debug!("in-memory backend does not enforce cleanup (TTL/Age/LRU); configured cleanup settings are ignored");
+        }
         debug!(
             persistence = ?config.persistence,
             "in-memory storage backend initialized"
@@ -96,7 +99,10 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn delete(&self, namespace: &str, key: &str) -> Result<()> {
-        let ns = self.get_or_create_namespace(namespace)?;
+        let ns = match self.get_namespace(namespace) {
+            Ok(ns) => ns,
+            Err(_) => return Ok(()),
+        };
         ns.remove(key);
         Ok(())
     }

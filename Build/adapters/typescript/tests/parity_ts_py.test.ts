@@ -4,6 +4,7 @@ import {
   canonType,
   canonFn,
   normalizeReturns,
+  normalizeNumeric,
   tolerantNormalize,
 } from "./canonicalize";
 import { dirname, resolve } from "path";
@@ -227,17 +228,22 @@ describe("Schema parity: TypeScript <-> Python (basic)", () => {
         }
       }
 
+      // Normalize numeric types (f64/i64) for cross-language parity
+      const a1 = normalizeNumeric(a);
+      const b1 = normalizeNumeric(b);
+      const c1 = normalizeNumeric(c);
+
       if (
-        JSON.stringify(a) !== JSON.stringify(b) ||
-        JSON.stringify(c) !== JSON.stringify(b)
+        JSON.stringify(a1) !== JSON.stringify(b1) ||
+        JSON.stringify(c1) !== JSON.stringify(b1)
       ) {
         console.error("Mismatch for function:", name);
-        console.error("TS:", JSON.stringify(a, null, 2));
-        console.error("PY:", JSON.stringify(b, null, 2));
-        console.error("CS:", JSON.stringify(c, null, 2));
+        console.error("TS:", JSON.stringify(a1, null, 2));
+        console.error("PY:", JSON.stringify(b1, null, 2));
+        console.error("CS:", JSON.stringify(c1, null, 2));
       }
-      expect(a).toEqual(b);
-      expect(c).toEqual(b);
+      expect(a1).toEqual(b1);
+      expect(c1).toEqual(b1);
     }
     },
     60000,

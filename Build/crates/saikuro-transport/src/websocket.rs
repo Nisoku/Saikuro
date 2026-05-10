@@ -91,7 +91,7 @@ impl Transport for WebSocketTransport {
 /// accept-loop as TCP and Unix listeners.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct WsTransportListener {
-    inner: TcpListener,
+    inner: Option<TcpListener>,
     local_addr: SocketAddr,
 }
 
@@ -102,7 +102,10 @@ impl WsTransportListener {
         let inner = TcpListener::bind(addr).await?;
         let local_addr = inner.local_addr()?;
         debug!(%local_addr, "ws listener bound");
-        Ok(Self { inner, local_addr })
+        Ok(Self {
+            inner: Some(inner),
+            local_addr,
+        })
     }
 
     /// Return the address this listener is bound to.
@@ -117,7 +120,11 @@ impl TransportListener for WsTransportListener {
     type Output = WebSocketTransport;
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
-        let (stream, peer_addr) = self.inner.accept().await?;
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| TransportError::ConnectionRefused("listener closed".into()))?;
+        let (stream, peer_addr) = inner.accept().await?;
         let url = format!("ws://{peer_addr}");
         let maybe_tls = MaybeTlsStream::Plain(stream);
         match tokio_tungstenite::accept_async(maybe_tls).await {
@@ -136,6 +143,7 @@ impl TransportListener for WsTransportListener {
 
     async fn close(&mut self) -> Result<()> {
         debug!(local = %self.local_addr, "ws listener closing");
+        drop(self.inner.take());
         Ok(())
     }
 }
