@@ -66,10 +66,15 @@ class BaseSaikuroHandle<T = unknown>
 
   /** @internal Called when the transport closes while still open. */
   _close(): void {
-    this._done = true;
+    const errorPayload: ErrorPayload = { code: "ConnectionLost", message: "transport closed unexpectedly" };
+    const errorResponse: ResponseEnvelope = {
+      id: "",
+      ok: false,
+      error: errorPayload,
+    };
     for (const resolve of this._waiters.splice(0)) {
-      this._buffer.push(null as unknown as ResponseEnvelope);
-      resolve(null);
+      this._buffer.push(errorResponse);
+      resolve(errorResponse);
     }
   }
 

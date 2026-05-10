@@ -23,9 +23,9 @@ def main() -> int:
         print(flush=True)
 
     if failures:
-        print(f"{failures} language(s) failed")
+        print(f"{failures} language(s) failed", flush=True)
         return 1
-    print("All checks passed!")
+    print("All checks passed!", flush=True)
     return 0
 
 

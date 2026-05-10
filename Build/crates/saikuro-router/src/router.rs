@@ -351,7 +351,13 @@ impl InvocationRouter {
             .args
             .into_iter()
             .next()
-            .and_then(|v| LogRecord::try_from(v).ok());
+            .and_then(|v| match LogRecord::try_from(v) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    warn!(%id, error = %e, "failed to parse LogRecord from log envelope");
+                    None
+                }
+            });
 
         match record {
             Some(r) => {

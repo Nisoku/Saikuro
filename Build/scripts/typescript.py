@@ -39,6 +39,8 @@ def main() -> None:
                 print(f"[FAIL] {name} exited with code {code}", flush=True)
                 sys.exit(code)
         sys.exit(0)
+    elif cmd == "lint":
+        sys.exit(lint())
     elif cmd in CMDS:
         sys.exit(run(CMDS[cmd]))
     else:

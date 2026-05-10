@@ -59,8 +59,9 @@ struct NestingState {
     }
 
     // Process one character. Returns true if `c` is `delimiter` at top level
-    // and outside any quotes.
-    bool process(char c, char delimiter) {
+    // and outside any quotes. When `is_angle_operator` is true, `<`/`>` are
+    // treated as C++ operators (comparison, shift) rather than template delimiters.
+    bool process(char c, char delimiter, bool is_angle_operator = false) {
         if (in_double_quote) {
             if (escaped) {
                 escaped = false;
@@ -100,9 +101,9 @@ struct NestingState {
             ++bracket_depth;
         } else if (c == ']' && bracket_depth > 0) {
             --bracket_depth;
-        } else if (c == '<') {
+        } else if (c == '<' && !is_angle_operator) {
             ++angle_depth;
-        } else if (c == '>' && angle_depth > 0) {
+        } else if (c == '>' && !is_angle_operator && angle_depth > 0) {
             --angle_depth;
         }
 
@@ -120,11 +121,17 @@ std::vector<std::string> split_args_aware_of_nesting(const std::string& text) {
     std::string current;
 
     for (size_t i = 0; i < text.size(); ++i) {
-        if (state.process(text[i], ',')) {
+        char c = text[i];
+        bool is_angle_operator = false;
+        if (c == '<' && i + 1 < text.size() && (text[i + 1] == '=' || text[i + 1] == '<'))
+            is_angle_operator = true;
+        else if (c == '>' && i + 1 < text.size() && (text[i + 1] == '=' || text[i + 1] == '>'))
+            is_angle_operator = true;
+        if (state.process(c, ',', is_angle_operator)) {
             out.push_back(current);
             current.clear();
         } else {
-            current += text[i];
+            current += c;
         }
     }
 
