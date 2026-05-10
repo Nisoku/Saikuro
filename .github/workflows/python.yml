@@ -33,6 +33,9 @@ jobs:
       - name: Setup Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install dependencies
         run: uv pip install -e ".[dev,websocket]"
 

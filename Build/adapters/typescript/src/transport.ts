@@ -402,7 +402,7 @@ export class BroadcastChannelTransport extends BaseTransport {
         reject(new Error("BroadcastChannelTransport: connect timeout"));
       }, 10000);
 
-      const acceptHandler = (_ev: MessageEvent) => {
+      const acceptHandler = () => {
         clearTimeout(timeoutId);
         privateChannel.removeEventListener("message", acceptHandler);
         this._channel = privateChannel;

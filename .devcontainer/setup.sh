@@ -7,6 +7,7 @@ echo "Saikuro Development Environment Setup"
 echo "Setting up Rust..."
 rustup default stable
 rustup component add rustfmt clippy
+rustup target add wasm32-unknown-unknown
 
 # Python with uv
 echo "Setting up Python..."

@@ -14,6 +14,7 @@ use std::{
 
 use bytes::Bytes;
 use dashmap::DashMap;
+use futures::future::FutureExt;
 use saikuro_core::{
     envelope::{Envelope, InvocationType, ResponseEnvelope, StreamControl},
     error::{ErrorCode, ErrorDetail},
@@ -251,7 +252,7 @@ impl Client {
                     }
 
                     // Route inbound response frames to their waiting callers.
-                    result = transport.recv() => {
+                    result = transport.recv().fuse() => {
                         match result {
                             Ok(Some(frame)) => {
                                 handle_inbound(

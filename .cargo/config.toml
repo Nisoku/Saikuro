@@ -1,0 +1,8 @@
+# Saikuro Cargo configuration
+#
+# WASM test runner: requires `cargo install wasm-bindgen-cli`
+# Run with:  cargo test -p saikuro-tests --target wasm32-unknown-unknown
+# Or:        wasm-pack test --headless --chrome Build/tests
+
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"

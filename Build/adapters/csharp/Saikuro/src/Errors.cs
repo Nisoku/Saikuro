@@ -64,7 +64,7 @@ public class SaikuroException : Exception
     };
 }
 
-// Subclasses — primary constructors delegate to SaikuroException(c, m, d)
+// Subclasses as primary constructors delegate to SaikuroException(c, m, d)
 
 public sealed class FunctionNotFoundException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
 public sealed class InvalidArgumentsException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);

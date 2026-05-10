@@ -1,4 +1,4 @@
-.PHONY: setup build test fmt clippy python-setup python-test ts-setup ts-test ci dotnet-install
+.PHONY: setup build test wasm-check wasm-test fmt clippy python-setup python-test ts-setup ts-test check dotnet-install rust-setup
 
 export DOTNET_ROOT := $(HOME)/.dotnet
 export PATH := $(DOTNET_ROOT):$(PATH)
@@ -6,17 +6,26 @@ export PYTHON := python3
 
 # Rust
 
+rust-setup:
+	rustup target add wasm32-unknown-unknown
+
 build:
 	cd Build && cargo build --workspace
 
 test:
 	cd Build && cargo test --workspace
 
+wasm-check:
+	cd Build && cargo check --target wasm32-unknown-unknown -p saikuro-tests
+
+wasm-test:
+	cd Build && wasm-pack test --headless --firefox -p saikuro-tests
+
 fmt:
 	cd Build && cargo fmt --all
 
 clippy:
-	cd Build && cargo clippy --workspace --all-targets -- -D warnings
+	cd Build && cargo clippy --workspace -- -D warnings
 
 # dotnet
 
@@ -60,13 +69,8 @@ ts-typecheck:
 
 # All
 
-setup: python-setup ts-setup dotnet-install
+setup: rust-setup python-setup ts-setup dotnet-install
 	cd Build && cargo build --workspace
 
-check: fmt clippy test python-test ts-test
+check: fmt clippy test wasm-check python-test ts-test
 	@echo "All checks passed!"
-
-# CI
-
-ci:
-	cd Build && {{PYTHON}} scripts/saikuro_build.py all

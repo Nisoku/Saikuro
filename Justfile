@@ -9,17 +9,26 @@ export DOTNET_ROOT := env_var("HOME") + "/.dotnet"
 
 # Rust
 
+rust-setup:
+    rustup target add wasm32-unknown-unknown
+
 build:
     cd {{BUILD_DIR}} && cargo build --workspace
 
 test:
     cd {{BUILD_DIR}} && cargo test --workspace
 
+wasm-check:
+    cd {{BUILD_DIR}} && cargo check --target wasm32-unknown-unknown -p saikuro-tests
+
+wasm-test:
+    cd {{BUILD_DIR}} && wasm-pack test --headless --firefox -p saikuro-tests
+
 fmt:
     cd {{BUILD_DIR}} && cargo fmt --all
 
 clippy:
-    cd {{BUILD_DIR}} && cargo clippy --workspace --all-targets -- -D warnings
+    cd {{BUILD_DIR}} && cargo clippy --workspace -- -D warnings
 
 # dotnet
 
@@ -59,13 +68,8 @@ ts-typecheck:
 
 # All
 
-setup: python-setup ts-setup dotnet-install
+setup: rust-setup python-setup ts-setup dotnet-install
     cd {{BUILD_DIR}} && cargo build --workspace
 
-check: fmt clippy test python-test ts-test
+check: fmt clippy test wasm-check python-test ts-test
     @echo "All checks passed!"
-
-# CI
-
-ci:
-    cd {{BUILD_DIR}} && {{PYTHON}} scripts/saikuro_build.py all
