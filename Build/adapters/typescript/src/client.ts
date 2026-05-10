@@ -38,22 +38,19 @@ import type { ErrorPayload } from "./envelope";
 // Stream / Channel handles
 
 /**
- * An async iterator that yields values from a server-to-client stream.
+ * Common base for stream/channel handles.
  *
- * Obtained from `client.stream(...)`.
+ * Provides the buffered async-iterator plumbing used by both
+ * [`SaikuroStream`] and [`SaikuroChannel`].
  */
-export class SaikuroStream<T = unknown>
+class BaseSaikuroHandle<T = unknown>
   implements AsyncIterator<T>, AsyncIterable<T>
 {
-  private readonly _id: string;
-  /** Items waiting to be consumed, including a null sentinel for end. */
+  protected readonly _id: string;
+  protected _done = false;
   private readonly _buffer: Array<ResponseEnvelope | null> = [];
-  /** Resolve callbacks for consumers waiting on the next item. */
-  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
-    [];
-  private _done = false;
+  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> = [];
 
-  /** @internal */
   constructor(id: string) {
     this._id = id;
   }
@@ -67,7 +64,7 @@ export class SaikuroStream<T = unknown>
     this._enqueue(resp);
   }
 
-  /** @internal Called when the transport closes while the stream is still open. */
+  /** @internal Called when the transport closes while still open. */
   _close(): void {
     this._enqueue(null);
   }
@@ -125,31 +122,29 @@ export class SaikuroStream<T = unknown>
 }
 
 /**
+ * An async iterator that yields values from a server-to-client stream.
+ *
+ * Obtained from `client.stream(...)`.
+ */
+export class SaikuroStream<T = unknown> extends BaseSaikuroHandle<T> {}
+
+/**
  * A bidirectional async channel.
  *
  * Obtained from `client.channel(...)`.
  */
 export class SaikuroChannel<TIn = unknown, TOut = unknown>
-  implements AsyncIterator<TIn>, AsyncIterable<TIn>
+  extends BaseSaikuroHandle<TIn>
 {
-  private readonly _id: string;
   private readonly _sendFn: (id: string, value: unknown) => Promise<void>;
-  private readonly _buffer: Array<ResponseEnvelope | null> = [];
-  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
-    [];
-  private _done = false;
 
   /** @internal */
   constructor(
     id: string,
     sendFn: (id: string, value: unknown) => Promise<void>,
   ) {
-    this._id = id;
+    super(id);
     this._sendFn = sendFn;
-  }
-
-  get invocationId(): string {
-    return this._id;
   }
 
   /** Send a message to the provider side of the channel. */
@@ -158,67 +153,6 @@ export class SaikuroChannel<TIn = unknown, TOut = unknown>
       throw new Error("channel is already closed");
     }
     await this._sendFn(this._id, value);
-  }
-
-  /** @internal Called by the client's receive loop. */
-  _deliver(resp: ResponseEnvelope): void {
-    this._enqueue(resp);
-  }
-
-  /** @internal Called when the transport closes. */
-  _close(): void {
-    this._enqueue(null);
-  }
-
-  private _enqueue(item: ResponseEnvelope | null): void {
-    if (this._waiters.length > 0) {
-      const resolve = this._waiters.shift()!;
-      resolve(item);
-    } else {
-      this._buffer.push(item);
-    }
-  }
-
-  private _take(): Promise<ResponseEnvelope | null> {
-    if (this._buffer.length > 0) {
-      return Promise.resolve(this._buffer.shift()!);
-    }
-    return new Promise<ResponseEnvelope | null>((resolve) => {
-      this._waiters.push(resolve);
-    });
-  }
-
-  async next(): Promise<IteratorResult<TIn>> {
-    if (this._done) {
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    const item = await this._take();
-
-    if (item === null) {
-      this._done = true;
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    if (item.stream_control === "end") {
-      this._done = true;
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    if (!item.ok) {
-      this._done = true;
-      const payload = (item.error ?? {
-        code: "Internal",
-        message: "channel ended with error",
-      }) as ErrorPayload;
-      throw SaikuroError.fromPayload(payload);
-    }
-
-    return { done: false, value: item.result as TIn };
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<TIn> {
-    return this;
   }
 }
 

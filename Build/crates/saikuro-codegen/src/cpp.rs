@@ -4,7 +4,7 @@
 //! - One `<Namespace>Client.hpp` per namespace with schema-aware wrappers.
 //! - A `saikuro_generated.hpp` umbrella include.
 
-use saikuro_core::schema::{NamespaceSchema, Schema, Visibility};
+use saikuro_core::schema::{NamespaceSchema, Schema};
 use std::collections::{HashMap, HashSet};
 
 use crate::{
@@ -83,16 +83,10 @@ impl CppGenerator {
             String::new(),
         ];
 
-        let mut fn_items: Vec<_> = ns.functions.iter().collect();
-        fn_items.sort_by_key(|(k, _)| *k);
         let mut seen_methods: HashSet<String> = HashSet::new();
         seen_methods.insert(sanitize_ident(class_name));
         seen_methods.insert("client_".to_owned());
-        for (fn_name, fn_schema) in fn_items {
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method_name = sanitize_ident(fn_name);
             if !seen_methods.insert(method_name.clone()) {
                 return Err(CodegenError::Schema(format!(

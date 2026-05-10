@@ -30,90 +30,86 @@ inline std::string last_error() {
     return take_owned_c_string(saikuro_last_error_message());
 }
 
-class Client {
+// CRTP base: move-only RAII handle with custom destroy and optional move_from hook.
+template<typename Derived, typename Handle>
+class MoveOnlyHandle {
 public:
-    class Stream {
+    MoveOnlyHandle() = default;
+    explicit MoveOnlyHandle(Handle handle) : handle_(handle) {}
+
+    MoveOnlyHandle(const MoveOnlyHandle&) = delete;
+    MoveOnlyHandle& operator=(const MoveOnlyHandle&) = delete;
+
+    MoveOnlyHandle(MoveOnlyHandle&& other) noexcept : handle_(other.handle_) {
+        static_cast<Derived*>(this)->move_from(static_cast<Derived&>(other));
+        other.handle_ = nullptr;
+    }
+
+    MoveOnlyHandle& operator=(MoveOnlyHandle&& other) noexcept {
+        if (this != &other) {
+            destroy();
+            handle_ = other.handle_;
+            static_cast<Derived*>(this)->move_from(static_cast<Derived&>(other));
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+
+    ~MoveOnlyHandle() { destroy(); }
+
+protected:
+    Handle handle_ = nullptr;
+
+    void destroy() {
+        if (handle_ != nullptr) {
+            static_cast<Derived*>(this)->destroy_impl();
+            handle_ = nullptr;
+        }
+    }
+
+    void move_from(Derived&) {} // default no-op for most derived classes
+
+    template<typename Fn>
+    bool next_json_from(std::string& out_item_json, Fn c_next_fn) {
+        char* raw = nullptr;
+        int done = 0;
+        if (c_next_fn(handle_, &raw, &done) != 0) {
+            throw Error(last_error());
+        }
+        if (done != 0) {
+            out_item_json.clear();
+            return false;
+        }
+        out_item_json = take_owned_c_string(raw);
+        return true;
+    }
+};
+
+class Client : public MoveOnlyHandle<Client, saikuro_client_t> {
+public:
+    class Stream : public MoveOnlyHandle<Stream, saikuro_stream_t> {
     public:
-        explicit Stream(saikuro_stream_t handle) : handle_(handle) {
+        explicit Stream(saikuro_stream_t handle) : MoveOnlyHandle(handle) {
             if (handle_ == nullptr) {
                 throw Error(last_error());
             }
-        }
-
-        Stream(const Stream&) = delete;
-        Stream& operator=(const Stream&) = delete;
-
-        Stream(Stream&& other) noexcept : handle_(other.handle_) {
-            other.handle_ = nullptr;
-        }
-
-        Stream& operator=(Stream&& other) noexcept {
-            if (this != &other) {
-                destroy();
-                handle_ = other.handle_;
-                other.handle_ = nullptr;
-            }
-            return *this;
-        }
-
-        ~Stream() {
-            destroy();
         }
 
         bool next_json(std::string& out_item_json) {
-            char* raw = nullptr;
-            int done = 0;
-            if (saikuro_stream_next_json(handle_, &raw, &done) != 0) {
-                throw Error(last_error());
-            }
-            if (done != 0) {
-                out_item_json.clear();
-                return false;
-            }
-            out_item_json = take_owned_c_string(raw);
-            return true;
+            return next_json_from(out_item_json, saikuro_stream_next_json);
         }
 
     private:
-        void destroy() {
-            if (handle_ != nullptr) {
-                saikuro_stream_free(handle_);
-                handle_ = nullptr;
-            }
-        }
-
-        saikuro_stream_t handle_ = nullptr;
+        friend class MoveOnlyHandle<Stream, saikuro_stream_t>;
+        void destroy_impl() { saikuro_stream_free(handle_); }
     };
 
-    class Channel {
+    class Channel : public MoveOnlyHandle<Channel, saikuro_channel_t> {
     public:
-        explicit Channel(saikuro_channel_t handle) : handle_(handle) {
+        explicit Channel(saikuro_channel_t handle) : MoveOnlyHandle(handle) {
             if (handle_ == nullptr) {
                 throw Error(last_error());
             }
-        }
-
-        Channel(const Channel&) = delete;
-        Channel& operator=(const Channel&) = delete;
-
-        Channel(Channel&& other) noexcept : handle_(other.handle_), open_(other.open_) {
-            other.handle_ = nullptr;
-            other.open_ = false;
-        }
-
-        Channel& operator=(Channel&& other) noexcept {
-            if (this != &other) {
-                destroy();
-                handle_ = other.handle_;
-                open_ = other.open_;
-                other.handle_ = nullptr;
-                other.open_ = false;
-            }
-            return *this;
-        }
-
-        ~Channel() {
-            destroy();
         }
 
         void send_json(const std::string& item_json) {
@@ -140,33 +136,24 @@ public:
         }
 
         bool next_json(std::string& out_item_json) {
-            char* raw = nullptr;
-            int done = 0;
-            if (saikuro_channel_next_json(handle_, &raw, &done) != 0) {
-                throw Error(last_error());
-            }
-            if (done != 0) {
+            if (!next_json_from(out_item_json, saikuro_channel_next_json)) {
                 open_ = false;
-                out_item_json.clear();
                 return false;
             }
-            out_item_json = take_owned_c_string(raw);
             return true;
         }
 
     private:
-        void destroy() {
-            if (handle_ != nullptr) {
-                if (open_) {
-                    (void)saikuro_channel_close(handle_);
-                }
-                saikuro_channel_free(handle_);
-                handle_ = nullptr;
-                open_ = false;
-            }
+        friend class MoveOnlyHandle<Channel, saikuro_channel_t>;
+        void destroy_impl() {
+            if (open_) { (void)saikuro_channel_close(handle_); }
+            saikuro_channel_free(handle_);
+        }
+        void move_from(Channel& other) {
+            open_ = other.open_;
+            other.open_ = false;
         }
 
-        saikuro_channel_t handle_ = nullptr;
         bool open_ = true;
     };
 
@@ -175,26 +162,6 @@ public:
         if (handle_ == nullptr) {
             throw Error(last_error());
         }
-    }
-
-    Client(const Client&) = delete;
-    Client& operator=(const Client&) = delete;
-
-    Client(Client&& other) noexcept : handle_(other.handle_) {
-        other.handle_ = nullptr;
-    }
-
-    Client& operator=(Client&& other) noexcept {
-        if (this != &other) {
-            destroy();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
-        }
-        return *this;
-    }
-
-    ~Client() {
-        destroy();
     }
 
     std::string call_json(const std::string& target, const std::string& args_json) const {
@@ -272,18 +239,14 @@ public:
     }
 
 private:
-    void destroy() {
-        if (handle_ != nullptr) {
-            saikuro_client_close(handle_);
-            saikuro_client_free(handle_);
-            handle_ = nullptr;
-        }
+    friend class MoveOnlyHandle<Client, saikuro_client_t>;
+    void destroy_impl() {
+        saikuro_client_close(handle_);
+        saikuro_client_free(handle_);
     }
-
-    saikuro_client_t handle_ = nullptr;
 };
 
-class Provider {
+class Provider : public MoveOnlyHandle<Provider, saikuro_provider_t> {
 public:
     using RawHandler = saikuro_provider_handler_fn;
 
@@ -292,26 +255,6 @@ public:
         if (handle_ == nullptr) {
             throw Error(last_error());
         }
-    }
-
-    Provider(const Provider&) = delete;
-    Provider& operator=(const Provider&) = delete;
-
-    Provider(Provider&& other) noexcept : handle_(other.handle_) {
-        other.handle_ = nullptr;
-    }
-
-    Provider& operator=(Provider&& other) noexcept {
-        if (this != &other) {
-            destroy();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
-        }
-        return *this;
-    }
-
-    ~Provider() {
-        destroy();
     }
 
     void register_handler(const std::string& name, RawHandler callback, void* user_data) {
@@ -327,14 +270,8 @@ public:
     }
 
 private:
-    void destroy() {
-        if (handle_ != nullptr) {
-            saikuro_provider_free(handle_);
-            handle_ = nullptr;
-        }
-    }
-
-    saikuro_provider_t handle_ = nullptr;
+    friend class MoveOnlyHandle<Provider, saikuro_provider_t>;
+    void destroy_impl() { saikuro_provider_free(handle_); }
 };
 
 }  // namespace saikuro

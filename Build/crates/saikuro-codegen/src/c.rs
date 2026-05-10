@@ -5,7 +5,7 @@
 //! - One `<namespace>_client.h` per namespace with schema-aware C helper calls.
 //! - A `saikuro_generated.h` umbrella include.
 
-use saikuro_core::schema::{NamespaceSchema, Schema, Visibility};
+use saikuro_core::schema::{NamespaceSchema, Schema};
 use std::collections::HashMap;
 
 use crate::{
@@ -117,22 +117,15 @@ impl CGenerator {
             String::new(),
         ];
 
-        let mut fn_keys: Vec<_> = ns.functions.keys().collect();
-        fn_keys.sort();
         let mut seen_names: HashMap<String, String> = HashMap::new();
-        for fn_name in fn_keys {
-            let fn_schema = &ns.functions[fn_name];
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             if let Some(previous_raw) = seen_names.get(&c_fn_name) {
                 return Err(CodegenError::Schema(format!(
                     "C wrapper name collision in namespace '{ns_name}': '{previous_raw}' and '{fn_name}' both sanitize to '{c_fn_name}'"
                 )));
             }
-            seen_names.insert(c_fn_name.clone(), fn_name.clone());
+            seen_names.insert(c_fn_name.clone(), fn_name.to_owned());
 
             let target = format!("{ns_name}.{fn_name}");
             let escaped_target = escape_c_string_literal(&target);

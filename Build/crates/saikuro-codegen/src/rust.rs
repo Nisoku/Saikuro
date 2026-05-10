@@ -7,12 +7,11 @@
 
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor,
-    Visibility,
 };
 
 use crate::{
     error::{CodegenError, Result},
-    generator::{BindingGenerator, GeneratorOutput},
+    generator::{convert_type, BindingGenerator, GeneratorOutput, TypeConverter},
     to_pascal_case,
 };
 
@@ -92,7 +91,7 @@ impl RustGenerator {
                     field_keys.sort();
                     for field_name in field_keys {
                         let field_desc = &fields[&field_name];
-                        let rust_type = Self::type_to_rust(&field_desc.r#type)?;
+                        let rust_type = Self::type_to_rust(&field_desc.r#type);
                         let final_type = if field_desc.optional {
                             format!("Option<{rust_type}>")
                         } else {
@@ -142,7 +141,7 @@ impl RustGenerator {
                 TypeDefinition::Alias { inner } => {
                     lines.push(format!(
                         "pub type {safe_type_name} = {};",
-                        Self::type_to_rust(inner)?
+                        Self::type_to_rust(inner)
                     ));
                     lines.push("".to_owned());
                 }
@@ -174,21 +173,15 @@ impl RustGenerator {
             "".to_owned(),
         ];
 
-        let mut fn_keys: Vec<_> = ns.functions.keys().cloned().collect();
-        fn_keys.sort();
         let mut method_names = HashMap::new();
-        for fn_name in fn_keys {
-            let fn_schema = &ns.functions[&fn_name];
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method_name = ensure_unique_name(
                 &format!("method in namespace {ns_name}"),
-                &fn_name,
-                &sanitize_ident(&fn_name),
+                fn_name,
+                &sanitize_ident(fn_name),
                 &mut method_names,
             )?;
-            lines.push(self.generate_method(ns_name, &fn_name, &method_name, fn_schema)?);
+            lines.push(self.generate_method(ns_name, fn_name, &method_name, fn_schema)?);
         }
 
         lines.push("}".to_owned());
@@ -217,7 +210,7 @@ impl RustGenerator {
                 &sanitize_ident(&arg.name),
                 &mut arg_names,
             )?;
-            let arg_type = Self::type_to_rust_in_client(&arg.r#type)?;
+            let arg_type = Self::type_to_rust_in_client(&arg.r#type);
             let final_type = if arg.optional {
                 format!("Option<{arg_type}>")
             } else {
@@ -268,7 +261,7 @@ impl RustGenerator {
                 lines.push("    }".to_owned());
             }
             _ => {
-                let return_type = Self::type_to_rust_in_client(&schema.returns)?;
+                let return_type = Self::type_to_rust_in_client(&schema.returns);
                 lines.push(format!(
                     "    pub async fn {method_name}(&self, {}) -> Result<{return_type}> {{",
                     params.join(", ")
@@ -289,94 +282,92 @@ impl RustGenerator {
         Ok(lines.join("\n"))
     }
 
-    fn type_to_rust(desc: &TypeDescriptor) -> Result<String> {
-        Ok(match desc {
-            TypeDescriptor::Primitive { r#type } => match r#type {
-                PrimitiveType::Bool => "bool".to_owned(),
-                PrimitiveType::I8 => "i8".to_owned(),
-                PrimitiveType::I16 => "i16".to_owned(),
-                PrimitiveType::I32 => "i32".to_owned(),
-                PrimitiveType::I64 => "i64".to_owned(),
-                PrimitiveType::U8 => "u8".to_owned(),
-                PrimitiveType::U16 => "u16".to_owned(),
-                PrimitiveType::U32 => "u32".to_owned(),
-                PrimitiveType::U64 => "u64".to_owned(),
-                PrimitiveType::F32 => "f32".to_owned(),
-                PrimitiveType::F64 => "f64".to_owned(),
-                PrimitiveType::String => "String".to_owned(),
-                PrimitiveType::Bytes => "Vec<u8>".to_owned(),
-                PrimitiveType::Any => "serde_json::Value".to_owned(),
-                PrimitiveType::Unit => "()".to_owned(),
-            },
-            TypeDescriptor::Named { name } => sanitize_type_name_pascal(name),
-            TypeDescriptor::Option { inner } => format!("Option<{}>", Self::type_to_rust(inner)?),
-            TypeDescriptor::Array { item } => format!("Vec<{}>", Self::type_to_rust(item)?),
-            TypeDescriptor::Map { value } => {
-                format!(
-                    "std::collections::HashMap<String, {}>",
-                    Self::type_to_rust(value)?
-                )
-            }
-            TypeDescriptor::Stream { item } => {
-                format!(
-                    "saikuro::SaikuroStream /* item: {} */",
-                    Self::type_to_rust(item)?
-                )
-            }
-            TypeDescriptor::Channel { inbound, outbound } => format!(
-                "saikuro::SaikuroChannel /* in: {}, out: {} */",
-                Self::type_to_rust(inbound)?,
-                Self::type_to_rust(outbound)?
-            ),
-        })
+    fn type_to_rust(desc: &TypeDescriptor) -> String {
+        convert_type(desc, &RustTypeConverter)
     }
 
-    fn type_to_rust_in_client(desc: &TypeDescriptor) -> Result<String> {
-        Ok(match desc {
-            TypeDescriptor::Primitive { r#type } => match r#type {
-                PrimitiveType::Bool => "bool".to_owned(),
-                PrimitiveType::I8 => "i8".to_owned(),
-                PrimitiveType::I16 => "i16".to_owned(),
-                PrimitiveType::I32 => "i32".to_owned(),
-                PrimitiveType::I64 => "i64".to_owned(),
-                PrimitiveType::U8 => "u8".to_owned(),
-                PrimitiveType::U16 => "u16".to_owned(),
-                PrimitiveType::U32 => "u32".to_owned(),
-                PrimitiveType::U64 => "u64".to_owned(),
-                PrimitiveType::F32 => "f32".to_owned(),
-                PrimitiveType::F64 => "f64".to_owned(),
-                PrimitiveType::String => "String".to_owned(),
-                PrimitiveType::Bytes => "Vec<u8>".to_owned(),
-                PrimitiveType::Any => "serde_json::Value".to_owned(),
-                PrimitiveType::Unit => "()".to_owned(),
-            },
-            TypeDescriptor::Named { name } => {
-                format!("super::types::{}", sanitize_type_name_pascal(name))
-            }
-            TypeDescriptor::Option { inner } => {
-                format!("Option<{}>", Self::type_to_rust_in_client(inner)?)
-            }
-            TypeDescriptor::Array { item } => {
-                format!("Vec<{}>", Self::type_to_rust_in_client(item)?)
-            }
-            TypeDescriptor::Map { value } => {
-                format!(
-                    "std::collections::HashMap<String, {}>",
-                    Self::type_to_rust_in_client(value)?
-                )
-            }
-            TypeDescriptor::Stream { item } => {
-                format!(
-                    "saikuro::SaikuroStream /* item: {} */",
-                    Self::type_to_rust_in_client(item)?
-                )
-            }
-            TypeDescriptor::Channel { inbound, outbound } => format!(
-                "saikuro::SaikuroChannel /* in: {}, out: {} */",
-                Self::type_to_rust_in_client(inbound)?,
-                Self::type_to_rust_in_client(outbound)?
-            ),
-        })
+    fn type_to_rust_in_client(desc: &TypeDescriptor) -> String {
+        convert_type(desc, &RustClientTypeConverter)
+    }
+}
+
+struct RustTypeConverter;
+
+impl TypeConverter for RustTypeConverter {
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str {
+        match t {
+            PrimitiveType::Bool => "bool",
+            PrimitiveType::I8 => "i8",
+            PrimitiveType::I16 => "i16",
+            PrimitiveType::I32 => "i32",
+            PrimitiveType::I64 => "i64",
+            PrimitiveType::U8 => "u8",
+            PrimitiveType::U16 => "u16",
+            PrimitiveType::U32 => "u32",
+            PrimitiveType::U64 => "u64",
+            PrimitiveType::F32 => "f32",
+            PrimitiveType::F64 => "f64",
+            PrimitiveType::String => "String",
+            PrimitiveType::Bytes => "Vec<u8>",
+            PrimitiveType::Any => "serde_json::Value",
+            PrimitiveType::Unit => "()",
+        }
+    }
+
+    fn named_type(&self, name: &str) -> String {
+        sanitize_type_name_pascal(name)
+    }
+
+    fn wrap_option(&self, inner: &str) -> String {
+        format!("Option<{inner}>")
+    }
+
+    fn wrap_array(&self, inner: &str) -> String {
+        format!("Vec<{inner}>")
+    }
+
+    fn wrap_map(&self, value: &str) -> String {
+        format!("std::collections::HashMap<String, {value}>")
+    }
+
+    fn wrap_stream(&self, item: &str) -> String {
+        format!("saikuro::SaikuroStream /* item: {item} */")
+    }
+
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
+        format!("saikuro::SaikuroChannel /* in: {inbound}, out: {outbound} */")
+    }
+}
+
+struct RustClientTypeConverter;
+
+impl TypeConverter for RustClientTypeConverter {
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str {
+        RustTypeConverter.primitive_name(t)
+    }
+
+    fn named_type(&self, name: &str) -> String {
+        format!("super::types::{}", sanitize_type_name_pascal(name))
+    }
+
+    fn wrap_option(&self, inner: &str) -> String {
+        format!("Option<{inner}>")
+    }
+
+    fn wrap_array(&self, inner: &str) -> String {
+        format!("Vec<{inner}>")
+    }
+
+    fn wrap_map(&self, value: &str) -> String {
+        format!("std::collections::HashMap<String, {value}>")
+    }
+
+    fn wrap_stream(&self, item: &str) -> String {
+        format!("saikuro::SaikuroStream /* item: {item} */")
+    }
+
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
+        format!("saikuro::SaikuroChannel /* in: {inbound}, out: {outbound} */")
     }
 }
 

@@ -6,14 +6,14 @@
 //! - A `Generated.cs` that lists each client class (summary comment).
 
 use saikuro_core::schema::{
-    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };
 
 use crate::{
     error::Result,
     generator::{
-        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
-        GeneratorOutput,
+        convert_type, generate_types_and_namespace_clients, generate_types_from_schema,
+        BindingGenerator, GeneratorOutput, TypeConverter,
     },
     to_camel_case, to_pascal_case,
 };
@@ -47,6 +47,8 @@ impl CSharpGenerator {
             String::new(),
         ];
 
+        let type_to_cs = |desc: &TypeDescriptor| self.type_to_cs(desc);
+
         generate_types_from_schema(
             schema,
             header,
@@ -54,7 +56,7 @@ impl CSharpGenerator {
                 let mut lines = vec![format!("public sealed record {type_name}(")];
                 let mut field_lines = Vec::new();
                 for (field_name, field_desc) in fields {
-                    let cs_type = CSharpGenerator::type_to_cs(&field_desc.r#type)?;
+                    let cs_type = type_to_cs(&field_desc.r#type);
                     let nullable = if field_desc.optional {
                         format!("{cs_type}?")
                     } else {
@@ -78,7 +80,7 @@ impl CSharpGenerator {
                 Ok(lines)
             },
             |type_name, inner| {
-                let cs_type = CSharpGenerator::type_to_cs(inner)?;
+                let cs_type = type_to_cs(inner);
                 Ok(vec![
                     format!("// {type_name} is an alias for {cs_type}"),
                     format!("using {type_name} = {cs_type};"),
@@ -135,11 +137,7 @@ impl CSharpGenerator {
         ));
         lines.push("".to_owned());
 
-        for (fn_name, fn_schema) in &ns.functions {
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method = self.generate_method(ns_name, fn_name, fn_schema)?;
             lines.push(method);
         }
@@ -163,7 +161,7 @@ impl CSharpGenerator {
         let mut call_args_items: Vec<String> = vec![];
 
         for arg in &schema.args {
-            let cs_type = Self::type_to_cs(&arg.r#type)?;
+            let cs_type = self.type_to_cs(&arg.r#type);
             if arg.optional {
                 params.push(format!("{}? {} = null", cs_type, to_camel_case(&arg.name)));
             } else {
@@ -187,7 +185,7 @@ impl CSharpGenerator {
 
         match &schema.returns {
             TypeDescriptor::Stream { item } => {
-                let item_cs = Self::type_to_cs(item)?;
+                let item_cs = self.type_to_cs(item);
                 lines.push(format!(
                     "    public Task<SaikuroStream<{item_cs}>> {method_name}Async({params_str}) =>"
                 ));
@@ -197,8 +195,8 @@ impl CSharpGenerator {
                 lines.push(format!("            {args_array});"));
             }
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_cs = Self::type_to_cs(inbound)?;
-                let out_cs = Self::type_to_cs(outbound)?;
+                let in_cs = self.type_to_cs(inbound);
+                let out_cs = self.type_to_cs(outbound);
                 lines.push(format!(
                     "    public Task<SaikuroChannel<{in_cs}, {out_cs}>> {method_name}Async({params_str}) =>"
                 ));
@@ -208,7 +206,7 @@ impl CSharpGenerator {
                 lines.push(format!("            {args_array});"));
             }
             _ => {
-                let return_cs = Self::type_to_cs(&schema.returns)?;
+                let return_cs = self.type_to_cs(&schema.returns);
                 if return_cs == "void" {
                     lines.push(format!(
                         "    public async Task {method_name}Async({params_str}) {{"
@@ -248,46 +246,53 @@ impl CSharpGenerator {
         lines.join("\n")
     }
 
-    fn type_to_cs(desc: &TypeDescriptor) -> Result<String> {
-        Ok(match desc {
-            TypeDescriptor::Primitive { r#type } => match r#type {
-                PrimitiveType::Bool => "bool".to_owned(),
-                PrimitiveType::I8 => "sbyte".to_owned(),
-                PrimitiveType::I16 => "short".to_owned(),
-                PrimitiveType::I32 => "int".to_owned(),
-                PrimitiveType::I64 => "long".to_owned(),
-                PrimitiveType::U8 => "byte".to_owned(),
-                PrimitiveType::U16 => "ushort".to_owned(),
-                PrimitiveType::U32 => "uint".to_owned(),
-                PrimitiveType::U64 => "ulong".to_owned(),
-                PrimitiveType::F32 => "float".to_owned(),
-                PrimitiveType::F64 => "double".to_owned(),
-                PrimitiveType::String => "string".to_owned(),
-                PrimitiveType::Bytes => "byte[]".to_owned(),
-                PrimitiveType::Any => "object?".to_owned(),
-                PrimitiveType::Unit => "void".to_owned(),
-            },
-            TypeDescriptor::Named { name } => name.clone(),
-            TypeDescriptor::Option { inner } => {
-                let inner_cs = Self::type_to_cs(inner)?;
-                format!("{inner_cs}?")
-            }
-            TypeDescriptor::Array { item } => {
-                format!("List<{}>", Self::type_to_cs(item)?)
-            }
-            TypeDescriptor::Map { value } => {
-                format!("Dictionary<string, {}>", Self::type_to_cs(value)?)
-            }
-            TypeDescriptor::Stream { item } => {
-                format!("SaikuroStream<{}>", Self::type_to_cs(item)?)
-            }
-            TypeDescriptor::Channel { inbound, outbound } => {
-                format!(
-                    "SaikuroChannel<{}, {}>",
-                    Self::type_to_cs(inbound)?,
-                    Self::type_to_cs(outbound)?
-                )
-            }
-        })
+    fn type_to_cs(&self, desc: &TypeDescriptor) -> String {
+        convert_type(desc, self)
+    }
+}
+
+impl TypeConverter for CSharpGenerator {
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str {
+        match t {
+            PrimitiveType::Bool => "bool",
+            PrimitiveType::I8 => "sbyte",
+            PrimitiveType::I16 => "short",
+            PrimitiveType::I32 => "int",
+            PrimitiveType::I64 => "long",
+            PrimitiveType::U8 => "byte",
+            PrimitiveType::U16 => "ushort",
+            PrimitiveType::U32 => "uint",
+            PrimitiveType::U64 => "ulong",
+            PrimitiveType::F32 => "float",
+            PrimitiveType::F64 => "double",
+            PrimitiveType::String => "string",
+            PrimitiveType::Bytes => "byte[]",
+            PrimitiveType::Any => "object?",
+            PrimitiveType::Unit => "void",
+        }
+    }
+
+    fn named_type(&self, name: &str) -> String {
+        name.to_owned()
+    }
+
+    fn wrap_option(&self, inner: &str) -> String {
+        format!("{inner}?")
+    }
+
+    fn wrap_array(&self, inner: &str) -> String {
+        format!("List<{inner}>")
+    }
+
+    fn wrap_map(&self, value: &str) -> String {
+        format!("Dictionary<string, {value}>")
+    }
+
+    fn wrap_stream(&self, item: &str) -> String {
+        format!("SaikuroStream<{item}>")
+    }
+
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
+        format!("SaikuroChannel<{inbound}, {outbound}>")
     }
 }

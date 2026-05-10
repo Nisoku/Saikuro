@@ -9,6 +9,8 @@
 //
 //   await provider.ServeAsync("tcp://localhost:7700");
 
+using System.Text.Json.Serialization;
+
 namespace Saikuro;
 
 //  Handler delegates
@@ -55,6 +57,7 @@ public abstract class TypeDescriptor
     /// <summary>Primitive type (bool, i32, i64, f32, f64, string, bytes, any, unit).</summary>
     public sealed class Primitive : TypeDescriptor
     {
+        [JsonPropertyName("type")]
         public string Type { get; }
 
         public Primitive(string type) => Type = type;
@@ -66,6 +69,7 @@ public abstract class TypeDescriptor
     /// <summary>Homogeneous list of <see cref="Item"/>.</summary>
     public sealed class List : TypeDescriptor
     {
+        [JsonPropertyName("item")]
         public TypeDescriptor Item { get; }
 
         public List(TypeDescriptor item) => Item = item;
@@ -77,7 +81,9 @@ public abstract class TypeDescriptor
     /// <summary>Map with typed keys and values.</summary>
     public sealed class Map : TypeDescriptor
     {
+        [JsonPropertyName("key")]
         public TypeDescriptor Key { get; }
+        [JsonPropertyName("value")]
         public TypeDescriptor Value { get; }
 
         public Map(TypeDescriptor key, TypeDescriptor value)
@@ -98,6 +104,7 @@ public abstract class TypeDescriptor
     /// <summary>Optional wrapper.</summary>
     public sealed class Optional : TypeDescriptor
     {
+        [JsonPropertyName("inner")]
         public TypeDescriptor Inner { get; }
 
         public Optional(TypeDescriptor inner) => Inner = inner;
@@ -109,6 +116,7 @@ public abstract class TypeDescriptor
     /// <summary>Named (user-defined) type.</summary>
     public sealed class Named : TypeDescriptor
     {
+        [JsonPropertyName("name")]
         public string Name { get; }
 
         public Named(string name) => Name = name;
@@ -120,6 +128,7 @@ public abstract class TypeDescriptor
     /// <summary>Server-to-client stream of items.</summary>
     public sealed class Stream : TypeDescriptor
     {
+        [JsonPropertyName("item")]
         public TypeDescriptor Item { get; }
 
         public Stream(TypeDescriptor item) => Item = item;
@@ -131,7 +140,9 @@ public abstract class TypeDescriptor
     /// <summary>Bidirectional channel.</summary>
     public sealed class Channel : TypeDescriptor
     {
+        [JsonPropertyName("send")]
         public TypeDescriptor Send { get; }
+        [JsonPropertyName("recv")]
         public TypeDescriptor Recv { get; }
 
         public Channel(TypeDescriptor send, TypeDescriptor recv)
@@ -313,15 +324,7 @@ public sealed class SaikuroProvider
             functions[name] = fn;
         }
 
-        return new Dictionary<string, object?>
-        {
-            [WireKey.Version] = 1,
-            [WireKey.Namespaces] = new Dictionary<string, object?>
-            {
-                [_namespace] = new Dictionary<string, object?> { [WireKey.Functions] = functions },
-            },
-            [WireKey.Types] = new Dictionary<string, object?>(),
-        };
+        return WireKey.BuildSchemaDict(_namespace, functions);
     }
 
     //  Dispatch

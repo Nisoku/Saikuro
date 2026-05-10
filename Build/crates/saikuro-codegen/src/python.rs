@@ -6,14 +6,14 @@
 //! - A `__init__.py` that re-exports everything.
 
 use saikuro_core::schema::{
-    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };
 
 use crate::{
     error::Result,
     generator::{
-        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
-        GeneratorOutput,
+        convert_type, generate_types_and_namespace_clients, generate_types_from_schema,
+        BindingGenerator, GeneratorOutput, TypeConverter,
     },
     to_pascal_case,
 };
@@ -51,6 +51,8 @@ impl PythonGenerator {
             String::new(),
         ];
 
+        let type_to_py = |desc: &TypeDescriptor| self.type_to_python(desc);
+
         generate_types_from_schema(
             schema,
             header,
@@ -60,7 +62,7 @@ impl PythonGenerator {
                     lines.push("    pass".to_owned());
                 } else {
                     for (field_name, field_desc) in fields {
-                        let py_type = PythonGenerator::type_to_python(&field_desc.r#type)?;
+                        let py_type = type_to_py(&field_desc.r#type);
                         let default = if field_desc.optional {
                             format!(": Optional[{py_type}] = None")
                         } else {
@@ -84,7 +86,7 @@ impl PythonGenerator {
                 Ok(lines)
             },
             |type_name, inner| {
-                let py_type = PythonGenerator::type_to_python(inner)?;
+                let py_type = type_to_py(inner);
                 Ok(vec![format!("{type_name} = {py_type}"), String::new()])
             },
         )
@@ -141,11 +143,7 @@ impl PythonGenerator {
         lines.push("        self._client = client".to_owned());
         lines.push(String::new());
 
-        for (fn_name, fn_schema) in &ns.functions {
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method = self.generate_method(ns_name, fn_name, fn_schema)?;
             lines.push(method);
         }
@@ -163,7 +161,7 @@ impl PythonGenerator {
         let mut call_args = vec![];
 
         for arg in &schema.args {
-            let py_type = Self::type_to_python(&arg.r#type)?;
+            let py_type = self.type_to_python(&arg.r#type);
             if arg.optional {
                 args.push(format!("{}: Optional[{}] = None", arg.name, py_type));
             } else {
@@ -172,7 +170,7 @@ impl PythonGenerator {
             call_args.push(arg.name.clone());
         }
 
-        let return_type = Self::type_to_python(&schema.returns)?;
+        let return_type = self.type_to_python(&schema.returns);
         let target = format!("{ns_name}.{fn_name}");
         let args_list = call_args.join(", ");
 
@@ -188,8 +186,8 @@ impl PythonGenerator {
                 format!("        return await self._client.stream(\"{target}\", [{args_list}])"),
             ),
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_py = Self::type_to_python(inbound)?;
-                let out_py = Self::type_to_python(outbound)?;
+                let in_py = self.type_to_python(inbound);
+                let out_py = self.type_to_python(outbound);
                 (
                     format!(
                         "    async def {}({}) -> \"SaikuroChannel[{}, {}]\":",
@@ -225,44 +223,52 @@ impl PythonGenerator {
         Ok(lines.join("\n"))
     }
 
-    fn type_to_python(desc: &TypeDescriptor) -> Result<String> {
-        Ok(match desc {
-            TypeDescriptor::Primitive { r#type } => match r#type {
-                PrimitiveType::Bool => "bool".to_owned(),
-                PrimitiveType::I8
-                | PrimitiveType::I16
-                | PrimitiveType::I32
-                | PrimitiveType::I64
-                | PrimitiveType::U8
-                | PrimitiveType::U16
-                | PrimitiveType::U32
-                | PrimitiveType::U64 => "int".to_owned(),
-                PrimitiveType::F32 | PrimitiveType::F64 => "float".to_owned(),
-                PrimitiveType::String => "str".to_owned(),
-                PrimitiveType::Bytes => "bytes".to_owned(),
-                PrimitiveType::Any => "Any".to_owned(),
-                PrimitiveType::Unit => "None".to_owned(),
-            },
-            TypeDescriptor::Named { name } => name.clone(),
-            TypeDescriptor::Option { inner } => {
-                format!("Optional[{}]", Self::type_to_python(inner)?)
-            }
-            TypeDescriptor::Array { item } => {
-                format!("List[{}]", Self::type_to_python(item)?)
-            }
-            TypeDescriptor::Map { value } => {
-                format!("Dict[str, {}]", Self::type_to_python(value)?)
-            }
-            TypeDescriptor::Stream { item } => {
-                format!("AsyncIterator[{}]", Self::type_to_python(item)?)
-            }
-            TypeDescriptor::Channel { inbound, outbound } => {
-                format!(
-                    "\"SaikuroChannel[{}, {}]\"",
-                    Self::type_to_python(inbound)?,
-                    Self::type_to_python(outbound)?
-                )
-            }
-        })
+    fn type_to_python(&self, desc: &TypeDescriptor) -> String {
+        convert_type(desc, self)
+    }
+}
+
+impl TypeConverter for PythonGenerator {
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str {
+        match t {
+            PrimitiveType::Bool => "bool",
+            PrimitiveType::I8
+            | PrimitiveType::I16
+            | PrimitiveType::I32
+            | PrimitiveType::I64
+            | PrimitiveType::U8
+            | PrimitiveType::U16
+            | PrimitiveType::U32
+            | PrimitiveType::U64 => "int",
+            PrimitiveType::F32 | PrimitiveType::F64 => "float",
+            PrimitiveType::String => "str",
+            PrimitiveType::Bytes => "bytes",
+            PrimitiveType::Any => "Any",
+            PrimitiveType::Unit => "None",
+        }
+    }
+
+    fn named_type(&self, name: &str) -> String {
+        name.to_owned()
+    }
+
+    fn wrap_option(&self, inner: &str) -> String {
+        format!("Optional[{inner}]")
+    }
+
+    fn wrap_array(&self, inner: &str) -> String {
+        format!("List[{inner}]")
+    }
+
+    fn wrap_map(&self, value: &str) -> String {
+        format!("Dict[str, {value}]")
+    }
+
+    fn wrap_stream(&self, item: &str) -> String {
+        format!("AsyncIterator[{item}]")
+    }
+
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
+        format!("\"SaikuroChannel[{inbound}, {outbound}]\"")
     }
 }

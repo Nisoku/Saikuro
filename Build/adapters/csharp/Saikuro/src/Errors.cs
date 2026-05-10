@@ -64,94 +64,20 @@ public class SaikuroException : Exception
     };
 }
 
-// Subclasses
+// Subclasses — primary constructors delegate to SaikuroException(c, m, d)
 
-public sealed class FunctionNotFoundException : SaikuroException
-{
-    public FunctionNotFoundException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class InvalidArgumentsException : SaikuroException
-{
-    public InvalidArgumentsException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class CapabilityDeniedException : SaikuroException
-{
-    public CapabilityDeniedException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class TransportException : SaikuroException
-{
-    public TransportException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class SaikuroTimeoutException : SaikuroException
-{
-    public SaikuroTimeoutException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class ProviderException : SaikuroException
-{
-    public ProviderException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class NoProviderException : SaikuroException
-{
-    public NoProviderException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class ProviderUnavailableException : SaikuroException
-{
-    public ProviderUnavailableException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class ProtocolVersionException : SaikuroException
-{
-    public ProtocolVersionException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class MalformedEnvelopeException : SaikuroException
-{
-    public MalformedEnvelopeException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class MessageTooLargeException : SaikuroException
-{
-    public MessageTooLargeException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class BufferOverflowException : SaikuroException
-{
-    public BufferOverflowException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class StreamClosedException : SaikuroException
-{
-    public StreamClosedException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class ChannelClosedException : SaikuroException
-{
-    public ChannelClosedException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
-
-public sealed class OutOfOrderException : SaikuroException
-{
-    public OutOfOrderException(string c, string m, IReadOnlyDictionary<string, object?> d)
-        : base(c, m, d) { }
-}
+public sealed class FunctionNotFoundException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class InvalidArgumentsException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class CapabilityDeniedException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class TransportException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class SaikuroTimeoutException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class ProviderException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class NoProviderException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class ProviderUnavailableException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class ProtocolVersionException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class MalformedEnvelopeException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class MessageTooLargeException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class BufferOverflowException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class StreamClosedException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class ChannelClosedException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);
+public sealed class OutOfOrderException(string c, string m, IReadOnlyDictionary<string, object?> d) : SaikuroException(c, m, d);

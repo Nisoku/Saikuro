@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 
 use saikuro_core::schema::{
-    FieldDescriptor, NamespaceSchema, Schema, TypeDefinition, TypeDescriptor,
+    FieldDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition,
+    TypeDescriptor, Visibility,
 };
 
 use crate::error::Result;
@@ -60,6 +61,68 @@ pub fn to_camel_case(s: &str) -> String {
     match c.next() {
         None => String::new(),
         Some(f) => f.to_lowercase().collect::<String>() + c.as_str(),
+    }
+}
+
+/// Iterate over namespace functions sorted by name, filtering out private ones.
+///
+/// Every codegen backend needs this same loop.  Using this helper
+/// eliminates the duplicated iteration + filter pattern.
+pub fn namespace_public_functions(ns: &NamespaceSchema) -> Vec<(&str, &FunctionSchema)> {
+    let mut fn_keys: Vec<_> = ns.functions.keys().collect();
+    fn_keys.sort();
+    fn_keys
+        .into_iter()
+        .filter_map(|k| {
+            let schema = &ns.functions[k];
+            if schema.visibility == Visibility::Private {
+                None
+            } else {
+                Some((k.as_str(), schema))
+            }
+        })
+        .collect()
+}
+
+/// Language-specific type name conversion.
+///
+/// Every codegen backend has a match over `TypeDescriptor` variants that
+/// produces a target-language type string.  This trait + [`convert_type`]
+/// eliminate that duplicated dispatcher; each backend only provides the
+/// per-variant mappings.
+pub trait TypeConverter {
+    /// Map a Saikuro primitive type to the target-language type name.
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str;
+    /// Map a named (user-defined) type reference.
+    fn named_type(&self, name: &str) -> String;
+    /// Wrap an inner type as optional / nullable.
+    fn wrap_option(&self, inner: &str) -> String;
+    /// Wrap an inner type into an array / list.
+    fn wrap_array(&self, inner: &str) -> String;
+    /// Wrap a value type into a map with string keys.
+    fn wrap_map(&self, value: &str) -> String;
+    /// Wrap an item type into a stream.
+    fn wrap_stream(&self, item: &str) -> String;
+    /// Wrap inbound/outbound types into a channel.
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String;
+}
+
+/// Convert a [`TypeDescriptor`] to a target-language type string.
+///
+/// This is the shared dispatcher that all backends use instead of
+/// writing their own `match` over the same variants.  Each backend
+/// implements [`TypeConverter`] to supply the language-specific mappings.
+pub fn convert_type(desc: &TypeDescriptor, conv: &impl TypeConverter) -> String {
+    match desc {
+        TypeDescriptor::Primitive { r#type } => conv.primitive_name(&r#type.clone()).to_owned(),
+        TypeDescriptor::Named { name } => conv.named_type(name),
+        TypeDescriptor::Option { inner } => conv.wrap_option(&convert_type(inner, conv)),
+        TypeDescriptor::Array { item } => conv.wrap_array(&convert_type(item, conv)),
+        TypeDescriptor::Map { value } => conv.wrap_map(&convert_type(value, conv)),
+        TypeDescriptor::Stream { item } => conv.wrap_stream(&convert_type(item, conv)),
+        TypeDescriptor::Channel { inbound, outbound } => {
+            conv.wrap_channel(&convert_type(inbound, conv), &convert_type(outbound, conv))
+        }
     }
 }
 

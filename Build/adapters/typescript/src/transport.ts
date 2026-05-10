@@ -33,19 +33,50 @@ export interface Transport {
    */
   recv(): Promise<Record<string, unknown> | null>;
 
-  /** Register a handler invoked for every received message.
-   * Multiple handlers may be registered; all are called in registration order.
-   */
+  /** Register a handler invoked for every received message. */
   onMessage(handler: (msg: Record<string, unknown>) => void): void;
 
-  /**
-   * Deregister a previously-registered message handler.
-   * A no-op if the handler was never registered.
-   */
+  /** Deregister a previously-registered message handler. */
   offMessage(handler: (msg: Record<string, unknown>) => void): void;
 
   /** Register an error / close handler. */
   onClose(handler: (err?: Error) => void): void;
+}
+
+/**
+ * Shared handler management for all transports.
+ *
+ * Every transport implementation needs the same `_messageHandlers` set,
+ * `_closeHandler`, and the three registration methods.  This base class
+ * provides them so each transport only writes the unique parts.
+ */
+abstract class BaseTransport implements Transport {
+  readonly _messageHandlers = new Set<
+    (msg: Record<string, unknown>) => void
+  >();
+  _closeHandler?: (err?: Error) => void;
+
+  abstract connect(): Promise<void>;
+  abstract close(): Promise<void>;
+  abstract send(obj: Record<string, unknown>): Promise<void>;
+  abstract recv(): Promise<Record<string, unknown> | null>;
+
+  onMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.add(handler);
+  }
+
+  offMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.delete(handler);
+  }
+
+  onClose(handler: (err?: Error) => void): void {
+    this._closeHandler = handler;
+  }
+
+  /** Snapshot the current handler set and dispatch to each in registration order. */
+  _dispatch(msg: Record<string, unknown>): void {
+    for (const h of Array.from(this._messageHandlers)) h(msg);
+  }
 }
 
 //  Frame codec (length-prefix, big-endian uint32)
@@ -60,12 +91,8 @@ function buildFrame(payload: Uint8Array): Buffer {
 
 //  In-Memory Transport (testing)
 
-export class InMemoryTransport implements Transport {
+export class InMemoryTransport extends BaseTransport {
   private readonly _inbox: Array<Record<string, unknown>> = [];
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private _peer?: InMemoryTransport;
   private _closed = false;
 
@@ -90,27 +117,11 @@ export class InMemoryTransport implements Transport {
 
   async send(obj: Record<string, unknown>): Promise<void> {
     if (this._closed) throw new Error("transport is closed");
-    // Snapshot the handler set before iterating so that handlers which call
-    // offMessage/onMessage during delivery cannot corrupt the iteration or
-    // cause re-entrant infinite loops.
-    const handlers = Array.from(this._peer?._messageHandlers ?? []);
-    for (const h of handlers) h(obj);
+    for (const h of Array.from(this._peer?._messageHandlers ?? [])) h(obj);
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
     return this._inbox.shift() ?? null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 
@@ -122,16 +133,13 @@ export class InMemoryTransport implements Transport {
  * On Node.js >= 22 the built-in `WebSocket` global is available.
  * For older versions pass a `ws`-compatible constructor via `wsConstructor`.
  */
-export class WebSocketTransport implements Transport {
+export class WebSocketTransport extends BaseTransport {
   private _ws?: WebSocket;
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private readonly _url: string;
   private readonly _WS: typeof WebSocket;
 
   constructor(url: string, options?: { wsConstructor?: typeof WebSocket }) {
+    super();
     this._url = url;
     if (options?.wsConstructor !== undefined) {
       this._WS = options.wsConstructor;
@@ -160,12 +168,8 @@ export class WebSocketTransport implements Transport {
         try {
           const bytes = new Uint8Array(ev.data as ArrayBuffer);
           const msg = decode(bytes) as Record<string, unknown>;
-          // Snapshot handlers so any onMessage/offMessage calls inside a
-          // handler do not corrupt the current dispatch pass.
-          const handlers = Array.from(this._messageHandlers);
-          for (const h of handlers) h(msg);
+          this._dispatch(msg);
         } catch (err) {
-          // Malformed frame - log and continue; don't crash the receive loop.
           log.error("ws frame decode error", { err: String(err) });
         }
       };
@@ -191,20 +195,7 @@ export class WebSocketTransport implements Transport {
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
-    // Receive is event-driven via onMessage; this method is a no-op stub.
     return null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 
@@ -219,12 +210,8 @@ export class WebSocketTransport implements Transport {
  *
  * Framing: 4-byte big-endian length prefix (matches the Rust LengthPrefixedCodec).
  */
-export class NodeStreamTransport implements Transport {
+export class NodeStreamTransport extends BaseTransport {
   private _socket?: import("net").Socket;
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private _buffer: Buffer = Buffer.alloc(0);
   private readonly _connectionOptions:
     | { type: "tcp"; host: string; port: number }
@@ -243,6 +230,7 @@ export class NodeStreamTransport implements Transport {
       | { type: "tcp"; host: string; port: number }
       | { type: "unix"; path: string },
   ) {
+    super();
     this._connectionOptions = opts;
   }
 
@@ -290,10 +278,7 @@ export class NodeStreamTransport implements Transport {
 
       try {
         const msg = decode(payload) as Record<string, unknown>;
-        // Snapshot handlers so any onMessage/offMessage calls inside a
-        // handler do not corrupt the current dispatch pass.
-        const handlers = Array.from(this._messageHandlers);
-        for (const h of handlers) h(msg);
+        this._dispatch(msg);
       } catch (err) {
         log.error("frame decode error", { err: String(err) });
       }
@@ -314,20 +299,7 @@ export class NodeStreamTransport implements Transport {
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
-    // Event-driven via onMessage.
     return null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 
@@ -371,12 +343,8 @@ function generateShortId(): string {
  * This transport is for communication between different JavaScript/WASM contexts
  * in the same browser origin (e.g., main page ↔ Worker, or JS ↔ Rust WASM).
  */
-export class BroadcastChannelTransport implements Transport {
+export class BroadcastChannelTransport extends BaseTransport {
   private _channel: BroadcastChannel | undefined = undefined;
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler: ((err?: Error) => void) | undefined = undefined;
   private readonly _baseChannel: string;
   private _connected = false;
   private _closed = false;
@@ -387,6 +355,7 @@ export class BroadcastChannelTransport implements Transport {
    * Call `connect()` to perform the rendezvous handshake.
    */
   constructor(baseChannel: string) {
+    super();
     this._baseChannel = baseChannel;
   }
 
@@ -404,8 +373,7 @@ export class BroadcastChannelTransport implements Transport {
         } else {
           return;
         }
-        const handlers = Array.from(this._messageHandlers);
-        for (const h of handlers) h(msg);
+        this._dispatch(msg);
       } catch (err) {
         log.error("broadcast channel frame decode error", {
           err: String(err),
@@ -476,18 +444,6 @@ export class BroadcastChannelTransport implements Transport {
 
   async recv(): Promise<Record<string, unknown> | null> {
     return null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 

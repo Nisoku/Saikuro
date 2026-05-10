@@ -15,10 +15,9 @@ export class SaikuroError extends Error {
 
   constructor(payload: ErrorPayload) {
     super(`[${payload.code}] ${payload.message}`);
-    this.name = "SaikuroError";
+    this.name = new.target.name;
     this.code = payload.code;
     this.details = payload.details ?? {};
-    // Restore prototype chain (needed when compiling to ES5).
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
@@ -29,112 +28,23 @@ export class SaikuroError extends Error {
   }
 }
 
-// Specific subclasses
+// Specific subclasses have constructors inherited from SaikuroError (name set via new.target.name)
 
-export class FunctionNotFoundError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "FunctionNotFoundError";
-  }
-}
-
-export class InvalidArgumentsError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "InvalidArgumentsError";
-  }
-}
-
-export class CapabilityDeniedError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "CapabilityDeniedError";
-  }
-}
-
-export class TransportError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "TransportError";
-  }
-}
-
-export class SaikuroTimeoutError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "SaikuroTimeoutError";
-  }
-}
-
-export class ProviderError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "ProviderError";
-  }
-}
-
-export class NoProviderError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "NoProviderError";
-  }
-}
-
-export class ProviderUnavailableError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "ProviderUnavailableError";
-  }
-}
-
-export class ProtocolVersionError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "ProtocolVersionError";
-  }
-}
-
-export class MalformedEnvelopeError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "MalformedEnvelopeError";
-  }
-}
-
-export class MessageTooLargeError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "MessageTooLargeError";
-  }
-}
-
-export class BufferOverflowError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "BufferOverflowError";
-  }
-}
-
-export class StreamClosedError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "StreamClosedError";
-  }
-}
-
-export class ChannelClosedError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "ChannelClosedError";
-  }
-}
-
-export class OutOfOrderError extends SaikuroError {
-  constructor(p: ErrorPayload) {
-    super(p);
-    this.name = "OutOfOrderError";
-  }
-}
+export class FunctionNotFoundError extends SaikuroError {}
+export class InvalidArgumentsError extends SaikuroError {}
+export class CapabilityDeniedError extends SaikuroError {}
+export class TransportError extends SaikuroError {}
+export class SaikuroTimeoutError extends SaikuroError {}
+export class ProviderError extends SaikuroError {}
+export class NoProviderError extends SaikuroError {}
+export class ProviderUnavailableError extends SaikuroError {}
+export class ProtocolVersionError extends SaikuroError {}
+export class MalformedEnvelopeError extends SaikuroError {}
+export class MessageTooLargeError extends SaikuroError {}
+export class BufferOverflowError extends SaikuroError {}
+export class StreamClosedError extends SaikuroError {}
+export class ChannelClosedError extends SaikuroError {}
+export class OutOfOrderError extends SaikuroError {}
 
 // Mapping
 

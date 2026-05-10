@@ -13,16 +13,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import msgpack
 from abc import ABC, abstractmethod
 from typing import Optional
 
-# MessagePack dependency - use the high-performance msgpack library.
-try:
-    import msgpack
-except ImportError as exc:
-    raise ImportError(
-        "saikuro requires 'msgpack': install it with `pip install msgpack`"
-    ) from exc
 
 logger = logging.getLogger(__name__)
 
@@ -101,19 +95,20 @@ class BaseTransport(ABC):
         await self.close()
 
 
-#  Unix socket transport
+#  Stream-based transport (shared by UnixSocket and TCP)
 
 
-class UnixSocketTransport(BaseTransport):
-    """Connects to a Saikuro runtime over a Unix domain socket."""
+class _StreamTransport(BaseTransport):
+    """Shared plumbing for transports backed by ``asyncio.StreamReader`` /
+    ``asyncio.StreamWriter`` (Unix domain sockets and TCP).
 
-    def __init__(self, path: str) -> None:
-        self._path = path
+    Subclasses only need to implement :meth:`connect`; everything else
+    (framed send/recv, close with error handling) is provided here.
+    """
+
+    def __init__(self) -> None:
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
-
-    async def connect(self) -> None:
-        self._reader, self._writer = await asyncio.open_unix_connection(self._path)
 
     async def close(self) -> None:
         if self._writer is not None:
@@ -125,87 +120,62 @@ class UnixSocketTransport(BaseTransport):
                 await writer.wait_closed()
             except Exception:
                 logger.debug(
-                    "UnixSocketTransport.close: error during shutdown", exc_info=True
+                    "%s.close: error during shutdown", type(self).__name__, exc_info=True
                 )
 
     async def send(self, obj: dict) -> None:
         if self._writer is None:
-            raise RuntimeError("UnixSocketTransport: not connected")
+            raise RuntimeError(f"{type(self).__name__}: not connected")
         data = msgpack.packb(obj, use_bin_type=True)
         await _send_frame(self._writer, data)
 
     async def recv(self) -> Optional[dict]:
         if self._reader is None:
-            raise RuntimeError("UnixSocketTransport: not connected")
+            raise RuntimeError(f"{type(self).__name__}: not connected")
         try:
             data = await _recv_frame(self._reader)
         except asyncio.IncompleteReadError as exc:
-            logger.warning("UnixSocketTransport: connection lost mid-frame: %s", exc)
+            logger.warning("%s: connection lost mid-frame: %s", type(self).__name__, exc)
             return None
         if data is None:
             return None
         return msgpack.unpackb(data, raw=False)
 
 
+#  Unix socket transport
+
+
+class UnixSocketTransport(_StreamTransport):
+    """Connects to a Saikuro runtime over a Unix domain socket."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__()
+        self._path = path
+
+    async def connect(self) -> None:
+        self._reader, self._writer = await asyncio.open_unix_connection(self._path)
+
+
 #  TCP transport
 
 
-class TcpTransport(BaseTransport):
+class TcpTransport(_StreamTransport):
     """Connects to a Saikuro runtime over TCP."""
 
     def __init__(self, host: str, port: int) -> None:
+        super().__init__()
         self._host = host
         self._port = port
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
 
     async def connect(self) -> None:
         self._reader, self._writer = await asyncio.open_connection(
             self._host, self._port
         )
 
-    async def close(self) -> None:
-        if self._writer is not None:
-            writer = self._writer
-            self._writer = None
-            self._reader = None
-            try:
-                writer.close()
-                await writer.wait_closed()
-            except Exception:
-                logger.debug("TcpTransport.close: error during shutdown", exc_info=True)
-
-    async def send(self, obj: dict) -> None:
-        if self._writer is None:
-            raise RuntimeError("TcpTransport: not connected")
-        data = msgpack.packb(obj, use_bin_type=True)
-        await _send_frame(self._writer, data)
-
-    async def recv(self) -> Optional[dict]:
-        if self._reader is None:
-            raise RuntimeError("TcpTransport: not connected")
-        try:
-            data = await _recv_frame(self._reader)
-        except asyncio.IncompleteReadError as exc:
-            logger.warning("TcpTransport: connection lost mid-frame: %s", exc)
-            return None
-        if data is None:
-            return None
-        return msgpack.unpackb(data, raw=False)
-
 
 #  WebSocket transport
 
-
-def _require_websockets() -> None:
-    """Raise ImportError with a helpful message when `websockets` is absent."""
-    try:
-        import websockets  # noqa: F401
-    except ImportError as exc:
-        raise ImportError(
-            "saikuro WebSocket transport requires 'websockets': "
-            "install it with `pip install websockets`"
-        ) from exc
+import websockets
 
 
 class WebSocketTransport(BaseTransport):
@@ -233,7 +203,6 @@ class WebSocketTransport(BaseTransport):
         ping_interval: "float | None" = 20.0,
         ping_timeout: "float | None" = 20.0,
     ) -> None:
-        _require_websockets()
         self._uri = uri
         self._max_size = max_size
         self._extra_headers = extra_headers

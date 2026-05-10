@@ -202,16 +202,64 @@ public sealed class InMemoryTransport : ITransport
 }
 
 #if !WASM
+//  Base for TCP / Unix socket transports
+
+/// <summary>
+/// Shared plumbing for transports backed by a <see cref="NetworkStream"/>
+/// with 4-byte big-endian length-prefix framing. Only <see cref="ConnectAsync"/>
+/// and resource cleanup differ between TCP and Unix domain sockets.
+/// </summary>
+public abstract class StreamTransport : ITransport
+{
+    protected NetworkStream? _stream;
+
+    public abstract Task ConnectAsync(CancellationToken ct = default);
+
+    /// <summary>Release any resources beyond <see cref="_stream"/>.</summary>
+    protected abstract void Cleanup();
+
+    public async Task CloseAsync(CancellationToken ct = default)
+    {
+        if (_stream is not null)
+        {
+            await _stream.DisposeAsync().ConfigureAwait(false);
+            _stream = null;
+        }
+        Cleanup();
+    }
+
+    public async Task SendAsync(Dictionary<string, object?> obj, CancellationToken ct = default)
+    {
+        EnsureConnected();
+        var payload = MsgpackHelper.Encode(obj);
+        await FrameCodec.WriteFrameAsync(_stream!, payload, ct).ConfigureAwait(false);
+    }
+
+    public async Task<Dictionary<string, object?>?> RecvAsync(CancellationToken ct = default)
+    {
+        EnsureConnected();
+        var payload = await FrameCodec.ReadFrameAsync(_stream!, ct).ConfigureAwait(false);
+        if (payload is null)
+            return null;
+        return MsgpackHelper.Decode(payload);
+    }
+
+    private void EnsureConnected()
+    {
+        if (_stream is null)
+            throw new InvalidOperationException("StreamTransport: not connected.");
+    }
+}
+
 //  TcpTransport
 
 /// <summary>TCP transport with 4-byte big-endian length-prefix framing.
 /// Not available on WebAssembly (Blazor).</summary>
-public sealed class TcpTransport : ITransport
+public sealed class TcpTransport : StreamTransport
 {
     private readonly string _host;
     private readonly int _port;
     private TcpClient? _client;
-    private NetworkStream? _stream;
 
     public TcpTransport(string host, int port)
     {
@@ -219,44 +267,17 @@ public sealed class TcpTransport : ITransport
         _port = port;
     }
 
-    public async Task ConnectAsync(CancellationToken ct = default)
+    public override async Task ConnectAsync(CancellationToken ct = default)
     {
         _client = new TcpClient();
         await _client.ConnectAsync(_host, _port, ct).ConfigureAwait(false);
         _stream = _client.GetStream();
     }
 
-    public async Task CloseAsync(CancellationToken ct = default)
+    protected override void Cleanup()
     {
-        if (_stream is not null)
-        {
-            await _stream.DisposeAsync().ConfigureAwait(false);
-            _stream = null;
-        }
         _client?.Dispose();
         _client = null;
-    }
-
-    public async Task SendAsync(Dictionary<string, object?> obj, CancellationToken ct = default)
-    {
-        EnsureConnected();
-        var payload = MsgpackHelper.Encode(obj);
-        await FrameCodec.WriteFrameAsync(_stream!, payload, ct).ConfigureAwait(false);
-    }
-
-    public async Task<Dictionary<string, object?>?> RecvAsync(CancellationToken ct = default)
-    {
-        EnsureConnected();
-        var payload = await FrameCodec.ReadFrameAsync(_stream!, ct).ConfigureAwait(false);
-        if (payload is null)
-            return null;
-        return MsgpackHelper.Decode(payload);
-    }
-
-    private void EnsureConnected()
-    {
-        if (_stream is null)
-            throw new InvalidOperationException("TcpTransport: not connected.");
     }
 }
 
@@ -264,15 +285,14 @@ public sealed class TcpTransport : ITransport
 
 /// <summary>Unix domain socket transport with 4-byte big-endian length-prefix framing.
 /// Not available on WebAssembly (Blazor).</summary>
-public sealed class UnixSocketTransport : ITransport
+public sealed class UnixSocketTransport : StreamTransport
 {
     private readonly string _path;
     private Socket? _socket;
-    private NetworkStream? _stream;
 
     public UnixSocketTransport(string path) => _path = path;
 
-    public async Task ConnectAsync(CancellationToken ct = default)
+    public override async Task ConnectAsync(CancellationToken ct = default)
     {
         _socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var ep = new UnixDomainSocketEndPoint(_path);
@@ -280,37 +300,10 @@ public sealed class UnixSocketTransport : ITransport
         _stream = new NetworkStream(_socket, ownsSocket: false);
     }
 
-    public async Task CloseAsync(CancellationToken ct = default)
+    protected override void Cleanup()
     {
-        if (_stream is not null)
-        {
-            await _stream.DisposeAsync().ConfigureAwait(false);
-            _stream = null;
-        }
         _socket?.Dispose();
         _socket = null;
-    }
-
-    public async Task SendAsync(Dictionary<string, object?> obj, CancellationToken ct = default)
-    {
-        EnsureConnected();
-        var payload = MsgpackHelper.Encode(obj);
-        await FrameCodec.WriteFrameAsync(_stream!, payload, ct).ConfigureAwait(false);
-    }
-
-    public async Task<Dictionary<string, object?>?> RecvAsync(CancellationToken ct = default)
-    {
-        EnsureConnected();
-        var payload = await FrameCodec.ReadFrameAsync(_stream!, ct).ConfigureAwait(false);
-        if (payload is null)
-            return null;
-        return MsgpackHelper.Decode(payload);
-    }
-
-    private void EnsureConnected()
-    {
-        if (_stream is null)
-            throw new InvalidOperationException("UnixSocketTransport: not connected.");
     }
 }
 #endif

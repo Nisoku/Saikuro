@@ -21,26 +21,22 @@ internal interface IDeliverable
     void Close();
 }
 
-//  SaikuroStream<T>
+//  Base class for stream / channel handles
 
-/// <summary>
-/// An async-enumerable stream of values received from the provider.
-/// Obtained from <see cref="SaikuroClient.StreamAsync{T}"/>.
-/// </summary>
-public sealed class SaikuroStream<T> : IAsyncEnumerable<T>, IDeliverable
+/// <summary>Shared async-enumerable plumbing for stream and channel types.</summary>
+public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
 {
-    private readonly string _id;
+    protected readonly string _id;
     private readonly System.Threading.Channels.Channel<ResponseEnvelope?> _ch =
         System.Threading.Channels.Channel.CreateUnbounded<ResponseEnvelope?>();
-    private bool _done;
+    protected bool _done;
 
-    internal SaikuroStream(string id) => _id = id;
+    protected BaseSaikuroHandle(string id) => _id = id;
 
-    /// <summary>The invocation ID that identifies this stream.</summary>
+    /// <summary>The invocation ID that identifies this handle.</summary>
     public string InvocationId => _id;
 
     void IDeliverable.Deliver(ResponseEnvelope resp) => _ch.Writer.TryWrite(resp);
-
     void IDeliverable.Close() => _ch.Writer.TryComplete();
 
     public async IAsyncEnumerator<T> GetAsyncEnumerator(
@@ -74,6 +70,17 @@ public sealed class SaikuroStream<T> : IAsyncEnumerable<T>, IDeliverable
     }
 }
 
+//  SaikuroStream<T>
+
+/// <summary>
+/// An async-enumerable stream of values received from the provider.
+/// Obtained from <see cref="SaikuroClient.StreamAsync{T}"/>.
+/// </summary>
+public sealed class SaikuroStream<T> : BaseSaikuroHandle<T>
+{
+    internal SaikuroStream(string id) : base(id) { }
+}
+
 //  SaikuroChannel<TIn, TOut>
 
 /// <summary>
@@ -81,22 +88,14 @@ public sealed class SaikuroStream<T> : IAsyncEnumerable<T>, IDeliverable
 /// use <see cref="SendAsync"/> to send items to the provider.
 /// Obtained from <see cref="SaikuroClient.ChannelAsync{TIn,TOut}"/>.
 /// </summary>
-public sealed class SaikuroChannel<TIn, TOut> : IAsyncEnumerable<TIn>, IDeliverable
+public sealed class SaikuroChannel<TIn, TOut> : BaseSaikuroHandle<TIn>
 {
-    private readonly string _id;
     private readonly Func<string, object?, Task> _sendFn;
-    private readonly System.Threading.Channels.Channel<ResponseEnvelope?> _ch =
-        System.Threading.Channels.Channel.CreateUnbounded<ResponseEnvelope?>();
-    private bool _done;
 
-    internal SaikuroChannel(string id, Func<string, object?, Task> sendFn)
+    internal SaikuroChannel(string id, Func<string, object?, Task> sendFn) : base(id)
     {
-        _id = id;
         _sendFn = sendFn;
     }
-
-    /// <summary>The invocation ID that identifies this channel.</summary>
-    public string InvocationId => _id;
 
     /// <summary>Send a message to the provider side of the channel.</summary>
     public Task SendAsync(TOut value, CancellationToken ct = default)
@@ -104,40 +103,6 @@ public sealed class SaikuroChannel<TIn, TOut> : IAsyncEnumerable<TIn>, IDelivera
         if (_done)
             throw new InvalidOperationException("Channel is already closed.");
         return _sendFn(_id, value);
-    }
-
-    void IDeliverable.Deliver(ResponseEnvelope resp) => _ch.Writer.TryWrite(resp);
-
-    void IDeliverable.Close() => _ch.Writer.TryComplete();
-
-    public async IAsyncEnumerator<TIn> GetAsyncEnumerator(
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (_done)
-            yield break;
-        await foreach (var item in _ch.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (item is null)
-            {
-                _done = true;
-                yield break;
-            }
-            if (item.IsStreamEnd)
-            {
-                _done = true;
-                yield break;
-            }
-            if (!item.Ok)
-            {
-                _done = true;
-                var payload =
-                    item.Error
-                    ?? new ErrorPayload { Code = "Internal", Message = "channel ended with error" };
-                throw SaikuroException.FromPayload(payload);
-            }
-            yield return (TIn)item.Result!;
-        }
     }
 }
 

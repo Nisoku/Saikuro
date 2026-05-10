@@ -6,14 +6,14 @@
 //! - An `index.ts` that re-exports everything.
 
 use saikuro_core::schema::{
-    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+    FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };
 
 use crate::{
     error::Result,
     generator::{
-        generate_types_and_namespace_clients, generate_types_from_schema, BindingGenerator,
-        GeneratorOutput,
+        convert_type, generate_types_and_namespace_clients, generate_types_from_schema,
+        BindingGenerator, GeneratorOutput, TypeConverter,
     },
     to_pascal_case,
 };
@@ -50,13 +50,15 @@ impl TypeScriptGenerator {
             String::new(),
         ];
 
+        let type_to_ts = |desc: &TypeDescriptor| self.type_to_ts(desc);
+
         generate_types_from_schema(
             schema,
             header,
             |type_name, fields| {
                 let mut lines = vec![format!("export interface {type_name} {{")];
                 for (field_name, field_desc) in fields {
-                    let ts_type = TypeScriptGenerator::type_to_ts(&field_desc.r#type)?;
+                    let ts_type = type_to_ts(&field_desc.r#type);
                     let optional = if field_desc.optional { "?" } else { "" };
                     lines.push(format!("  {field_name}{optional}: {ts_type};"));
                 }
@@ -73,7 +75,7 @@ impl TypeScriptGenerator {
                 Ok(lines)
             },
             |type_name, inner| {
-                let ts_type = TypeScriptGenerator::type_to_ts(inner)?;
+                let ts_type = type_to_ts(inner);
                 Ok(vec![
                     format!("export type {type_name} = {ts_type};"),
                     String::new(),
@@ -108,11 +110,7 @@ impl TypeScriptGenerator {
         lines.push("  constructor(private readonly client: SaikuroClient) {}".to_owned());
         lines.push(String::new());
 
-        for (fn_name, fn_schema) in &ns.functions {
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method = self.generate_method(ns_name, fn_name, fn_schema)?;
             lines.push(method);
         }
@@ -133,7 +131,7 @@ impl TypeScriptGenerator {
         let mut call_args = vec![];
 
         for arg in &schema.args {
-            let ts_type = Self::type_to_ts(&arg.r#type)?;
+            let ts_type = self.type_to_ts(&arg.r#type);
             let optional = if arg.optional { "?" } else { "" };
             params.push(format!("{}{}: {}", arg.name, optional, ts_type));
             call_args.push(arg.name.clone());
@@ -151,7 +149,7 @@ impl TypeScriptGenerator {
         // Choose the correct client primitive based on the return type.
         match &schema.returns {
             TypeDescriptor::Stream { item } => {
-                let item_ts = Self::type_to_ts(item)?;
+                let item_ts = self.type_to_ts(item);
                 lines.push(format!(
                     "  async {}({}): Promise<AsyncIterable<{}>> {{",
                     fn_name,
@@ -164,8 +162,8 @@ impl TypeScriptGenerator {
                 lines.push("  }".to_owned());
             }
             TypeDescriptor::Channel { inbound, outbound } => {
-                let in_ts = Self::type_to_ts(inbound)?;
-                let out_ts = Self::type_to_ts(outbound)?;
+                let in_ts = self.type_to_ts(inbound);
+                let out_ts = self.type_to_ts(outbound);
                 lines.push(format!(
                     "  async {}({}): Promise<SaikuroChannel<{}, {}>> {{",
                     fn_name,
@@ -179,7 +177,7 @@ impl TypeScriptGenerator {
                 lines.push("  }".to_owned());
             }
             _ => {
-                let return_type = Self::type_to_ts(&schema.returns)?;
+                let return_type = self.type_to_ts(&schema.returns);
                 lines.push(format!(
                     "  async {}({}): Promise<{}> {{",
                     fn_name,
@@ -198,45 +196,53 @@ impl TypeScriptGenerator {
         Ok(lines.join("\n"))
     }
 
-    fn type_to_ts(desc: &TypeDescriptor) -> Result<String> {
-        Ok(match desc {
-            TypeDescriptor::Primitive { r#type } => match r#type {
-                PrimitiveType::Bool => "boolean".to_owned(),
-                PrimitiveType::I8
-                | PrimitiveType::I16
-                | PrimitiveType::I32
-                | PrimitiveType::I64
-                | PrimitiveType::U8
-                | PrimitiveType::U16
-                | PrimitiveType::U32
-                | PrimitiveType::U64
-                | PrimitiveType::F32
-                | PrimitiveType::F64 => "number".to_owned(),
-                PrimitiveType::String => "string".to_owned(),
-                PrimitiveType::Bytes => "Uint8Array".to_owned(),
-                PrimitiveType::Any => "unknown".to_owned(),
-                PrimitiveType::Unit => "void".to_owned(),
-            },
-            TypeDescriptor::Named { name } => format!("Types.{name}"),
-            TypeDescriptor::Option { inner } => {
-                format!("{} | null", Self::type_to_ts(inner)?)
-            }
-            TypeDescriptor::Array { item } => {
-                format!("Array<{}>", Self::type_to_ts(item)?)
-            }
-            TypeDescriptor::Map { value } => {
-                format!("Record<string, {}>", Self::type_to_ts(value)?)
-            }
-            TypeDescriptor::Stream { item } => {
-                format!("AsyncIterable<{}>", Self::type_to_ts(item)?)
-            }
-            TypeDescriptor::Channel { inbound, outbound } => {
-                format!(
-                    "SaikuroChannel<{}, {}>",
-                    Self::type_to_ts(inbound)?,
-                    Self::type_to_ts(outbound)?
-                )
-            }
-        })
+    fn type_to_ts(&self, desc: &TypeDescriptor) -> String {
+        convert_type(desc, self)
+    }
+}
+
+impl TypeConverter for TypeScriptGenerator {
+    fn primitive_name(&self, t: &PrimitiveType) -> &'static str {
+        match t {
+            PrimitiveType::Bool => "boolean",
+            PrimitiveType::I8
+            | PrimitiveType::I16
+            | PrimitiveType::I32
+            | PrimitiveType::I64
+            | PrimitiveType::U8
+            | PrimitiveType::U16
+            | PrimitiveType::U32
+            | PrimitiveType::U64
+            | PrimitiveType::F32
+            | PrimitiveType::F64 => "number",
+            PrimitiveType::String => "string",
+            PrimitiveType::Bytes => "Uint8Array",
+            PrimitiveType::Any => "unknown",
+            PrimitiveType::Unit => "void",
+        }
+    }
+
+    fn named_type(&self, name: &str) -> String {
+        format!("Types.{name}")
+    }
+
+    fn wrap_option(&self, inner: &str) -> String {
+        format!("{inner} | null")
+    }
+
+    fn wrap_array(&self, inner: &str) -> String {
+        format!("Array<{inner}>")
+    }
+
+    fn wrap_map(&self, value: &str) -> String {
+        format!("Record<string, {value}>")
+    }
+
+    fn wrap_stream(&self, item: &str) -> String {
+        format!("AsyncIterable<{item}>")
+    }
+
+    fn wrap_channel(&self, inbound: &str, outbound: &str) -> String {
+        format!("SaikuroChannel<{inbound}, {outbound}>")
     }
 }
