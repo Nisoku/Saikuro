@@ -37,8 +37,8 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install Python test dependency
-        run: python3 -m pip install msgpack
+      - name: Install Python test dependencies
+        run: python3 -m pip install msgpack websockets
 
       - name: Type-check
         run: npm run typecheck
