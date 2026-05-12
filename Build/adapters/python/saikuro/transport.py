@@ -28,11 +28,15 @@ _LENGTH_HEADER = struct.Struct(">I")  # big-endian uint32
 _MAX_FRAME_SIZE = 16 * 1024 * 1024  # 16 MiB - matches the Rust framing codec
 
 
-async def _send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
+def _check_frame_size(data: bytes) -> None:
     if len(data) > _MAX_FRAME_SIZE:
         raise ValueError(
             f"frame {len(data)} bytes exceeds maximum {_MAX_FRAME_SIZE} bytes"
         )
+
+
+async def _send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
+    _check_frame_size(data)
     header = _LENGTH_HEADER.pack(len(data))
     writer.write(header + data)
     await writer.drain()
@@ -251,10 +255,7 @@ class WebSocketTransport(BaseTransport):
         if self._closed or self._ws is None:
             raise RuntimeError("WebSocketTransport: not connected")
         data: bytes = msgpack.packb(obj, use_bin_type=True)
-        if len(data) > _MAX_FRAME_SIZE:
-            raise ValueError(
-                f"frame {len(data)} bytes exceeds maximum {_MAX_FRAME_SIZE} bytes"
-            )
+        _check_frame_size(data)
         try:
             await self._ws.send(data)  # type: ignore[union-attr]
         except Exception as exc:
@@ -379,7 +380,7 @@ def make_transport(address: str) -> BaseTransport:
     """
     global _memory_channels, _memory_channels_lock
 
-    if address == "memory://" or address.startswith("memory://"):
+    if address.startswith("memory://"):
         name = address[len("memory://") :] if len(address) > len("memory://") else "default"
         with _memory_channels_lock:
             if name in _memory_channels:

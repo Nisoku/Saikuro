@@ -60,12 +60,14 @@ function toSaikuroLevel(level: string): LogLevel {
  * @param transport - An open transport connected to the Saikuro runtime.
  * @returns A function that can be called with (level, name, message, fields).
  */
-export function createLoggingHandler(transport: Transport) {
+export function createLoggingHandler(
+  transport: Transport,
+): (level: string, name: string, msg: string, fields?: Record<string, unknown>) => void {
   return function log(
     level: string,
     name: string,
     msg: string,
-    fields?: Record<string, unknown>
+    fields?: Record<string, unknown>,
   ): void {
     const ts = new Date().toISOString();
     const saikuroLevel = toSaikuroLevel(level);

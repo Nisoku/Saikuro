@@ -143,11 +143,6 @@
 **File:** `Build/adapters/python/saikuro/client.py:115-275`
 **Issue:** ~15 identical lines (create future → register → send → wait → cleanup → error check) duplicated across all three methods.
 
-### M29. `_send_frame()` frame-size check duplicated in `WebSocketTransport.send()`
-
-**File:** `Build/adapters/python/saikuro/transport.py:37-43` and `288-291`
-**Issue:** Identical `len(data) > _MAX_FRAME_SIZE` check in both places.
-
 ### M30. Module-level mutable global state for memory channels in Python
 
 **File:** `Build/adapters/python/saikuro/transport.py:386`
@@ -222,11 +217,6 @@
 
 **File:** `Build/adapters/cpp/tests/wrapper_behavior.cpp:57-254`
 **Issue:** Re-implements every function from `saikuro.h` as mock. If the C API changes, this file breaks silently.
-
-### M58. `Stream`/`Channel` response construction uses inline raw dicts in Python provider
-
-**File:** `Build/adapters/python/saikuro/provider.py:222-248`
-**Issue:** Stream responses built as raw dicts inline, while call/cast use `_make_ok`/`_make_error` helpers. Inconsistent.
 
 ### M59. `Ui` class in build script duplicates `if self._tui` in all 8 methods
 
@@ -347,30 +337,10 @@
 **File:** All test files
 **Issue:** ~200+ `saikuro_exec::block_on(async { ... })` wrappers across the test suite.
 
-### L18. `as` type assertions in TypeScript `client.ts` that bypass type safety
-
-**File:** `Build/adapters/typescript/src/client.ts:95,96,101,102,107,112,116,119`
-**Issue:** `undefined as unknown as T`, `item.result as T`, etc. — discard all type safety.
-
-### L19. Magic number `0` for "no timeout" in TypeScript client
-
-**File:** `Build/adapters/typescript/src/client.ts:268`
-**Issue:** `defaultTimeoutMs: options.defaultTimeoutMs ?? 0` — 0 means "no timeout" but is a magic sentinel.
-
 ### L20. `_channelSend` constructs raw envelope dict with `target: ""` instead of using factory
 
 **File:** `Build/adapters/typescript/src/client.ts:578-586`
 **Issue:** Manual envelope construction duplicates `envelope.ts` factories.
-
-### L21. `Logger._emit` spreads `...extra` that could overwrite base fields
-
-**File:** `Build/adapters/typescript/src/logger.ts:156`
-**Issue:** Spreading `...extra` means `{ ts: "malicious" }` could overwrite `ts`, `level`, `name`, `msg`.
-
-### L22. `createLoggingHandler` return type not declared in TypeScript
-
-**File:** `Build/adapters/typescript/src/logging_handler.ts:63`
-**Issue:** Missing explicit return type.
 
 ### L23. Duplicate list-handling code paths in TypeScript schema extractor
 
@@ -392,25 +362,10 @@
 **File:** `Build/adapters/python/saikuro/client.py:309,552`
 **Issue:** Known anti-pattern that creates flaky tests.
 
-### L27. `Transport address parsing logic is convoluted in Python
-
-**File:** `Build/adapters/python/saikuro/transport.py:408-415`
-**Issue:** Double-check `address == "memory://"` and `address.startswith("memory://")` is redundant.
-
 ### L32. .NET 8 version hardcoded in build script
 
 **File:** `Build/scripts/saikuro_build.py:270`
 **Issue:** `_has_dotnet_runtime_8` — magic string `"8."`.
-
-### L33. `CleanXmlText` only collapses double spaces once
-
-**File:** `Build/adapters/csharp/Saikuro/src/SchemaExtractor.cs:428-431`
-**Issue:** `"a   b"` (triple space) becomes `"a  b"` (still double). Should use `Regex.Replace(@"\s+", " ")`.
-
-### L34. `Program.cs` in C# tools returns 0 even on failure
-
-**File:** `Build/adapters/csharp/tools/extractor/Program.cs:10-19`
-**Issue:** No error handling for schema extraction or JSON serialization failure.
 
 ### L35. `SchemaExtractor.cs` returns empty parser silently when file doesn't exist
 

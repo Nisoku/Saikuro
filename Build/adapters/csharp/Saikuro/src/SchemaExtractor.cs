@@ -27,6 +27,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Saikuro;
 
 namespace Saikuro.Schema;
@@ -278,7 +279,7 @@ public class XmlDocumentationParser
 
     private static string CleanXmlText(string text)
     {
-        return text.Replace("\r", "").Replace("\n", " ").Replace("  ", " ").Trim();
+        return Regex.Replace(text, @"\s+", " ").Trim();
     }
 
     public string? GetMemberDoc(string fullMemberName)

@@ -143,11 +143,11 @@ export class Logger {
   ): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[_minLevel]) return;
     const record: LogRecord = {
+      ...extra,
       ts: new Date().toISOString(),
       level,
       name: this._name,
       msg,
-      ...extra,
     };
     _sink(record);
   }

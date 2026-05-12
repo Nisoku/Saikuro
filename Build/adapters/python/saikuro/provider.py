@@ -218,12 +218,7 @@ class SaikuroProvider:
         seq = 0
         try:
             async for item in handler(*envelope.args):
-                response = {
-                    "id": envelope.id,
-                    "ok": True,
-                    "result": item,
-                    "seq": seq,
-                }
+                response = {**_make_ok(envelope.id, item), "seq": seq}
                 await transport.send(response)
                 seq += 1
             # End-of-stream sentinel

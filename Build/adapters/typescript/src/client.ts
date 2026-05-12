@@ -115,10 +115,10 @@ class BaseSaikuroHandle<T = unknown>
 
     if (!item.ok) {
       this._done = true;
-      const payload = (item.error ?? {
+      const payload: ErrorPayload = (item.error ?? {
         code: "Internal",
         message: "stream ended with error",
-      }) as ErrorPayload;
+      });
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -167,10 +167,13 @@ export class SaikuroChannel<TIn = unknown, TOut = unknown>
 
 // Client options
 
+/** Sentinel value meaning "no timeout". */
+const NO_TIMEOUT = 0;
+
 export interface ClientOptions {
   /**
    * Default timeout for `call` invocations, in milliseconds.
-   * `0` means no timeout. Defaults to `0`.
+   * `0` (`NO_TIMEOUT`) means no timeout. Defaults to `0`.
    */
   defaultTimeoutMs?: number;
 }
@@ -208,7 +211,7 @@ export class SaikuroClient {
   private constructor(transport: Transport, options: ClientOptions = {}) {
     this._transport = transport;
     this._options = {
-      defaultTimeoutMs: options.defaultTimeoutMs ?? 0,
+      defaultTimeoutMs: options.defaultTimeoutMs ?? NO_TIMEOUT,
     };
   }
 
@@ -293,10 +296,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = (response.error ?? {
         code: "Internal",
         message: "call failed",
-      }) as ErrorPayload;
+      });
       throw SaikuroError.fromPayload(payload);
     }
     return response.result;
@@ -341,10 +344,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = (response.error ?? {
         code: "Internal",
         message: "resource call failed",
-      }) as ErrorPayload;
+      });
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -417,10 +420,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(batchEnvelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = (response.error ?? {
         code: "Internal",
         message: "batch call failed",
-      }) as ErrorPayload;
+      });
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -491,7 +494,7 @@ export class SaikuroClient {
     return new Promise<ResponseEnvelope>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      if (timeoutMs > 0) {
+      if (timeoutMs !== NO_TIMEOUT) {
         timer = setTimeout(() => {
           this._pendingCalls.delete(envelope.id);
           reject(
