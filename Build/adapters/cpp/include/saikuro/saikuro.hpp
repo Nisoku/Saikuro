@@ -150,7 +150,7 @@ public:
     private:
         friend class MoveOnlyHandle<Channel, saikuro_channel_t>;
         void destroy_impl() {
-            if (open_) { (void)saikuro_channel_close(handle_); }
+            if (open_) { std::ignore = saikuro_channel_close(handle_); }
             saikuro_channel_free(handle_);
         }
 
@@ -241,7 +241,7 @@ public:
 private:
     friend class MoveOnlyHandle<Client, saikuro_client_t>;
     void destroy_impl() {
-        (void)saikuro_client_close(handle_);
+        std::ignore = saikuro_client_close(handle_);
         saikuro_client_free(handle_);
     }
 };

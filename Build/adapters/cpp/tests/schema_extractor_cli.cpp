@@ -1,7 +1,6 @@
 #include <saikuro/schema_extractor.hpp>
 
 #include <cassert>
-#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -13,7 +12,7 @@ static void contains_or_fail(const std::string& text, const std::string& needle)
     if (text.find(needle) == std::string::npos) {
         std::cerr << "Expected to find substring: '" << needle << "'\n";
         std::cerr << "Actual text:\n" << text << "\n";
-        std::abort();
+        assert(!"Expected to find substring");
     }
 }
 
@@ -35,8 +34,8 @@ int main() {
 
     bool threw = false;
     try {
-        (void)saikuro::extract_schema_from_file("/definitely/missing/header.h", "parityns", false);
-    } catch (...) {
+        std::ignore = saikuro::extract_schema_from_file("/definitely/missing/header.h", "parityns", false);
+    } catch (const std::exception&) {
         threw = true;
     }
     assert(threw);

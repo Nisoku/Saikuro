@@ -315,6 +315,8 @@ public sealed class UnixSocketTransport : StreamTransport
 /// </summary>
 public sealed class WebSocketTransport : ITransport
 {
+    private const int WebSocketBufferSize = 4096;
+
     private readonly Uri _uri;
     private ClientWebSocket? _ws;
 
@@ -356,7 +358,7 @@ public sealed class WebSocketTransport : ITransport
         try
         {
             // Accumulate the message across potentially multiple WS fragments.
-            var buf = new byte[4096];
+            var buf = new byte[WebSocketBufferSize];
             using var ms = new System.IO.MemoryStream();
             WebSocketReceiveResult result;
             do

@@ -92,7 +92,6 @@ export function createLoggingHandler(transport: Transport) {
     // Fire-and-forget; swallow errors to prevent infinite recursion.
     transport
       .send(envelope)
-      .then(() => {})
       .catch(() => {});
   };
 }

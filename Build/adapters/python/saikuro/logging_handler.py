@@ -28,6 +28,7 @@ import logging
 import traceback
 from typing import Any, Dict
 
+from .client import SaikuroClient
 from .envelope import Envelope, InvocationType, LogLevel, LogRecord
 
 # Mapping from Python logging levels to Saikuro LogLevel values.
@@ -65,9 +66,9 @@ class SaikuroLoggingHandler(logging.Handler):
         level:    Minimum Python logging level to forward (default: ``NOTSET``).
     """
 
-    def __init__(self, client: Any, level: int = logging.NOTSET) -> None:
+    def __init__(self, client: SaikuroClient, level: int = logging.NOTSET) -> None:
         super().__init__(level)
-        self._client = client
+        self._client: SaikuroClient = client
 
     def emit(self, record: logging.LogRecord) -> None:
         """Serialise ``record`` and schedule a fire-and-forget send."""

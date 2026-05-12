@@ -1,5 +1,6 @@
 #include <saikuro/schema_extractor.hpp>
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -17,42 +18,38 @@ int main(int argc, char** argv) {
     bool pretty = false;
     std::string header_path;
 
-    std::vector<std::string> args;
     for (int i = 1; i < argc; ++i) {
-        args.push_back(argv[i]);
-    }
-
-    for (size_t i = 0; i < args.size(); ++i) {
-        if (args[i] == "--pretty") {
+        const std::string arg(argv[i]);
+        if (arg == "--pretty") {
             pretty = true;
             continue;
         }
-        if (args[i] == "--namespace") {
-            if (i + 1 >= args.size()) {
+        if (arg == "--namespace") {
+            if (i + 1 >= argc) {
                 std::cerr << "--namespace requires a value\n";
                 print_usage();
-                return 2;
+                return EXIT_FAILURE;
             }
-            namespace_name = args[i + 1];
+            namespace_name = argv[i + 1];
             i += 1;
             continue;
         }
-        if (!args[i].empty() && args[i][0] == '-') {
-            std::cerr << "unknown argument: " << args[i] << "\n";
+        if (!arg.empty() && arg[0] == '-') {
+            std::cerr << "unknown argument: " << arg << "\n";
             print_usage();
-            return 2;
+            return EXIT_FAILURE;
         }
         if (!header_path.empty()) {
-            std::cerr << "unexpected extra positional argument: " << args[i] << "\n";
+            std::cerr << "unexpected extra positional argument: " << arg << "\n";
             print_usage();
-            return 2;
+            return EXIT_FAILURE;
         }
-        header_path = args[i];
+        header_path = arg;
     }
 
     if (header_path.empty()) {
         print_usage();
-        return 2;
+        return EXIT_FAILURE;
     }
 
     try {
@@ -60,8 +57,8 @@ int main(int argc, char** argv) {
         std::cout << schema << std::endl;
     } catch (const std::exception& ex) {
         std::cerr << ex.what() << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

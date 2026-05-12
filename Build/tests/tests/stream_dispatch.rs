@@ -7,32 +7,17 @@ use saikuro_core::{
     value::Value,
     ResponseEnvelope,
 };
-use saikuro_exec::mpsc;
-use saikuro_router::{
-    provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::InvocationRouter,
-};
+use saikuro_router::provider::ProviderRegistry;
+use saikuro_router::router::InvocationRouter;
 
-// Helpers
-
-fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
-    let handle = ProviderHandle::new(
-        format!("{namespace}-provider"),
-        vec![namespace.to_owned()],
-        work_tx,
-    );
-    let registry = ProviderRegistry::new();
-    registry.register(handle);
-    (registry, work_rx)
-}
+mod common;
 
 //  Tests
 
 #[test]
 fn stream_open_returns_ok_empty() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("events");
+        let (registry, mut work_rx) = common::make_provider("events");
 
         // Consume work items (provider side).
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -50,7 +35,7 @@ fn stream_open_returns_ok_empty() {
 #[test]
 fn route_stream_item_delivers_to_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("data");
+        let (registry, mut work_rx) = common::make_provider("data");
 
         // The provider will send items back via route_stream_item.
         let router = InvocationRouter::with_providers(registry);
@@ -74,7 +59,7 @@ fn route_stream_item_delivers_to_state() {
 #[test]
 fn route_stream_end_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("fin");
+        let (registry, mut work_rx) = common::make_provider("fin");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::stream_open("fin.feed", vec![]);
@@ -127,7 +112,7 @@ fn stream_open_to_unknown_namespace_returns_no_provider() {
 #[test]
 fn multiple_streams_are_independent() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("multi");
+        let (registry, mut work_rx) = common::make_provider("multi");
         let router = InvocationRouter::with_providers(registry);
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -164,7 +149,7 @@ fn multiple_streams_are_independent() {
 #[test]
 fn out_of_order_item_is_dropped_not_panicked() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("ooo");
+        let (registry, mut work_rx) = common::make_provider("ooo");
         let router = InvocationRouter::with_providers(registry);
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -187,7 +172,7 @@ fn out_of_order_item_is_dropped_not_panicked() {
 #[test]
 fn stream_abort_control_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("abort");
+        let (registry, mut work_rx) = common::make_provider("abort");
         let router = InvocationRouter::with_providers(registry);
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });

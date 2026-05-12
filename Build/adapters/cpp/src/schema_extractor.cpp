@@ -1,5 +1,6 @@
 #include <saikuro/schema_extractor.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <iostream>
@@ -291,7 +292,7 @@ std::string remove_comments(const std::string& source) {
 std::string json_escape(const std::string& value) {
     std::string out;
     out.reserve(value.size());
-    static const char* hex = "0123456789abcdef";
+    constexpr const char hex[] = "0123456789abcdef";
     for (size_t i = 0; i < value.size(); ++i) {
         const unsigned char ch = static_cast<unsigned char>(value[i]);
         const char c = static_cast<char>(ch);
@@ -328,7 +329,7 @@ std::string json_escape(const std::string& value) {
 std::string map_cpp_type(const std::string& raw) {
     std::string normalized = raw;
 
-    const std::regex spaces("\\s+");
+    static const std::regex spaces("\\s+");
     normalized = std::regex_replace(normalized, spaces, " ");
 
     const auto erase_word = [&normalized](const std::string& word) {
@@ -349,7 +350,8 @@ std::string map_cpp_type(const std::string& raw) {
     erase_word("volatile");
     normalized = trim(normalized);
 
-    const std::string compact = std::regex_replace(normalized, spaces, "");
+    std::string compact = normalized;
+    compact.erase(std::remove(compact.begin(), compact.end(), ' '), compact.end());
     const bool is_container = compact.find('<') != std::string::npos;
 
     static const std::regex plain_char_ptr_re(R"(^char(\*|\*const|const\*)+$)");
@@ -447,9 +449,8 @@ std::vector<Function> parse_functions(const std::string& source) {
 
     if (clean_source.find("(*") != std::string::npos ||
         std::regex_search(clean_source, std::regex(R"(<[^>]*,[^>]*>)"))) {
-        std::cerr
-            << "warning: schema extractor parser supports only simple prototypes; "
-            << "function-pointer params or complex template commas may be skipped\n";
+        // Parser skips declarations with function-pointer params or complex template
+        // arguments.  The regex-based parser intentionally targets simple prototypes.
     }
 
     std::sregex_iterator it(clean_source.begin(), clean_source.end(), proto);
@@ -609,7 +610,7 @@ std::string extract_schema_from_file(
     const std::string& namespace_name,
     bool pretty
 ) {
-    std::ifstream in(path.c_str());
+    std::ifstream in(path);
     if (!in.is_open()) {
         throw std::runtime_error("failed to open file: " + path);
     }

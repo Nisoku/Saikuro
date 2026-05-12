@@ -13,10 +13,12 @@ pub type Value = serde_json::Value;
 
 /// Convert a `saikuro_core::value::Value` into a [`Value`] (JSON).
 pub fn core_to_json(v: saikuro_core::value::Value) -> Value {
-    // saikuro_core::value::Value serialises to JSON via serde.
     match serde_json::to_value(&v) {
         Ok(j) => j,
-        Err(_) => Value::Null,
+        Err(e) => {
+            tracing::warn!(error = %e, "core_to_json serialization failed");
+            Value::Null
+        }
     }
 }
 
@@ -24,6 +26,9 @@ pub fn core_to_json(v: saikuro_core::value::Value) -> Value {
 pub fn json_to_core(v: Value) -> saikuro_core::value::Value {
     match serde_json::from_value(v) {
         Ok(c) => c,
-        Err(_) => saikuro_core::value::Value::Null,
+        Err(e) => {
+            tracing::warn!(error = %e, "json_to_core deserialization failed");
+            saikuro_core::value::Value::Null
+        }
     }
 }

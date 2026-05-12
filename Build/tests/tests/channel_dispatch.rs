@@ -8,24 +8,10 @@ use saikuro_core::{
     ResponseEnvelope,
 };
 use saikuro_exec::mpsc;
-use saikuro_router::{
-    provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::InvocationRouter,
-};
+use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
+use saikuro_router::router::InvocationRouter;
 
-//  Helpers
-
-fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
-    let handle = ProviderHandle::new(
-        format!("{namespace}-provider"),
-        vec![namespace.to_owned()],
-        work_tx,
-    );
-    let registry = ProviderRegistry::new();
-    registry.register(handle);
-    (registry, work_rx)
-}
+mod common;
 
 fn channel_item(id: InvocationId, seq: u64, value: Value) -> ResponseEnvelope {
     ResponseEnvelope {
@@ -65,7 +51,7 @@ fn channel_abort(id: InvocationId, seq: u64) -> ResponseEnvelope {
 #[test]
 fn channel_open_returns_ok_empty() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("chat");
+        let (registry, mut work_rx) = common::make_provider("chat");
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
@@ -97,7 +83,7 @@ fn channel_open_to_unknown_namespace_returns_no_provider() {
 #[test]
 fn route_channel_inbound_delivers_to_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("pipe");
+        let (registry, mut work_rx) = common::make_provider("pipe");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("pipe.connect", vec![]);
@@ -133,7 +119,7 @@ fn route_channel_inbound_delivers_to_state() {
 #[test]
 fn route_channel_outbound_delivers_to_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("pipe2");
+        let (registry, mut work_rx) = common::make_provider("pipe2");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("pipe2.connect", vec![]);
@@ -167,7 +153,7 @@ fn route_channel_outbound_delivers_to_state() {
 #[test]
 fn route_channel_inbound_end_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("fin_chan");
+        let (registry, mut work_rx) = common::make_provider("fin_chan");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("fin_chan.open", vec![]);
@@ -194,7 +180,7 @@ fn route_channel_inbound_end_removes_state() {
 #[test]
 fn route_channel_outbound_end_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("fin_out");
+        let (registry, mut work_rx) = common::make_provider("fin_out");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("fin_out.open", vec![]);
@@ -221,7 +207,7 @@ fn route_channel_outbound_end_removes_state() {
 #[test]
 fn route_channel_abort_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("abort_chan");
+        let (registry, mut work_rx) = common::make_provider("abort_chan");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("abort_chan.open", vec![]);
@@ -275,7 +261,7 @@ fn route_channel_outbound_to_unknown_channel_fails() {
 #[test]
 fn multiple_channels_are_independent() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("multi_chan");
+        let (registry, mut work_rx) = common::make_provider("multi_chan");
         let router = InvocationRouter::with_providers(registry);
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -343,7 +329,7 @@ fn channel_open_to_dropped_provider_returns_unavailable() {
 #[test]
 fn channel_pause_resume_round_trips() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_provider("bpressure");
+        let (registry, mut work_rx) = common::make_provider("bpressure");
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("bpressure.stream", vec![]);

@@ -226,8 +226,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeCall(target, args, capability);
-        var effectiveTimeout = timeout ?? _options.DefaultTimeout;
-        var resp = await SendAndWaitAsync(envelope, effectiveTimeout, ct).ConfigureAwait(false);
+        var resp = await SendAndWaitAsync(envelope, timeout, ct).ConfigureAwait(false);
         if (!resp.Ok)
         {
             var p = resp.Error ?? new ErrorPayload { Code = "Internal", Message = "call failed" };
@@ -258,8 +257,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeResource(target, args, capability);
-        var effectiveTimeout = timeout ?? _options.DefaultTimeout;
-        var resp = await SendAndWaitAsync(envelope, effectiveTimeout, ct).ConfigureAwait(false);
+        var resp = await SendAndWaitAsync(envelope, timeout, ct).ConfigureAwait(false);
         if (!resp.Ok)
         {
             var p =
@@ -323,8 +321,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var items = calls.Select(c => Envelope.MakeCall(c.Target, c.Args, c.Capability)).ToList();
         var batchEnvelope = Envelope.MakeBatch(items);
-        var effectiveTimeout = timeout ?? _options.DefaultTimeout;
-        var resp = await SendAndWaitAsync(batchEnvelope, effectiveTimeout, ct)
+        var resp = await SendAndWaitAsync(batchEnvelope, timeout, ct)
             .ConfigureAwait(false);
         if (!resp.Ok)
         {
@@ -371,10 +368,11 @@ public sealed class SaikuroClient : IAsyncDisposable
 
     private async Task<ResponseEnvelope> SendAndWaitAsync(
         Envelope envelope,
-        TimeSpan timeout,
+        TimeSpan? timeout,
         CancellationToken ct
     )
     {
+        var effectiveTimeout = timeout ?? _options.DefaultTimeout;
         var tcs = new TaskCompletionSource<ResponseEnvelope>(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -383,15 +381,15 @@ public sealed class SaikuroClient : IAsyncDisposable
         CancellationTokenSource? timeoutCts = null;
         CancellationTokenRegistration reg = default;
 
-        if (timeout > TimeSpan.Zero)
+        if (effectiveTimeout > TimeSpan.Zero)
         {
-            timeoutCts = new CancellationTokenSource(timeout);
+            timeoutCts = new CancellationTokenSource(effectiveTimeout);
             reg = timeoutCts.Token.Register(() =>
             {
                 if (_pendingCalls.TryRemove(envelope.Id, out _))
                     tcs.TrySetException(
                         new TimeoutException(
-                            $"Call to \"{envelope.Target}\" timed out after {timeout.TotalMilliseconds}ms."
+                            $"Call to \"{envelope.Target}\" timed out after {effectiveTimeout.TotalMilliseconds}ms."
                         )
                     );
             });

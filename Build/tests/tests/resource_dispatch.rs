@@ -107,7 +107,7 @@ async fn round_trip_via_handler(
     let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
-    let router = InvocationRouter::new(provider_registry, RouterConfig::default());
+    let router = InvocationRouter::new(provider_registry.clone(), RouterConfig::default());
     let validator = InvocationValidator::new(schema_registry.clone());
     let capability_engine = CapabilityEngine::default();
 
@@ -121,7 +121,7 @@ async fn round_trip_via_handler(
         peer_capabilities: CapabilitySet::empty(),
         max_message_size: 4 * 1024 * 1024,
         schema_registry,
-        provider_registry: ProviderRegistry::new(),
+        provider_registry,
     };
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));

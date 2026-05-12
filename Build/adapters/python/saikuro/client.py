@@ -95,11 +95,7 @@ class SaikuroClient:
                 )
         self._pending_calls.clear()
 
-        # Close open streams and channels.
-        for stream in self._open_streams.values():
-            stream._close()
-        for channel in self._open_channels.values():
-            channel._close()
+        self._close_open_handles()
 
         logger.debug("saikuro client closed")
 
@@ -380,6 +376,9 @@ class SaikuroClient:
                 fut.set_exception(
                     TransportError("ConnectionLost", "transport closed unexpectedly")
                 )
+        self._close_open_handles()
+
+    def _close_open_handles(self) -> None:
         for stream in self._open_streams.values():
             stream._close()
         for channel in self._open_channels.values():

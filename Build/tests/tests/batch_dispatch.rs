@@ -42,8 +42,8 @@ fn register_echo_provider(
 
     // Return a dummy receiver:  we've already handed ownership to the task.
     // We need to return something; use a channel that is immediately dropped.
-    let (_dummy_tx, dummy_rx) = mpsc::channel(1);
-    dummy_rx
+    let (_dummy_tx, _dummy_rx) = mpsc::channel(1);
+    _dummy_rx
 }
 
 //  Tests

@@ -218,6 +218,8 @@ internal sealed class HandlerEntry
 /// </summary>
 public sealed class SaikuroProvider
 {
+    private static readonly TimeSpan AnnounceTimeout = TimeSpan.FromSeconds(5);
+
     private readonly string _namespace;
     private readonly Dictionary<string, HandlerEntry> _handlers = new();
     private static readonly SaikuroLogger Log = SaikuroLogger.GetLogger("saikuro.provider");
@@ -534,7 +536,7 @@ public sealed class SaikuroProvider
             var envelope = Envelope.MakeAnnounce(schema);
             await transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var timeoutCts = new CancellationTokenSource(AnnounceTimeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
                 ct,
                 timeoutCts.Token

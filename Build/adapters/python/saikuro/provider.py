@@ -318,7 +318,7 @@ class SaikuroProvider:
                 )
                 continue
             # Background dispatch; done-callback logs any unhandled exception.
-            task = asyncio.ensure_future(self._dispatch(envelope, transport))
+            task = asyncio.create_task(self._dispatch(envelope, transport))
             task.add_done_callback(_log_task_exception)
 
 

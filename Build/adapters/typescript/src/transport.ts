@@ -319,9 +319,9 @@ export class NodeStreamTransport extends BaseTransport {
  * avoiding collisions in the connection handshake.
  */
 function generateShortId(): string {
-  const now = Date.now() & 0xffff;
-  const rand = Math.floor(Math.random() * 0x10000);
-  return `${now.toString(16).padStart(4, "0")}${rand.toString(16).padStart(4, "0")}`;
+  const now = Date.now() & 0xffffffff;
+  const rand = Math.floor(Math.random() * 0x100000000);
+  return `${now.toString(16).padStart(8, "0")}${rand.toString(16).padStart(8, "0")}`;
 }
 
 /**
@@ -541,16 +541,26 @@ export class BroadcastChannelListener {
  *   - `wasm-host://channel-name` (BroadcastChannel for same-origin browser contexts)
  *   - `wasm-host` (uses default channel "saikuro")
  */
+const _TRANSPORT_FACTORIES: ReadonlyMap<string, (address: string) => Transport> = new Map([
+  [
+    "unix://",
+    (addr) => NodeStreamTransport.unix(addr.slice("unix://".length)),
+  ],
+  [
+    "tcp://",
+    (addr) => {
+      const rest = addr.slice("tcp://".length);
+      const lastColon = rest.lastIndexOf(":");
+      const host = rest.slice(0, lastColon);
+      const port = parseInt(rest.slice(lastColon + 1), 10);
+      return NodeStreamTransport.tcp(host, port);
+    },
+  ],
+]);
+
 export function makeTransport(address: string): Transport {
-  if (address.startsWith("unix://")) {
-    return NodeStreamTransport.unix(address.slice("unix://".length));
-  }
-  if (address.startsWith("tcp://")) {
-    const rest = address.slice("tcp://".length);
-    const lastColon = rest.lastIndexOf(":");
-    const host = rest.slice(0, lastColon);
-    const port = parseInt(rest.slice(lastColon + 1), 10);
-    return NodeStreamTransport.tcp(host, port);
+  for (const [prefix, factory] of _TRANSPORT_FACTORIES) {
+    if (address.startsWith(prefix)) return factory(address);
   }
   if (address.startsWith("ws://") || address.startsWith("wss://")) {
     return new WebSocketTransport(address);

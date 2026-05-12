@@ -9,6 +9,12 @@
 use saikuro::{Client, Error, InMemoryTransport, Provider, Result};
 use serde_json::Value as JsonValue;
 
+fn extract_two_floats(args: &[JsonValue]) -> (f64, f64) {
+    let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
+    let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
+    (a, b)
+}
+
 fn main() -> Result<()> {
     saikuro_exec::block_on(async_main())
 }
@@ -19,26 +25,22 @@ async fn async_main() -> Result<()> {
     let mut provider = Provider::new("math");
 
     provider.register("add", |args: Vec<JsonValue>| async move {
-        let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
-        let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
+        let (a, b) = extract_two_floats(&args);
         Ok(serde_json::json!(a + b))
     });
 
     provider.register("subtract", |args: Vec<JsonValue>| async move {
-        let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
-        let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
+        let (a, b) = extract_two_floats(&args);
         Ok(serde_json::json!(a - b))
     });
 
     provider.register("multiply", |args: Vec<JsonValue>| async move {
-        let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
-        let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
+        let (a, b) = extract_two_floats(&args);
         Ok(serde_json::json!(a * b))
     });
 
     provider.register("divide", |args: Vec<JsonValue>| async move {
-        let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
-        let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
+        let (a, b) = extract_two_floats(&args);
         if b == 0.0 {
             return Err(Error::InvalidState("division by zero".into()));
         }

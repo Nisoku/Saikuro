@@ -94,18 +94,12 @@ export function createTransportSink(
           name: record.name,
           msg: record.msg,
           // Collect all extra fields under `fields`.
-          ...(Object.keys(record).filter(
-            (k) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
-          ).length > 0
-            ? {
-                fields: Object.fromEntries(
-                  Object.entries(record).filter(
-                    ([k]) =>
-                      k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
-                  )
-                ),
-              }
-            : {}),
+          ...(() => {
+            const entries = Object.entries(record).filter(
+              ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
+            );
+            return entries.length > 0 ? { fields: Object.fromEntries(entries) } : {};
+          })(),
         },
       ],
     };

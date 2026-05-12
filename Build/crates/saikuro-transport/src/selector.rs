@@ -123,14 +123,11 @@ impl TransportSelector {
             return (TransportKind::WebSocket, Some(addr.to_owned()));
         }
 
-        // Everything else: TCP.
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            return (TransportKind::Tcp, Some(addr.to_owned()));
+        // TCP (non-WASM) or memory (WASM fallback).
+        if cfg!(target_arch = "wasm32") {
+            (TransportKind::Memory, None)
+        } else {
+            (TransportKind::Tcp, Some(addr.to_owned()))
         }
-
-        // Fallback for exhaustiveness on unusual targets.
-        #[allow(unreachable_code)]
-        (TransportKind::Memory, None)
     }
 }

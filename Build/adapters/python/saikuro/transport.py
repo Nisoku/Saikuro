@@ -206,7 +206,7 @@ class WebSocketTransport(BaseTransport):
         self._open_timeout = open_timeout
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
-        self._ws: "object | None" = None  # websockets.asyncio.client.ClientConnection
+        self._ws: object | None = None
         self._closed = False
 
     async def connect(self) -> None:

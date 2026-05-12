@@ -606,8 +606,7 @@ async fn route_response(
     let is_stream_end = resp
         .stream_control
         .as_ref()
-        .map(|c| matches!(c, StreamControl::End | StreamControl::Abort))
-        .unwrap_or(false);
+        .is_some_and(|c| matches!(c, StreamControl::End | StreamControl::Abort));
     let is_error = !resp.ok;
 
     let slot_type = pending.get(&id).map(|s| match s.value() {

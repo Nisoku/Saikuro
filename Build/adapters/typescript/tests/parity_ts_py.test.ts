@@ -5,7 +5,6 @@ import {
   canonFn,
   normalizeReturns,
   normalizeNumeric,
-  tolerantNormalize,
 } from "./canonicalize";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";

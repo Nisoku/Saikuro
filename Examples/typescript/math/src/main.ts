@@ -68,7 +68,7 @@ console.log(`batch [add(1,2), multiply(3,4)] = [${batchSum}, ${batchProduct}]`);
 // error handling
 try {
   await client.call("math.divide", [1, 0]);
-} catch (err) {
+} catch (err: any) {
   if (err instanceof SaikuroError) {
     console.log(`divide by zero caught: [${err.code}] ${err.message}`);
   } else {
@@ -77,5 +77,7 @@ try {
 }
 
 await client.close();
-await servePromise.catch(() => {});
+await servePromise.catch((err: any) => {
+  console.error("serve failed:", err);
+});
 console.log("all examples passed");
