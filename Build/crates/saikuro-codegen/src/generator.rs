@@ -41,9 +41,22 @@ pub trait BindingGenerator {
 
 // Shared utilities
 
-/// Convert a snake_case string to PascalCase.
+/// Normalize `-`, `/`, `\` to `_`, collapse consecutive separators,
+/// trim leading/trailing separators, then convert to PascalCase.
 pub fn to_pascal_case(s: &str) -> String {
-    s.split('_')
+    let normalized: String = s
+        .chars()
+        .map(|c| {
+            if matches!(c, '-' | '/' | '\\') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    normalized
+        .split('_')
+        .filter(|p| !p.is_empty())
         .map(|part| {
             let mut c = part.chars();
             match c.next() {
@@ -140,7 +153,10 @@ pub fn generate_types_from_schema(
     mut on_alias: impl FnMut(&str, &TypeDescriptor) -> Result<Vec<String>>,
 ) -> Result<String> {
     let mut lines = header;
-    for (type_name, type_def) in &schema.types {
+    let mut sorted_keys: Vec<&String> = schema.types.keys().collect();
+    sorted_keys.sort();
+    for type_name in sorted_keys {
+        let type_def = &schema.types[type_name];
         match type_def {
             TypeDefinition::Record { fields } => {
                 lines.extend(on_record(type_name, fields)?);
@@ -174,7 +190,10 @@ pub fn generate_types_and_namespace_clients(
 ) -> Result<Vec<(String, String)>> {
     output.add(types_file_name, types_content);
     let mut ns_pairs = Vec::new();
-    for (ns_name, ns_schema) in &schema.namespaces {
+    let mut sorted_ns: Vec<&String> = schema.namespaces.keys().collect();
+    sorted_ns.sort();
+    for ns_name in sorted_ns {
+        let ns_schema = &schema.namespaces[ns_name];
         let class_name = ns_class_name_fn(ns_name);
         let file_name = ns_file_name_fn(ns_name);
         let src = ns_client_fn(ns_name, &class_name, ns_schema)?;

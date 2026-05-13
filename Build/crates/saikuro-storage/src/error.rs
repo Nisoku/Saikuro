@@ -91,12 +91,6 @@ impl StorageError {
     }
 }
 
-impl From<serde_json::Error> for StorageError {
-    fn from(e: serde_json::Error) -> Self {
-        StorageError::Deserialization(e.to_string())
-    }
-}
-
 impl From<rmp_serde::encode::Error> for StorageError {
     fn from(e: rmp_serde::encode::Error) -> Self {
         StorageError::Serialization(e.to_string())

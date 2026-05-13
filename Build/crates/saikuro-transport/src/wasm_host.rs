@@ -255,8 +255,16 @@ impl TransportConnector for WasmHostConnector {
         let _handler_guard: SendWrapper<Closure<dyn FnMut(MessageEvent)>> = {
             let h: Closure<dyn FnMut(MessageEvent)> = Closure::new({
                 let signal = signal_tx;
-                move |_event: MessageEvent| {
-                    let _ = signal.try_send(());
+                let expected_id = conn_id.clone();
+                move |event: MessageEvent| {
+                    let data = event.data();
+                    let msg_type = get_field(&data, "type");
+                    let msg_id = get_field(&data, "id");
+                    if msg_type.as_deref() == Some("accept")
+                        && msg_id.as_deref() == Some(&expected_id)
+                    {
+                        let _ = signal.try_send(());
+                    }
                 }
             });
             private.set_onmessage(Some(h.as_ref().unchecked_ref()));

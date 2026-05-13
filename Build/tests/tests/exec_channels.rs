@@ -42,12 +42,18 @@ fn mpsc_backpressure_sender_waits() {
         // The 4th send would block (channel full).  Spawn a task so we can
         // receive concurrently.
         let tx_clone = tx.clone();
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done_clone = done.clone();
         let handle = saikuro_exec::spawn(async move {
             tx_clone.send(4).await.unwrap();
+            done_clone.store(true, std::sync::atomic::Ordering::Release);
         });
+        // The spawned task should be blocked, assert it has not completed.
+        assert!(!done.load(std::sync::atomic::Ordering::Acquire));
         // Drain one slot so the spawned sender can proceed.
         assert_eq!(rx.recv().await, Some(1));
         handle.await.unwrap();
+        assert!(done.load(std::sync::atomic::Ordering::Acquire));
         assert_eq!(rx.recv().await, Some(2));
         assert_eq!(rx.recv().await, Some(3));
         assert_eq!(rx.recv().await, Some(4));
@@ -157,10 +163,8 @@ fn mpsc_is_closed() {
         assert!(!tx.is_closed());
         drop(rx);
         saikuro_exec::yield_now().await;
-        // Note: tokio mpsc::Sender::is_closed() may not reflect the drop
-        // until a send is attempted.  This test documents the behaviour
-        // rather than asserting.
-        let _ = tx;
+        assert!(tx.is_closed());
+        assert!(tx.try_send(0).is_err());
     })
 }
 

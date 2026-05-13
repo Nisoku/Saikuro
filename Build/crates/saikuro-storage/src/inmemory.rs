@@ -48,23 +48,49 @@ impl InMemoryStorage {
         Self { config, namespaces }
     }
 
+    /// Prefix a logical namespace name with the configured prefix.
+    fn apply_prefix(&self, namespace: &str) -> String {
+        match &self.config.namespace_prefix {
+            Some(prefix) => format!("{prefix}:{namespace}"),
+            None => namespace.to_owned(),
+        }
+    }
+
+    /// Strip the configured prefix from a stored key, returning the logical name.
+    fn strip_prefix(&self, stored_key: &str) -> String {
+        match &self.config.namespace_prefix {
+            Some(prefix) => {
+                let prefix_len = prefix.len() + 1; // include ':'
+                if stored_key.len() > prefix_len && stored_key.starts_with(&format!("{prefix}:")) {
+                    stored_key[prefix_len..].to_owned()
+                } else {
+                    stored_key.to_owned()
+                }
+            }
+            None => stored_key.to_owned(),
+        }
+    }
+
     /// Look up a namespace, returns an error if it doesn't exist.
     fn get_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
+        let key = self.apply_prefix(namespace);
         self.namespaces
-            .get(namespace)
+            .get(&key)
             .map(|ns| ns.clone())
             .ok_or_else(|| StorageError::namespace_not_found(namespace))
     }
 
     /// Get or create a namespace (write operations).
     fn get_or_create_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
+        let key = self.apply_prefix(namespace);
+
         if !self.config.auto_create_namespaces {
             return self.get_namespace(namespace);
         }
 
         Ok(self
             .namespaces
-            .entry(namespace.to_owned())
+            .entry(key)
             .or_insert_with(|| Arc::new(NamespaceStore::new()))
             .clone())
     }
@@ -116,13 +142,14 @@ impl KeyValueBackend for InMemoryStorage {
         Ok(self
             .namespaces
             .iter()
-            .map(|entry| entry.key().clone())
+            .map(|entry| self.strip_prefix(entry.key()))
             .collect())
     }
 
     async fn create_namespace(&self, namespace: &str) -> Result<()> {
         use dashmap::mapref::entry::Entry;
-        match self.namespaces.entry(namespace.to_owned()) {
+        let key = self.apply_prefix(namespace);
+        match self.namespaces.entry(key) {
             Entry::Occupied(_) => Err(StorageError::NamespaceAlreadyExists(namespace.to_owned())),
             Entry::Vacant(e) => {
                 e.insert(Arc::new(NamespaceStore::new()));
@@ -132,7 +159,8 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn delete_namespace(&self, namespace: &str) -> Result<()> {
-        self.namespaces.remove(namespace);
+        let key = self.apply_prefix(namespace);
+        self.namespaces.remove(&key);
         Ok(())
     }
 

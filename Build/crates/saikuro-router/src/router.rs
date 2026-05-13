@@ -384,6 +384,7 @@ impl InvocationRouter {
         &self,
         response: ResponseEnvelope,
         pick_tx: impl FnOnce(&ChannelState) -> &mpsc::Sender<ResponseEnvelope>,
+        advance_seq: impl FnOnce(&ChannelState, u64) -> bool,
     ) -> Result<()> {
         let id = response.id;
         let state = self
@@ -393,6 +394,14 @@ impl InvocationRouter {
 
         if state.is_closed() {
             return Err(RouterError::ChannelClosed(id.to_string()));
+        }
+
+        // Sequence check.
+        if let Some(seq) = response.seq {
+            if !advance_seq(&state, seq) {
+                warn!(%id, seq, "out-of-order channel item dropped");
+                return Ok(());
+            }
         }
 
         let is_terminal = matches!(
@@ -414,7 +423,8 @@ impl InvocationRouter {
     }
 
     pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(response, |s| &s.inbound_tx).await
+        self.route_channel_item(response, |s| &s.inbound_tx, |s, seq| s.advance_inbound(seq))
+            .await
     }
 
     /// Route an outbound channel item (provider -> client direction) to the
@@ -423,7 +433,12 @@ impl InvocationRouter {
     /// Called by the provider adapter when it wants to push a message to the
     /// client side of an open channel.
     pub async fn route_channel_outbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(response, |s| &s.outbound_tx).await
+        self.route_channel_item(
+            response,
+            |s| &s.outbound_tx,
+            |s, seq| s.advance_outbound(seq),
+        )
+        .await
     }
 
     /// Route an inbound stream item to the appropriate open stream.

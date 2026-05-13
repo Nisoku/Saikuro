@@ -118,8 +118,8 @@ export class InMemoryTransport extends BaseTransport {
     const peer = this._peer;
     if (peer && !peer._closed) {
       peer._inbox.push(obj);
+      peer._dispatch(obj);
     }
-    for (const h of Array.from(this._peer?._messageHandlers ?? [])) h(obj);
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
@@ -399,11 +399,14 @@ export class BroadcastChannelTransport extends BaseTransport {
       const privateChannel = new BroadcastChannel(privateName);
 
       const timeoutId = setTimeout(() => {
+        privateChannel.removeEventListener("message", acceptHandler);
         privateChannel.close();
         reject(new Error("BroadcastChannelTransport: connect timeout"));
       }, 10000);
 
-      const acceptHandler = () => {
+      const acceptHandler = (event: MessageEvent) => {
+        const data = event.data as Record<string, unknown> | undefined;
+        if (data?.type !== "accept" || data?.id !== connId) return;
         clearTimeout(timeoutId);
         privateChannel.removeEventListener("message", acceptHandler);
         this._channel = privateChannel;
@@ -411,9 +414,7 @@ export class BroadcastChannelTransport extends BaseTransport {
         this._setupMessageHandler();
         resolve();
       };
-      privateChannel.addEventListener("message", acceptHandler, {
-        once: true,
-      });
+      privateChannel.addEventListener("message", acceptHandler);
 
       const baseChannel = new BroadcastChannel(this._baseChannel);
       baseChannel.postMessage({ type: "connect", id: connId });

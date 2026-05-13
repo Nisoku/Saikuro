@@ -48,6 +48,7 @@ class BaseSaikuroHandle<T = unknown>
 {
   protected readonly _id: string;
   protected _done = false;
+  protected _closed = false;
   private readonly _buffer: Array<ResponseEnvelope | null> = [];
   private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
     [];
@@ -67,19 +68,20 @@ class BaseSaikuroHandle<T = unknown>
 
   /** @internal Called when the transport closes while still open. */
   _close(): void {
-    const errorPayload: ErrorPayload = {
-      code: "ConnectionLost",
-      message: "transport closed unexpectedly",
-    };
+    if (this._closed) return;
+    this._closed = true;
     const errorResponse: ResponseEnvelope = {
       id: "",
       ok: false,
-      error: errorPayload,
+      error: {
+        code: "ConnectionLost",
+        message: "transport closed unexpectedly",
+      },
     };
     for (const resolve of this._waiters.splice(0)) {
-      this._buffer.push(errorResponse);
       resolve(errorResponse);
     }
+    this._buffer.push(errorResponse);
   }
 
   private _enqueue(item: ResponseEnvelope | null): void {

@@ -19,7 +19,7 @@ public class SchemaExtractorTests
 
         Assert.Equal(0, result.exitCode);
 
-        using var doc = JsonDocument.Parse(result.stdout.Trim());
+        using var doc = JsonDocument.Parse(ExtractJson(result.stdout));
 
         var root = doc.RootElement;
         Assert.True(root.TryGetProperty("version", out _));
@@ -42,7 +42,7 @@ public class SchemaExtractorTests
 
         Assert.Equal(0, result.exitCode);
 
-        using var doc = JsonDocument.Parse(result.stdout.Trim());
+        using var doc = JsonDocument.Parse(ExtractJson(result.stdout));
 
         var ns = doc.RootElement.GetProperty("namespaces");
         Assert.True(ns.TryGetProperty("custom_ns", out _));
@@ -67,6 +67,15 @@ public class SchemaExtractorTests
         proc.WaitForExit();
 
         return (proc.ExitCode, stdoutTask.Result, stderrTask.Result);
+    }
+
+    private static string ExtractJson(string text)
+    {
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+        if (start < 0 || end < 0 || end <= start)
+            throw new InvalidOperationException($"No JSON object found in output: {text}");
+        return text.Substring(start, end - start + 1);
     }
 
     private static string FindRepoRoot([CallerFilePath] string sourceFilePath = "")

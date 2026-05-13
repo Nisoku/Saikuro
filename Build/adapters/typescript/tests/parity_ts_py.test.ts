@@ -26,10 +26,11 @@ function getPythonBin(): string {
 
 function getDotnetBin(): string {
   // Check PATH first
-  const pathDirs = (process.env.PATH || "").split(":");
+  const pathSep = process.platform === "win32" ? ";" : ":";
+  const pathDirs = (process.env.PATH || "").split(pathSep);
   for (const dir of pathDirs) {
     const candidate = resolve(dir, "dotnet");
-    if (existsSync(candidate)) return "dotnet";
+    if (existsSync(candidate)) return candidate;
   }
   // Check DOTNET_ROOT
   const root = process.env.DOTNET_ROOT;

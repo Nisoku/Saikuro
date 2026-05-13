@@ -308,17 +308,30 @@ pub mod watch {
 }
 
 // JoinHandle
+
+/// Error returned when a spawned task is cancelled (sender dropped).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JoinError;
+
+impl std::fmt::Display for JoinError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "task was cancelled")
+    }
+}
+
+impl std::error::Error for JoinError {}
+
 pub struct JoinHandle<T> {
     rx: inner_oneshot::Receiver<T>,
 }
 
 impl<T> Future for JoinHandle<T> {
-    type Output = T;
+    type Output = Result<T, JoinError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match Pin::new(&mut self.get_mut().rx).poll(cx) {
-            Poll::Ready(Ok(v)) => Poll::Ready(v),
-            Poll::Ready(Err(_)) => panic!("JoinHandle: sender dropped without sending"),
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(v)),
+            Poll::Ready(Err(_)) => Poll::Ready(Err(JoinError)),
             Poll::Pending => Poll::Pending,
         }
     }
