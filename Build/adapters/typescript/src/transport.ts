@@ -473,8 +473,10 @@ export class BroadcastChannelConnector {
  */
 export class BroadcastChannelListener {
   private readonly _baseChannel: BroadcastChannel;
-  private readonly _connectQueue: Array<(t: BroadcastChannelTransport) => void> =
-    [];
+  private readonly _connectQueue: Array<{
+    resolve: (t: BroadcastChannelTransport) => void;
+    reject: (err: Error) => void;
+  }> = [];
   private readonly _pendingConnections: BroadcastChannelTransport[] = [];
   private _closed = false;
 
@@ -492,7 +494,7 @@ export class BroadcastChannelListener {
 
         const queued = this._connectQueue.shift();
         if (queued) {
-          queued(transport);
+          queued.resolve(transport);
         } else {
           this._pendingConnections.push(transport);
         }
@@ -513,7 +515,7 @@ export class BroadcastChannelListener {
       if (pending) {
         resolve(pending);
       } else {
-        this._connectQueue.push(resolve);
+        this._connectQueue.push({ resolve, reject });
       }
     });
   }
@@ -522,8 +524,8 @@ export class BroadcastChannelListener {
     if (this._closed) return;
     this._closed = true;
     this._baseChannel.close();
-    for (const resolve of this._connectQueue.splice(0)) {
-      resolve(new BroadcastChannelTransport(""));
+    for (const queued of this._connectQueue.splice(0)) {
+      queued.reject(new Error("BroadcastChannelListener is closed"));
     }
     this._pendingConnections.length = 0;
   }

@@ -15,6 +15,13 @@ on:
       - "Justfile"
       - ".github/workflows/csharp.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: csharp-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Build + Test

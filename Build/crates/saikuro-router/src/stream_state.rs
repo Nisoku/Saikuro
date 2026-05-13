@@ -24,7 +24,10 @@ trait TryAdvanceSeq {
 
 impl TryAdvanceSeq for AtomicU64 {
     fn try_advance(&self, seq: u64) -> bool {
-        self.compare_exchange(seq, seq + 1, Ordering::AcqRel, Ordering::Acquire)
+        let Some(next) = seq.checked_add(1) else {
+            return false;
+        };
+        self.compare_exchange(seq, next, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
     }
 }

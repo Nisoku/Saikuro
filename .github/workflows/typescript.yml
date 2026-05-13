@@ -11,6 +11,13 @@ on:
       - "Build/adapters/typescript/**"
       - ".github/workflows/typescript.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: typescript-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: Lint + Typecheck + Build + Test
@@ -27,7 +34,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: Install Python test deps
-        run: python3 -m pip install msgpack websockets
+        run: python3 -m pip install 'msgpack==1.1.0' 'websockets==13.1'
       - name: Install npm deps
         run: npm ci
         working-directory: Build/adapters/typescript

@@ -108,25 +108,24 @@ impl TransportSelector {
             } else {
                 format!("ws://{}", addr)
             };
-            return (TransportKind::WebSocket, Some(ws_url));
+            (TransportKind::WebSocket, Some(ws_url))
         }
 
-        // Unix socket: path-like address on a Unix host.
-        #[cfg(all(not(target_arch = "wasm32"), target_family = "unix"))]
-        if addr.starts_with('/') || addr.starts_with('.') {
-            return (TransportKind::Unix, Some(addr.to_owned()));
-        }
-
-        // WebSocket URL.
+        // Non-WASM: unix socket, websocket, or TCP.
         #[cfg(not(target_arch = "wasm32"))]
-        if addr.starts_with("ws://") || addr.starts_with("wss://") {
-            return (TransportKind::WebSocket, Some(addr.to_owned()));
-        }
+        {
+            // Unix socket: path-like address on a Unix host.
+            #[cfg(target_family = "unix")]
+            if addr.starts_with('/') || addr.starts_with('.') {
+                return (TransportKind::Unix, Some(addr.to_owned()));
+            }
 
-        // TCP (non-WASM) or memory (WASM fallback).
-        if cfg!(target_arch = "wasm32") {
-            (TransportKind::Memory, None)
-        } else {
+            // WebSocket URL.
+            if addr.starts_with("ws://") || addr.starts_with("wss://") {
+                return (TransportKind::WebSocket, Some(addr.to_owned()));
+            }
+
+            // TCP fallback.
             (TransportKind::Tcp, Some(addr.to_owned()))
         }
     }

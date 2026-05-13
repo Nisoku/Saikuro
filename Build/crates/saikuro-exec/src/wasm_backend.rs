@@ -160,7 +160,7 @@ pub mod mpsc {
     impl<T> Receiver<T> {
         pub fn recv(
             &mut self,
-        ) -> impl futures::future::Future<Output = Option<T>> + futures::future::FusedFuture + '_
+        ) -> impl futures::future::FusedFuture<Output = Option<T>> + '_
         {
             self.inner.next()
         }

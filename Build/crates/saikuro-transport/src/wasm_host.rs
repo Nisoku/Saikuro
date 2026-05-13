@@ -29,11 +29,11 @@
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use js_sys::{ArrayBuffer, Uint8Array};
+use js_sys::{ArrayBuffer, Reflect, Uint8Array};
 use send_wrapper::SendWrapper;
 use tracing::trace;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-use web_sys::{BroadcastChannel, MessageEvent};
+use web_sys::{BroadcastChannel, Crypto, MessageEvent};
 
 use saikuro_exec::mpsc;
 
@@ -49,18 +49,18 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 // helpers
 
-/// Generate a short (~8-char hex) random connection identifier.
+/// Generate a 128-bit random hex connection identifier.
 fn short_id() -> String {
-    // Use a simple counter + timestamp for uniqueness.
-    // WASM is single-threaded so this is safe without atomics.
-    use std::sync::atomic::{AtomicU16, Ordering};
-    static COUNTER: AtomicU16 = AtomicU16::new(0);
-    let n = u64::from(COUNTER.fetch_add(1, Ordering::Relaxed));
-    let t = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos() as u64;
-    format!("{:04x}{:04x}", t, n)
+    let crypto: Crypto = Reflect::get(&js_sys::global(), &"crypto".into())
+        .expect("global crypto API available in browser/worker context")
+        .unchecked_into();
+    let mut buf = [0u8; 16];
+    let _ = crypto.get_random_values_with_u8_array(&mut buf);
+    buf.iter().fold(String::with_capacity(32), |mut s, b| {
+        use std::fmt::Write;
+        let _ = write!(s, "{:02x}", b);
+        s
+    })
 }
 
 /// Create a JS object literal from key-value pairs.

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <tuple>
 
 #ifndef SAIKURO_SCHEMA_FIXTURE
 #define SAIKURO_SCHEMA_FIXTURE ""

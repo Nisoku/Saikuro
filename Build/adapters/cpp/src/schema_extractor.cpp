@@ -329,9 +329,6 @@ std::string json_escape(const std::string& value) {
 std::string map_cpp_type(const std::string& raw) {
     std::string normalized = raw;
 
-    static const std::regex spaces("\\s+");
-    normalized = std::regex_replace(normalized, spaces, " ");
-
     const auto erase_word = [&normalized](const std::string& word) {
         size_t pos = 0;
         while ((pos = normalized.find(word, pos)) != std::string::npos) {
@@ -348,10 +345,11 @@ std::string map_cpp_type(const std::string& raw) {
 
     erase_word("const");
     erase_word("volatile");
+    normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '), normalized.end());
     normalized = trim(normalized);
 
-    std::string compact = normalized;
-    compact.erase(std::remove(compact.begin(), compact.end(), ' '), compact.end());
+    std::string compact = raw;
+    compact.erase(std::remove_if(compact.begin(), compact.end(), ::isspace), compact.end());
     const bool is_container = compact.find('<') != std::string::npos;
 
     static const std::regex plain_char_ptr_re(R"(^char(\*|\*const|const\*)+$)");

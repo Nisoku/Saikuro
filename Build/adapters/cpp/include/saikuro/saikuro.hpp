@@ -137,8 +137,10 @@ public:
             return true;
         }
 
-    public:
-        Channel(Channel&&) = default;
+        Channel(Channel&& other) noexcept
+            : MoveOnlyHandle(std::move(other)),
+              open_(std::exchange(other.open_, false)) {}
+
         Channel& operator=(Channel&& other) noexcept {
             if (this != &other) {
                 MoveOnlyHandle::operator=(std::move(other));

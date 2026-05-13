@@ -19,6 +19,13 @@ on:
       - "Build/adapters/rust/**"
       - ".github/workflows/rust.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1

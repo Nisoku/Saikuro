@@ -1,7 +1,11 @@
 """C# adapter commands."""
 
-import os, shutil, subprocess, sys
+import hashlib, os, shutil, subprocess, sys
 from pathlib import Path
+
+# Pinned SHA256 of https://dot.net/v1/dotnet-install.sh.
+# Update when upgrading the .NET SDK version.
+DOTNET_INSTALL_SHA256 = "102a6849303713f15462bb28eb10593bf874bbeec17122e0522f10a3b57ce442"
 
 DIR = Path(__file__).resolve().parents[1] / "adapters" / "csharp" / "Saikuro"
 SRC = DIR / "src"
@@ -35,6 +39,10 @@ def ensure_dotnet() -> None:
         ["curl", "-sSL", "https://dot.net/v1/dotnet-install.sh", "-o", str(installer)],
         check=True,
     )
+    actual = hashlib.sha256(installer.read_bytes()).hexdigest()
+    if actual != DOTNET_INSTALL_SHA256:
+        print(f"SHA256 mismatch: expected {DOTNET_INSTALL_SHA256}, got {actual}", flush=True)
+        sys.exit(1)
     installer.chmod(0o755)
     subprocess.run(["bash", str(installer), "--channel", "8.0"], check=True)
     dotnet = Path.home() / ".dotnet" / "dotnet"
@@ -70,7 +78,8 @@ def fmt_check() -> int:
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
     if cmd == "check":
-        sys.exit(sum([fmt_check(), run(CMDS["build"]), run(CMDS["test"])]))
+        rc_sum = [fmt_check(), run(CMDS["build"]), run(CMDS["test"])]
+        sys.exit(0 if all(rc == 0 for rc in rc_sum) else 1)
     elif cmd == "fmt_check":
         sys.exit(fmt_check())
     elif cmd in CMDS:

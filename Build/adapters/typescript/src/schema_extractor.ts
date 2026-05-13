@@ -379,7 +379,7 @@ export class SchemaExtractor {
         return { kind: "map", key: this.typeToDescriptor(typeArgs[0]), value: this.typeToDescriptor(typeArgs[1]) };
       }
       if (symName === "Record" && typeArgs && typeArgs.length >= 2) {
-        return { kind: "map", key: { kind: "primitive", type: "string" }, value: this.typeToDescriptor(typeArgs[1]) };
+        return { kind: "map", key: this.typeToDescriptor(typeArgs[0]), value: this.typeToDescriptor(typeArgs[1]) };
       }
     }
     if (type.getProperties().length === 0) {

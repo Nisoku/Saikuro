@@ -220,12 +220,16 @@ public abstract class StreamTransport : ITransport
 
     public async Task CloseAsync(CancellationToken ct = default)
     {
-        if (_stream is not null)
+        try
         {
-            await _stream.DisposeAsync().ConfigureAwait(false);
-            _stream = null;
+            if (_stream is not null)
+                await _stream.DisposeAsync().ConfigureAwait(false);
         }
-        Cleanup();
+        finally
+        {
+            _stream = null;
+            Cleanup();
+        }
     }
 
     public async Task SendAsync(Dictionary<string, object?> obj, CancellationToken ct = default)

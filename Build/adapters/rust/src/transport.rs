@@ -298,6 +298,7 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     )))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn parse_host_port(s: &str) -> Result<(String, &str)> {
     // Handle IPv6 like [::1]:7700
     if let Some(bracket_end) = s.find(']') {

@@ -50,8 +50,7 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 pub fn block_on<F>(future: F) -> F::Output
 where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    F: Future,
 {
     let rt = RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()

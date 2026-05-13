@@ -12,6 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
+use std::sync::OnceLock;
 
 /// Sentinel token value that grants access to all capabilities.
 pub const WILDCARD_TOKEN: &str = "*";
@@ -90,8 +91,7 @@ impl CapabilitySet {
     ///
     /// The wildcard token `"*"` grants every capability.
     pub fn grants(&self, required: &CapabilityToken) -> bool {
-        self.tokens.contains(&CapabilityToken::new(WILDCARD_TOKEN))
-            || self.tokens.contains(required)
+        self.tokens.contains(wildcard_token()) || self.tokens.contains(required)
     }
 
     /// Return `true` if this set satisfies *all* of the required capabilities.
@@ -118,4 +118,10 @@ impl CapabilitySet {
     pub fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
+}
+
+static WILDCARD: OnceLock<CapabilityToken> = OnceLock::new();
+
+fn wildcard_token() -> &'static CapabilityToken {
+    WILDCARD.get_or_init(|| CapabilityToken::new(WILDCARD_TOKEN))
 }

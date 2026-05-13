@@ -11,6 +11,13 @@ on:
       - "Build/adapters/python/**"
       - ".github/workflows/python.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Lint + Tests

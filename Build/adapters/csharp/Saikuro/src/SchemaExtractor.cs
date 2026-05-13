@@ -431,9 +431,9 @@ public class SchemaExtractor
         var returnType = method.ReturnType;
         var isAsync =
             returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>);
-        var isGenerator =
-            typeof(IAsyncEnumerable<>).IsAssignableFrom(returnType)
-            || typeof(IEnumerable<>).IsAssignableFrom(returnType);
+        var genericDef = returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : null;
+        var isAsyncGenerator = genericDef == typeof(IAsyncEnumerable<>);
+        var isEnumerable = genericDef == typeof(IEnumerable<>);
 
         TypeDescriptor returns;
         if (returnType == typeof(void))
@@ -445,10 +445,15 @@ public class SchemaExtractor
             var innerType = returnType.GetGenericArguments()[0];
             returns = TypeDescriptorFactory.FromSystemType(innerType);
         }
-        else if (isGenerator)
+        else if (isAsyncGenerator)
         {
             var innerType = returnType.GetGenericArguments().FirstOrDefault() ?? typeof(object);
             returns = new TypeDescriptor.Stream(TypeDescriptorFactory.FromSystemType(innerType));
+        }
+        else if (isEnumerable)
+        {
+            var innerType = returnType.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+            returns = new TypeDescriptor.List(TypeDescriptorFactory.FromSystemType(innerType));
         }
         else
         {
@@ -477,7 +482,7 @@ public class SchemaExtractor
             Visibility = visibility,
             Doc = doc,
             IsAsync = isAsync,
-            IsGenerator = isGenerator,
+            IsGenerator = isAsyncGenerator,
         };
     }
 

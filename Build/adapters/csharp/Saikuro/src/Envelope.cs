@@ -118,7 +118,7 @@ public sealed class ResourceHandle
             {
                 long l => l,
                 int i => (long)i,
-                ulong u => (long)u,
+                ulong u when u <= long.MaxValue => (long)u,
                 _ => (long?)null,
             }
             : null;
@@ -249,8 +249,8 @@ public sealed record Envelope
         var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
             ? seqRaw switch
             {
-                long l => (ulong)l,
-                int i => (ulong)i,
+                long l when l >= 0 => (ulong)l,
+                int i when i >= 0 => (ulong)i,
                 ulong u => u,
                 _ => (ulong?)null,
             }
@@ -326,8 +326,8 @@ public sealed class ResponseEnvelope
         var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
             ? seqRaw switch
             {
-                long l => (ulong)l,
-                int i => (ulong)i,
+                long l when l >= 0 => (ulong)l,
+                int i when i >= 0 => (ulong)i,
                 ulong u => u,
                 _ => (ulong?)null,
             }

@@ -8,7 +8,7 @@ ADAPTER = ROOT / "adapters" / "rust"
 
 CMDS = {
     "setup": ["rustup", "target", "add", "wasm32-unknown-unknown"],
-    "wasm_check": ["cargo", "check", "--target", "wasm32-unknown-unknown", "-p", "saikuro-tests"],
+    "wasm_check": ["cargo", "clippy", "--target", "wasm32-unknown-unknown", "-p", "saikuro-tests", "--", "-D", "warnings"],
     "test": ["cargo", "test", "--workspace"],
     "adapter_test": ["cargo", "test", "-p", "saikuro"],
 }

@@ -380,6 +380,7 @@ public sealed class SaikuroClient : IAsyncDisposable
 
         CancellationTokenSource? timeoutCts = null;
         CancellationTokenRegistration reg = default;
+        CancellationTokenRegistration cancelReg = default;
 
         if (effectiveTimeout > TimeSpan.Zero)
         {
@@ -392,6 +393,15 @@ public sealed class SaikuroClient : IAsyncDisposable
                             $"Call to \"{envelope.Target}\" timed out after {effectiveTimeout.TotalMilliseconds}ms."
                         )
                     );
+            });
+        }
+
+        if (ct.CanBeCanceled)
+        {
+            cancelReg = ct.Register(() =>
+            {
+                if (_pendingCalls.TryRemove(envelope.Id, out _))
+                    tcs.TrySetCanceled(ct);
             });
         }
 
@@ -413,6 +423,7 @@ public sealed class SaikuroClient : IAsyncDisposable
         finally
         {
             reg.Dispose();
+            cancelReg.Dispose();
             timeoutCts?.Dispose();
         }
     }

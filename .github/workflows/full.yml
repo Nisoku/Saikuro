@@ -5,6 +5,13 @@ on:
     branches: ["main"]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: full-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   all:
     name: All checks
@@ -35,7 +42,7 @@ jobs:
         run: npm ci
         working-directory: Build/adapters/typescript
       - name: Install Python test deps
-        run: python3 -m pip install msgpack websockets
+        run: python3 -m pip install 'msgpack==1.1.0' 'websockets==13.1'
       - name: Install Python adapter deps
         run: uv sync --extra dev --extra websocket
         working-directory: Build/adapters/python

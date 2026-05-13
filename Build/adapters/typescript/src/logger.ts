@@ -82,6 +82,9 @@ export function createTransportSink(
   transport: TransportLike
 ): (record: LogRecord) => void {
   return (record: LogRecord): void => {
+    const extraEntries = Object.entries(record).filter(
+      ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
+    );
     const envelope: Record<string, unknown> = {
       version: 1,
       type: "log",
@@ -93,13 +96,7 @@ export function createTransportSink(
           level: record.level,
           name: record.name,
           msg: record.msg,
-          // Collect all extra fields under `fields`.
-          ...(() => {
-            const entries = Object.entries(record).filter(
-              ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
-            );
-            return entries.length > 0 ? { fields: Object.fromEntries(entries) } : {};
-          })(),
+          ...(extraEntries.length > 0 ? { fields: Object.fromEntries(extraEntries) } : {}),
         },
       ],
     };
