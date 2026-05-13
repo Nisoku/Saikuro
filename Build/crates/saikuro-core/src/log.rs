@@ -29,14 +29,33 @@ pub enum LogLevel {
 
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+        f.write_str(self.as_str())
+    }
+}
+
+impl LogLevel {
+    fn as_str(&self) -> &'static str {
+        match self {
             Self::Trace => "trace",
             Self::Debug => "debug",
             Self::Info => "info",
             Self::Warn => "warn",
             Self::Error => "error",
-        };
-        f.write_str(s)
+        }
+    }
+}
+
+impl TryFrom<&str> for LogLevel {
+    type Error = ();
+    fn try_from(s: &str) -> Result<Self, <Self as TryFrom<&str>>::Error> {
+        match s {
+            "trace" => Ok(Self::Trace),
+            "debug" => Ok(Self::Debug),
+            "info" => Ok(Self::Info),
+            "warn" => Ok(Self::Warn),
+            "error" => Ok(Self::Error),
+            _ => Err(()),
+        }
     }
 }
 
@@ -86,6 +105,43 @@ impl LogRecord {
     pub fn with_field(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
         self.fields.insert(key.into(), value.into());
         self
+    }
+}
+
+/// Helper: extract a `Value::String` from a map by key.
+fn take_string(map: &mut BTreeMap<String, Value>, key: &str) -> Option<String> {
+    match map.remove(key) {
+        Some(Value::String(s)) => Some(s),
+        _ => None,
+    }
+}
+
+impl TryFrom<Value> for LogRecord {
+    type Error = &'static str;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Map(mut map) => {
+                let ts = take_string(&mut map, "ts").unwrap_or_default();
+                let level = map
+                    .remove("level")
+                    .and_then(|v| match v {
+                        Value::String(s) => LogLevel::try_from(s.as_str()).ok(),
+                        _ => None,
+                    })
+                    .unwrap_or(LogLevel::Info);
+                let name = take_string(&mut map, "name").unwrap_or_default();
+                let msg = take_string(&mut map, "msg").unwrap_or_default();
+                Ok(LogRecord {
+                    ts,
+                    level,
+                    name,
+                    msg,
+                    fields: map,
+                })
+            }
+            _ => Err("expected a Map"),
+        }
     }
 }
 

@@ -10,13 +10,14 @@ Use Rust for performance-sensitive services while callers stay in dynamic langua
 ```rust
 use saikuro::{Provider, Result};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut provider = Provider::new("index");
-    provider.register("search", |args: Vec<serde_json::Value>| async move {
-        Ok(run_search(args))
-    });
-    provider.serve("tcp://127.0.0.1:7700").await
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async {
+        let mut provider = Provider::new("index");
+        provider.register("search", |args: Vec<serde_json::Value>| async move {
+            Ok(run_search(args))
+        });
+        provider.serve("tcp://127.0.0.1:7700").await
+    })
 }
 ```
 

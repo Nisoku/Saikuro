@@ -155,7 +155,9 @@ class SaikuroProvider:
         except Exception as exc:
             logger.exception("provider error in '%s'", envelope.target)
             if not is_cast:
-                await transport.send(_make_error(envelope.id, "ProviderError", str(exc)))
+                await transport.send(
+                    _make_error(envelope.id, "ProviderError", str(exc))
+                )
 
     async def _dispatch_batch(
         self,
@@ -218,12 +220,7 @@ class SaikuroProvider:
         seq = 0
         try:
             async for item in handler(*envelope.args):
-                response = {
-                    "id": envelope.id,
-                    "ok": True,
-                    "result": item,
-                    "seq": seq,
-                }
+                response = {**_make_ok(envelope.id, item), "seq": seq}
                 await transport.send(response)
                 seq += 1
             # End-of-stream sentinel
@@ -318,7 +315,7 @@ class SaikuroProvider:
                 )
                 continue
             # Background dispatch; done-callback logs any unhandled exception.
-            task = asyncio.ensure_future(self._dispatch(envelope, transport))
+            task = asyncio.create_task(self._dispatch(envelope, transport))
             task.add_done_callback(_log_task_exception)
 
 

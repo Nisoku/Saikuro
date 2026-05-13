@@ -13,9 +13,10 @@ use parking_lot::RwLock;
 use saikuro_core::{
     capability::CapabilitySet, envelope::Envelope, schema::Schema, ResponseEnvelope,
 };
+use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::{InvocationRouter, RouterConfig},
+    router::InvocationRouter,
 };
 use saikuro_schema::{
     capability_engine::CapabilityEngine,
@@ -23,7 +24,6 @@ use saikuro_schema::{
     validator::InvocationValidator,
 };
 use saikuro_transport::traits::Transport;
-use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use crate::{config::RuntimeConfig, connection::ConnectionHandler, error::Result};
@@ -152,7 +152,7 @@ impl RuntimeHandle {
         };
 
         info!(peer = %peer_id, "spawning connection handler");
-        tokio::spawn(handler.run());
+        saikuro_exec::spawn(handler.run());
     }
 
     // In-process provider registration
@@ -182,10 +182,10 @@ impl RuntimeHandle {
 
         debug!(provider = %provider_id, "in-process provider registered");
 
-        tokio::spawn(async move {
+        saikuro_exec::spawn(async move {
             while let Some(item) = work_rx.recv().await {
                 let handler = handler.clone();
-                tokio::spawn(async move {
+                saikuro_exec::spawn(async move {
                     let response = handler(item.envelope).await;
                     if let Some(tx) = item.response_tx {
                         let _ = tx.send(response);
@@ -198,14 +198,7 @@ impl RuntimeHandle {
     // Helpers
 
     fn build_router(&self) -> InvocationRouter {
-        InvocationRouter::new(
-            self.provider_registry.clone(),
-            RouterConfig {
-                call_timeout: self.config.call_timeout,
-                stream_channel_capacity: self.config.stream_buffer_capacity,
-                channel_capacity: self.config.stream_buffer_capacity,
-            },
-        )
+        InvocationRouter::new(self.provider_registry.clone(), self.config.router_config())
     }
 
     pub fn is_shutdown(&self) -> bool {

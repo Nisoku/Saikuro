@@ -3,10 +3,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use saikuro_router::{
-    provider::ProviderRegistry,
-    router::{InvocationRouter, RouterConfig},
-};
+use saikuro_router::{provider::ProviderRegistry, router::InvocationRouter};
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
@@ -115,14 +112,7 @@ impl SaikuroRuntime {
 
     /// Build an [`InvocationRouter`] configured for this runtime.
     pub fn router(&self) -> InvocationRouter {
-        InvocationRouter::new(
-            self.provider_registry.clone(),
-            RouterConfig {
-                call_timeout: self.config.call_timeout,
-                stream_channel_capacity: self.config.stream_buffer_capacity,
-                channel_capacity: self.config.stream_buffer_capacity,
-            },
-        )
+        InvocationRouter::new(self.provider_registry.clone(), self.config.router_config())
     }
 
     /// Produce a cheap [`RuntimeHandle`] that can be cloned and shared across

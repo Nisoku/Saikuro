@@ -397,7 +397,8 @@ export class SaikuroProvider {
 
         if (capturedError !== null) {
           const errCode = (capturedError["code"] as string) ?? "ProviderError";
-          const errMsg = (capturedError["message"] as string) ?? "unknown error";
+          const errMsg =
+            (capturedError["message"] as string) ?? "unknown error";
           await _sendError(transport, envelope.id, errCode, errMsg, {
             batch_index: i,
             target: item.target,
@@ -487,7 +488,7 @@ export class SaikuroProvider {
           options.sourceFiles,
           this._namespace,
         );
-        await this._announce(transport, schema as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        await this._announce(transport, schema as SaikuroSchema);
       } catch (err) {
         // If extraction fails, fallback to regular announce behavior.
         log.warn("dev schema extraction failed, falling back to built schema", {
@@ -531,11 +532,11 @@ export class SaikuroProvider {
    */
   private async _announce(
     transport: Transport,
-    schemaOverride?: object,
+    schemaOverride?: SaikuroSchema,
   ): Promise<void> {
     try {
       const schema = schemaOverride ?? this.schemaObject();
-      const envelope = makeAnnounceEnvelope(schema as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const envelope = makeAnnounceEnvelope(schema);
       // Register a one-shot listener for the ack before sending so we don't
       // miss an immediate response from an in-memory transport.
       let tid: ReturnType<typeof setTimeout> | null = null;
@@ -548,7 +549,8 @@ export class SaikuroProvider {
           res(null);
         }, 5000);
         onMsg = (raw: Record<string, unknown>): void => {
-          if (tid) clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
+          if (tid)
+            clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
           if (onMsg) transport.offMessage(onMsg);
           res(raw);
         };
@@ -587,15 +589,7 @@ export class SaikuroProvider {
 
 function _isAsyncGenerator(value: unknown): boolean {
   if (value == null || typeof value !== "object") return false;
-  return (
-    typeof (value as { next?: unknown }).next === "function" &&
-    typeof (value as { return?: unknown }).return === "function" &&
-    typeof (value as { throw?: unknown }).throw === "function" &&
-    Symbol.asyncIterator in (value as object) &&
-    (value as AsyncIterator<unknown>)[
-      Symbol.asyncIterator as unknown as keyof AsyncIterator<unknown>
-    ] !== undefined
-  );
+  return Symbol.asyncIterator in value;
 }
 
 function _rawToEnvelope(raw: Record<string, unknown>): Envelope | null {

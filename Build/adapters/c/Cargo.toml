@@ -21,7 +21,7 @@ saikuro = { workspace = true, default-features = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
-tokio = { workspace = true }
+saikuro-exec = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 regex = "1.11"
 

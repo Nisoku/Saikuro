@@ -1,0 +1,179 @@
+//! In-memory storage backend using DashMap.
+//!
+//! This is the reference implementation and the default backend for
+//! Saikuro's ephemeral storage needs.
+
+use async_trait::async_trait;
+use bytes::Bytes;
+use dashmap::DashMap;
+use std::sync::Arc;
+use tracing::debug;
+
+use super::{
+    config::StorageConfig,
+    error::{Result, StorageError},
+    traits::{KeyValueBackend, StorageBackend},
+};
+
+/// An in-memory namespace containing key-value pairs.
+type NamespaceStore = DashMap<String, Bytes>;
+
+/// A thread-safe, in-memory storage backend.
+///
+/// Uses `DashMap` for lock-free concurrent access. All data is ephemeral
+/// and will be lost when the backend is dropped.
+pub struct InMemoryStorage {
+    config: StorageConfig,
+    namespaces: DashMap<String, Arc<NamespaceStore>>,
+}
+
+impl InMemoryStorage {
+    /// Create a new in-memory storage backend with default configuration.
+    pub fn new() -> Self {
+        Self::with_config(StorageConfig::default())
+    }
+
+    /// Create a new in-memory storage backend with custom configuration.
+    pub fn with_config(config: StorageConfig) -> Self {
+        let namespaces = DashMap::new();
+
+        if config.cleanup != super::config::CleanupPolicy::Never {
+            debug!("in-memory backend does not enforce cleanup (TTL/Age/LRU); configured cleanup settings are ignored");
+        }
+        debug!(
+            persistence = ?config.persistence,
+            "in-memory storage backend initialized"
+        );
+
+        Self { config, namespaces }
+    }
+
+    /// Prefix a logical namespace name with the configured prefix.
+    fn apply_prefix(&self, namespace: &str) -> String {
+        match &self.config.namespace_prefix {
+            Some(prefix) => format!("{prefix}:{namespace}"),
+            None => namespace.to_owned(),
+        }
+    }
+
+    /// Strip the configured prefix from a stored key, returning the logical name.
+    fn strip_prefix(&self, stored_key: &str) -> String {
+        match &self.config.namespace_prefix {
+            Some(prefix) => {
+                let prefix_len = prefix.len() + 1; // include ':'
+                if stored_key.len() > prefix_len && stored_key.starts_with(&format!("{prefix}:")) {
+                    stored_key[prefix_len..].to_owned()
+                } else {
+                    stored_key.to_owned()
+                }
+            }
+            None => stored_key.to_owned(),
+        }
+    }
+
+    /// Look up a namespace, returns an error if it doesn't exist.
+    fn get_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
+        let key = self.apply_prefix(namespace);
+        self.namespaces
+            .get(&key)
+            .map(|ns| ns.clone())
+            .ok_or_else(|| StorageError::namespace_not_found(namespace))
+    }
+
+    /// Get or create a namespace (write operations).
+    fn get_or_create_namespace(&self, namespace: &str) -> Result<Arc<NamespaceStore>> {
+        let key = self.apply_prefix(namespace);
+
+        if !self.config.auto_create_namespaces {
+            return self.get_namespace(namespace);
+        }
+
+        Ok(self
+            .namespaces
+            .entry(key)
+            .or_insert_with(|| Arc::new(NamespaceStore::new()))
+            .clone())
+    }
+}
+
+impl Default for InMemoryStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl KeyValueBackend for InMemoryStorage {
+    fn config(&self) -> &StorageConfig {
+        &self.config
+    }
+
+    async fn exists(&self, namespace: &str, key: &str) -> Result<bool> {
+        let ns = self.get_namespace(namespace)?;
+        Ok(ns.contains_key(key))
+    }
+
+    async fn get(&self, namespace: &str, key: &str) -> Result<Option<Bytes>> {
+        let ns = self.get_namespace(namespace)?;
+        Ok(ns.get(key).map(|v| v.clone()))
+    }
+
+    async fn put(&self, namespace: &str, key: &str, value: Bytes) -> Result<()> {
+        let ns = self.get_or_create_namespace(namespace)?;
+        ns.insert(key.to_owned(), value);
+        Ok(())
+    }
+
+    async fn delete(&self, namespace: &str, key: &str) -> Result<()> {
+        let ns = match self.get_namespace(namespace) {
+            Ok(ns) => ns,
+            Err(_) => return Ok(()),
+        };
+        ns.remove(key);
+        Ok(())
+    }
+
+    async fn list_keys(&self, namespace: &str) -> Result<Vec<String>> {
+        let ns = self.get_namespace(namespace)?;
+        Ok(ns.iter().map(|entry| entry.key().clone()).collect())
+    }
+
+    async fn list_namespaces(&self) -> Result<Vec<String>> {
+        Ok(self
+            .namespaces
+            .iter()
+            .map(|entry| self.strip_prefix(entry.key()))
+            .collect())
+    }
+
+    async fn create_namespace(&self, namespace: &str) -> Result<()> {
+        use dashmap::mapref::entry::Entry;
+        let key = self.apply_prefix(namespace);
+        match self.namespaces.entry(key) {
+            Entry::Occupied(_) => Err(StorageError::NamespaceAlreadyExists(namespace.to_owned())),
+            Entry::Vacant(e) => {
+                e.insert(Arc::new(NamespaceStore::new()));
+                Ok(())
+            }
+        }
+    }
+
+    async fn delete_namespace(&self, namespace: &str) -> Result<()> {
+        let key = self.apply_prefix(namespace);
+        self.namespaces.remove(&key);
+        Ok(())
+    }
+
+    async fn clear_namespace(&self, namespace: &str) -> Result<()> {
+        let ns = self.get_namespace(namespace)?;
+        ns.clear();
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl StorageBackend for InMemoryStorage {
+    fn supports_files(&self) -> bool {
+        false
+    }
+}

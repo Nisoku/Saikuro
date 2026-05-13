@@ -1,4 +1,3 @@
-# Rust CI: format check, clippy, and tests for the workspace + Rust adapter
 name: Rust
 
 on:
@@ -20,27 +19,28 @@ on:
       - "Build/adapters/rust/**"
       - ".github/workflows/rust.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-  check:
+  lint:
     name: Format + Clippy
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Build
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -48,27 +48,17 @@ jobs:
             Build/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-
-      - name: cargo fmt --check
-        run: cargo fmt --all -- --check
-
-      - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: just rust fmt_check
+      - run: just rust lint
 
   test:
-    name: Tests
+    name: Tests + WASM
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Build
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -76,26 +66,21 @@ jobs:
             Build/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      - run: just rust test
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - run: just rust wasm_check
 
-      - name: cargo test (workspace)
-        run: cargo test --workspace --all-features
-
-  rust-adapter:
+  adapter:
     name: Rust adapter
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Build/adapters/rust
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -103,12 +88,4 @@ jobs:
             Build/adapters/rust/target
           key: ${{ runner.os }}-cargo-adapter-${{ hashFiles('Build/adapters/rust/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-adapter-
-
-      - name: cargo fmt --check
-        run: cargo fmt -- --check
-
-      - name: cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: cargo test
-        run: cargo test --all-features
+      - run: just rust adapter_test

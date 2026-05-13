@@ -40,7 +40,7 @@
 - [ ] Awk (Yes, really. Text processing god.)
 - [ ] GDScript (So useful for Godot)
 - [ ] Gleam (Another new lang, really cute mascot hehe)
-- [ ] Jakt (from SerenityOS: https://github.com/SerenityOS/jakt)
+- [ ] Jakt (from SerenityOS: <https://github.com/SerenityOS/jakt>)
 - [ ] Luau (yes that one)
 - [ ] Assembly (this would be peak but silly but still peak.)
 - [ ] D (Dlang)
@@ -65,12 +65,7 @@
 ## Features
 
 - [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
-- [O] Buildscripts (Python ofc) and more dev conveniences
 - [ ] Make WASM compilation of runtime work like how i imagined it
-- [ ] WasmHostTransport for WASM
-    - A transport that uses:
-        - postMessage (basic other stuff, logs for ex?)
-        - MessageChannel (transport and channels (hah))
-        - BroadcastChannel (discovery) 
-    - (can choose which of the three or use all three in diff places)
+- [X] WasmHostTransport for WASM
+  - A transport that uses BroadcastChannel
 - [ ] Language Adapter Template Generator

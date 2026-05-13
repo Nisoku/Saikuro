@@ -1,6 +1,6 @@
 [package]
 name = "saikuro-runtime"
-description = "The Saikuro runtime:  orchestrates schema, transport, routing, and capability enforcement"
+description = "The Saikuro runtime: orchestrates schema, transport, routing, and capability enforcement. Includes standalone server binary."
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,16 +8,23 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "runtime", "async"]
 
+[[bin]]
+name = "saikuro-runtime"
+path = "src/main.rs"
+required-features = ["native-transport"]
+
 [features]
 default = ["native-transport"]
-native-transport = ["saikuro-transport/native-transport"]
-ws-transport = ["saikuro-transport/ws-transport"]
+native-transport = ["saikuro-transport/native-transport", "saikuro-exec/tokio-runtime"]
+ws-transport = ["saikuro-transport/ws-transport", "dep:tokio-tungstenite", "dep:tungstenite"]
+wasm-runtime = ["saikuro-exec/wasm-runtime"]
 
 [dependencies]
 saikuro-core      = { workspace = true }
 saikuro-schema    = { workspace = true }
 saikuro-transport = { workspace = true }
 saikuro-router    = { workspace = true }
+saikuro-exec      = { workspace = true, default-features = false }
 
 serde       = { workspace = true }
 serde_json  = { workspace = true }
@@ -30,9 +37,14 @@ tracing     = { workspace = true }
 tracing-subscriber = { workspace = true }
 dashmap     = { workspace = true }
 parking_lot = { workspace = true }
-tokio       = { workspace = true }
-tokio-stream = { workspace = true }
 uuid        = { workspace = true }
 
+# CLI and error handling for binary
+anyhow      = { workspace = true }
+clap        = { version = "4.5", features = ["derive", "env"] }
+
+# WebSocket server-side (optional, depends on ws-transport feature)
+tokio-tungstenite = { version = "0.24", optional = true }
+tungstenite       = { version = "0.24", optional = true }
+
 [dev-dependencies]
-tokio-test = { workspace = true }

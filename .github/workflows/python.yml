@@ -1,4 +1,3 @@
-# Python CI: lint and tests
 name: Python
 
 on:
@@ -12,27 +11,29 @@ on:
       - "Build/adapters/python/**"
       - ".github/workflows/python.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Tests
+    name: Lint + Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Build/adapters/python
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: taiki-e/install-action@just
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-
+          version: "0.6.0"
+      - name: Setup Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -e ".[dev,websocket]"
-
-      - name: Run pytest
-        run: pytest --tb=short -q
+        run: uv sync --extra dev --extra websocket
+        working-directory: Build/adapters/python
+      - run: just python check

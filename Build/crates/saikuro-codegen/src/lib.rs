@@ -25,4 +25,8 @@ pub mod rust;
 pub mod typescript;
 
 pub use error::CodegenError;
-pub use generator::{BindingGenerator, GeneratedFile, GeneratorOutput};
+pub use generator::{
+    convert_type, generate_types_and_namespace_clients, generate_types_from_schema,
+    namespace_public_functions, to_camel_case, to_pascal_case, BindingGenerator, GeneratedFile,
+    GeneratorOutput, TypeConverter,
+};

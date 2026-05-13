@@ -198,8 +198,8 @@ fn batch_with_no_items_fails() {
 
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::EmptyBatch),
-        "expected EmptyBatch, got {err:?}"
+        matches!(err, ValidationError::MissingBatch),
+        "expected MissingBatch, got {err:?}"
     );
     assert_eq!(err.error_code(), ErrorCode::MalformedEnvelope);
 }

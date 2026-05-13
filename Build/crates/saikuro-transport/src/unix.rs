@@ -5,20 +5,19 @@
 //! length-prefixed framing as the TCP transport.
 //! This only works when the target OS is a Unix family OS. (yes, not you Windows >:( )
 
+use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
+use saikuro_exec::net::{UnixListener, UnixStream};
+use saikuro_exec::tokio_util::codec::Framed;
 use std::path::{Path, PathBuf};
-use tokio::net::{UnixListener, UnixStream};
-use tokio_util::codec::Framed;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     error::Result,
     framing::LengthPrefixedCodec,
-    traits::{
-        Transport, TransportConnector, TransportListener, TransportReceiver, TransportSender,
-    },
+    traits::{Transport, TransportConnector, TransportListener},
 };
 
 // Transport
@@ -70,40 +69,14 @@ pub struct UnixSender {
     path: PathBuf,
 }
 
-#[async_trait]
-impl TransportSender for UnixSender {
-    async fn send(&mut self, frame: Bytes) -> Result<()> {
-        trace!(path = ?self.path, bytes = frame.len(), "unix send");
-        self.inner.send(frame).await
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        debug!(path = ?self.path, "unix sender closing");
-        self.inner.close().await
-    }
-}
+impl_native_sender!(UnixSender, path, "unix");
 
 pub struct UnixReceiver {
     inner: futures::stream::SplitStream<Framed<UnixStream, LengthPrefixedCodec>>,
     path: PathBuf,
 }
 
-#[async_trait]
-impl TransportReceiver for UnixReceiver {
-    async fn recv(&mut self) -> Result<Option<Bytes>> {
-        match self.inner.next().await {
-            Some(Ok(bytes)) => {
-                trace!(path = ?self.path, bytes = bytes.len(), "unix recv");
-                Ok(Some(bytes))
-            }
-            Some(Err(e)) => Err(e),
-            None => {
-                debug!(path = ?self.path, "unix connection closed by peer");
-                Ok(None)
-            }
-        }
-    }
-}
+impl_native_receiver!(UnixReceiver, path, "unix");
 
 // Connector
 
@@ -143,7 +116,7 @@ impl UnixTransportListener {
     /// Bind a listener on the given socket path.
     ///
     /// If a stale socket file already exists at the path it is removed first.
-    pub fn bind(path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn bind(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_owned();
         // Remove any stale socket from a previous run.
         if path.exists() {

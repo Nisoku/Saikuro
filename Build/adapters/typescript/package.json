@@ -30,7 +30,8 @@
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "schema": "node dist/cli/saikuro-schema.js"
+    "schema": "node dist/cli/saikuro-schema.js",
+    "format": "prettier --write ."
   },
   "keywords": [
     "ipc",
@@ -53,6 +54,7 @@
     "globals": "^17.4.0",
     "jiti": "^2.6.1",
     "path": "^0.12.7",
+    "prettier": "^3.8.3",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.56.1",

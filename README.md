@@ -31,17 +31,18 @@ or in-memory).
 ```rust
 use saikuro::{Provider, Result};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut provider = Provider::new("math");
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async {
+        let mut provider = Provider::new("math");
 
-    provider.register("add", |args: Vec<serde_json::Value>| async move {
-        let a = args[0].as_i64().unwrap_or(0);
-        let b = args[1].as_i64().unwrap_or(0);
-        Ok(serde_json::json!(a + b))
-    });
+        provider.register("add", |args: Vec<serde_json::Value>| async move {
+            let a = args[0].as_i64().unwrap_or(0);
+            let b = args[1].as_i64().unwrap_or(0);
+            Ok(serde_json::json!(a + b))
+        });
 
-    provider.serve("tcp://127.0.0.1:7700").await
+        provider.serve("tcp://127.0.0.1:7700").await
+    })
 }
 ```
 
@@ -78,9 +79,8 @@ Build/
     saikuro-schema/     Schema registry & validation
     saikuro-transport/  Transport backends
     saikuro-router/     Invocation router
-    saikuro-runtime/    Embeddable runtime
+    saikuro-runtime/    Embeddable runtime (includes standalone server binary)
     saikuro-codegen/    Binding code-generator
-    saikuro-runtime-bin/ Standalone server binary
   tests/              # Rust integration tests
   adapters/
     rust/             Rust adapter (saikuro crate)
@@ -96,8 +96,8 @@ Docs/                 Documentation site
 
 Full documentation is available at the project's GitHub Pages site:
 
-- https://nisoku.org/Saikuro/docs/
-- Adapter docs index: https://nisoku.org/Saikuro/docs/adapters/
+- <https://nisoku.org/Saikuro/docs/>
+- Adapter docs index: <https://nisoku.org/Saikuro/docs/adapters/>
 
 Repository docs sources:
 

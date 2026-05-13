@@ -1,0 +1,22 @@
+[package]
+name = "saikuro-exec"
+description = "Execution and concurrency facade for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = ["tokio", "tokio-util"]
+wasm-runtime = ["wasm-bindgen-futures", "wasm-timer"]
+embassy-runtime = []
+
+[dependencies]
+tokio      = { version = "1.52.3", features = ["full"], optional = true }
+tokio-util = { version = "0.7.18", features = ["codec"], optional = true }
+
+futures = { workspace = true }
+wasm-bindgen-futures = { version = "0.4.71", optional = true }
+wasm-timer = { version = "0.2.5", optional = true }

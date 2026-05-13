@@ -27,189 +27,11 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using TDF = Saikuro.Schema.TypeDescriptorFactory;
+using System.Text.RegularExpressions;
+using Saikuro;
 
 namespace Saikuro.Schema;
 
-// Type Descriptors
-
-public abstract class TypeDescriptor
-{
-    public string Kind { get; init; } = "";
-}
-
-/// <summary>Primitive types: bool, i32, i64, f32, f64, string, bytes, any, unit</summary>
-public class PrimitiveTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("type")]
-    public string Type { get; init; } = "any";
-
-    public static PrimitiveTypeDescriptor FromType(Type type)
-    {
-        var underlying = Nullable.GetUnderlyingType(type) ?? type;
-
-        if (underlying == typeof(bool))
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "bool" };
-        if (
-            underlying == typeof(sbyte)
-            || underlying == typeof(byte)
-            || underlying == typeof(short)
-            || underlying == typeof(ushort)
-            || underlying == typeof(int)
-            || underlying == typeof(uint)
-            || underlying == typeof(long)
-            || underlying == typeof(ulong)
-        )
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "i64" };
-
-        if (
-            underlying == typeof(float)
-            || underlying == typeof(double)
-            || underlying == typeof(decimal)
-        )
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "f64" };
-
-        if (underlying == typeof(string))
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "string" };
-
-        if (
-            underlying == typeof(byte[])
-            || underlying == typeof(Memory<byte>)
-            || underlying == typeof(ReadOnlyMemory<byte>)
-        )
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "bytes" };
-
-        if (underlying == typeof(void))
-            return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "unit" };
-
-        return new PrimitiveTypeDescriptor { Kind = "primitive", Type = "any" };
-    }
-}
-
-/// <summary>List/array types: { kind: "list", item: TypeDescriptor }</summary>
-public class ListTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("item")]
-    public TypeDescriptor Item { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    public static ListTypeDescriptor FromType(Type type)
-    {
-        var elementType = type.IsArray
-            ? type.GetElementType()!
-            : type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
-        return new ListTypeDescriptor { Kind = "list", Item = TDF.FromSystemType(elementType) };
-    }
-}
-
-/// <summary>Map/dictionary types: { kind: "map", key: TypeDescriptor, value: TypeDescriptor }</summary>
-public class MapTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("key")]
-    public TypeDescriptor Key { get; init; } = new PrimitiveTypeDescriptor { Type = "string" };
-
-    [JsonPropertyName("value")]
-    public TypeDescriptor Value { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    public static MapTypeDescriptor FromType(Type type)
-    {
-        var args = type.GetGenericArguments();
-        return new MapTypeDescriptor
-        {
-            Kind = "map",
-            Key =
-                args.Length >= 1
-                    ? TDF.FromSystemType(args[0])
-                    : new PrimitiveTypeDescriptor { Type = "string" },
-            Value =
-                args.Length >= 2
-                    ? TDF.FromSystemType(args[1])
-                    : new PrimitiveTypeDescriptor { Type = "any" },
-        };
-    }
-}
-
-/// <summary>Optional/nullable types: { kind: "optional", inner: TypeDescriptor }</summary>
-public class OptionalTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("inner")]
-    public TypeDescriptor Inner { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    public static OptionalTypeDescriptor FromType(Type type)
-    {
-        var underlying = Nullable.GetUnderlyingType(type);
-        if (underlying != null)
-        {
-            return new OptionalTypeDescriptor
-            {
-                Kind = "optional",
-                Inner = TDF.FromSystemType(underlying),
-            };
-        }
-        // Check for Task<T?> pattern
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
-        {
-            return new OptionalTypeDescriptor
-            {
-                Kind = "optional",
-                Inner = TDF.FromSystemType(type.GetGenericArguments()[0]),
-            };
-        }
-        return new OptionalTypeDescriptor { Kind = "optional", Inner = TDF.FromSystemType(type) };
-    }
-}
-
-/// <summary>Named type reference: { kind: "named", name: "TypeName" }</summary>
-public class NamedTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("name")]
-    public string Name { get; init; } = "";
-
-    public static NamedTypeDescriptor FromType(Type type)
-    {
-        return new NamedTypeDescriptor { Kind = "named", Name = type.Name };
-    }
-}
-
-/// <summary>Async stream: { kind: "stream", item: TypeDescriptor }</summary>
-public class StreamTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("item")]
-    public TypeDescriptor Item { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    public static StreamTypeDescriptor FromType(Type type)
-    {
-        var args = type.GetGenericArguments();
-        var itemType = args.FirstOrDefault() ?? typeof(object);
-        return new StreamTypeDescriptor { Kind = "stream", Item = TDF.FromSystemType(itemType) };
-    }
-}
-
-/// <summary>Channel (bidirectional): { kind: "channel", send: TypeDescriptor, recv: TypeDescriptor }</summary>
-public class ChannelTypeDescriptor : TypeDescriptor
-{
-    [JsonPropertyName("send")]
-    public TypeDescriptor Send { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    [JsonPropertyName("recv")]
-    public TypeDescriptor Recv { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
-
-    public static ChannelTypeDescriptor FromType(Type type)
-    {
-        var args = type.GetGenericArguments();
-        return new ChannelTypeDescriptor
-        {
-            Kind = "channel",
-            Send =
-                args.Length >= 1
-                    ? TDF.FromSystemType(args[0])
-                    : new PrimitiveTypeDescriptor { Type = "any" },
-            Recv =
-                args.Length >= 2
-                    ? TDF.FromSystemType(args[1])
-                    : new PrimitiveTypeDescriptor { Type = "any" },
-        };
-    }
-}
 
 /// <summary>
 /// Convert a .NET Type to a Saikuro TypeDescriptor.
@@ -220,61 +42,69 @@ public static class TypeDescriptorFactory
     public static TypeDescriptor FromSystemType(Type type)
     {
         if (type is null)
-            return new PrimitiveTypeDescriptor { Type = "any" };
+            return new TypeDescriptor.Primitive("any");
 
         // Handle nullable
         if (Nullable.GetUnderlyingType(type) != null)
         {
-            return new OptionalTypeDescriptor
-            {
-                Kind = "optional",
-                Inner = TDF.FromSystemType(Nullable.GetUnderlyingType(type)!),
-            };
+            return new TypeDescriptor.Optional(
+                FromSystemType(Nullable.GetUnderlyingType(type)!));
         }
 
         // Handle arrays
         if (type.IsArray)
         {
-            return ListTypeDescriptor.FromType(type);
+            return new TypeDescriptor.List(FromSystemType(type.GetElementType()!));
         }
 
-        // Handle IEnumerable<T> / IEnumerable
+        // Handle generic types
         if (type.IsGenericType)
         {
             var genericDef = type.GetGenericTypeDefinition();
 
-            // Task<T> - unwrap to get inner type
+            // Task<T> / ValueTask<T> - unwrap
             if (genericDef == typeof(Task<>) || genericDef == typeof(ValueTask<>))
+                return FromSystemType(type.GetGenericArguments()[0]);
+
+            // IAsyncEnumerable<T> - stream
+            if (genericDef == typeof(IAsyncEnumerable<>))
             {
-                return TDF.FromSystemType(type.GetGenericArguments()[0]);
+                var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                return new TypeDescriptor.Stream(FromSystemType(itemType));
             }
 
-            // IAsyncEnumerable<T> - stream type
-            if (genericDef == typeof(IAsyncEnumerable<>) || genericDef == typeof(IEnumerable<>))
+            // IEnumerable<T> - list
+            if (genericDef == typeof(IEnumerable<>))
             {
-                return StreamTypeDescriptor.FromType(type);
+                var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                return new TypeDescriptor.List(FromSystemType(itemType));
             }
 
-            // IDictionary<TKey, TValue>, Dictionary<TKey, TValue>
+            // IDictionary / Dictionary
             if (genericDef == typeof(IDictionary<,>) || genericDef == typeof(Dictionary<,>))
             {
-                return MapTypeDescriptor.FromType(type);
+                var args = type.GetGenericArguments();
+                return new TypeDescriptor.Map(
+                    args.Length >= 1 ? FromSystemType(args[0]) : new TypeDescriptor.Primitive("string"),
+                    args.Length >= 2 ? FromSystemType(args[1]) : new TypeDescriptor.Primitive("any"));
             }
 
             // ICollection<T>, IList<T>, List<T>
-            if (
-                genericDef == typeof(ICollection<>)
+            if (genericDef == typeof(ICollection<>)
                 || genericDef == typeof(IList<>)
-                || genericDef == typeof(List<>)
-            )
+                || genericDef == typeof(List<>))
             {
-                return ListTypeDescriptor.FromType(type);
+                var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                return new TypeDescriptor.List(FromSystemType(itemType));
             }
 
             // Channel<T>
             if (type.Name.Contains("Channel"))
             {
-                return ChannelTypeDescriptor.FromType(type);
+                var args = type.GetGenericArguments();
+                return new TypeDescriptor.Channel(
+                    args.Length >= 1 ? FromSystemType(args[0]) : new TypeDescriptor.Primitive("any"),
+                    args.Length >= 2 ? FromSystemType(args[1]) : new TypeDescriptor.Primitive("any"));
             }
         }
 
@@ -283,25 +113,47 @@ public static class TypeDescriptorFactory
         {
             if (type.Name.StartsWith("IAsyncEnumerable"))
             {
-                return StreamTypeDescriptor.FromType(type);
+                var itemType = type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                return new TypeDescriptor.Stream(FromSystemType(itemType));
             }
             if (type.Name.StartsWith("IDictionary"))
             {
-                return MapTypeDescriptor.FromType(type);
+                var args = type.GetGenericArguments();
+                return new TypeDescriptor.Map(
+                    args.Length >= 1 ? FromSystemType(args[0]) : new TypeDescriptor.Primitive("string"),
+                    args.Length >= 2 ? FromSystemType(args[1]) : new TypeDescriptor.Primitive("any"));
             }
             if (type.Name.StartsWith("IEnumerable"))
             {
-                return ListTypeDescriptor.FromType(type);
+                return new TypeDescriptor.List(new TypeDescriptor.Primitive("any"));
             }
         }
 
         // Handle primitives
-        var primitive = PrimitiveTypeDescriptor.FromType(type);
-        if (primitive.Type != "any")
-            return primitive;
+        return PrimitiveFromType(type);
+    }
 
-        // Default to named type for complex objects
-        return NamedTypeDescriptor.FromType(type);
+    private static TypeDescriptor PrimitiveFromType(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+        if (underlying == typeof(bool))
+            return new TypeDescriptor.Primitive("bool");
+        if (underlying == typeof(sbyte) || underlying == typeof(byte)
+            || underlying == typeof(short) || underlying == typeof(ushort)
+            || underlying == typeof(int) || underlying == typeof(uint)
+            || underlying == typeof(long) || underlying == typeof(ulong))
+            return new TypeDescriptor.Primitive("i64");
+        if (underlying == typeof(float) || underlying == typeof(double) || underlying == typeof(decimal))
+            return new TypeDescriptor.Primitive("f64");
+        if (underlying == typeof(string))
+            return new TypeDescriptor.Primitive("string");
+        if (underlying == typeof(byte[]) || underlying == typeof(Memory<byte>) || underlying == typeof(ReadOnlyMemory<byte>))
+            return new TypeDescriptor.Primitive("bytes");
+        if (underlying == typeof(void))
+            return new TypeDescriptor.Primitive("unit");
+
+        return new TypeDescriptor.Named(type.Name);
     }
 }
 
@@ -314,7 +166,7 @@ public class ExtractedArg
     public string Name { get; init; } = "";
 
     [JsonPropertyName("type")]
-    public TypeDescriptor Type { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
+    public TypeDescriptor Type { get; init; } = new TypeDescriptor.Primitive("any");
 
     [JsonPropertyName("optional")]
     public bool Optional { get; init; }
@@ -336,7 +188,7 @@ public class ExtractedFunction
     public List<ExtractedArg> Args { get; init; } = new();
 
     [JsonPropertyName("returns")]
-    public TypeDescriptor Returns { get; init; } = new PrimitiveTypeDescriptor { Type = "any" };
+    public TypeDescriptor Returns { get; init; } = new TypeDescriptor.Primitive("any");
 
     [JsonPropertyName("capabilities")]
     public List<string> Capabilities { get; init; } = new();
@@ -367,7 +219,10 @@ public class XmlDocumentationParser
     public XmlDocumentationParser(string xmlPath)
     {
         if (!File.Exists(xmlPath))
+        {
+            Console.Error.WriteLine($"[warn] XML doc file not found: {xmlPath}");
             return;
+        }
 
         var content = File.ReadAllText(xmlPath);
         ParseXml(content);
@@ -427,7 +282,7 @@ public class XmlDocumentationParser
 
     private static string CleanXmlText(string text)
     {
-        return text.Replace("\r", "").Replace("\n", " ").Replace("  ", " ").Trim();
+        return Regex.Replace(text, @"\s+", " ").Trim();
     }
 
     public string? GetMemberDoc(string fullMemberName)
@@ -480,7 +335,7 @@ public class SchemaExtractor
             var parser = new XmlDocumentationParser(xmlPath);
             foreach (var assembly in _assemblies)
             {
-                _xmlDocs[assembly.FullName ?? assembly.GetName().Name!] = parser;
+                _xmlDocs[assembly.FullName ?? assembly.GetName().Name ?? "unknown"] = parser;
             }
         }
         return this;
@@ -509,7 +364,7 @@ public class SchemaExtractor
         {
             var types = assembly.GetExportedTypes();
             var docParser = _xmlDocs.GetValueOrDefault(
-                assembly.FullName ?? assembly.GetName().Name!
+                assembly.FullName ?? assembly.GetName().Name ?? "unknown"
             );
 
             foreach (var type in types)
@@ -579,28 +434,29 @@ public class SchemaExtractor
         var returnType = method.ReturnType;
         var isAsync =
             returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>);
-        var isGenerator =
-            typeof(IAsyncEnumerable<>).IsAssignableFrom(returnType)
-            || typeof(IEnumerable<>).IsAssignableFrom(returnType);
+        var genericDef = returnType.IsGenericType ? returnType.GetGenericTypeDefinition() : null;
+        var isAsyncGenerator = genericDef == typeof(IAsyncEnumerable<>);
+        var isEnumerable = genericDef == typeof(IEnumerable<>);
 
         TypeDescriptor returns;
         if (returnType == typeof(void))
         {
-            returns = new PrimitiveTypeDescriptor { Kind = "primitive", Type = "unit" };
+            returns = new TypeDescriptor.Primitive("unit");
         }
         else if (isAsync)
         {
             var innerType = returnType.GetGenericArguments()[0];
             returns = TypeDescriptorFactory.FromSystemType(innerType);
         }
-        else if (isGenerator)
+        else if (isAsyncGenerator)
         {
             var innerType = returnType.GetGenericArguments().FirstOrDefault() ?? typeof(object);
-            returns = new StreamTypeDescriptor
-            {
-                Kind = "stream",
-                Item = TypeDescriptorFactory.FromSystemType(innerType),
-            };
+            returns = new TypeDescriptor.Stream(TypeDescriptorFactory.FromSystemType(innerType));
+        }
+        else if (isEnumerable)
+        {
+            var innerType = returnType.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+            returns = new TypeDescriptor.List(TypeDescriptorFactory.FromSystemType(innerType));
         }
         else
         {
@@ -629,111 +485,57 @@ public class SchemaExtractor
             Visibility = visibility,
             Doc = doc,
             IsAsync = isAsync,
-            IsGenerator = isGenerator,
+            IsGenerator = isAsyncGenerator,
         };
     }
 
     /// <summary>
     /// Build a Saikuro schema announcement from extracted functions.
     /// </summary>
-    public Dictionary<string, object> BuildSchema(string namespaceName)
+    public Dictionary<string, object?> BuildSchema(string namespaceName)
     {
         var functions = Extract();
 
-        var schemaFunctions = new Dictionary<string, object>();
+        var schemaFunctions = new Dictionary<string, object?>();
         foreach (var fn in functions)
         {
             var argList = fn
-                .Args.Select(arg => new Dictionary<string, object?>
-                {
-                    ["name"] = arg.Name,
-                    ["type"] = SerializeType(arg.Type),
-                    ["optional"] = arg.Optional,
-                })
+            .Args.Select(arg => new Dictionary<string, object?>
+            {
+                [WireKey.Name] = arg.Name,
+                [WireKey.Type] = arg.Type.ToWire(),
+                [WireKey.Optional] = arg.Optional,
+            })
                 .ToList();
 
             var returns = fn.IsGenerator
-                ? new Dictionary<string, object>
+                ? new Dictionary<string, object?>
                 {
-                    ["kind"] = "stream",
-                    ["item"] = SerializeType(fn.Returns),
+                    [WireKey.Kind] = "stream",
+                    [WireKey.Item] = fn.Returns.ToWire(),
                 }
-                : SerializeType(fn.Returns);
+                : fn.Returns.ToWire();
 
             var schemaFn = new Dictionary<string, object?>
             {
-                ["args"] = argList,
-                ["returns"] = returns,
-                ["visibility"] = fn.Visibility,
-                ["capabilities"] = fn.Capabilities,
+                [WireKey.Args] = argList,
+                [WireKey.Returns] = returns,
+                [WireKey.Visibility] = fn.Visibility,
+                [WireKey.Capabilities] = fn.Capabilities,
             };
 
             if (!string.IsNullOrEmpty(fn.Doc))
             {
-                schemaFn["doc"] = fn.Doc;
+                schemaFn[WireKey.Doc] = fn.Doc;
             }
 
             schemaFunctions[fn.Name] = schemaFn;
         }
 
-        return new Dictionary<string, object>
-        {
-            ["version"] = 1,
-            ["namespaces"] = new Dictionary<string, object>
-            {
-                [namespaceName] = new Dictionary<string, object>
-                {
-                    ["functions"] = schemaFunctions,
-                },
-            },
-            ["types"] = new Dictionary<string, object>(),
-        };
+        return WireKey.BuildSchemaDict(namespaceName, schemaFunctions);
     }
 
-    private object SerializeType(TypeDescriptor type)
-    {
-        return type switch
-        {
-            PrimitiveTypeDescriptor p => new Dictionary<string, string>
-            {
-                ["kind"] = p.Kind,
-                ["type"] = p.Type,
-            },
-            ListTypeDescriptor l => new Dictionary<string, object>
-            {
-                ["kind"] = l.Kind,
-                ["item"] = SerializeType(l.Item),
-            },
-            MapTypeDescriptor m => new Dictionary<string, object>
-            {
-                ["kind"] = m.Kind,
-                ["key"] = SerializeType(m.Key),
-                ["value"] = SerializeType(m.Value),
-            },
-            OptionalTypeDescriptor o => new Dictionary<string, object>
-            {
-                ["kind"] = o.Kind,
-                ["inner"] = SerializeType(o.Inner),
-            },
-            NamedTypeDescriptor n => new Dictionary<string, string>
-            {
-                ["kind"] = n.Kind,
-                ["name"] = n.Name,
-            },
-            StreamTypeDescriptor s => new Dictionary<string, object>
-            {
-                ["kind"] = s.Kind,
-                ["item"] = SerializeType(s.Item),
-            },
-            ChannelTypeDescriptor c => new Dictionary<string, object>
-            {
-                ["kind"] = c.Kind,
-                ["send"] = SerializeType(c.Send),
-                ["recv"] = SerializeType(c.Recv),
-            },
-            _ => new Dictionary<string, string> { ["kind"] = "primitive", ["type"] = "any" },
-        };
-    }
+    private static object SerializeType(TypeDescriptor type) => type.ToWire();
 }
 
 // Attributes
@@ -782,7 +584,7 @@ public static class SchemaExtractorExtensions
     {
         return new SchemaExtractor()
             .AddAssemblyContaining<T>()
-            .AddXmlDocumentation(typeof(T).Assembly.GetName().Name!, xmlPath)
+            .AddXmlDocumentation(typeof(T).Assembly.GetName().Name ?? "unknown", xmlPath)
             .BuildSchema(namespaceName);
     }
 }

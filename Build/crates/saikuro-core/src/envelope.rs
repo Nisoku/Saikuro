@@ -128,6 +128,26 @@ pub struct Envelope {
     pub seq: Option<u64>,
 }
 
+// Shared MessagePack serialization for wire types.
+macro_rules! impl_msgpack {
+    ($ty:ty) => {
+        impl $ty {
+            /// Serialise this envelope to MessagePack bytes.
+            pub fn to_msgpack(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+                rmp_serde::to_vec_named(self)
+            }
+
+            /// Deserialise from MessagePack bytes.
+            pub fn from_msgpack(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
+                rmp_serde::from_slice(bytes)
+            }
+        }
+    };
+}
+
+impl_msgpack!(Envelope);
+impl_msgpack!(ResponseEnvelope);
+
 impl Envelope {
     /// Construct the simplest possible call envelope.
     pub fn call(target: impl Into<String>, args: Vec<Value>) -> Self {
@@ -194,27 +214,23 @@ impl Envelope {
         }
     }
 
-    /// Serialise this envelope to MessagePack bytes.
-    pub fn to_msgpack(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
-        rmp_serde::to_vec_named(self)
-    }
-
-    /// Deserialise an envelope from MessagePack bytes.
-    pub fn from_msgpack(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
-        rmp_serde::from_slice(bytes)
-    }
-
     /// Return the namespace portion of `target` (everything before the last `.`).
     pub fn namespace(&self) -> Option<&str> {
-        let dot = self.target.rfind('.')?;
-        Some(&self.target[..dot])
+        split_target(&self.target).map(|(ns, _)| ns)
     }
 
     /// Return the function name portion of `target` (everything after the last `.`).
     pub fn function_name(&self) -> Option<&str> {
-        let dot = self.target.rfind('.')?;
-        Some(&self.target[dot + 1..])
+        split_target(&self.target).map(|(_, fn_name)| fn_name)
     }
+}
+
+/// Split a `"namespace.function"` target string into its two components.
+///
+/// Returns `None` when `target` contains no dot separator.
+pub fn split_target(target: &str) -> Option<(&str, &str)> {
+    let dot = target.rfind('.')?;
+    Some((&target[..dot], &target[dot + 1..]))
 }
 
 /// The envelope carrying a response back to a caller.
@@ -305,15 +321,5 @@ impl ResponseEnvelope {
             seq: Some(seq),
             stream_control: Some(StreamControl::End),
         }
-    }
-
-    /// Serialise this response to MessagePack bytes.
-    pub fn to_msgpack(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
-        rmp_serde::to_vec_named(self)
-    }
-
-    /// Deserialise a response from MessagePack bytes.
-    pub fn from_msgpack(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
-        rmp_serde::from_slice(bytes)
     }
 }

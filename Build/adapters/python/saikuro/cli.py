@@ -26,6 +26,7 @@ import argparse
 import importlib.util
 import inspect
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Callable
@@ -77,10 +78,6 @@ def extract_schema(source_path: Path, namespace: str) -> dict:
     module = _load_module_from_path(source_path)
     builder = SchemaBuilder(namespace)
     functions = _extract_functions(module)
-    if not functions:
-        # Emit an empty-but-valid schema rather than erroring; the user may
-        # intentionally be extracting from a file with no public functions.
-        pass
     for name, fn in functions:
         doc = inspect.getdoc(fn) or ""
         # Capabilities can be annotated via a ``__saikuro_capabilities__``
@@ -88,7 +85,6 @@ def extract_schema(source_path: Path, namespace: str) -> dict:
         # ``@capability <token>``.  Support both.
         capabilities: list[str] = list(getattr(fn, "__saikuro_capabilities__", []))
         if not capabilities:
-            import re
             for m in re.finditer(r"@capability\s+(\S+)", doc):
                 capabilities.append(m.group(1))
         builder.add_function(name, fn, capabilities, doc)
@@ -156,7 +152,11 @@ Examples:
         out_path = Path(args.output).resolve()
         try:
             out_path.write_text(text + "\n", encoding="utf-8")
-            rel = out_path.relative_to(Path.cwd()) if out_path.is_relative_to(Path.cwd()) else out_path
+            rel = (
+                out_path.relative_to(Path.cwd())
+                if out_path.is_relative_to(Path.cwd())
+                else out_path
+            )
             print(f"Schema written to {rel}", file=sys.stderr)
         except Exception as exc:
             print(f"Error writing output file: {exc}", file=sys.stderr)

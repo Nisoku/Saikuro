@@ -56,6 +56,7 @@ SAIKURO_API char* SAIKURO_CALL saikuro_last_error_message(void);
 
 /* Client API */
 SAIKURO_API saikuro_client_t SAIKURO_CALL saikuro_client_connect(const char* address);
+/** Close the given client connection.  Returns 0 on success, non-zero on error. */
 SAIKURO_API int SAIKURO_CALL saikuro_client_close(saikuro_client_t handle);
 SAIKURO_API void SAIKURO_CALL saikuro_client_free(saikuro_client_t handle);
 
@@ -103,12 +104,7 @@ SAIKURO_API int SAIKURO_CALL saikuro_channel_send_json(
 SAIKURO_API int SAIKURO_CALL saikuro_channel_close(saikuro_channel_t channel);
 SAIKURO_API int SAIKURO_CALL saikuro_channel_abort(saikuro_channel_t channel);
 
-/* Contract:
- * - Success item: return 0, set *out_done = 0 and *out_item_json to owned heap string
- *   (free with saikuro_string_free).
- * - End of stream: return 0, set *out_done = 1 and *out_item_json = NULL.
- * - Error: return non-zero, set *out_done = 1 and *out_item_json = NULL.
- */
+/* Same contract as saikuro_channel_next_json: see above. */
 SAIKURO_API int SAIKURO_CALL saikuro_channel_next_json(
     saikuro_channel_t channel,
     char** out_item_json,
@@ -117,12 +113,7 @@ SAIKURO_API int SAIKURO_CALL saikuro_channel_next_json(
 
 SAIKURO_API void SAIKURO_CALL saikuro_channel_free(saikuro_channel_t channel);
 
-/* Contract:
- * - Success item: return 0, set *out_done = 0 and *out_item_json to owned heap string
- *   (free with saikuro_string_free).
- * - End of stream: return 0, set *out_done = 1 and *out_item_json = NULL.
- * - Error: return non-zero, set *out_done = 1 and *out_item_json = NULL.
- */
+/* Same contract as saikuro_channel_next_json: see above. */
 SAIKURO_API int SAIKURO_CALL saikuro_stream_next_json(
     saikuro_stream_t stream,
     char** out_item_json,

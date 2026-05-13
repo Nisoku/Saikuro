@@ -4,12 +4,13 @@
 //! - One `<Namespace>Client.hpp` per namespace with schema-aware wrappers.
 //! - A `saikuro_generated.hpp` umbrella include.
 
-use saikuro_core::schema::{NamespaceSchema, Schema, Visibility};
+use saikuro_core::schema::{NamespaceSchema, Schema};
 use std::collections::{HashMap, HashSet};
 
 use crate::{
     error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
+    to_pascal_case,
 };
 
 pub struct CppGenerator;
@@ -82,16 +83,10 @@ impl CppGenerator {
             String::new(),
         ];
 
-        let mut fn_items: Vec<_> = ns.functions.iter().collect();
-        fn_items.sort_by_key(|(k, _)| *k);
         let mut seen_methods: HashSet<String> = HashSet::new();
         seen_methods.insert(sanitize_ident(class_name));
         seen_methods.insert("client_".to_owned());
-        for (fn_name, fn_schema) in fn_items {
-            if fn_schema.visibility == Visibility::Private {
-                continue;
-            }
-
+        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
             let method_name = sanitize_ident(fn_name);
             if !seen_methods.insert(method_name.clone()) {
                 return Err(CodegenError::Schema(format!(
@@ -123,18 +118,6 @@ impl CppGenerator {
 
         Ok(lines.join("\n"))
     }
-}
-
-fn to_pascal_case(s: &str) -> String {
-    s.split('_')
-        .map(|part| {
-            let mut c = part.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
 }
 
 // TODO: Don't use such a hacky (subjectively) thing to sanitize identifiers.
@@ -292,11 +275,11 @@ fn escape_cpp_string_literal(s: &str) -> String {
                 use std::fmt::Write;
                 let code = c as u32;
                 if code <= 0xFF {
-                    write!(out, "\\x{:02X}", code).unwrap();
+                    let _ = write!(out, "\\x{:02X}", code);
                 } else if code <= 0xFFFF {
-                    write!(out, "\\u{:04X}", code).unwrap();
+                    let _ = write!(out, "\\u{:04X}", code);
                 } else {
-                    write!(out, "\\U{:08X}", code).unwrap();
+                    let _ = write!(out, "\\U{:08X}", code);
                 }
             }
             _ => out.push(c),

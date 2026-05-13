@@ -5,8 +5,8 @@ use std::thread_local;
 use std::time::Duration;
 
 use saikuro::{Client, Provider, SaikuroChannel, Value};
+use saikuro_exec::Runtime;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 // TODO: Modularize a bit haha
 
@@ -110,6 +110,79 @@ fn parse_json_object_arg(
     }
 }
 
+//  C API helpers factor out the null-check / cast / error pattern
+
+macro_rules! ok_or_ptr {
+    ($expr:expr) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) => {
+                set_last_error(e);
+                return ptr::null_mut();
+            }
+        }
+    };
+}
+
+macro_rules! ok_or_int {
+    ($expr:expr) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) => {
+                set_last_error(e);
+                return 1;
+            }
+        }
+    };
+}
+
+/// Parse a JSON array from a C string pointer.
+fn c_json_array(ptr: *const c_char) -> Result<Vec<Value>, String> {
+    let s = cstr_to_string(ptr, "args_json")?;
+    parse_json_array_arg(&s, "args_json")
+}
+
+/// Validate and dereference a client handle.
+fn client_handle(h: *mut c_void) -> Result<&'static mut ClientHandle, String> {
+    if h.is_null() {
+        return Err("handle must not be null".to_owned());
+    }
+    let h = unsafe { &mut *(h as *mut ClientHandle) };
+    if h.client.is_none() {
+        return Err("client is already closed".to_owned());
+    }
+    Ok(h)
+}
+
+/// Serialise a `saikuro::Result<Value>` into a heap-allocated C string pointer,
+/// or set `last_error` and return null on failure.
+fn ptr_saikuro(result: Result<Value, saikuro::Error>, op: &str) -> *mut c_char {
+    match result {
+        Ok(v) => match serde_json::to_string(&v) {
+            Ok(json) => into_c_string_ptr(&json),
+            Err(e) => {
+                set_last_error(format!("failed to serialize result: {e}"));
+                ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(format!("{op} failed: {e}"));
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Map a `saikuro::Result<()>` to a C `c_int` return, setting `last_error` on failure.
+fn int_saikuro(result: Result<(), saikuro::Error>, op: &str) -> c_int {
+    match result {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(format!("{op} failed: {e}"));
+            1
+        }
+    }
+}
+
 struct ClientHandle {
     rt: Arc<Runtime>,
     client: Option<Client>,
@@ -118,7 +191,7 @@ struct ClientHandle {
 impl ClientHandle {
     fn new(address: &str) -> Result<Self, String> {
         let rt = Arc::new(
-            tokio::runtime::Builder::new_current_thread()
+            saikuro_exec::new_runtime()
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to create runtime: {e}"))?,
@@ -155,7 +228,7 @@ impl ClientHandle {
 type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
 
 struct ProviderHandle {
-    rt: tokio::runtime::Runtime,
+    rt: saikuro_exec::Runtime,
     provider: Option<Provider>,
 }
 
@@ -171,7 +244,7 @@ struct ChannelHandle {
 
 impl ProviderHandle {
     fn new(namespace: &str) -> Result<Self, String> {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::new_runtime()
             .enable_all()
             .build()
             .map_err(|e| format!("failed to create runtime: {e}"))?;
@@ -244,14 +317,11 @@ pub extern "C" fn saikuro_client_connect(address: *const c_char) -> *mut c_void 
 #[no_mangle]
 pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
     clear_last_error();
-
     if handle.is_null() {
         set_last_error("handle must not be null");
         return 1;
     }
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    match handle.close() {
+    match unsafe { &mut *(handle as *mut ClientHandle) }.close() {
         Ok(()) => 0,
         Err(e) => {
             set_last_error(e);
@@ -277,67 +347,13 @@ pub extern "C" fn saikuro_client_call_json(
     args_json: *const c_char,
 ) -> *mut c_char {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_value: serde_json::Value = match serde_json::from_str(&args_json) {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(format!("args_json must be valid JSON: {e}"));
-            return ptr::null_mut();
-        }
-    };
-
-    let args: Vec<Value> = match args_value {
-        serde_json::Value::Array(items) => items,
-        _ => {
-            set_last_error("args_json must be a JSON array");
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
-    let result = handle.rt.block_on(client.call(target, args));
-    match result {
-        Ok(v) => match serde_json::to_string(&v) {
-            Ok(json) => into_c_string_ptr(&json),
-            Err(e) => {
-                set_last_error(format!("failed to serialize result: {e}"));
-                ptr::null_mut()
-            }
-        },
-        Err(e) => {
-            set_last_error(format!("call failed: {e}"));
-            ptr::null_mut()
-        }
-    }
+    let h = ok_or_ptr!(client_handle(handle));
+    let target = ok_or_ptr!(cstr_to_string(target, "target"));
+    let args = ok_or_ptr!(c_json_array(args_json));
+    ptr_saikuro(
+        h.rt.block_on(h.client.as_ref().unwrap().call(target, args)),
+        "call",
+    )
 }
 
 #[no_mangle]
@@ -348,74 +364,23 @@ pub extern "C" fn saikuro_client_call_json_timeout(
     timeout_ms: c_int,
 ) -> *mut c_char {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
+    let h = ok_or_ptr!(client_handle(handle));
     if timeout_ms < 0 {
         set_last_error("timeout_ms must be non-negative");
         return ptr::null_mut();
     }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_value: serde_json::Value = match serde_json::from_str(&args_json) {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(format!("args_json must be valid JSON: {e}"));
-            return ptr::null_mut();
-        }
-    };
-
-    let args: Vec<Value> = match args_value {
-        serde_json::Value::Array(items) => items,
-        _ => {
-            set_last_error("args_json must be a JSON array");
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
+    let target = ok_or_ptr!(cstr_to_string(target, "target"));
+    let args = ok_or_ptr!(c_json_array(args_json));
     let timeout = Duration::from_millis(timeout_ms as u64);
-    let result = handle
-        .rt
-        .block_on(client.call_with_timeout(target, args, Some(timeout)));
-    match result {
-        Ok(v) => match serde_json::to_string(&v) {
-            Ok(json) => into_c_string_ptr(&json),
-            Err(e) => {
-                set_last_error(format!("failed to serialize result: {e}"));
-                ptr::null_mut()
-            }
-        },
-        Err(e) => {
-            set_last_error(format!("call failed: {e}"));
-            ptr::null_mut()
-        }
-    }
+    ptr_saikuro(
+        h.rt.block_on(
+            h.client
+                .as_ref()
+                .unwrap()
+                .call_with_timeout(target, args, Some(timeout)),
+        ),
+        "call",
+    )
 }
 
 #[no_mangle]
@@ -425,52 +390,13 @@ pub extern "C" fn saikuro_client_cast_json(
     args_json: *const c_char,
 ) -> c_int {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return 1;
-    }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-
-    let args: Vec<Value> = match parse_json_array_arg(&args_json, "args_json") {
-        Ok(items) => items,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return 1;
-        }
-    };
-
-    match handle.rt.block_on(client.cast(target, args)) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("cast failed: {e}"));
-            1
-        }
-    }
+    let h = ok_or_int!(client_handle(handle));
+    let target = ok_or_int!(cstr_to_string(target, "target"));
+    let args = ok_or_int!(c_json_array(args_json));
+    int_saikuro(
+        h.rt.block_on(h.client.as_ref().unwrap().cast(target, args)),
+        "cast",
+    )
 }
 
 #[no_mangle]
@@ -479,39 +405,10 @@ pub extern "C" fn saikuro_client_batch_json(
     calls_json: *const c_char,
 ) -> *mut c_char {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
-
-    let calls_json = match cstr_to_string(calls_json, "calls_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let calls = match parse_batch_calls(&calls_json) {
-        Ok(c) => c,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
-    let result = handle.rt.block_on(client.batch(calls));
-    match result {
+    let h = ok_or_ptr!(client_handle(handle));
+    let raw = ok_or_ptr!(cstr_to_string(calls_json, "calls_json"));
+    let calls = ok_or_ptr!(parse_batch_calls(&raw));
+    match h.rt.block_on(h.client.as_ref().unwrap().batch(calls)) {
         Ok(v) => match serde_json::to_string(&v) {
             Ok(json) => into_c_string_ptr(&json),
             Err(e) => {
@@ -533,54 +430,20 @@ pub extern "C" fn saikuro_client_stream_json(
     args_json: *const c_char,
 ) -> *mut c_void {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args = match parse_json_array_arg(&args_json, "args_json") {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let rt = handle.rt.clone();
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
-    let stream = match handle.rt.block_on(client.stream(target, args)) {
+    let h = ok_or_ptr!(client_handle(handle));
+    let target = ok_or_ptr!(cstr_to_string(target, "target"));
+    let args = ok_or_ptr!(c_json_array(args_json));
+    let rt = h.rt.clone();
+    let stream = match h
+        .rt
+        .block_on(h.client.as_ref().unwrap().stream(target, args))
+    {
         Ok(s) => s,
         Err(e) => {
             set_last_error(format!("stream open failed: {e}"));
             return ptr::null_mut();
         }
     };
-
     Box::into_raw(Box::new(StreamHandle { rt, stream })) as *mut c_void
 }
 
@@ -669,54 +532,20 @@ pub extern "C" fn saikuro_client_channel_json(
     args_json: *const c_char,
 ) -> *mut c_void {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args = match parse_json_array_arg(&args_json, "args_json") {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let rt = handle.rt.clone();
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
-    let channel = match handle.rt.block_on(client.channel(target, args)) {
+    let h = ok_or_ptr!(client_handle(handle));
+    let target = ok_or_ptr!(cstr_to_string(target, "target"));
+    let args = ok_or_ptr!(c_json_array(args_json));
+    let rt = h.rt.clone();
+    let channel = match h
+        .rt
+        .block_on(h.client.as_ref().unwrap().channel(target, args))
+    {
         Ok(c) => c,
         Err(e) => {
             set_last_error(format!("channel open failed: {e}"));
             return ptr::null_mut();
         }
     };
-
     Box::into_raw(Box::new(ChannelHandle { rt, channel })) as *mut c_void
 }
 
@@ -881,59 +710,13 @@ pub extern "C" fn saikuro_client_resource_json(
     args_json: *const c_char,
 ) -> *mut c_char {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return ptr::null_mut();
-    }
-
-    let target = match cstr_to_string(target, "target") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args_json = match cstr_to_string(args_json, "args_json") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let args = match parse_json_array_arg(&args_json, "args_json") {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(e);
-            return ptr::null_mut();
-        }
-    };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return ptr::null_mut();
-        }
-    };
-
-    let result = handle.rt.block_on(client.resource(target, args));
-    match result {
-        Ok(v) => match serde_json::to_string(&v) {
-            Ok(json) => into_c_string_ptr(&json),
-            Err(e) => {
-                set_last_error(format!("failed to serialize resource result: {e}"));
-                ptr::null_mut()
-            }
-        },
-        Err(e) => {
-            set_last_error(format!("resource call failed: {e}"));
-            ptr::null_mut()
-        }
-    }
+    let h = ok_or_ptr!(client_handle(handle));
+    let target = ok_or_ptr!(cstr_to_string(target, "target"));
+    let args = ok_or_ptr!(c_json_array(args_json));
+    ptr_saikuro(
+        h.rt.block_on(h.client.as_ref().unwrap().resource(target, args)),
+        "resource",
+    )
 }
 
 #[no_mangle]
@@ -945,44 +728,14 @@ pub extern "C" fn saikuro_client_log(
     fields_json: *const c_char,
 ) -> c_int {
     clear_last_error();
-
-    if handle.is_null() {
-        set_last_error("handle must not be null");
-        return 1;
-    }
-
-    let level = match cstr_to_string(level, "level") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-    let name = match cstr_to_string(name, "name") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-    let msg = match cstr_to_string(msg, "msg") {
-        Ok(s) => s,
-        Err(e) => {
-            set_last_error(e);
-            return 1;
-        }
-    };
-
+    let h = ok_or_int!(client_handle(handle));
+    let level = ok_or_int!(cstr_to_string(level, "level"));
+    let name = ok_or_int!(cstr_to_string(name, "name"));
+    let msg = ok_or_int!(cstr_to_string(msg, "msg"));
     let fields = if fields_json.is_null() {
         None
     } else {
-        let raw = match cstr_to_string(fields_json, "fields_json") {
-            Ok(s) => s,
-            Err(e) => {
-                set_last_error(e);
-                return 1;
-            }
-        };
+        let raw = ok_or_int!(cstr_to_string(fields_json, "fields_json"));
         match parse_json_object_arg(&raw, "fields_json") {
             Ok(map) => Some(Value::Object(map)),
             Err(e) => {
@@ -991,23 +744,10 @@ pub extern "C" fn saikuro_client_log(
             }
         }
     };
-
-    let handle = unsafe { &mut *(handle as *mut ClientHandle) };
-    let client = match handle.client.as_ref() {
-        Some(c) => c,
-        None => {
-            set_last_error("client is already closed");
-            return 1;
-        }
-    };
-
-    match handle.rt.block_on(client.log(level, name, msg, fields)) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("log send failed: {e}"));
-            1
-        }
-    }
+    int_saikuro(
+        h.rt.block_on(h.client.as_ref().unwrap().log(level, name, msg, fields)),
+        "log",
+    )
 }
 
 #[no_mangle]

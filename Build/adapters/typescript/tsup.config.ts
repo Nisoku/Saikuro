@@ -1,6 +1,5 @@
 import { defineConfig } from "tsup";
 
-
 export default defineConfig([
   // Library bundle (CJS + ESM + types)
   {

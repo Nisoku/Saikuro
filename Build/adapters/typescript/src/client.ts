@@ -38,22 +38,21 @@ import type { ErrorPayload } from "./envelope";
 // Stream / Channel handles
 
 /**
- * An async iterator that yields values from a server-to-client stream.
+ * Common base for stream/channel handles.
  *
- * Obtained from `client.stream(...)`.
+ * Provides the buffered async-iterator plumbing used by both
+ * [`SaikuroStream`] and [`SaikuroChannel`].
  */
-export class SaikuroStream<T = unknown>
+class BaseSaikuroHandle<T = unknown>
   implements AsyncIterator<T>, AsyncIterable<T>
 {
-  private readonly _id: string;
-  /** Items waiting to be consumed, including a null sentinel for end. */
+  protected readonly _id: string;
+  protected _done = false;
+  protected _closed = false;
   private readonly _buffer: Array<ResponseEnvelope | null> = [];
-  /** Resolve callbacks for consumers waiting on the next item. */
   private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
     [];
-  private _done = false;
 
-  /** @internal */
   constructor(id: string) {
     this._id = id;
   }
@@ -67,9 +66,22 @@ export class SaikuroStream<T = unknown>
     this._enqueue(resp);
   }
 
-  /** @internal Called when the transport closes while the stream is still open. */
+  /** @internal Called when the transport closes while still open. */
   _close(): void {
-    this._enqueue(null);
+    if (this._closed) return;
+    this._closed = true;
+    const errorResponse: ResponseEnvelope = {
+      id: "",
+      ok: false,
+      error: {
+        code: "ConnectionLost",
+        message: "transport closed unexpectedly",
+      },
+    };
+    for (const resolve of this._waiters.splice(0)) {
+      resolve(errorResponse);
+    }
+    this._buffer.push(errorResponse);
   }
 
   private _enqueue(item: ResponseEnvelope | null): void {
@@ -109,10 +121,10 @@ export class SaikuroStream<T = unknown>
 
     if (!item.ok) {
       this._done = true;
-      const payload = (item.error ?? {
+      const payload: ErrorPayload = item.error ?? {
         code: "Internal",
         message: "stream ended with error",
-      }) as ErrorPayload;
+      };
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -125,31 +137,30 @@ export class SaikuroStream<T = unknown>
 }
 
 /**
+ * An async iterator that yields values from a server-to-client stream.
+ *
+ * Obtained from `client.stream(...)`.
+ */
+export class SaikuroStream<T = unknown> extends BaseSaikuroHandle<T> {}
+
+/**
  * A bidirectional async channel.
  *
  * Obtained from `client.channel(...)`.
  */
-export class SaikuroChannel<TIn = unknown, TOut = unknown>
-  implements AsyncIterator<TIn>, AsyncIterable<TIn>
-{
-  private readonly _id: string;
+export class SaikuroChannel<
+  TIn = unknown,
+  TOut = unknown,
+> extends BaseSaikuroHandle<TIn> {
   private readonly _sendFn: (id: string, value: unknown) => Promise<void>;
-  private readonly _buffer: Array<ResponseEnvelope | null> = [];
-  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
-    [];
-  private _done = false;
 
   /** @internal */
   constructor(
     id: string,
     sendFn: (id: string, value: unknown) => Promise<void>,
   ) {
-    this._id = id;
+    super(id);
     this._sendFn = sendFn;
-  }
-
-  get invocationId(): string {
-    return this._id;
   }
 
   /** Send a message to the provider side of the channel. */
@@ -159,75 +170,17 @@ export class SaikuroChannel<TIn = unknown, TOut = unknown>
     }
     await this._sendFn(this._id, value);
   }
-
-  /** @internal Called by the client's receive loop. */
-  _deliver(resp: ResponseEnvelope): void {
-    this._enqueue(resp);
-  }
-
-  /** @internal Called when the transport closes. */
-  _close(): void {
-    this._enqueue(null);
-  }
-
-  private _enqueue(item: ResponseEnvelope | null): void {
-    if (this._waiters.length > 0) {
-      const resolve = this._waiters.shift()!;
-      resolve(item);
-    } else {
-      this._buffer.push(item);
-    }
-  }
-
-  private _take(): Promise<ResponseEnvelope | null> {
-    if (this._buffer.length > 0) {
-      return Promise.resolve(this._buffer.shift()!);
-    }
-    return new Promise<ResponseEnvelope | null>((resolve) => {
-      this._waiters.push(resolve);
-    });
-  }
-
-  async next(): Promise<IteratorResult<TIn>> {
-    if (this._done) {
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    const item = await this._take();
-
-    if (item === null) {
-      this._done = true;
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    if (item.stream_control === "end") {
-      this._done = true;
-      return { done: true, value: undefined as unknown as TIn };
-    }
-
-    if (!item.ok) {
-      this._done = true;
-      const payload = (item.error ?? {
-        code: "Internal",
-        message: "channel ended with error",
-      }) as ErrorPayload;
-      throw SaikuroError.fromPayload(payload);
-    }
-
-    return { done: false, value: item.result as TIn };
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<TIn> {
-    return this;
-  }
 }
 
 // Client options
 
+/** Sentinel value meaning "no timeout". */
+const NO_TIMEOUT = 0;
+
 export interface ClientOptions {
   /**
    * Default timeout for `call` invocations, in milliseconds.
-   * `0` means no timeout. Defaults to `0`.
+   * `0` (`NO_TIMEOUT`) means no timeout. Defaults to `0`.
    */
   defaultTimeoutMs?: number;
 }
@@ -265,7 +218,7 @@ export class SaikuroClient {
   private constructor(transport: Transport, options: ClientOptions = {}) {
     this._transport = transport;
     this._options = {
-      defaultTimeoutMs: options.defaultTimeoutMs ?? 0,
+      defaultTimeoutMs: options.defaultTimeoutMs ?? NO_TIMEOUT,
     };
   }
 
@@ -350,10 +303,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "call failed",
-      }) as ErrorPayload;
+      };
       throw SaikuroError.fromPayload(payload);
     }
     return response.result;
@@ -398,10 +351,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "resource call failed",
-      }) as ErrorPayload;
+      };
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -474,10 +427,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(batchEnvelope, timeoutMs);
 
     if (!response.ok) {
-      const payload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "batch call failed",
-      }) as ErrorPayload;
+      };
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -548,7 +501,7 @@ export class SaikuroClient {
     return new Promise<ResponseEnvelope>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      if (timeoutMs > 0) {
+      if (timeoutMs !== NO_TIMEOUT) {
         timer = setTimeout(() => {
           this._pendingCalls.delete(envelope.id);
           reject(

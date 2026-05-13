@@ -14,6 +14,7 @@ use std::{
 
 use bytes::Bytes;
 use dashmap::DashMap;
+use futures::future::FutureExt;
 use saikuro_core::{
     envelope::{Envelope, InvocationType, ResponseEnvelope, StreamControl},
     error::{ErrorCode, ErrorDetail},
@@ -21,7 +22,7 @@ use saikuro_core::{
     value::Value as CoreValue,
     PROTOCOL_VERSION,
 };
-use tokio::sync::{mpsc, oneshot, Mutex};
+use saikuro_exec::{mpsc, oneshot, sync::Mutex};
 use tracing::{debug, error, warn};
 
 use crate::{
@@ -149,11 +150,7 @@ impl SaikuroChannel {
         self.receiver.recv().await
     }
 }
-
-// ---------------------------------------------------------------------------
 // Internal routing
-// ---------------------------------------------------------------------------
-
 enum PendingSlot {
     /// A one-shot call waiting for a single response.
     Call(oneshot::Sender<ResponseEnvelope>),
@@ -162,11 +159,7 @@ enum PendingSlot {
     /// An open bidirectional channel accumulating inbound items.
     Channel(mpsc::Sender<StreamItem>),
 }
-
-// ---------------------------------------------------------------------------
 // Client
-// ---------------------------------------------------------------------------
-
 /// Async Saikuro client over a single transport connection.
 ///
 /// The client spawns a background I/O task that drives outbound sends and
@@ -181,7 +174,7 @@ pub struct Client {
     /// Channel-specific outbound sender handles to invalidate on shutdown.
     channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>>,
     /// Background I/O task handle.
-    recv_task: Option<tokio::task::JoinHandle<()>>,
+    recv_task: Option<saikuro_exec::JoinHandle<()>>,
     /// Whether the client is still connected.
     connected: Arc<AtomicBool>,
     options: ClientOptions,
@@ -230,8 +223,7 @@ impl Client {
         let channel_senders_recv = channel_senders.clone();
         let connected_recv = connected.clone();
 
-        let recv_task = tokio::spawn(async move {
-            // ----------------------------------------------------------------
+        let recv_task = saikuro_exec::spawn(async move {
             // Handshake phase: drain any announce frames that may have arrived
             // before this task started.  This is the normal path when a
             // provider and client are connected directly via InMemoryTransport
@@ -243,10 +235,9 @@ impl Client {
             // arrives on the client side at all).
             drain_announces(&mut *transport).await;
 
-            // ----------------------------------------------------------------
             // I/O loop: multiplex outbound sends and inbound responses.
             loop {
-                tokio::select! {
+                saikuro_exec::select! {
                     // Forward outbound frames from callers to the transport.
                     frame = send_rx.recv() => {
                         match frame {
@@ -261,7 +252,7 @@ impl Client {
                     }
 
                     // Route inbound response frames to their waiting callers.
-                    result = transport.recv() => {
+                    result = transport.recv().fuse() => {
                         match result {
                             Ok(Some(frame)) => {
                                 handle_inbound(
@@ -320,15 +311,12 @@ impl Client {
 
         drop(self.send_tx);
         if let Some(task) = self.recv_task.take() {
-            let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
+            let _ = saikuro_exec::timeout(Duration::from_secs(5), task).await;
         }
         Ok(())
     }
 
-    // -----------------------------------------------------------------------
     // Invocation API
-    // -----------------------------------------------------------------------
-
     /// Perform a request/response call and return the result.
     pub async fn call(&self, target: impl Into<String>, args: Vec<Value>) -> Result<Value> {
         self.call_with_timeout(target, args, self.options.default_timeout)
@@ -360,7 +348,7 @@ impl Client {
         };
 
         let resp = match timeout {
-            Some(t) => tokio::time::timeout(t, recv_fut)
+            Some(t) => saikuro_exec::timeout(t, recv_fut)
                 .await
                 .map_err(|_| Error::Timeout {
                     target: target.clone(),
@@ -519,10 +507,7 @@ impl Client {
         self.send_envelope(&envelope).await
     }
 
-    // -----------------------------------------------------------------------
     // Internal helpers
-    // -----------------------------------------------------------------------
-
     async fn send_envelope(&self, envelope: &Envelope) -> Result<()> {
         let bytes = envelope
             .to_msgpack()
@@ -533,11 +518,7 @@ impl Client {
             .map_err(|_| Error::Transport("client send channel closed".into()))
     }
 }
-
-// ---------------------------------------------------------------------------
 // Background task helpers
-// ---------------------------------------------------------------------------
-
 /// Drain any announce envelopes that have already arrived on the transport.
 ///
 /// This is called once at the start of the I/O task, before the main select
@@ -556,7 +537,7 @@ async fn drain_announces(transport: &mut dyn AdapterTransport) {
     // immediately after the first timeout.
     const POLL_TIMEOUT: Duration = Duration::from_millis(20);
 
-    while let Ok(Ok(Some(frame))) = tokio::time::timeout(POLL_TIMEOUT, transport.recv()).await {
+    while let Ok(Ok(Some(frame))) = saikuro_exec::timeout(POLL_TIMEOUT, transport.recv()).await {
         // Check if this is an announce.  If it is, ack it and continue
         // draining.  If it is a normal response, we cannot put it back
         // into the transport; log an unexpected-frame warning and drop
@@ -625,8 +606,7 @@ async fn route_response(
     let is_stream_end = resp
         .stream_control
         .as_ref()
-        .map(|c| matches!(c, StreamControl::End | StreamControl::Abort))
-        .unwrap_or(false);
+        .is_some_and(|c| matches!(c, StreamControl::End | StreamControl::Abort));
     let is_error = !resp.ok;
 
     let slot_type = pending.get(&id).map(|s| match s.value() {
@@ -737,11 +717,7 @@ fn teardown_pending(pending: &DashMap<InvocationId, PendingSlot>) {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
-
 fn make_envelope(
     inv_type: InvocationType,
     target: &str,

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use clap::Parser;
 use regex::Regex;
@@ -78,10 +79,13 @@ fn parse_arg(arg: &str) -> Option<(String, Value, bool)> {
 }
 
 fn extract_schema(source: &str, namespace: &str) -> Value {
-    let proto = Regex::new(
-        r"^\s*([A-Za-z_][A-Za-z0-9_\s\*]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;",
-    )
-    .expect("compile regex");
+    static PROTO: OnceLock<Regex> = OnceLock::new();
+    let proto = PROTO.get_or_init(|| {
+        Regex::new(
+            r"^\s*([A-Za-z_][A-Za-z0-9_\s\*]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;",
+        )
+        .expect("compile regex")
+    });
 
     let mut functions = serde_json::Map::new();
 

@@ -93,7 +93,7 @@ impl RuntimeHarness {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let worker = thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
+            let rt = saikuro_exec::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("create test runtime");
@@ -137,7 +137,7 @@ impl RuntimeHarness {
                 let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
                 let mut peer_counter: u64 = 0;
                 loop {
-                    tokio::select! {
+                    saikuro_exec::select! {
                         result = listener.accept() => {
                             match result {
                                 Ok(Some(transport)) => {
@@ -152,7 +152,7 @@ impl RuntimeHarness {
                                 Err(_) => break,
                             }
                         }
-                        _ = tokio::time::sleep(Duration::from_millis(25)) => {
+                        _ = saikuro_exec::sleep(Duration::from_millis(25)) => {
                             if stop_flag_bg.load(Ordering::Relaxed) {
                                 break;
                             }

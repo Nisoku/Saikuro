@@ -49,7 +49,7 @@ struct ScriptReport {
 fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptReport>) {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("create runtime");
@@ -71,7 +71,7 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
             let mut open_channel_id = None;
 
             loop {
-                let frame = match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+                let frame = match saikuro_exec::timeout(Duration::from_secs(2), rx.recv()).await {
                     Ok(Ok(Some(frame))) => frame,
                     _ => break,
                 };
@@ -257,7 +257,7 @@ unsafe extern "C" fn add_cb(
 fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptReport>) {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("create runtime");
@@ -277,7 +277,7 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
 
             let mut report = ScriptReport::default();
 
-            let announce_frame = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            let announce_frame = saikuro_exec::timeout(Duration::from_secs(5), rx.recv())
                 .await
                 .expect("timed out waiting for announce frame")
                 .expect("announce recv result")
@@ -296,7 +296,7 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
                 .await
                 .expect("send call");
 
-            let response_frame = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            let response_frame = saikuro_exec::timeout(Duration::from_secs(5), rx.recv())
                 .await
                 .expect("timed out waiting for provider response frame")
                 .expect("response recv result")

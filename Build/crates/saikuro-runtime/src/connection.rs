@@ -38,6 +38,7 @@
 
 use bytes::Bytes;
 use dashmap::DashMap;
+use futures::future::FutureExt;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
@@ -47,6 +48,7 @@ use saikuro_core::{
     value::Value,
     ResponseEnvelope,
 };
+use saikuro_exec::{mpsc, oneshot, spawn};
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::InvocationRouter,
@@ -58,7 +60,6 @@ use saikuro_schema::{
 };
 use saikuro_transport::traits::{TransportReceiver, TransportSender};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, instrument, warn};
 
 //  Pending call map
@@ -141,73 +142,31 @@ where
         let (forward_tx, mut forward_rx) = mpsc::channel::<Bytes>(256);
 
         loop {
-            tokio::select! {
+            saikuro_exec::select! {
                 // Outbound frame from the ForwardTask (call forwarded to this
                 // peer acting as a provider).
-                Some(frame) = forward_rx.recv() => {
-                    if let Err(e) = self.sender.send(frame).await {
-                        error!(peer = %self.peer_id, "send error on forwarded call: {e}");
-                        break;
+                frame_opt = forward_rx.recv() => {
+                    match frame_opt {
+                        Some(frame) => {
+                            if let Err(e) = self.sender.send(frame).await {
+                                error!(peer = %self.peer_id, "send error on forwarded call: {e}");
+                                break;
+                            }
+                        }
+                        None => {
+                            info!(peer = %self.peer_id, "forward channel closed");
+                            break;
+                        }
                     }
                 }
 
                 // Inbound frame from the peer (either a new request OR a
                 // response to a previously forwarded call).
-                incoming = self.receiver.recv() => {
+                incoming = self.receiver.recv().fuse() => {
                     match incoming {
                         Ok(Some(frame)) => {
-                            if frame.len() > self.max_message_size {
-                                let err = saikuro_core::error::ErrorDetail::new(
-                                    saikuro_core::error::ErrorCode::MessageTooLarge,
-                                    format!(
-                                        "frame {} bytes exceeds limit {} bytes",
-                                        frame.len(),
-                                        self.max_message_size
-                                    ),
-                                );
-                                let response = ResponseEnvelope::err(InvocationId::new(), err);
-                                let _ = self.send_response(response).await;
-                                continue;
-                            }
-
-                            // Classify the frame
-                            // Try to decode as ResponseEnvelope first.
-                            // ResponseEnvelope has `ok`, `id`, and optionally
-                            // `result`/`error`/`seq`/`stream_control`.
-                            // Envelope has `type` (the discriminant) as a
-                            // required field.  We can tell them apart by
-                            // attempting ResponseEnvelope decode and checking if
-                            // the resulting `id` matches any pending call.
-                            if let Ok(resp) = rmp_serde::from_slice::<ResponseEnvelope>(&frame) {
-                                if let Some((_, sender)) = pending.remove(&resp.id) {
-                                    // This is a response to a call we forwarded.
-                                    let _ = sender.send(resp);
-                                    continue;
-                                }
-                                // The ID is not pending:  fall through and treat
-                                // as a normal inbound envelope (will likely fail
-                                // validation since it has no `type` field, but
-                                // we surface the error cleanly).
-                            }
-
-                            let (response, sandbox_schema) =
-                                self.handle_frame(frame, &pending, &forward_tx).await;
-
-                            if let Err(e) = self.send_response(response).await {
-                                error!(peer = %self.peer_id, "send error: {e}");
+                            if !self.handle_incoming(frame, &pending, &forward_tx).await {
                                 break;
-                            }
-
-                            // In sandbox mode, push the filtered schema
-                            // snapshot after each successful Announce.
-                            if let Some(filtered) = sandbox_schema {
-                                if let Err(e) = self.push_sandbox_schema(filtered).await {
-                                    error!(
-                                        peer = %self.peer_id,
-                                        "failed to push sandbox schema: {e}"
-                                    );
-                                    break;
-                                }
                             }
                         }
                         Ok(None) => {
@@ -243,21 +202,9 @@ where
         forward_tx: &mpsc::Sender<Bytes>,
     ) -> (ResponseEnvelope, Option<Schema>) {
         // 1. Decode the MessagePack envelope.
-        let envelope: Envelope = match rmp_serde::from_slice(&frame) {
-            Ok(env) => env,
-            Err(e) => {
-                warn!(peer = %self.peer_id, "envelope decode failed: {e}");
-                return (
-                    ResponseEnvelope::err(
-                        InvocationId::new(),
-                        ErrorDetail::new(
-                            saikuro_core::error::ErrorCode::MalformedEnvelope,
-                            format!("msgpack decode error: {e}"),
-                        ),
-                    ),
-                    None,
-                );
-            }
+        let envelope = match self.decode_envelope(&frame) {
+            Ok(e) => e,
+            Err(resp) => return (*resp, None),
         };
 
         let id = envelope.id;
@@ -316,6 +263,75 @@ where
 
         // 5. Route to provider.
         (self.router.dispatch(envelope).await, None)
+    }
+
+    /// Decode a MessagePack frame into an [`Envelope`], or return an error
+    /// response on failure.
+    fn decode_envelope(&self, frame: &[u8]) -> Result<Envelope, Box<ResponseEnvelope>> {
+        match rmp_serde::from_slice(frame) {
+            Ok(env) => Ok(env),
+            Err(e) => {
+                warn!(peer = %self.peer_id, "envelope decode failed: {e}");
+                Err(Box::new(ResponseEnvelope::err(
+                    InvocationId::new(),
+                    ErrorDetail::new(
+                        saikuro_core::error::ErrorCode::MalformedEnvelope,
+                        format!("msgpack decode error: {e}"),
+                    ),
+                )))
+            }
+        }
+    }
+
+    /// Process one incoming frame. Returns `false` when the loop should break.
+    async fn handle_incoming(
+        &mut self,
+        frame: Bytes,
+        pending: &PendingCalls,
+        forward_tx: &mpsc::Sender<Bytes>,
+    ) -> bool {
+        if frame.len() > self.max_message_size {
+            let err = ErrorDetail::new(
+                saikuro_core::error::ErrorCode::MessageTooLarge,
+                format!(
+                    "frame {} bytes exceeds limit {} bytes",
+                    frame.len(),
+                    self.max_message_size
+                ),
+            );
+            let response = ResponseEnvelope::err(InvocationId::new(), err);
+            let _ = self.send_response(response).await;
+            return true;
+        }
+
+        // Try to decode as ResponseEnvelope first.
+        // ResponseEnvelope has `ok`, `id`, and optionally
+        // `result`/`error`/`seq`/`stream_control`.
+        // Envelope has `type` (the discriminant) as a required field.
+        // We can tell them apart by attempting ResponseEnvelope decode and
+        // checking if the resulting `id` matches any pending call.
+        if let Ok(resp) = rmp_serde::from_slice::<ResponseEnvelope>(&frame) {
+            if let Some((_, sender)) = pending.remove(&resp.id) {
+                let _ = sender.send(resp);
+                return true;
+            }
+        }
+
+        let (response, sandbox_schema) = self.handle_frame(frame, pending, forward_tx).await;
+
+        if let Err(e) = self.send_response(response).await {
+            error!(peer = %self.peer_id, "send error: {e}");
+            return false;
+        }
+
+        if let Some(filtered) = sandbox_schema {
+            if let Err(e) = self.push_sandbox_schema(filtered).await {
+                error!(peer = %self.peer_id, "failed to push sandbox schema: {e}");
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Handle a schema-announcement envelope (§6.1 development mode).
@@ -403,7 +419,7 @@ where
         let forward_tx_clone = forward_tx.clone();
         let peer_id = self.peer_id.clone();
 
-        tokio::spawn(async move {
+        spawn(async move {
             while let Some(item) = work_rx.recv().await {
                 // Encode the envelope for the wire.
                 let frame = match rmp_serde::to_vec_named(&item.envelope) {

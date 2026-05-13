@@ -4,14 +4,16 @@
 //! On native targets it is also useful
 //! for remote cross-machine communication through firewalls and proxies that
 //! block raw TCP.
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
     error::{Result, TransportError},
-    traits::{Transport, TransportReceiver, TransportSender},
+    traits::{Transport, TransportListener, TransportReceiver, TransportSender},
 };
 
 //  Native implementation
@@ -20,7 +22,7 @@ use crate::{
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 #[cfg(not(target_arch = "wasm32"))]
-use tokio::net::TcpStream;
+use saikuro_exec::net::{TcpListener, TcpStream};
 
 /// A WebSocket transport connection.
 ///
@@ -78,6 +80,71 @@ impl Transport for WebSocketTransport {
 
     fn description(&self) -> &str {
         "websocket"
+    }
+}
+
+//  WebSocket transport listener (server-side accept)
+
+/// Listens for inbound TCP connections and upgrades them to WebSocket.
+///
+/// Implements [`TransportListener`] so it can be used with the same generic
+/// accept-loop as TCP and Unix listeners.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct WsTransportListener {
+    inner: Option<TcpListener>,
+    local_addr: SocketAddr,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl WsTransportListener {
+    /// Bind a TCP listener on the given address for WebSocket upgrades.
+    pub async fn bind(addr: SocketAddr) -> Result<Self> {
+        let inner = TcpListener::bind(addr).await?;
+        let local_addr = inner.local_addr()?;
+        debug!(%local_addr, "ws listener bound");
+        Ok(Self {
+            inner: Some(inner),
+            local_addr,
+        })
+    }
+
+    /// Return the address this listener is bound to.
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait]
+impl TransportListener for WsTransportListener {
+    type Output = WebSocketTransport;
+
+    async fn accept(&mut self) -> Result<Option<Self::Output>> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| TransportError::ConnectionRefused("listener closed".into()))?;
+        let (stream, peer_addr) = inner.accept().await?;
+        let url = format!("ws://{peer_addr}");
+        let maybe_tls = MaybeTlsStream::Plain(stream);
+        match tokio_tungstenite::accept_async(maybe_tls).await {
+            Ok(ws_stream) => {
+                debug!(peer = %peer_addr, "ws upgrade successful");
+                Ok(Some(WebSocketTransport::from_stream(ws_stream, url)))
+            }
+            Err(e) => {
+                warn!(peer = %peer_addr, error = %e, "ws upgrade failed");
+                Err(TransportError::ConnectionRefused(format!(
+                    "WebSocket upgrade from {peer_addr} failed: {e}"
+                )))
+            }
+        }
+    }
+
+    async fn close(&mut self) -> Result<()> {
+        debug!(local = %self.local_addr, "ws listener closing");
+        drop(self.inner.take());
+        Ok(())
     }
 }
 

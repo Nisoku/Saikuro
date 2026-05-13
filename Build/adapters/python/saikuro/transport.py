@@ -13,16 +13,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import threading
+import msgpack
 from abc import ABC, abstractmethod
 from typing import Optional
 
-# MessagePack dependency - use the high-performance msgpack library.
-try:
-    import msgpack
-except ImportError as exc:
-    raise ImportError(
-        "saikuro requires 'msgpack': install it with `pip install msgpack`"
-    ) from exc
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +28,15 @@ _LENGTH_HEADER = struct.Struct(">I")  # big-endian uint32
 _MAX_FRAME_SIZE = 16 * 1024 * 1024  # 16 MiB - matches the Rust framing codec
 
 
-async def _send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
+def _check_frame_size(data: bytes) -> None:
     if len(data) > _MAX_FRAME_SIZE:
         raise ValueError(
             f"frame {len(data)} bytes exceeds maximum {_MAX_FRAME_SIZE} bytes"
         )
+
+
+async def _send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
+    _check_frame_size(data)
     header = _LENGTH_HEADER.pack(len(data))
     writer.write(header + data)
     await writer.drain()
@@ -101,19 +100,20 @@ class BaseTransport(ABC):
         await self.close()
 
 
-#  Unix socket transport
+#  Stream-based transport (shared by UnixSocket and TCP)
 
 
-class UnixSocketTransport(BaseTransport):
-    """Connects to a Saikuro runtime over a Unix domain socket."""
+class _StreamTransport(BaseTransport):
+    """Shared plumbing for transports backed by ``asyncio.StreamReader`` /
+    ``asyncio.StreamWriter`` (Unix domain sockets and TCP).
 
-    def __init__(self, path: str) -> None:
-        self._path = path
+    Subclasses only need to implement :meth:`connect`; everything else
+    (framed send/recv, close with error handling) is provided here.
+    """
+
+    def __init__(self) -> None:
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
-
-    async def connect(self) -> None:
-        self._reader, self._writer = await asyncio.open_unix_connection(self._path)
 
     async def close(self) -> None:
         if self._writer is not None:
@@ -125,87 +125,61 @@ class UnixSocketTransport(BaseTransport):
                 await writer.wait_closed()
             except Exception:
                 logger.debug(
-                    "UnixSocketTransport.close: error during shutdown", exc_info=True
+                    "%s.close: error during shutdown",
+                    type(self).__name__,
+                    exc_info=True,
                 )
 
     async def send(self, obj: dict) -> None:
         if self._writer is None:
-            raise RuntimeError("UnixSocketTransport: not connected")
+            raise RuntimeError(f"{type(self).__name__}: not connected")
         data = msgpack.packb(obj, use_bin_type=True)
         await _send_frame(self._writer, data)
 
     async def recv(self) -> Optional[dict]:
         if self._reader is None:
-            raise RuntimeError("UnixSocketTransport: not connected")
+            raise RuntimeError(f"{type(self).__name__}: not connected")
         try:
             data = await _recv_frame(self._reader)
         except asyncio.IncompleteReadError as exc:
-            logger.warning("UnixSocketTransport: connection lost mid-frame: %s", exc)
+            logger.warning(
+                "%s: connection lost mid-frame: %s", type(self).__name__, exc
+            )
             return None
         if data is None:
             return None
         return msgpack.unpackb(data, raw=False)
+
+
+#  Unix socket transport
+
+
+class UnixSocketTransport(_StreamTransport):
+    """Connects to a Saikuro runtime over a Unix domain socket."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__()
+        self._path = path
+
+    async def connect(self) -> None:
+        self._reader, self._writer = await asyncio.open_unix_connection(self._path)
 
 
 #  TCP transport
 
 
-class TcpTransport(BaseTransport):
+class TcpTransport(_StreamTransport):
     """Connects to a Saikuro runtime over TCP."""
 
     def __init__(self, host: str, port: int) -> None:
+        super().__init__()
         self._host = host
         self._port = port
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
 
     async def connect(self) -> None:
         self._reader, self._writer = await asyncio.open_connection(
             self._host, self._port
         )
-
-    async def close(self) -> None:
-        if self._writer is not None:
-            writer = self._writer
-            self._writer = None
-            self._reader = None
-            try:
-                writer.close()
-                await writer.wait_closed()
-            except Exception:
-                logger.debug("TcpTransport.close: error during shutdown", exc_info=True)
-
-    async def send(self, obj: dict) -> None:
-        if self._writer is None:
-            raise RuntimeError("TcpTransport: not connected")
-        data = msgpack.packb(obj, use_bin_type=True)
-        await _send_frame(self._writer, data)
-
-    async def recv(self) -> Optional[dict]:
-        if self._reader is None:
-            raise RuntimeError("TcpTransport: not connected")
-        try:
-            data = await _recv_frame(self._reader)
-        except asyncio.IncompleteReadError as exc:
-            logger.warning("TcpTransport: connection lost mid-frame: %s", exc)
-            return None
-        if data is None:
-            return None
-        return msgpack.unpackb(data, raw=False)
-
-
-#  WebSocket transport
-
-
-def _require_websockets() -> None:
-    """Raise ImportError with a helpful message when `websockets` is absent."""
-    try:
-        import websockets  # noqa: F401
-    except ImportError as exc:
-        raise ImportError(
-            "saikuro WebSocket transport requires 'websockets': "
-            "install it with `pip install websockets`"
-        ) from exc
 
 
 class WebSocketTransport(BaseTransport):
@@ -233,14 +207,13 @@ class WebSocketTransport(BaseTransport):
         ping_interval: "float | None" = 20.0,
         ping_timeout: "float | None" = 20.0,
     ) -> None:
-        _require_websockets()
         self._uri = uri
         self._max_size = max_size
         self._extra_headers = extra_headers
         self._open_timeout = open_timeout
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
-        self._ws: "object | None" = None  # websockets.asyncio.client.ClientConnection
+        self._ws: object | None = None
         self._closed = False
 
     async def connect(self) -> None:
@@ -285,10 +258,7 @@ class WebSocketTransport(BaseTransport):
         if self._closed or self._ws is None:
             raise RuntimeError("WebSocketTransport: not connected")
         data: bytes = msgpack.packb(obj, use_bin_type=True)
-        if len(data) > _MAX_FRAME_SIZE:
-            raise ValueError(
-                f"frame {len(data)} bytes exceeds maximum {_MAX_FRAME_SIZE} bytes"
-            )
+        _check_frame_size(data)
         try:
             await self._ws.send(data)  # type: ignore[union-attr]
         except Exception as exc:
@@ -366,6 +336,13 @@ class InMemoryTransport(BaseTransport):
             self._closed = True
             # Unblock any coroutine waiting in recv().
             await self._recv_queue.put(self._EOF)
+            # Remove from global registry if this is a named memory transport.
+            global _memory_channels, _memory_channels_lock
+            with _memory_channels_lock:
+                for name, transport in list(_memory_channels.items()):
+                    if transport is self:
+                        _memory_channels.pop(name, None)
+                        break
 
     async def send(self, obj: dict) -> None:
         if self._closed:
@@ -383,6 +360,8 @@ class InMemoryTransport(BaseTransport):
 
 
 #  Factory function
+_memory_channels: dict[str, "InMemoryTransport"] = {}
+_memory_channels_lock = threading.Lock()
 
 
 def make_transport(address: str) -> BaseTransport:
@@ -394,8 +373,30 @@ def make_transport(address: str) -> BaseTransport:
       - ``tcp://host:port``         - TCP
       - ``ws://host:port/path``     - WebSocket (plain)
       - ``wss://host:port/path``    - WebSocket (TLS)
-      - ``memory://``               - In-memory (testing only; returns one half)
+      - ``memory://``               - In-memory (testing only; creates default channel)
+      - ``memory://channel-name``   - In-memory with named channel
+
+    In-memory channels work as pairs:
+      - First call to ``memory://foo`` creates a pair and returns side A
+      - Second call to ``memory://foo`` returns side B, connected to A
+      - For tests, prefer ``InMemoryTransport.pair()`` for direct control
     """
+    global _memory_channels, _memory_channels_lock
+
+    if address.startswith("memory://"):
+        name = (
+            address[len("memory://") :]
+            if len(address) > len("memory://")
+            else "default"
+        )
+        with _memory_channels_lock:
+            if name in _memory_channels:
+                return _memory_channels.pop(name)
+            else:
+                a, b = InMemoryTransport.pair()
+                _memory_channels[name] = b
+                return a
+
     if address.startswith("unix://"):
         path = address[len("unix://") :]
         return UnixSocketTransport(path)
@@ -407,5 +408,5 @@ def make_transport(address: str) -> BaseTransport:
         return WebSocketTransport(address)
     raise ValueError(
         f"unsupported transport address: {address!r}\n"
-        "Supported schemes: unix://, tcp://, ws://, wss://"
+        "Supported schemes: unix://, tcp://, ws://, wss://, memory://"
     )

@@ -6,12 +6,12 @@ use saikuro_core::{
     value::Value,
     InvocationId, PROTOCOL_VERSION,
 };
+use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::{InvocationRouter, RouterConfig},
 };
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
 
 //  Helpers
 
@@ -53,175 +53,189 @@ fn make_router_with_sink(sink: LogSink) -> InvocationRouter {
 
 //  Tests
 
-#[tokio::test]
-async fn log_envelope_is_not_routed_to_provider() {
-    // Even with a registered provider, a Log envelope must NOT reach it.
-    let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(8);
-    let handle = ProviderHandle::new("logger", vec!["$log".to_owned()], work_tx);
-    let registry = ProviderRegistry::new();
-    registry.register(handle);
+#[test]
+fn log_envelope_is_not_routed_to_provider() {
+    saikuro_exec::block_on(async {
+        // Even with a registered provider, a Log envelope must NOT reach it.
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(8);
+        let handle = ProviderHandle::new("logger", vec!["$log".to_owned()], work_tx);
+        let registry = ProviderRegistry::new();
+        registry.register(handle);
 
-    let (sink, _captured) = capturing_sink();
-    let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
+        let (sink, _captured) = capturing_sink();
+        let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
 
-    let env = make_log_envelope(LogLevel::Info, "test.logger", "hello from test");
-    let resp = router.dispatch(env).await;
-
-    // Must succeed.
-    assert!(resp.ok, "log dispatch should return ok_empty");
-
-    // Provider channel must be empty:  log was NOT forwarded to it.
-    assert!(
-        work_rx.try_recv().is_err(),
-        "log envelope must not be forwarded to any provider"
-    );
-}
-
-#[tokio::test]
-async fn log_envelope_delivers_record_to_sink() {
-    let (sink, captured) = capturing_sink();
-    let router = make_router_with_sink(sink);
-
-    let env = make_log_envelope(LogLevel::Warn, "myapp.handler", "something fishy");
-    let resp = router.dispatch(env).await;
-
-    assert!(resp.ok);
-
-    let records = captured.lock().unwrap();
-    assert_eq!(records.len(), 1, "exactly one record should be captured");
-    let r = &records[0];
-    assert_eq!(r.level, LogLevel::Warn);
-    assert_eq!(r.name, "myapp.handler");
-    assert_eq!(r.msg, "something fishy");
-}
-
-#[tokio::test]
-async fn log_all_levels_are_forwarded() {
-    let (sink, captured) = capturing_sink();
-    let router = make_router_with_sink(sink);
-
-    let levels = [
-        LogLevel::Trace,
-        LogLevel::Debug,
-        LogLevel::Info,
-        LogLevel::Warn,
-        LogLevel::Error,
-    ];
-
-    for &level in &levels {
-        let env = make_log_envelope(level, "level.test", "msg");
+        let env = make_log_envelope(LogLevel::Info, "test.logger", "hello from test");
         let resp = router.dispatch(env).await;
-        assert!(resp.ok, "log dispatch for {level:?} should succeed");
-    }
 
-    let records = captured.lock().unwrap();
-    assert_eq!(records.len(), levels.len(), "all levels should be captured");
-    for (i, &expected_level) in levels.iter().enumerate() {
-        assert_eq!(records[i].level, expected_level);
-    }
+        // Must succeed.
+        assert!(resp.ok, "log dispatch should return ok_empty");
+
+        // Provider channel must be empty:  log was NOT forwarded to it.
+        assert!(
+            work_rx.try_recv().is_err(),
+            "log envelope must not be forwarded to any provider"
+        );
+    })
 }
 
-#[tokio::test]
-async fn log_envelope_with_no_args_returns_ok_without_panicking() {
-    let (sink, captured) = capturing_sink();
-    let router = make_router_with_sink(sink);
+#[test]
+fn log_envelope_delivers_record_to_sink() {
+    saikuro_exec::block_on(async {
+        let (sink, captured) = capturing_sink();
+        let router = make_router_with_sink(sink);
 
-    // Malformed: no args at all.
-    let env = Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: InvocationType::Log,
-        id: InvocationId::new(),
-        target: "$log".to_owned(),
-        args: vec![],
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq: None,
-    };
-    let resp = router.dispatch(env).await;
-
-    // Must not panic; ok_empty is returned.
-    assert!(resp.ok, "malformed log should still return ok");
-
-    // Nothing was delivered to the sink.
-    assert!(
-        captured.lock().unwrap().is_empty(),
-        "malformed log should not reach sink"
-    );
-}
-
-#[tokio::test]
-async fn log_envelope_with_invalid_args_returns_ok_without_panicking() {
-    let (sink, captured) = capturing_sink();
-    let router = make_router_with_sink(sink);
-
-    // args[0] is a plain string:  not a LogRecord map.
-    let env = Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: InvocationType::Log,
-        id: InvocationId::new(),
-        target: "$log".to_owned(),
-        args: vec![Value::String("not a log record".into())],
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq: None,
-    };
-    let resp = router.dispatch(env).await;
-
-    assert!(resp.ok, "invalid log args should still return ok");
-    assert!(
-        captured.lock().unwrap().is_empty(),
-        "invalid log args should not reach sink"
-    );
-}
-
-#[tokio::test]
-async fn router_with_custom_sink_still_routes_calls() {
-    // A custom log sink must not interfere with normal call routing.
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(8);
-    let handle = ProviderHandle::new("math", vec!["math".to_owned()], work_tx);
-    let registry = ProviderRegistry::new();
-    registry.register(handle);
-
-    // Spawn an auto-responder.
-    tokio::spawn(async move {
-        let mut rx = work_rx;
-        while let Some(item) = rx.recv().await {
-            if let Some(tx) = item.response_tx {
-                let _ = tx.send(saikuro_core::ResponseEnvelope::ok(
-                    item.envelope.id,
-                    Value::Int(99),
-                ));
-            }
-        }
-    });
-
-    let (sink, _captured) = capturing_sink();
-    let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
-
-    let env = Envelope::call("math.compute", vec![]);
-    let resp = router.dispatch(env).await;
-    assert!(resp.ok, "call should still succeed with custom log sink");
-    assert_eq!(resp.result, Some(Value::Int(99)));
-}
-
-#[tokio::test]
-async fn multiple_log_envelopes_all_delivered_to_sink() {
-    let (sink, captured) = capturing_sink();
-    let router = make_router_with_sink(sink);
-
-    for i in 0..10u32 {
-        let env = make_log_envelope(LogLevel::Info, "bulk.test", &format!("message {i}"));
+        let env = make_log_envelope(LogLevel::Warn, "myapp.handler", "something fishy");
         let resp = router.dispatch(env).await;
+
         assert!(resp.ok);
-    }
 
-    let records = captured.lock().unwrap();
-    assert_eq!(records.len(), 10, "all 10 log records should be captured");
-    for (i, record) in records.iter().enumerate() {
-        assert_eq!(record.msg, format!("message {i}"));
-    }
+        let records = captured.lock().unwrap();
+        assert_eq!(records.len(), 1, "exactly one record should be captured");
+        let r = &records[0];
+        assert_eq!(r.level, LogLevel::Warn);
+        assert_eq!(r.name, "myapp.handler");
+        assert_eq!(r.msg, "something fishy");
+    })
+}
+
+#[test]
+fn log_all_levels_are_forwarded() {
+    saikuro_exec::block_on(async {
+        let (sink, captured) = capturing_sink();
+        let router = make_router_with_sink(sink);
+
+        let levels = [
+            LogLevel::Trace,
+            LogLevel::Debug,
+            LogLevel::Info,
+            LogLevel::Warn,
+            LogLevel::Error,
+        ];
+
+        for &level in &levels {
+            let env = make_log_envelope(level, "level.test", "msg");
+            let resp = router.dispatch(env).await;
+            assert!(resp.ok, "log dispatch for {level:?} should succeed");
+        }
+
+        let records = captured.lock().unwrap();
+        assert_eq!(records.len(), levels.len(), "all levels should be captured");
+        for (i, &expected_level) in levels.iter().enumerate() {
+            assert_eq!(records[i].level, expected_level);
+        }
+    })
+}
+
+#[test]
+fn log_envelope_with_no_args_returns_ok_without_panicking() {
+    saikuro_exec::block_on(async {
+        let (sink, captured) = capturing_sink();
+        let router = make_router_with_sink(sink);
+
+        // Malformed: no args at all.
+        let env = Envelope {
+            version: PROTOCOL_VERSION,
+            invocation_type: InvocationType::Log,
+            id: InvocationId::new(),
+            target: "$log".to_owned(),
+            args: vec![],
+            meta: Default::default(),
+            capability: None,
+            batch_items: None,
+            stream_control: None,
+            seq: None,
+        };
+        let resp = router.dispatch(env).await;
+
+        // Must not panic; ok_empty is returned.
+        assert!(resp.ok, "malformed log should still return ok");
+
+        // Nothing was delivered to the sink.
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "malformed log should not reach sink"
+        );
+    })
+}
+
+#[test]
+fn log_envelope_with_invalid_args_returns_ok_without_panicking() {
+    saikuro_exec::block_on(async {
+        let (sink, captured) = capturing_sink();
+        let router = make_router_with_sink(sink);
+
+        // args[0] is a plain string:  not a LogRecord map.
+        let env = Envelope {
+            version: PROTOCOL_VERSION,
+            invocation_type: InvocationType::Log,
+            id: InvocationId::new(),
+            target: "$log".to_owned(),
+            args: vec![Value::String("not a log record".into())],
+            meta: Default::default(),
+            capability: None,
+            batch_items: None,
+            stream_control: None,
+            seq: None,
+        };
+        let resp = router.dispatch(env).await;
+
+        assert!(resp.ok, "invalid log args should still return ok");
+        assert!(
+            captured.lock().unwrap().is_empty(),
+            "invalid log args should not reach sink"
+        );
+    })
+}
+
+#[test]
+fn router_with_custom_sink_still_routes_calls() {
+    saikuro_exec::block_on(async {
+        // A custom log sink must not interfere with normal call routing.
+        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(8);
+        let handle = ProviderHandle::new("math", vec!["math".to_owned()], work_tx);
+        let registry = ProviderRegistry::new();
+        registry.register(handle);
+
+        // Spawn an auto-responder.
+        saikuro_exec::spawn(async move {
+            let mut rx = work_rx;
+            while let Some(item) = rx.recv().await {
+                if let Some(tx) = item.response_tx {
+                    let _ = tx.send(saikuro_core::ResponseEnvelope::ok(
+                        item.envelope.id,
+                        Value::Int(99),
+                    ));
+                }
+            }
+        });
+
+        let (sink, _captured) = capturing_sink();
+        let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
+
+        let env = Envelope::call("math.compute", vec![]);
+        let resp = router.dispatch(env).await;
+        assert!(resp.ok, "call should still succeed with custom log sink");
+        assert_eq!(resp.result, Some(Value::Int(99)));
+    })
+}
+
+#[test]
+fn multiple_log_envelopes_all_delivered_to_sink() {
+    saikuro_exec::block_on(async {
+        let (sink, captured) = capturing_sink();
+        let router = make_router_with_sink(sink);
+
+        for i in 0..10u32 {
+            let env = make_log_envelope(LogLevel::Info, "bulk.test", &format!("message {i}"));
+            let resp = router.dispatch(env).await;
+            assert!(resp.ok);
+        }
+
+        let records = captured.lock().unwrap();
+        assert_eq!(records.len(), 10, "all 10 log records should be captured");
+        for (i, record) in records.iter().enumerate() {
+            assert_eq!(record.msg, format!("message {i}"));
+        }
+    })
 }

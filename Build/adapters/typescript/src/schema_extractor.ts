@@ -80,7 +80,7 @@ export class SchemaExtractor {
       content,
       ts.ScriptTarget.Latest,
       true,
-      ts.ScriptKind.TS
+      ts.ScriptKind.TS,
     );
     this.sourceFiles.set(resolvedPath, sourceFile);
   }
@@ -174,7 +174,7 @@ export class SchemaExtractor {
             moduleName,
             containingFile,
             options,
-            ts.sys as any
+            ts.sys as any,
           );
           return res.resolvedModule || undefined;
         });
@@ -273,29 +273,11 @@ export class SchemaExtractor {
    * Convert a TypeScript type to a Saikuro TypeDescriptor.
    */
   private typeToDescriptor(type: ts.Type): TypeDescriptor {
-    // Handle primitive types
-    const primitiveType = this.typeChecker!.typeToString(type);
-    const primitiveMap: Record<
-      string,
-      Extract<TypeDescriptor, { kind: "primitive" }>["type"]
-    > = {
-      boolean: "bool",
-      number: "i64", // Could be f32/f64 with more analysis
-      string: "string",
-      Uint8Array: "bytes",
-      ArrayBuffer: "bytes",
-      null: "unit",
-      undefined: "unit",
-      void: "unit",
-      never: "unit",
-    };
+    const name = this.typeChecker!.typeToString(type);
 
-    if (primitiveType in primitiveMap) {
-      return { kind: "primitive", type: primitiveMap[primitiveType] };
-    }
+    const primitive = this.typeToPrimitive(name);
+    if (primitive) return primitive;
 
-    // Fallback: handle common array prints like `T[]` or `Array<T>` when
-    // `isArrayType` helper wasn't available or didn't match.
     const asAny = type as any;
     if (asAny.elementType) {
       return {
@@ -304,230 +286,171 @@ export class SchemaExtractor {
       };
     }
 
-    if (primitiveType.endsWith("[]")) {
-      const base = primitiveType.slice(0, -2).trim();
-      // map base to primitive if possible
-      if (base in primitiveMap) {
-        return {
-          kind: "list",
-          item: {
-            kind: "primitive",
-            type: primitiveMap[base],
-          } as TypeDescriptor,
-        } as TypeDescriptor;
-      }
-      return {
-        kind: "list",
-        item: { kind: "named", name: base } as TypeDescriptor,
-      } as TypeDescriptor;
+    const listStr = this.typeListFromString(name);
+    if (listStr) return listStr;
+
+    if (name.startsWith("Record<")) {
+      const rec = this.typeToRecordFromType(type);
+      if (rec) return rec;
     }
 
-    if (primitiveType.startsWith("Array<") && primitiveType.endsWith(">")) {
-      const inner = primitiveType.slice(6, -1).trim();
-      if (inner in primitiveMap)
-        return {
-          kind: "list",
-          item: {
-            kind: "primitive",
-            type: primitiveMap[inner],
-          } as TypeDescriptor,
-        } as TypeDescriptor;
-      return {
-        kind: "list",
-        item: { kind: "named", name: inner } as TypeDescriptor,
-      } as TypeDescriptor;
-    }
-
-    // Handle TypeScript Record<K,V> printed names like `Record<string, number>`
-    if (primitiveType.startsWith("Record<")) {
-      try {
-        const ref = type as unknown as ts.TypeReference;
-        const typeArgs =
-          (ref as any).typeArguments || (ref as any).aliasTypeArguments;
-        if (typeArgs && typeArgs.length >= 2) {
-          return {
-            kind: "map",
-            key: this.typeToDescriptor(typeArgs[0]),
-            value: this.typeToDescriptor(typeArgs[1]),
-          };
-        }
-      } catch {
-        // fallthrough to string-parse
-      }
-
-      const m = primitiveType.match(/^Record<\s*([^,>]+)\s*,\s*(.+)>$/);
-      if (m) {
-        const keyStr = m[1].trim();
-        const valStr = m[2].trim();
-        const keyDesc: TypeDescriptor =
-          keyStr === "string"
-            ? ({ kind: "primitive", type: "string" } as TypeDescriptor)
-            : ({ kind: "named", name: keyStr } as TypeDescriptor);
-        const valDesc: TypeDescriptor = {
-          kind: "named",
-          name: valStr,
-        } as TypeDescriptor;
-        return { kind: "map", key: keyDesc, value: valDesc } as TypeDescriptor;
-      }
-    }
-
-    // Handle any / anonymous object types ("{}") that TS prints for empty
-    // object literal types - map them to any for parity with Python.
-    if (
-      primitiveType === "any" ||
-      primitiveType === "{}" ||
-      primitiveType === "object"
-    ) {
+    if (name === "any" || name === "{}" || name === "object") {
       return { kind: "primitive", type: "any" };
     }
 
-    // Handle arrays (use isArrayType when available)
-    if (this.typeChecker!.isArrayType && this.typeChecker!.isArrayType(type)) {
-      const elementType = (type as any).elementType ||
-        (type as any).typeArguments?.[0] || { flags: ts.TypeFlags.Any };
-      return { kind: "list", item: this.typeToDescriptor(elementType) };
+    if (this.typeChecker!.isArrayType?.(type) ?? false) {
+      const el = asAny.elementType ??
+        asAny.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any };
+      return { kind: "list", item: this.typeToDescriptor(el) };
     }
 
-    // Handle tuple
-    if (
-      (type as any).target &&
-      (type as any).target.objectFlags & ts.ObjectFlags.Tuple
-    ) {
-      const elements =
-        (type as any).resolvedTypeArguments ||
-        (type as any).typeArguments ||
-        [];
-      const items = elements.map((e: any) =>
-        this.typeToDescriptor(e as ts.Type)
-      );
+    if (asAny.target?.objectFlags & ts.ObjectFlags.Tuple) {
+      const items = (
+        asAny.resolvedTypeArguments ??
+        asAny.typeArguments ??
+        []
+      ).map((e: any) => this.typeToDescriptor(e as ts.Type));
       return {
         kind: "list",
-        item: items[0] || { kind: "primitive", type: "any" },
+        item: items[0] ?? { kind: "primitive", type: "any" },
       };
     }
 
-    // Handle union
     if (type.flags & ts.TypeFlags.Union) {
-      const unionType = type as ts.UnionType;
-      const types = unionType.types;
+      return this.typeToUnion(type as ts.UnionType);
+    }
 
-      // Check if it's a nullable type (T | null | undefined)
-      const hasNull = types.some((t) => t.flags & ts.TypeFlags.Null);
-      const hasUndefined = types.some((t) => t.flags & ts.TypeFlags.Undefined);
-      const nonNullTypes = types.filter(
-        (t) => !(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined))
-      );
+    if (type.flags & ts.TypeFlags.Intersection) {
+      return { kind: "primitive", type: "any" };
+    }
 
-      if ((hasNull || hasUndefined) && nonNullTypes.length === 1) {
+    if (asAny.typeArguments ?? asAny.aliasTypeArguments) {
+      const ref = this.typeToReference(type, name);
+      if (ref) return ref;
+    }
+
+    if (type.flags & ts.TypeFlags.Object) {
+      return this.typeToObjectType(type, name);
+    }
+
+    return { kind: "named", name };
+  }
+
+  private typeToPrimitive(name: string): TypeDescriptor | undefined {
+    switch (name) {
+      case "boolean":
+        return { kind: "primitive", type: "bool" };
+      case "number":
+        return { kind: "primitive", type: "f64" };
+      case "string":
+        return { kind: "primitive", type: "string" };
+      case "Uint8Array":
+      case "ArrayBuffer":
+        return { kind: "primitive", type: "bytes" };
+      case "null":
+      case "undefined":
+      case "void":
+      case "never":
+        return { kind: "primitive", type: "unit" };
+    }
+  }
+
+  private typeListFromString(name: string): TypeDescriptor | undefined {
+    const inner = name.endsWith("[]")
+      ? name.slice(0, -2).trim()
+      : name.startsWith("Array<") && name.endsWith(">")
+        ? name.slice(6, -1).trim()
+        : undefined;
+    if (!inner) return;
+    const prim = this.typeToPrimitive(inner);
+    return { kind: "list", item: prim ?? { kind: "named", name: inner } };
+  }
+
+  private typeToRecordFromType(type: ts.Type): TypeDescriptor | undefined {
+    const ref = type as any;
+    const typeArgs = ref.typeArguments ?? ref.aliasTypeArguments;
+    if (typeArgs?.length >= 2) {
+      return {
+        kind: "map",
+        key: this.typeToDescriptor(typeArgs[0]),
+        value: this.typeToDescriptor(typeArgs[1]),
+      };
+    }
+  }
+
+  private typeToUnion(type: ts.UnionType): TypeDescriptor {
+    const types = type.types;
+    const hasNull = types.some((t) => t.flags & ts.TypeFlags.Null);
+    const hasUndefined = types.some((t) => t.flags & ts.TypeFlags.Undefined);
+    const nonNull = types.filter(
+      (t) => !(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)),
+    );
+
+    if ((hasNull || hasUndefined) && nonNull.length === 1) {
+      return { kind: "optional", inner: this.typeToDescriptor(nonNull[0]) };
+    }
+    return { kind: "primitive", type: "any" };
+  }
+
+  private typeToObjectType(type: ts.Type, name: string): TypeDescriptor {
+    const symbol = type.getSymbol();
+    if (symbol) {
+      const symName = symbol.getName();
+      const typeArgs = (type as ts.TypeReference).typeArguments;
+      if (symName === "Map" && typeArgs && typeArgs.length >= 2) {
         return {
-          kind: "optional",
-          inner: this.typeToDescriptor(nonNullTypes[0]),
+          kind: "map",
+          key: this.typeToDescriptor(typeArgs[0]),
+          value: this.typeToDescriptor(typeArgs[1]),
         };
       }
-
-      // For other unions, return any (complex)
+      if (symName === "Record" && typeArgs && typeArgs.length >= 2) {
+        return {
+          kind: "map",
+          key: this.typeToDescriptor(typeArgs[0]),
+          value: this.typeToDescriptor(typeArgs[1]),
+        };
+      }
+    }
+    if (type.getProperties().length === 0) {
       return { kind: "primitive", type: "any" };
     }
+    return { kind: "named", name };
+  }
 
-    // Handle intersection
-    if (type.flags & ts.TypeFlags.Intersection) {
-      // Complex - return any for now
-      return { kind: "primitive", type: "any" };
+  private typeToReference(
+    type: ts.Type,
+    name: string,
+  ): TypeDescriptor | undefined {
+    const typeArgs =
+      (type as any).typeArguments ?? (type as any).aliasTypeArguments;
+    if (!typeArgs) return;
+
+    if (name.startsWith("Promise") && typeArgs.length > 0) {
+      return this.typeToDescriptor(typeArgs[0]);
     }
 
-    // Handle object/interface
-    if (type.flags & ts.TypeFlags.Object) {
-      // Check if it's a Map or Record
-      const symbol = type.getSymbol();
-      if (symbol) {
-        const name = symbol.getName();
-        if (name === "Map") {
-          const typeArgs = (type as ts.TypeReference).typeArguments;
-          if (typeArgs && typeArgs.length >= 2) {
-            return {
-              kind: "map",
-              key: this.typeToDescriptor(typeArgs[0]),
-              value: this.typeToDescriptor(typeArgs[1]),
-            };
-          }
-        }
-        if (name === "Record") {
-          const typeArgs = (type as ts.TypeReference).typeArguments;
-          // Record<string, T> -> map with string keys
-          if (typeArgs && typeArgs.length >= 2) {
-            return {
-              kind: "map",
-              key: { kind: "primitive", type: "string" },
-              value: this.typeToDescriptor(typeArgs[1]),
-            };
-          }
-        }
-      }
-
-      // Check for index signature to determine if it's a map-like type
-      const props = type.getProperties();
-      if (props.length === 0) {
-        // Empty object type -> treat as any for parity with Python
-        return { kind: "primitive", type: "any" };
-      }
-
-      // For objects with properties, emit a named type using the printed
-      // type name. Downstream parity tests will canonicalize shape if needed.
-      return { kind: "named", name: primitiveType };
-    }
-
-    // Handle type references (generics, interfaces, types)
     if (
-      (type as any).symbol &&
-      (type as any).symbol.flags & ts.SymbolFlags.TypeAlias
+      (name.startsWith("AsyncGenerator") || name.startsWith("Generator")) &&
+      typeArgs.length > 0
     ) {
-      // fallthrough to named
+      return { kind: "stream", item: this.typeToDescriptor(typeArgs[0]) };
     }
 
-    if ((type as any).typeArguments || (type as any).aliasTypeArguments) {
-      const refType = type as ts.TypeReference;
-      const typeArgs =
-        (refType as any).typeArguments || (refType as any).aliasTypeArguments;
-      const typeName = this.typeChecker!.typeToString(refType);
-
-      if (typeName.startsWith("Promise")) {
-        // Async return - look at inner type
-        if (typeArgs && typeArgs.length > 0) {
-          return this.typeToDescriptor(typeArgs[0]);
-        }
-      }
-
-      if (
-        typeName.startsWith("AsyncGenerator") ||
-        typeName.startsWith("Generator")
-      ) {
-        // Stream return
-        if (typeArgs && typeArgs.length > 0) {
-          return { kind: "stream", item: this.typeToDescriptor(typeArgs[0]) };
-        }
-        return { kind: "stream", item: { kind: "primitive", type: "any" } };
-      }
-
-      if (typeName.startsWith("Channel")) {
-        // Channel type
-        if (typeArgs && typeArgs.length >= 2) {
-          return {
-            kind: "channel",
-            send: this.typeToDescriptor(typeArgs[0]),
-            recv: this.typeToDescriptor(typeArgs[1]),
-          };
-        }
-      }
+    if (name.startsWith("Channel") && typeArgs.length >= 2) {
+      return {
+        kind: "channel",
+        send: this.typeToDescriptor(typeArgs[0]),
+        recv: this.typeToDescriptor(typeArgs[1]),
+      };
     }
-
-    return { kind: "named", name: primitiveType };
   }
 
   /**
    * Extract the function signature from a function declaration.
    */
   private extractFunction(
-    node: ts.FunctionDeclaration
+    node: ts.FunctionDeclaration,
   ): ExtractedFunction | null {
     // Skip if not exported
     const modifiers = node.modifiers;
@@ -560,7 +483,7 @@ export class SchemaExtractor {
         const paramName = param.getName();
         const paramType = this.typeChecker!.getTypeOfSymbolAtLocation(
           param,
-          node
+          node,
         );
         const isOptional = !!(
           paramNode &&
@@ -597,7 +520,7 @@ export class SchemaExtractor {
         visibility: jsdoc.visibility || "public",
         doc: jsdoc.doc as string | undefined,
         isAsync: node.modifiers.some(
-          (m) => m.kind === ts.SyntaxKind.AsyncKeyword
+          (m) => m.kind === ts.SyntaxKind.AsyncKeyword,
         ),
         isGenerator,
       };
@@ -612,7 +535,7 @@ export class SchemaExtractor {
   extract(): ExtractedFunction[] {
     if (!this.program || !this.typeChecker) {
       throw new Error(
-        "Schema extractor not initialized. Call initialize() first."
+        "Schema extractor not initialized. Call initialize() first.",
       );
     }
 
@@ -691,7 +614,7 @@ export class SchemaExtractor {
 /** Extract schema from source files and return it as a plain object. */
 export async function extractSchema(
   sourceFiles: string[],
-  namespace: string
+  namespace: string,
 ): Promise<object> {
   const extractor = new SchemaExtractor();
   extractor.addSourceFiles(sourceFiles);

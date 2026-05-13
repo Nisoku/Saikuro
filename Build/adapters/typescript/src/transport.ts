@@ -33,19 +33,48 @@ export interface Transport {
    */
   recv(): Promise<Record<string, unknown> | null>;
 
-  /** Register a handler invoked for every received message.
-   * Multiple handlers may be registered; all are called in registration order.
-   */
+  /** Register a handler invoked for every received message. */
   onMessage(handler: (msg: Record<string, unknown>) => void): void;
 
-  /**
-   * Deregister a previously-registered message handler.
-   * A no-op if the handler was never registered.
-   */
+  /** Deregister a previously-registered message handler. */
   offMessage(handler: (msg: Record<string, unknown>) => void): void;
 
   /** Register an error / close handler. */
   onClose(handler: (err?: Error) => void): void;
+}
+
+/**
+ * Shared handler management for all transports.
+ *
+ * Every transport implementation needs the same `_messageHandlers` set,
+ * `_closeHandler`, and the three registration methods.  This base class
+ * provides them so each transport only writes the unique parts.
+ */
+abstract class BaseTransport implements Transport {
+  readonly _messageHandlers = new Set<(msg: Record<string, unknown>) => void>();
+  _closeHandler?: (err?: Error) => void;
+
+  abstract connect(): Promise<void>;
+  abstract close(): Promise<void>;
+  abstract send(obj: Record<string, unknown>): Promise<void>;
+  abstract recv(): Promise<Record<string, unknown> | null>;
+
+  onMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.add(handler);
+  }
+
+  offMessage(handler: (msg: Record<string, unknown>) => void): void {
+    this._messageHandlers.delete(handler);
+  }
+
+  onClose(handler: (err?: Error) => void): void {
+    this._closeHandler = handler;
+  }
+
+  /** Snapshot the current handler set and dispatch to each in registration order. */
+  _dispatch(msg: Record<string, unknown>): void {
+    for (const h of Array.from(this._messageHandlers)) h(msg);
+  }
 }
 
 //  Frame codec (length-prefix, big-endian uint32)
@@ -60,12 +89,8 @@ function buildFrame(payload: Uint8Array): Buffer {
 
 //  In-Memory Transport (testing)
 
-export class InMemoryTransport implements Transport {
+export class InMemoryTransport extends BaseTransport {
   private readonly _inbox: Array<Record<string, unknown>> = [];
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private _peer?: InMemoryTransport;
   private _closed = false;
 
@@ -90,27 +115,15 @@ export class InMemoryTransport implements Transport {
 
   async send(obj: Record<string, unknown>): Promise<void> {
     if (this._closed) throw new Error("transport is closed");
-    // Snapshot the handler set before iterating so that handlers which call
-    // offMessage/onMessage during delivery cannot corrupt the iteration or
-    // cause re-entrant infinite loops.
-    const handlers = Array.from(this._peer?._messageHandlers ?? []);
-    for (const h of handlers) h(obj);
+    const peer = this._peer;
+    if (peer && !peer._closed) {
+      peer._inbox.push(obj);
+      peer._dispatch(obj);
+    }
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
     return this._inbox.shift() ?? null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 
@@ -122,16 +135,13 @@ export class InMemoryTransport implements Transport {
  * On Node.js >= 22 the built-in `WebSocket` global is available.
  * For older versions pass a `ws`-compatible constructor via `wsConstructor`.
  */
-export class WebSocketTransport implements Transport {
+export class WebSocketTransport extends BaseTransport {
   private _ws?: WebSocket;
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private readonly _url: string;
   private readonly _WS: typeof WebSocket;
 
   constructor(url: string, options?: { wsConstructor?: typeof WebSocket }) {
+    super();
     this._url = url;
     if (options?.wsConstructor !== undefined) {
       this._WS = options.wsConstructor;
@@ -160,12 +170,8 @@ export class WebSocketTransport implements Transport {
         try {
           const bytes = new Uint8Array(ev.data as ArrayBuffer);
           const msg = decode(bytes) as Record<string, unknown>;
-          // Snapshot handlers so any onMessage/offMessage calls inside a
-          // handler do not corrupt the current dispatch pass.
-          const handlers = Array.from(this._messageHandlers);
-          for (const h of handlers) h(msg);
+          this._dispatch(msg);
         } catch (err) {
-          // Malformed frame - log and continue; don't crash the receive loop.
           log.error("ws frame decode error", { err: String(err) });
         }
       };
@@ -191,20 +197,7 @@ export class WebSocketTransport implements Transport {
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
-    // Receive is event-driven via onMessage; this method is a no-op stub.
     return null;
-  }
-
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
-  }
-
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
-  }
-
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
   }
 }
 
@@ -219,12 +212,8 @@ export class WebSocketTransport implements Transport {
  *
  * Framing: 4-byte big-endian length prefix (matches the Rust LengthPrefixedCodec).
  */
-export class NodeStreamTransport implements Transport {
+export class NodeStreamTransport extends BaseTransport {
   private _socket?: import("net").Socket;
-  private readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
-  private _closeHandler?: (err?: Error) => void;
   private _buffer: Buffer = Buffer.alloc(0);
   private readonly _connectionOptions:
     | { type: "tcp"; host: string; port: number }
@@ -243,6 +232,7 @@ export class NodeStreamTransport implements Transport {
       | { type: "tcp"; host: string; port: number }
       | { type: "unix"; path: string },
   ) {
+    super();
     this._connectionOptions = opts;
   }
 
@@ -290,10 +280,7 @@ export class NodeStreamTransport implements Transport {
 
       try {
         const msg = decode(payload) as Record<string, unknown>;
-        // Snapshot handlers so any onMessage/offMessage calls inside a
-        // handler do not corrupt the current dispatch pass.
-        const handlers = Array.from(this._messageHandlers);
-        for (const h of handlers) h(msg);
+        this._dispatch(msg);
       } catch (err) {
         log.error("frame decode error", { err: String(err) });
       }
@@ -314,20 +301,232 @@ export class NodeStreamTransport implements Transport {
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
-    // Event-driven via onMessage.
     return null;
   }
+}
 
-  onMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.add(handler);
+//  BroadcastChannel Transport (browser/WASM in-page communication)
+
+/**
+ * Creates a transport from an already-connected BroadcastChannel.
+ */
+/**
+ * Generate a short random ID for connection negotiation.
+ * Format: 8 hex chars (4 from timestamp, 4 random).
+ * Not guaranteed to be universally unique, but should be good enough for
+ * avoiding collisions in the connection handshake.
+ */
+function generateShortId(): string {
+  const now = Date.now() & 0xffffffff;
+  const rand = Math.floor(Math.random() * 0x100000000);
+  return `${now.toString(16).padStart(8, "0")}${rand.toString(16).padStart(8, "0")}`;
+}
+
+/**
+ * A transport backed by the browser's BroadcastChannel API.
+ *
+ * Uses the same connection negotiation protocol as the Rust WasmHostTransport:
+ * 1. Connector generates a random connection ID
+ * 2. Connector sends `{ type: "connect", id: conn_id }` on base channel
+ * 3. Listener receives, opens private channel `{base}:{conn_id}`
+ * 4. Listener sends `{ type: "accept", id: conn_id }` on private channel
+ * 5. Both sides communicate on private channel from then on
+ *
+ * This transport is for communication between different JavaScript/WASM contexts
+ * in the same browser origin (e.g., main page ↔ Worker, or JS ↔ Rust WASM).
+ */
+export class BroadcastChannelTransport extends BaseTransport {
+  private _channel: BroadcastChannel | undefined = undefined;
+  private readonly _baseChannel: string;
+  private _connected = false;
+  private _closed = false;
+
+  /**
+   * Create a BroadcastChannelTransport for the "wasm-host://" scheme.
+   *
+   * Call `connect()` to perform the rendezvous handshake.
+   */
+  constructor(baseChannel: string) {
+    super();
+    this._baseChannel = baseChannel;
   }
 
-  offMessage(handler: (msg: Record<string, unknown>) => void): void {
-    this._messageHandlers.delete(handler);
+  /** Create a transport already wired to a connected BroadcastChannel. */
+  static fromChannel(channel: BroadcastChannel): BroadcastChannelTransport {
+    const t = new BroadcastChannelTransport(channel.name);
+    t._channel = channel;
+    t._connected = true;
+    t._setupMessageHandler();
+    return t;
   }
 
-  onClose(handler: (err?: Error) => void): void {
-    this._closeHandler = handler;
+  private _setupMessageHandler(): void {
+    const ch = this._channel;
+    if (!ch) return;
+    ch.onmessage = (ev: MessageEvent) => {
+      try {
+        let msg: Record<string, unknown>;
+        if (ev.data instanceof ArrayBuffer) {
+          const bytes = new Uint8Array(ev.data);
+          msg = decode(bytes) as Record<string, unknown>;
+        } else if (ev.data instanceof Uint8Array) {
+          msg = decode(ev.data) as Record<string, unknown>;
+        } else {
+          return;
+        }
+        this._dispatch(msg);
+      } catch (err) {
+        log.error("broadcast channel frame decode error", {
+          err: String(err),
+        });
+      }
+    };
+  }
+
+  /**
+   * Connect as a client using the rendezvous protocol.
+   * This generates a connection ID and waits for a listener to accept.
+   */
+  connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this._connected) {
+        resolve();
+        return;
+      }
+
+      const connId = generateShortId();
+      const privateName = `${this._baseChannel}:${connId}`;
+      const privateChannel = new BroadcastChannel(privateName);
+
+      const timeoutId = setTimeout(() => {
+        privateChannel.removeEventListener("message", acceptHandler);
+        privateChannel.close();
+        reject(new Error("BroadcastChannelTransport: connect timeout"));
+      }, 10000);
+
+      const acceptHandler = (event: MessageEvent) => {
+        const data = event.data as Record<string, unknown> | undefined;
+        if (data?.type !== "accept" || data?.id !== connId) return;
+        clearTimeout(timeoutId);
+        privateChannel.removeEventListener("message", acceptHandler);
+        this._channel = privateChannel;
+        this._connected = true;
+        this._setupMessageHandler();
+        resolve();
+      };
+      privateChannel.addEventListener("message", acceptHandler);
+
+      const baseChannel = new BroadcastChannel(this._baseChannel);
+      baseChannel.postMessage({ type: "connect", id: connId });
+      baseChannel.close();
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this._closed) return;
+    this._closed = true;
+    this._connected = false;
+    this._channel?.close();
+    this._channel = undefined;
+    this._closeHandler?.();
+  }
+
+  async send(obj: Record<string, unknown>): Promise<void> {
+    const ch = this._channel;
+    if (!this._connected || !ch) {
+      throw new Error("BroadcastChannelTransport: not connected");
+    }
+    const payload = encode(obj);
+    const buffer = payload.buffer.slice(
+      payload.byteOffset,
+      payload.byteOffset + payload.byteLength,
+    );
+    ch.postMessage(buffer);
+  }
+
+  async recv(): Promise<Record<string, unknown> | null> {
+    return null;
+  }
+}
+
+/**
+ * Connector for initiating BroadcastChannel connections.
+ * Matches the Rust WasmHostConnector behavior.
+ */
+export class BroadcastChannelConnector {
+  private readonly _channelName: string;
+
+  constructor(channelName: string) {
+    this._channelName = channelName;
+  }
+
+  connect(): Promise<BroadcastChannelTransport> {
+    const t = new BroadcastChannelTransport(this._channelName);
+    return t.connect().then(() => t);
+  }
+}
+
+/**
+ * Listener for accepting incoming BroadcastChannel connections.
+ * Matches the Rust WasmHostListener behavior.
+ */
+export class BroadcastChannelListener {
+  private readonly _baseChannel: BroadcastChannel;
+  private readonly _connectQueue: Array<{
+    resolve: (t: BroadcastChannelTransport) => void;
+    reject: (err: Error) => void;
+  }> = [];
+  private readonly _pendingConnections: BroadcastChannelTransport[] = [];
+  private _closed = false;
+
+  constructor(channelName: string) {
+    this._baseChannel = new BroadcastChannel(channelName);
+    this._baseChannel.onmessage = (ev: MessageEvent) => {
+      const data = ev.data as { type?: string; id?: string };
+      if (data.type === "connect" && data.id) {
+        const privateName = `${channelName}:${data.id}`;
+        const privateChannel = new BroadcastChannel(privateName);
+
+        privateChannel.postMessage({ type: "accept", id: data.id });
+
+        const transport = BroadcastChannelTransport.fromChannel(privateChannel);
+
+        const queued = this._connectQueue.shift();
+        if (queued) {
+          queued.resolve(transport);
+        } else {
+          this._pendingConnections.push(transport);
+        }
+      }
+    };
+  }
+
+  /**
+   * Wait for the next incoming connection.
+   */
+  accept(): Promise<BroadcastChannelTransport> {
+    return new Promise((resolve, reject) => {
+      if (this._closed) {
+        reject(new Error("BroadcastChannelListener is closed"));
+        return;
+      }
+      const pending = this._pendingConnections.shift();
+      if (pending) {
+        resolve(pending);
+      } else {
+        this._connectQueue.push({ resolve, reject });
+      }
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this._closed) return;
+    this._closed = true;
+    this._baseChannel.close();
+    for (const queued of this._connectQueue.splice(0)) {
+      queued.reject(new Error("BroadcastChannelListener is closed"));
+    }
+    this._pendingConnections.length = 0;
   }
 }
 
@@ -340,23 +539,45 @@ export class NodeStreamTransport implements Transport {
  *   - `unix:///path/to/socket`
  *   - `tcp://host:port`
  *   - `ws://host:port/path`  or  `wss://host:port/path`
+ *   - `wasm-host://channel-name` (BroadcastChannel for same-origin browser contexts)
+ *   - `wasm-host` (uses default channel "saikuro")
  */
+const _TRANSPORT_FACTORIES: ReadonlyMap<
+  string,
+  (address: string) => Transport
+> = new Map([
+  ["unix://", (addr) => NodeStreamTransport.unix(addr.slice("unix://".length))],
+  [
+    "tcp://",
+    (addr) => {
+      const rest = addr.slice("tcp://".length);
+      const lastColon = rest.lastIndexOf(":");
+      const host = rest.slice(0, lastColon);
+      const port = parseInt(rest.slice(lastColon + 1), 10);
+      return NodeStreamTransport.tcp(host, port);
+    },
+  ],
+]);
+
 export function makeTransport(address: string): Transport {
-  if (address.startsWith("unix://")) {
-    return NodeStreamTransport.unix(address.slice("unix://".length));
-  }
-  if (address.startsWith("tcp://")) {
-    const rest = address.slice("tcp://".length);
-    const lastColon = rest.lastIndexOf(":");
-    const host = rest.slice(0, lastColon);
-    const port = parseInt(rest.slice(lastColon + 1), 10);
-    return NodeStreamTransport.tcp(host, port);
+  for (const [prefix, factory] of _TRANSPORT_FACTORIES) {
+    if (address.startsWith(prefix)) return factory(address);
   }
   if (address.startsWith("ws://") || address.startsWith("wss://")) {
     return new WebSocketTransport(address);
   }
+  if (address === "wasm-host" || address.startsWith("wasm-host://")) {
+    let channelName = "saikuro";
+    if (address.startsWith("wasm-host://")) {
+      const rest = address.slice("wasm-host://".length);
+      if (rest.length > 0) {
+        channelName = rest;
+      }
+    }
+    return new BroadcastChannelTransport(channelName);
+  }
   throw new Error(
     `unsupported transport address: "${address}"\n` +
-      "Supported schemes: unix://, tcp://, ws://, wss://",
+      "Supported schemes: unix://, tcp://, ws://, wss://, wasm-host://",
   );
 }

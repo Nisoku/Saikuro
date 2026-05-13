@@ -15,7 +15,7 @@ pub mod schema;
 pub mod value;
 
 pub use capability::{CapabilitySet, CapabilityToken};
-pub use envelope::{Envelope, InvocationType, ResponseEnvelope};
+pub use envelope::{split_target, Envelope, InvocationType, ResponseEnvelope};
 pub use error::{ErrorCode, ErrorDetail, SaikuroError};
 pub use invocation::InvocationId;
 pub use log::{stderr_log_sink, LogLevel, LogRecord, LogSink};

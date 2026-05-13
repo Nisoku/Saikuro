@@ -148,201 +148,222 @@ async fn run_and_collect(
 
 /// In sandbox mode, announcing a schema causes the handler to push back a
 /// second frame: an Announce envelope with the capability-filtered schema.
-#[tokio::test]
-async fn sandbox_announce_pushes_filtered_schema_frame() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_announce_pushes_filtered_schema_frame() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
 
-    // Frame 0: ok response to the peer's Announce.
-    // Frame 1: unsolicited Announce with the filtered schema.
-    assert_eq!(frames.len(), 2, "sandbox mode must produce 2 frames");
+        // Frame 0: ok response to the peer's Announce.
+        // Frame 1: unsolicited Announce with the filtered schema.
+        assert_eq!(frames.len(), 2, "sandbox mode must produce 2 frames");
 
-    let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode ok response");
-    assert!(resp.ok, "announce response must be ok: {:?}", resp.error);
+        let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode ok response");
+        assert!(resp.ok, "announce response must be ok: {:?}", resp.error);
 
-    // Second frame is an Announce envelope.
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    assert_eq!(
-        push.invocation_type,
-        InvocationType::Announce,
-        "second frame must be an Announce"
-    );
+        // Second frame is an Announce envelope.
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        assert_eq!(
+            push.invocation_type,
+            InvocationType::Announce,
+            "second frame must be an Announce"
+        );
+    })
 }
 
 /// The pushed schema excludes Internal-visibility functions.
-#[tokio::test]
-async fn sandbox_filtered_schema_excludes_internal_functions() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_filtered_schema_excludes_internal_functions() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
-    assert_eq!(frames.len(), 2);
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        assert_eq!(frames.len(), 2);
 
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    let schema_value = push.args.into_iter().next().expect("args[0] must exist");
-    let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-    let filtered: Schema = rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        let schema_value = push.args.into_iter().next().expect("args[0] must exist");
+        let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-    let svc = filtered
-        .namespaces
-        .get("svc")
-        .expect("svc namespace must be present");
-    assert!(
-        !svc.functions.contains_key("internal_fn"),
-        "Internal functions must be excluded from sandbox schema"
-    );
+        let svc = filtered
+            .namespaces
+            .get("svc")
+            .expect("svc namespace must be present");
+        assert!(
+            !svc.functions.contains_key("internal_fn"),
+            "Internal functions must be excluded from sandbox schema"
+        );
+    })
 }
 
 /// The pushed schema excludes Private-visibility functions.
-#[tokio::test]
-async fn sandbox_filtered_schema_excludes_private_functions() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_filtered_schema_excludes_private_functions() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
-    assert_eq!(frames.len(), 2);
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        assert_eq!(frames.len(), 2);
 
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    let schema_value = push.args.into_iter().next().expect("args[0]");
-    let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-    let filtered: Schema = rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        let schema_value = push.args.into_iter().next().expect("args[0]");
+        let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-    let svc = filtered.namespaces.get("svc").expect("svc namespace");
-    assert!(
-        !svc.functions.contains_key("private_fn"),
-        "Private functions must be excluded from sandbox schema"
-    );
+        let svc = filtered.namespaces.get("svc").expect("svc namespace");
+        assert!(
+            !svc.functions.contains_key("private_fn"),
+            "Private functions must be excluded from sandbox schema"
+        );
+    })
 }
 
 /// Public functions with no required caps are present in the filtered schema.
-#[tokio::test]
-async fn sandbox_filtered_schema_includes_public_no_cap_functions() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_filtered_schema_includes_public_no_cap_functions() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
-    assert_eq!(frames.len(), 2);
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        assert_eq!(frames.len(), 2);
 
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    let schema_value = push.args.into_iter().next().expect("args[0]");
-    let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-    let filtered: Schema = rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        let schema_value = push.args.into_iter().next().expect("args[0]");
+        let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-    let svc = filtered.namespaces.get("svc").expect("svc namespace");
-    assert!(
-        svc.functions.contains_key("public_fn"),
-        "public_fn (no caps required) must be included"
-    );
+        let svc = filtered.namespaces.get("svc").expect("svc namespace");
+        assert!(
+            svc.functions.contains_key("public_fn"),
+            "public_fn (no caps required) must be included"
+        );
+    })
 }
 
 /// Functions whose required capabilities the peer doesn't hold are excluded.
-#[tokio::test]
-async fn sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    // Peer has no capabilities.
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
-    assert_eq!(frames.len(), 2);
+        // Peer has no capabilities.
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        assert_eq!(frames.len(), 2);
 
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    let schema_value = push.args.into_iter().next().expect("args[0]");
-    let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-    let filtered: Schema = rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        let schema_value = push.args.into_iter().next().expect("args[0]");
+        let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-    let svc = filtered.namespaces.get("svc").expect("svc namespace");
-    assert!(
-        !svc.functions.contains_key("guarded_fn"),
-        "guarded_fn requires 'special.cap':  peer with no caps must not see it"
-    );
+        let svc = filtered.namespaces.get("svc").expect("svc namespace");
+        assert!(
+            !svc.functions.contains_key("guarded_fn"),
+            "guarded_fn requires 'special.cap':  peer with no caps must not see it"
+        );
+    })
 }
 
 /// If the peer holds the required capability, the guarded function IS included.
-#[tokio::test]
-async fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")]);
-    let frames = run_and_collect(registry, caps, true, env).await;
-    assert_eq!(frames.len(), 2);
+        let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")]);
+        let frames = run_and_collect(registry, caps, true, env).await;
+        assert_eq!(frames.len(), 2);
 
-    let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
-    let schema_value = push.args.into_iter().next().expect("args[0]");
-    let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-    let filtered: Schema = rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
+        let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
+        let schema_value = push.args.into_iter().next().expect("args[0]");
+        let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-    let svc = filtered.namespaces.get("svc").expect("svc namespace");
-    assert!(
-        svc.functions.contains_key("guarded_fn"),
-        "guarded_fn must be visible to a peer holding 'special.cap'"
-    );
+        let svc = filtered.namespaces.get("svc").expect("svc namespace");
+        assert!(
+            svc.functions.contains_key("guarded_fn"),
+            "guarded_fn must be visible to a peer holding 'special.cap'"
+        );
+    })
 }
 
 /// In non-sandbox mode, no extra frame is sent after an Announce.
-#[tokio::test]
-async fn non_sandbox_announce_produces_single_response_frame() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
-    let env = make_announce(&schema);
+#[test]
+fn non_sandbox_announce_produces_single_response_frame() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
+        let env = make_announce(&schema);
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), false, env).await;
+        let frames = run_and_collect(registry, CapabilitySet::empty(), false, env).await;
 
-    assert_eq!(
-        frames.len(),
-        1,
-        "non-sandbox announce must produce exactly 1 frame (the ok response)"
-    );
-    let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode response");
-    assert!(resp.ok);
+        assert_eq!(
+            frames.len(),
+            1,
+            "non-sandbox announce must produce exactly 1 frame (the ok response)"
+        );
+        let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode response");
+        assert!(resp.ok);
+    })
 }
 
 /// Calling an Internal function through a sandboxed handler returns CapabilityDenied.
-#[tokio::test]
-async fn sandbox_handler_denies_internal_function_invocation() {
-    let registry = SchemaRegistry::new();
-    let schema = build_schema();
+#[test]
+fn sandbox_handler_denies_internal_function_invocation() {
+    saikuro_exec::block_on(async {
+        let registry = SchemaRegistry::new();
+        let schema = build_schema();
 
-    // Pre-register the schema so the validator can find it.
-    registry
-        .merge_schema(schema.clone(), "test-provider")
-        .expect("merge schema");
+        // Pre-register the schema so the validator can find it.
+        registry
+            .merge_schema(schema.clone(), "test-provider")
+            .expect("merge schema");
 
-    // Build the Invoke envelope for the internal function.
-    let invoke_env = Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: InvocationType::Call,
-        id: InvocationId::new(),
-        target: "svc.internal_fn".to_owned(),
-        args: vec![],
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq: None,
-    };
+        // Build the Invoke envelope for the internal function.
+        let invoke_env = Envelope {
+            version: PROTOCOL_VERSION,
+            invocation_type: InvocationType::Call,
+            id: InvocationId::new(),
+            target: "svc.internal_fn".to_owned(),
+            args: vec![],
+            meta: Default::default(),
+            capability: None,
+            batch_items: None,
+            stream_control: None,
+            seq: None,
+        };
 
-    let frames = run_and_collect(registry, CapabilitySet::empty(), true, invoke_env).await;
+        let frames = run_and_collect(registry, CapabilitySet::empty(), true, invoke_env).await;
 
-    assert_eq!(frames.len(), 1);
-    let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode response");
-    assert!(
-        !resp.ok,
-        "internal function invocation must be denied in sandbox mode"
-    );
-    let err = resp.error.expect("error detail must be present");
-    assert_eq!(
-        err.code,
-        saikuro_core::error::ErrorCode::CapabilityDenied,
-        "expected CapabilityDenied, got {:?}",
-        err.code
-    );
+        assert_eq!(frames.len(), 1);
+        let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode response");
+        assert!(
+            !resp.ok,
+            "internal function invocation must be denied in sandbox mode"
+        );
+        let err = resp.error.expect("error detail must be present");
+        assert_eq!(
+            err.code,
+            saikuro_core::error::ErrorCode::CapabilityDenied,
+            "expected CapabilityDenied, got {:?}",
+            err.code
+        );
+    })
 }
