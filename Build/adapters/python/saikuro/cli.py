@@ -152,7 +152,11 @@ Examples:
         out_path = Path(args.output).resolve()
         try:
             out_path.write_text(text + "\n", encoding="utf-8")
-            rel = out_path.relative_to(Path.cwd()) if out_path.is_relative_to(Path.cwd()) else out_path
+            rel = (
+                out_path.relative_to(Path.cwd())
+                if out_path.is_relative_to(Path.cwd())
+                else out_path
+            )
             print(f"Schema written to {rel}", file=sys.stderr)
         except Exception as exc:
             print(f"Error writing output file: {exc}", file=sys.stderr)

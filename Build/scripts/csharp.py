@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Pinned SHA256 of https://dot.net/v1/dotnet-install.sh.
 # Update when upgrading the .NET SDK version.
+DOTNET_CHANNEL = "8.0"
 DOTNET_INSTALL_SHA256 = "102a6849303713f15462bb28eb10593bf874bbeec17122e0522f10a3b57ce442"
 
 DIR = Path(__file__).resolve().parents[1] / "adapters" / "csharp" / "Saikuro"
@@ -44,7 +45,7 @@ def ensure_dotnet() -> None:
         print(f"SHA256 mismatch: expected {DOTNET_INSTALL_SHA256}, got {actual}", flush=True)
         sys.exit(1)
     installer.chmod(0o755)
-    subprocess.run(["bash", str(installer), "--channel", "8.0"], check=True)
+    subprocess.run(["bash", str(installer), "--channel", DOTNET_CHANNEL], check=True)
     dotnet = Path.home() / ".dotnet" / "dotnet"
     if dotnet.is_file():
         os.environ["PATH"] = str(dotnet.parent) + os.pathsep + os.environ.get("PATH", "")

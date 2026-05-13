@@ -80,7 +80,7 @@ export class SchemaExtractor {
       content,
       ts.ScriptTarget.Latest,
       true,
-      ts.ScriptKind.TS
+      ts.ScriptKind.TS,
     );
     this.sourceFiles.set(resolvedPath, sourceFile);
   }
@@ -174,7 +174,7 @@ export class SchemaExtractor {
             moduleName,
             containingFile,
             options,
-            ts.sys as any
+            ts.sys as any,
           );
           return res.resolvedModule || undefined;
         });
@@ -280,7 +280,10 @@ export class SchemaExtractor {
 
     const asAny = type as any;
     if (asAny.elementType) {
-      return { kind: "list", item: this.typeToDescriptor(asAny.elementType as ts.Type) };
+      return {
+        kind: "list",
+        item: this.typeToDescriptor(asAny.elementType as ts.Type),
+      };
     }
 
     const listStr = this.typeListFromString(name);
@@ -296,14 +299,21 @@ export class SchemaExtractor {
     }
 
     if (this.typeChecker!.isArrayType?.(type) ?? false) {
-      const el = asAny.elementType ?? asAny.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any };
+      const el = asAny.elementType ??
+        asAny.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any };
       return { kind: "list", item: this.typeToDescriptor(el) };
     }
 
     if (asAny.target?.objectFlags & ts.ObjectFlags.Tuple) {
-      const items = (asAny.resolvedTypeArguments ?? asAny.typeArguments ?? [])
-        .map((e: any) => this.typeToDescriptor(e as ts.Type));
-      return { kind: "list", item: items[0] ?? { kind: "primitive", type: "any" } };
+      const items = (
+        asAny.resolvedTypeArguments ??
+        asAny.typeArguments ??
+        []
+      ).map((e: any) => this.typeToDescriptor(e as ts.Type));
+      return {
+        kind: "list",
+        item: items[0] ?? { kind: "primitive", type: "any" },
+      };
     }
 
     if (type.flags & ts.TypeFlags.Union) {
@@ -328,19 +338,29 @@ export class SchemaExtractor {
 
   private typeToPrimitive(name: string): TypeDescriptor | undefined {
     switch (name) {
-      case "boolean": return { kind: "primitive", type: "bool" };
-      case "number":  return { kind: "primitive", type: "f64" };
-      case "string":  return { kind: "primitive", type: "string" };
-      case "Uint8Array": case "ArrayBuffer": return { kind: "primitive", type: "bytes" };
-      case "null": case "undefined": case "void": case "never":
+      case "boolean":
+        return { kind: "primitive", type: "bool" };
+      case "number":
+        return { kind: "primitive", type: "f64" };
+      case "string":
+        return { kind: "primitive", type: "string" };
+      case "Uint8Array":
+      case "ArrayBuffer":
+        return { kind: "primitive", type: "bytes" };
+      case "null":
+      case "undefined":
+      case "void":
+      case "never":
         return { kind: "primitive", type: "unit" };
     }
   }
 
   private typeListFromString(name: string): TypeDescriptor | undefined {
-    const inner = name.endsWith("[]") ? name.slice(0, -2).trim()
-      : name.startsWith("Array<") && name.endsWith(">") ? name.slice(6, -1).trim()
-      : undefined;
+    const inner = name.endsWith("[]")
+      ? name.slice(0, -2).trim()
+      : name.startsWith("Array<") && name.endsWith(">")
+        ? name.slice(6, -1).trim()
+        : undefined;
     if (!inner) return;
     const prim = this.typeToPrimitive(inner);
     return { kind: "list", item: prim ?? { kind: "named", name: inner } };
@@ -362,7 +382,9 @@ export class SchemaExtractor {
     const types = type.types;
     const hasNull = types.some((t) => t.flags & ts.TypeFlags.Null);
     const hasUndefined = types.some((t) => t.flags & ts.TypeFlags.Undefined);
-    const nonNull = types.filter((t) => !(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)));
+    const nonNull = types.filter(
+      (t) => !(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)),
+    );
 
     if ((hasNull || hasUndefined) && nonNull.length === 1) {
       return { kind: "optional", inner: this.typeToDescriptor(nonNull[0]) };
@@ -376,10 +398,18 @@ export class SchemaExtractor {
       const symName = symbol.getName();
       const typeArgs = (type as ts.TypeReference).typeArguments;
       if (symName === "Map" && typeArgs && typeArgs.length >= 2) {
-        return { kind: "map", key: this.typeToDescriptor(typeArgs[0]), value: this.typeToDescriptor(typeArgs[1]) };
+        return {
+          kind: "map",
+          key: this.typeToDescriptor(typeArgs[0]),
+          value: this.typeToDescriptor(typeArgs[1]),
+        };
       }
       if (symName === "Record" && typeArgs && typeArgs.length >= 2) {
-        return { kind: "map", key: this.typeToDescriptor(typeArgs[0]), value: this.typeToDescriptor(typeArgs[1]) };
+        return {
+          kind: "map",
+          key: this.typeToDescriptor(typeArgs[0]),
+          value: this.typeToDescriptor(typeArgs[1]),
+        };
       }
     }
     if (type.getProperties().length === 0) {
@@ -388,20 +418,31 @@ export class SchemaExtractor {
     return { kind: "named", name };
   }
 
-  private typeToReference(type: ts.Type, name: string): TypeDescriptor | undefined {
-    const typeArgs = (type as any).typeArguments ?? (type as any).aliasTypeArguments;
+  private typeToReference(
+    type: ts.Type,
+    name: string,
+  ): TypeDescriptor | undefined {
+    const typeArgs =
+      (type as any).typeArguments ?? (type as any).aliasTypeArguments;
     if (!typeArgs) return;
 
     if (name.startsWith("Promise") && typeArgs.length > 0) {
       return this.typeToDescriptor(typeArgs[0]);
     }
 
-    if ((name.startsWith("AsyncGenerator") || name.startsWith("Generator")) && typeArgs.length > 0) {
+    if (
+      (name.startsWith("AsyncGenerator") || name.startsWith("Generator")) &&
+      typeArgs.length > 0
+    ) {
       return { kind: "stream", item: this.typeToDescriptor(typeArgs[0]) };
     }
 
     if (name.startsWith("Channel") && typeArgs.length >= 2) {
-      return { kind: "channel", send: this.typeToDescriptor(typeArgs[0]), recv: this.typeToDescriptor(typeArgs[1]) };
+      return {
+        kind: "channel",
+        send: this.typeToDescriptor(typeArgs[0]),
+        recv: this.typeToDescriptor(typeArgs[1]),
+      };
     }
   }
 
@@ -409,7 +450,7 @@ export class SchemaExtractor {
    * Extract the function signature from a function declaration.
    */
   private extractFunction(
-    node: ts.FunctionDeclaration
+    node: ts.FunctionDeclaration,
   ): ExtractedFunction | null {
     // Skip if not exported
     const modifiers = node.modifiers;
@@ -442,7 +483,7 @@ export class SchemaExtractor {
         const paramName = param.getName();
         const paramType = this.typeChecker!.getTypeOfSymbolAtLocation(
           param,
-          node
+          node,
         );
         const isOptional = !!(
           paramNode &&
@@ -479,7 +520,7 @@ export class SchemaExtractor {
         visibility: jsdoc.visibility || "public",
         doc: jsdoc.doc as string | undefined,
         isAsync: node.modifiers.some(
-          (m) => m.kind === ts.SyntaxKind.AsyncKeyword
+          (m) => m.kind === ts.SyntaxKind.AsyncKeyword,
         ),
         isGenerator,
       };
@@ -494,7 +535,7 @@ export class SchemaExtractor {
   extract(): ExtractedFunction[] {
     if (!this.program || !this.typeChecker) {
       throw new Error(
-        "Schema extractor not initialized. Call initialize() first."
+        "Schema extractor not initialized. Call initialize() first.",
       );
     }
 
@@ -573,7 +614,7 @@ export class SchemaExtractor {
 /** Extract schema from source files and return it as a plain object. */
 export async function extractSchema(
   sourceFiles: string[],
-  namespace: string
+  namespace: string,
 ): Promise<object> {
   const extractor = new SchemaExtractor();
   extractor.addSourceFiles(sourceFiles);

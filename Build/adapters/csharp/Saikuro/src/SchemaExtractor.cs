@@ -219,7 +219,10 @@ public class XmlDocumentationParser
     public XmlDocumentationParser(string xmlPath)
     {
         if (!File.Exists(xmlPath))
+        {
+            Console.Error.WriteLine($"[warn] XML doc file not found: {xmlPath}");
             return;
+        }
 
         var content = File.ReadAllText(xmlPath);
         ParseXml(content);
@@ -332,7 +335,7 @@ public class SchemaExtractor
             var parser = new XmlDocumentationParser(xmlPath);
             foreach (var assembly in _assemblies)
             {
-                _xmlDocs[assembly.FullName ?? assembly.GetName().Name!] = parser;
+                _xmlDocs[assembly.FullName ?? assembly.GetName().Name ?? "unknown"] = parser;
             }
         }
         return this;
@@ -361,7 +364,7 @@ public class SchemaExtractor
         {
             var types = assembly.GetExportedTypes();
             var docParser = _xmlDocs.GetValueOrDefault(
-                assembly.FullName ?? assembly.GetName().Name!
+                assembly.FullName ?? assembly.GetName().Name ?? "unknown"
             );
 
             foreach (var type in types)
@@ -581,7 +584,7 @@ public static class SchemaExtractorExtensions
     {
         return new SchemaExtractor()
             .AddAssemblyContaining<T>()
-            .AddXmlDocumentation(typeof(T).Assembly.GetName().Name!, xmlPath)
+            .AddXmlDocumentation(typeof(T).Assembly.GetName().Name ?? "unknown", xmlPath)
             .BuildSchema(namespaceName);
     }
 }

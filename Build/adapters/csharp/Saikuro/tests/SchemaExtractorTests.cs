@@ -7,20 +7,19 @@ namespace Saikuro.Tests;
 public class SchemaExtractorTests
 {
     [Fact]
-    public void ExtractorTool_PrintsValidSchemaJson()
+    public async Task ExtractorTool_PrintsValidSchemaJson()
     {
         var repoRoot = FindRepoRoot();
         var extractorProject = Path.Combine(repoRoot, "Build", "adapters", "csharp", "tools", "extractor", "extractor.csproj");
 
-        var result = RunProcess(
+        var result = await RunProcess(
             "dotnet",
             $"run --project \"{extractorProject}\" parityns"
         );
 
         Assert.Equal(0, result.exitCode);
 
-        var jsonText = ExtractJson(result.stdout);
-        using var doc = JsonDocument.Parse(jsonText);
+        using var doc = JsonDocument.Parse(result.stdout.Trim());
 
         var root = doc.RootElement;
         Assert.True(root.TryGetProperty("version", out _));
@@ -31,26 +30,25 @@ public class SchemaExtractorTests
     }
 
     [Fact]
-    public void ExtractorTool_SupportsCustomNamespaceArgument()
+    public async Task ExtractorTool_SupportsCustomNamespaceArgument()
     {
         var repoRoot = FindRepoRoot();
         var extractorProject = Path.Combine(repoRoot, "Build", "adapters", "csharp", "tools", "extractor", "extractor.csproj");
 
-        var result = RunProcess(
+        var result = await RunProcess(
             "dotnet",
             $"run --project \"{extractorProject}\" custom_ns"
         );
 
         Assert.Equal(0, result.exitCode);
 
-        var jsonText = ExtractJson(result.stdout);
-        using var doc = JsonDocument.Parse(jsonText);
+        using var doc = JsonDocument.Parse(result.stdout.Trim());
 
         var ns = doc.RootElement.GetProperty("namespaces");
         Assert.True(ns.TryGetProperty("custom_ns", out _));
     }
 
-    private static (int exitCode, string stdout, string stderr) RunProcess(string fileName, string arguments)
+    private static async Task<(int exitCode, string stdout, string stderr)> RunProcess(string fileName, string arguments)
     {
         var psi = new ProcessStartInfo
         {
@@ -65,18 +63,9 @@ public class SchemaExtractorTests
         using var proc = Process.Start(psi)!;
         var stdoutTask = proc.StandardOutput.ReadToEndAsync();
         var stderrTask = proc.StandardError.ReadToEndAsync();
-        proc.WaitForExit();
-        Task.WaitAll(stdoutTask, stderrTask);
+        await Task.WhenAll(stdoutTask, stderrTask);
 
         return (proc.ExitCode, stdoutTask.Result, stderrTask.Result);
-    }
-
-    private static string ExtractJson(string text)
-    {
-        var start = text.IndexOf('{');
-        var end = text.LastIndexOf('}');
-        Assert.True(start >= 0 && end >= 0 && end > start, $"No JSON found in output: {text}");
-        return text.Substring(start, end - start + 1);
     }
 
     private static string FindRepoRoot([CallerFilePath] string sourceFilePath = "")

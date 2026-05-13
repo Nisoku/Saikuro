@@ -1,8 +1,5 @@
 # TODO: Quality Improvements
 
-> Comprehensive audit of DRY violations, SSOT violations, bugs, and code quality issues.
-> Generated from systematic code review across all 6 language adapters and Rust core.
-
 ---
 
 ## HOW TO READ
@@ -65,19 +62,6 @@
 ---
 
 ## MEDIUM
-
-### M2. TCP/Unix sender/receiver near-duplicates in Rust transport
-
-**Files:**
-
-- `Build/crates/saikuro-transport/src/tcp.rs:80-89` and `98-111`
-- `Build/crates/saikuro-transport/src/unix.rs:74-83` and `92-105`
-**Issue:** `TransportSender::send`/`close` and `TransportReceiver::recv` are structurally identical. Only log-field names differ.
-
-### M6. `run()` in `connection.rs` is 107 lines, `handle_frame` is 80 lines
-
-**File:** `Build/crates/saikuro-runtime/src/connection.rs:133-240` and `248-328`
-**Issue:** Overly long functions. `run` has deeply nested `select!` → match → match → if/else. `handle_frame` does decode, system envelope handling, validation, capability check, and routing.
 
 ### M11. Near-identical transport adapter implementations in Rust adapter
 
@@ -233,16 +217,6 @@
 **File:** `Build/adapters/csharp/Saikuro/src/Provider.cs:511`
 **Issue:** `t.Exception?.InnerException?.Message` only captures the first inner exception. `AggregateException` details are lost.
 
-### M62. C# `SchemaExtractorTests.cs:66-68` potential deadlock from `Task.WaitAll` + `WaitForExit`
-
-**File:** `Build/adapters/csharp/Saikuro/tests/SchemaExtractorTests.cs:66-68`
-**Issue:** `Task.WaitAll(stdoutTask, stderrTask)` after `proc.WaitForExit()` — if stdout/stderr buffers fill, this deadlocks.
-
-### M63. C# `SchemaExtractorTests.cs:74-80` fragile JSON extraction via `IndexOf('{')` + `LastIndexOf('}')`
-
-**File:** `Build/adapters/csharp/Saikuro/tests/SchemaExtractorTests.cs:74-80`
-**Issue:** Nested JSON objects in output would misidentify boundaries.
-
 ### M64. C# `Transport.cs:349` `WebSocketTransport.SendAsync` re-checks frame size already checked by `FrameCodec`
 
 **File:** `Build/adapters/csharp/Saikuro/src/Transport.cs:349`
@@ -283,39 +257,7 @@
 **Files:** `schema.py:100-101`, `stream.py:79`, `provider.py:38`
 **Issue:** Bare `Callable[..., Any]`, untyped `send_fn`, etc.
 
-### M76. C# `Envelope.cs:293,296` `Target.LastIndexOf('.') is int i and >= 0` expression repeated back-to-back
-
-**File:** `Build/adapters/csharp/Saikuro/src/Envelope.cs:293,296`
-**Issue:** Identical expression used twice. Should be a private property.
-
-### M77. C# `Client.cs:529-530` and `533-534` stream/channel blocks in `DispatchResponse` are near-identical
-
-**File:** `Build/adapters/csharp/Saikuro/src/Client.cs:524-537`
-**Issue:** The same `TryRemove` pattern appears in both blocks.
-
-### M78. C# `Logger.cs:104` `"log-{ts}"` ID pattern duplicated with `Client.cs:343`
-
-**File:** `Build/adapters/csharp/Saikuro/src/Logger.cs:104` and `Client.cs:343`
-**Issue:** `$"log-{record.Ts}"` pattern in two files.
-
-### M79. C# `Logger.cs` has inconsistent accessibility on convenience overloads
-
-**File:** `Build/adapters/csharp/Saikuro/src/Logger.cs:185-189`
-**Issue:** `Error(string msg, string detail)` and `Warn(...)` are `internal` but other overloads are `public`.
-
-### M80. C# `SchemaExtractor.cs:510-513` null-forgiving `!` on nullable reference
-
-**File:** `Build/adapters/csharp/Saikuro/src/SchemaExtractor.cs:510-513`
-**Issue:** `assembly.FullName ?? assembly.GetName().Name!` — `!` could throw if both `FullName` and `Name` are null.
-
 ---
-
-## LOW
-
-### L3. Compile-error embassy placeholder file
-
-**File:** `Build/crates/saikuro-exec/src/embassy_backend.rs:2`
-**Issue:** `compile_error!("embassy-runtime backend is not implemented yet")` — dead stub.
 
 ### L12. `transport_compliance.rs:24-27` takes factory `fn() -> (MemoryTransport, MemoryTransport)` — not actually generic
 

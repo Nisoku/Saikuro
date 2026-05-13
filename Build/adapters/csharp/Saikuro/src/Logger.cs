@@ -101,8 +101,8 @@ public static class SaikuroLogSink
             {
                 ["version"] = (int)Protocol.Version,
                 ["type"] = "log",
-                ["id"] = $"log-{record.Ts}",
-                ["target"] = "$log",
+                [WireKey.Id] = $"{WireKey.LogIdPrefix}{record.Ts}",
+                [WireKey.Target] = WireKey.LogTarget,
                 ["args"] = new object?[] { logObj },
             };
             // Fire-and-forget; swallow errors to prevent infinite recursion.
@@ -182,9 +182,9 @@ public sealed class SaikuroLogger
         Emit(LogLevel.Error, msg, fields);
 
     // Convenience overload that takes a plain string detail.
-    internal void Error(string msg, string detail) =>
+    public void Error(string msg, string detail) =>
         Emit(LogLevel.Error, msg, new Dictionary<string, object?> { ["detail"] = detail });
 
-    internal void Warn(string msg, string detail) =>
+    public void Warn(string msg, string detail) =>
         Emit(LogLevel.Warn, msg, new Dictionary<string, object?> { ["detail"] = detail });
 }

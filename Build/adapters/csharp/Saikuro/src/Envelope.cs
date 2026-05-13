@@ -290,10 +290,11 @@ public sealed record Envelope
 
     // Helpers
 
-    public string? Namespace => Target.LastIndexOf('.') is int i and >= 0 ? Target[..i] : null;
+    private int? LastDotIndex => Target.LastIndexOf('.') is int i and >= 0 ? i : null;
 
-    public string? FunctionName =>
-        Target.LastIndexOf('.') is int i and >= 0 ? Target[(i + 1)..] : null;
+    public string? Namespace => LastDotIndex is { } i ? Target[..i] : null;
+
+    public string? FunctionName => LastDotIndex is { } i ? Target[(i + 1)..] : null;
 
     private static string NewId() => Guid.NewGuid().ToString();
 }

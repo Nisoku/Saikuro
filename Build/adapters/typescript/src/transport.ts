@@ -51,9 +51,7 @@ export interface Transport {
  * provides them so each transport only writes the unique parts.
  */
 abstract class BaseTransport implements Transport {
-  readonly _messageHandlers = new Set<
-    (msg: Record<string, unknown>) => void
-  >();
+  readonly _messageHandlers = new Set<(msg: Record<string, unknown>) => void>();
   _closeHandler?: (err?: Error) => void;
 
   abstract connect(): Promise<void>;
@@ -543,11 +541,11 @@ export class BroadcastChannelListener {
  *   - `wasm-host://channel-name` (BroadcastChannel for same-origin browser contexts)
  *   - `wasm-host` (uses default channel "saikuro")
  */
-const _TRANSPORT_FACTORIES: ReadonlyMap<string, (address: string) => Transport> = new Map([
-  [
-    "unix://",
-    (addr) => NodeStreamTransport.unix(addr.slice("unix://".length)),
-  ],
+const _TRANSPORT_FACTORIES: ReadonlyMap<
+  string,
+  (address: string) => Transport
+> = new Map([
+  ["unix://", (addr) => NodeStreamTransport.unix(addr.slice("unix://".length))],
   [
     "tcp://",
     (addr) => {

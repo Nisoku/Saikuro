@@ -155,7 +155,9 @@ class SaikuroProvider:
         except Exception as exc:
             logger.exception("provider error in '%s'", envelope.target)
             if not is_cast:
-                await transport.send(_make_error(envelope.id, "ProviderError", str(exc)))
+                await transport.send(
+                    _make_error(envelope.id, "ProviderError", str(exc))
+                )
 
     async def _dispatch_batch(
         self,

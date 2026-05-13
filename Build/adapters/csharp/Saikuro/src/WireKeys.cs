@@ -53,6 +53,10 @@ internal static class WireKey
 
     // ResourceHandle
     public const string MimeType = "mime_type";
+
+    // Internal ID conventions
+    public const string LogIdPrefix = "log-";
+    public const string LogTarget = "$log";
     public const string Size = "size";
     public const string Uri = "uri";
 

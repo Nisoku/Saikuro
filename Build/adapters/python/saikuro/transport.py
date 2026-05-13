@@ -125,7 +125,9 @@ class _StreamTransport(BaseTransport):
                 await writer.wait_closed()
             except Exception:
                 logger.debug(
-                    "%s.close: error during shutdown", type(self).__name__, exc_info=True
+                    "%s.close: error during shutdown",
+                    type(self).__name__,
+                    exc_info=True,
                 )
 
     async def send(self, obj: dict) -> None:
@@ -140,7 +142,9 @@ class _StreamTransport(BaseTransport):
         try:
             data = await _recv_frame(self._reader)
         except asyncio.IncompleteReadError as exc:
-            logger.warning("%s: connection lost mid-frame: %s", type(self).__name__, exc)
+            logger.warning(
+                "%s: connection lost mid-frame: %s", type(self).__name__, exc
+            )
             return None
         if data is None:
             return None
@@ -176,7 +180,6 @@ class TcpTransport(_StreamTransport):
         self._reader, self._writer = await asyncio.open_connection(
             self._host, self._port
         )
-
 
 
 class WebSocketTransport(BaseTransport):
@@ -381,7 +384,11 @@ def make_transport(address: str) -> BaseTransport:
     global _memory_channels, _memory_channels_lock
 
     if address.startswith("memory://"):
-        name = address[len("memory://") :] if len(address) > len("memory://") else "default"
+        name = (
+            address[len("memory://") :]
+            if len(address) > len("memory://")
+            else "default"
+        )
         with _memory_channels_lock:
             if name in _memory_channels:
                 return _memory_channels.pop(name)

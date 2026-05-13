@@ -62,7 +62,12 @@ function toSaikuroLevel(level: string): LogLevel {
  */
 export function createLoggingHandler(
   transport: Transport,
-): (level: string, name: string, msg: string, fields?: Record<string, unknown>) => void {
+): (
+  level: string,
+  name: string,
+  msg: string,
+  fields?: Record<string, unknown>,
+) => void {
   return function log(
     level: string,
     name: string,
@@ -92,9 +97,7 @@ export function createLoggingHandler(
     };
 
     // Fire-and-forget; swallow errors to prevent infinite recursion.
-    transport
-      .send(envelope)
-      .catch(() => {});
+    transport.send(envelope).catch(() => {});
   };
 }
 

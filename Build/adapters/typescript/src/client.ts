@@ -49,7 +49,8 @@ class BaseSaikuroHandle<T = unknown>
   protected readonly _id: string;
   protected _done = false;
   private readonly _buffer: Array<ResponseEnvelope | null> = [];
-  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> = [];
+  private readonly _waiters: Array<(item: ResponseEnvelope | null) => void> =
+    [];
 
   constructor(id: string) {
     this._id = id;
@@ -66,7 +67,10 @@ class BaseSaikuroHandle<T = unknown>
 
   /** @internal Called when the transport closes while still open. */
   _close(): void {
-    const errorPayload: ErrorPayload = { code: "ConnectionLost", message: "transport closed unexpectedly" };
+    const errorPayload: ErrorPayload = {
+      code: "ConnectionLost",
+      message: "transport closed unexpectedly",
+    };
     const errorResponse: ResponseEnvelope = {
       id: "",
       ok: false,
@@ -115,10 +119,10 @@ class BaseSaikuroHandle<T = unknown>
 
     if (!item.ok) {
       this._done = true;
-      const payload: ErrorPayload = (item.error ?? {
+      const payload: ErrorPayload = item.error ?? {
         code: "Internal",
         message: "stream ended with error",
-      });
+      };
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -142,9 +146,10 @@ export class SaikuroStream<T = unknown> extends BaseSaikuroHandle<T> {}
  *
  * Obtained from `client.channel(...)`.
  */
-export class SaikuroChannel<TIn = unknown, TOut = unknown>
-  extends BaseSaikuroHandle<TIn>
-{
+export class SaikuroChannel<
+  TIn = unknown,
+  TOut = unknown,
+> extends BaseSaikuroHandle<TIn> {
   private readonly _sendFn: (id: string, value: unknown) => Promise<void>;
 
   /** @internal */
@@ -296,10 +301,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload: ErrorPayload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "call failed",
-      });
+      };
       throw SaikuroError.fromPayload(payload);
     }
     return response.result;
@@ -344,10 +349,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload: ErrorPayload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "resource call failed",
-      });
+      };
       throw SaikuroError.fromPayload(payload);
     }
 
@@ -420,10 +425,10 @@ export class SaikuroClient {
     const response = await this._sendAndWait(batchEnvelope, timeoutMs);
 
     if (!response.ok) {
-      const payload: ErrorPayload = (response.error ?? {
+      const payload: ErrorPayload = response.error ?? {
         code: "Internal",
         message: "batch call failed",
-      });
+      };
       throw SaikuroError.fromPayload(payload);
     }
 

@@ -32,6 +32,21 @@ setup:
     cd {{scripts}} && python3 typescript.py setup
     cd {{scripts}} && python3 cpp.py setup
 
+format:
+    cd {{scripts}} && python3 rust.py fmt_check
+    cd {{scripts}} && python3 typescript.py fmt_check
+    cd {{scripts}} && python3 python.py fmt_check
+    cd {{scripts}} && python3 csharp.py fmt_check
+    cd {{scripts}} && python3 cpp.py fmt_check
+
+test:
+    cd {{scripts}} && python3 rust.py test
+    cd {{scripts}} && python3 python.py test
+    cd {{scripts}} && python3 typescript.py test
+    cd {{scripts}} && python3 csharp.py test
+    cd {{scripts}} && python3 c.py test
+    cd {{scripts}} && python3 cpp.py test
+
 check:
     cd {{scripts}} && python3 rust.py check
     cd {{scripts}} && python3 python.py check

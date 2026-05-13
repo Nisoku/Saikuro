@@ -397,7 +397,8 @@ export class SaikuroProvider {
 
         if (capturedError !== null) {
           const errCode = (capturedError["code"] as string) ?? "ProviderError";
-          const errMsg = (capturedError["message"] as string) ?? "unknown error";
+          const errMsg =
+            (capturedError["message"] as string) ?? "unknown error";
           await _sendError(transport, envelope.id, errCode, errMsg, {
             batch_index: i,
             target: item.target,
@@ -548,7 +549,8 @@ export class SaikuroProvider {
           res(null);
         }, 5000);
         onMsg = (raw: Record<string, unknown>): void => {
-          if (tid) clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
+          if (tid)
+            clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
           if (onMsg) transport.offMessage(onMsg);
           res(raw);
         };

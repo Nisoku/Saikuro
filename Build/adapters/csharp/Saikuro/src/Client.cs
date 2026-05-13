@@ -305,8 +305,8 @@ public sealed class SaikuroClient : IAsyncDisposable
         {
             [WireKey.Version] = (int)Protocol.Version,
             [WireKey.Type] = "log",
-            [WireKey.Id] = $"log-{ts}",
-            [WireKey.Target] = "$log",
+            [WireKey.Id] = $"{WireKey.LogIdPrefix}{ts}",
+            [WireKey.Target] = WireKey.LogTarget,
             [WireKey.Args] = new object?[] { logRecord },
         };
         return _transport.SendAsync(envelope, ct);
@@ -345,7 +345,15 @@ public sealed class SaikuroClient : IAsyncDisposable
         var envelope = Envelope.MakeStreamOpen(target, args) with { Capability = capability };
         var handle = new SaikuroStream<T>(envelope.Id);
         _openStreams[envelope.Id] = (IDeliverable)handle;
-        await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+        try
+        {
+            await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _openStreams.TryRemove(envelope.Id, out _);
+            throw;
+        }
         return handle;
     }
 
@@ -360,7 +368,15 @@ public sealed class SaikuroClient : IAsyncDisposable
         var envelope = Envelope.MakeChannelOpen(target, args) with { Capability = capability };
         var handle = new SaikuroChannel<TIn, TOut>(envelope.Id, ChannelSendAsync);
         _openChannels[envelope.Id] = (IDeliverable)handle;
-        await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+        try
+        {
+            await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _openChannels.TryRemove(envelope.Id, out _);
+            throw;
+        }
         return handle;
     }
 
@@ -433,7 +449,7 @@ public sealed class SaikuroClient : IAsyncDisposable
         var d = new Dictionary<string, object?>
         {
             [WireKey.Version] = (int)Protocol.Version,
-            [WireKey.Type] = "channel",
+            [WireKey.Type] = InvocationType.Channel.ToWire(),
             [WireKey.Id] = channelId,
             [WireKey.Target] = "",
             [WireKey.Args] = new object?[] { value },
@@ -497,23 +513,20 @@ public sealed class SaikuroClient : IAsyncDisposable
             return;
         }
 
-        if (_openStreams.TryGetValue(id, out var stream))
-        {
-            stream.Deliver(resp);
-            if (resp.IsStreamEnd || !resp.Ok)
-                _openStreams.TryRemove(id, out _);
-            return;
-        }
-
-        if (_openChannels.TryGetValue(id, out var channel))
-        {
-            channel.Deliver(resp);
-            if (resp.IsStreamEnd || !resp.Ok)
-                _openChannels.TryRemove(id, out _);
-            return;
-        }
+        if (TryDeliverStreamOrChannel(_openStreams, id, resp)) return;
+        if (TryDeliverStreamOrChannel(_openChannels, id, resp)) return;
 
         // Unknown ID:  silently ignore (late response after timeout, etc.).
+    }
+
+    private static bool TryDeliverStreamOrChannel(
+        ConcurrentDictionary<string, IDeliverable> dict, string id, ResponseEnvelope resp)
+    {
+        if (!dict.TryGetValue(id, out var target)) return false;
+        target.Deliver(resp);
+        if (resp.IsStreamEnd || !resp.Ok)
+            dict.TryRemove(id, out _);
+        return true;
     }
 
     private void HandleClose(Exception? ex)

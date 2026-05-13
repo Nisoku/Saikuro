@@ -3,20 +3,19 @@
 //! Provides a reliable, ordered, backpressure-capable byte stream over TCP
 //! using the length-prefixed framing codec from [`crate::framing`].
 
+use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use saikuro_exec::net::{TcpListener, TcpStream};
 use saikuro_exec::tokio_util::codec::Framed;
 use std::net::SocketAddr;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     error::Result,
     framing::LengthPrefixedCodec,
-    traits::{
-        Transport, TransportConnector, TransportListener, TransportReceiver, TransportSender,
-    },
+    traits::{Transport, TransportConnector, TransportListener},
 };
 
 // Transport
@@ -76,40 +75,14 @@ pub struct TcpSender {
     peer_addr: SocketAddr,
 }
 
-#[async_trait]
-impl TransportSender for TcpSender {
-    async fn send(&mut self, frame: Bytes) -> Result<()> {
-        trace!(peer = %self.peer_addr, bytes = frame.len(), "tcp send");
-        self.inner.send(frame).await
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        debug!(peer = %self.peer_addr, "tcp sender closing");
-        self.inner.close().await
-    }
-}
+impl_native_sender!(TcpSender, peer_addr, "tcp");
 
 pub struct TcpReceiver {
     inner: futures::stream::SplitStream<Framed<TcpStream, LengthPrefixedCodec>>,
     peer_addr: SocketAddr,
 }
 
-#[async_trait]
-impl TransportReceiver for TcpReceiver {
-    async fn recv(&mut self) -> Result<Option<Bytes>> {
-        match self.inner.next().await {
-            Some(Ok(bytes)) => {
-                trace!(peer = %self.peer_addr, bytes = bytes.len(), "tcp recv");
-                Ok(Some(bytes))
-            }
-            Some(Err(e)) => Err(e),
-            None => {
-                debug!(peer = %self.peer_addr, "tcp connection closed by peer");
-                Ok(None)
-            }
-        }
-    }
-}
+impl_native_receiver!(TcpReceiver, peer_addr, "tcp");
 
 // Connector
 

@@ -9,6 +9,7 @@
 //
 //   await provider.ServeAsync("tcp://localhost:7700");
 
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace Saikuro;
@@ -518,10 +519,15 @@ public sealed class SaikuroProvider
                     t =>
                     {
                         if (t.IsFaulted)
+                        {
+                            var msg = t.Exception?.Flatten().InnerExceptions.Count > 0
+                                ? string.Join("; ", t.Exception.Flatten().InnerExceptions.Select(e => e.Message))
+                                : t.Exception?.Message ?? "unknown";
                             Log.Error(
                                 $"unhandled dispatch exception for target '{envelope.Target}'",
-                                t.Exception?.InnerException?.Message ?? "unknown"
+                                msg
                             );
+                        }
                     },
                     TaskScheduler.Default
                 );

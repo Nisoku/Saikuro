@@ -79,11 +79,11 @@ export interface TransportLike {
 }
 
 export function createTransportSink(
-  transport: TransportLike
+  transport: TransportLike,
 ): (record: LogRecord) => void {
   return (record: LogRecord): void => {
     const extraEntries = Object.entries(record).filter(
-      ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
+      ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg",
     );
     const envelope: Record<string, unknown> = {
       version: 1,
@@ -96,7 +96,9 @@ export function createTransportSink(
           level: record.level,
           name: record.name,
           msg: record.msg,
-          ...(extraEntries.length > 0 ? { fields: Object.fromEntries(extraEntries) } : {}),
+          ...(extraEntries.length > 0
+            ? { fields: Object.fromEntries(extraEntries) }
+            : {}),
         },
       ],
     };
@@ -136,7 +138,7 @@ export class Logger {
   private _emit(
     level: LogLevel,
     msg: string,
-    extra?: Record<string, unknown>
+    extra?: Record<string, unknown>,
   ): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[_minLevel]) return;
     const record: LogRecord = {

@@ -17,6 +17,19 @@ def run(cmd: list[str]) -> int:
     return subprocess.run(cmd, cwd=DIR).returncode
 
 
+def fmt_check() -> int:
+    result = subprocess.run(
+        ["npm", "run", "format", "--", "--check"], cwd=DIR,
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        return 0
+    print(result.stdout, result.stderr, sep="", end="", flush=True)
+    subprocess.run(["npm", "run", "format"], cwd=DIR)
+    print("[WARN] TypeScript format issues auto-fixed. Stage changes before committing.", flush=True)
+    return result.returncode
+
+
 def lint() -> int:
     result = subprocess.run(
         ["npm", "run", "lint"], cwd=DIR, capture_output=True, text=True,
@@ -39,12 +52,14 @@ def main() -> None:
                 print(f"[FAIL] {name} exited with code {code}", flush=True)
                 sys.exit(code)
         sys.exit(0)
+    elif cmd == "fmt_check":
+        sys.exit(fmt_check())
     elif cmd == "lint":
         sys.exit(lint())
     elif cmd in CMDS:
         sys.exit(run(CMDS[cmd]))
     else:
-        print(f"Usage: {sys.argv[0]} <check|lint|{'|'.join(CMDS)}>")
+        print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
         sys.exit(1)
 
 
