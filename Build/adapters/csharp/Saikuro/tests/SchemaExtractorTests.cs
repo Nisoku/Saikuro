@@ -64,6 +64,7 @@ public class SchemaExtractorTests
         var stdoutTask = proc.StandardOutput.ReadToEndAsync();
         var stderrTask = proc.StandardError.ReadToEndAsync();
         await Task.WhenAll(stdoutTask, stderrTask);
+        proc.WaitForExit();
 
         return (proc.ExitCode, stdoutTask.Result, stderrTask.Result);
     }
