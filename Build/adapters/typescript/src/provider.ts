@@ -12,7 +12,7 @@
 
 import { makeTransport } from "./transport";
 import type { Transport } from "./transport";
-import { PROTOCOL_VERSION, makeAnnounceEnvelope } from "./envelope";
+import { PROTOCOL_VERSION, makeAnnounceEnvelope, makeSchemaObject } from "./envelope";
 import { extractSchema } from "./schema_extractor";
 import type {
   Envelope,
@@ -261,15 +261,7 @@ export class SaikuroProvider {
       };
       functions[name] = fn;
     }
-    return {
-      version: 1,
-      namespaces: {
-        [this._namespace]: {
-          functions,
-        },
-      },
-      types: {},
-    };
+    return makeSchemaObject(this._namespace, functions);
   }
 
   // Dispatch
@@ -558,7 +550,7 @@ export class SaikuroProvider {
       });
 
       try {
-        await transport.send(envelope as unknown as Record<string, unknown>);
+        await transport.send(envelope);
       } catch (err) {
         // Sending failed; remove listener and rethrow.
         if (onMsg) transport.offMessage(onMsg);

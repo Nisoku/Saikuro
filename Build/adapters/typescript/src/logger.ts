@@ -75,7 +75,7 @@ export function resetLogSink(): void {
  *   setLogSink(createTransportSink(client.transport));
  */
 export interface TransportLike {
-  send(obj: Record<string, unknown>): Promise<void>;
+  send(obj: object): Promise<void>;
 }
 
 export function createTransportSink(

@@ -40,13 +40,9 @@ def _load_module_from_path(path: Path):
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load module from {path}")
     module = importlib.util.module_from_spec(spec)
-    # Register in sys.modules before exec so that dataclasses / typing helpers
-    # that look up the module by __name__ can find it.
-    sys.modules["_saikuro_schema_target"] = module
-    # Add the module's directory to sys.path so relative imports inside the
-    # target file can resolve.
     module_dir = str(path.parent.resolve())
     added = False
+    sys.modules["_saikuro_schema_target"] = module
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
         added = True

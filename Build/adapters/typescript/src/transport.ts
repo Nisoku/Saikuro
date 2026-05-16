@@ -25,7 +25,7 @@ export interface Transport {
   close(): Promise<void>;
 
   /** Serialise `obj` to MessagePack and transmit it. */
-  send(obj: Record<string, unknown>): Promise<void>;
+  send(obj: object): Promise<void>;
 
   /**
    * Receive and deserialise the next message.
@@ -56,7 +56,7 @@ abstract class BaseTransport implements Transport {
 
   abstract connect(): Promise<void>;
   abstract close(): Promise<void>;
-  abstract send(obj: Record<string, unknown>): Promise<void>;
+  abstract send(obj: object): Promise<void>;
   abstract recv(): Promise<Record<string, unknown> | null>;
 
   onMessage(handler: (msg: Record<string, unknown>) => void): void {
@@ -113,12 +113,13 @@ export class InMemoryTransport extends BaseTransport {
     this._peer?._closeHandler?.();
   }
 
-  async send(obj: Record<string, unknown>): Promise<void> {
+  async send(obj: object): Promise<void> {
     if (this._closed) throw new Error("transport is closed");
     const peer = this._peer;
     if (peer && !peer._closed) {
-      peer._inbox.push(obj);
-      peer._dispatch(obj);
+      const msg = obj as Record<string, unknown>;
+      peer._inbox.push(msg);
+      peer._dispatch(msg);
     }
   }
 
@@ -188,7 +189,7 @@ export class WebSocketTransport extends BaseTransport {
     this._ws?.close(1000, "normal closure");
   }
 
-  async send(obj: Record<string, unknown>): Promise<void> {
+  async send(obj: object): Promise<void> {
     if (this._ws === undefined || this._ws.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket is not connected");
     }
@@ -291,7 +292,7 @@ export class NodeStreamTransport extends BaseTransport {
     this._socket?.end();
   }
 
-  async send(obj: Record<string, unknown>): Promise<void> {
+  async send(obj: object): Promise<void> {
     if (this._socket === undefined) throw new Error("not connected");
     const payload = encode(obj) as Uint8Array;
     const frame = buildFrame(payload);
@@ -431,7 +432,7 @@ export class BroadcastChannelTransport extends BaseTransport {
     this._closeHandler?.();
   }
 
-  async send(obj: Record<string, unknown>): Promise<void> {
+  async send(obj: object): Promise<void> {
     const ch = this._channel;
     if (!this._connected || !ch) {
       throw new Error("BroadcastChannelTransport: not connected");

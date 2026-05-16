@@ -321,7 +321,7 @@ export class SaikuroClient {
     options?: { capability?: string },
   ): Promise<void> {
     const envelope = makeCastEnvelope(target, args, options?.capability);
-    await this._transport.send(envelope as unknown as Record<string, unknown>);
+    await this._transport.send(envelope);
   }
 
   /**
@@ -460,7 +460,7 @@ export class SaikuroClient {
     };
     const streamHandle = new SaikuroStream<T>(patched.id);
     this._openStreams.set(patched.id, streamHandle as SaikuroStream<unknown>);
-    await this._transport.send(patched as unknown as Record<string, unknown>);
+    await this._transport.send(patched );
     return streamHandle;
   }
 
@@ -488,7 +488,7 @@ export class SaikuroClient {
       patched.id,
       channelHandle as SaikuroChannel<unknown, unknown>,
     );
-    await this._transport.send(patched as unknown as Record<string, unknown>);
+    await this._transport.send(patched );
     return channelHandle;
   }
 
@@ -518,7 +518,7 @@ export class SaikuroClient {
         ...(timer !== undefined && { timer }),
       });
       this._transport
-        .send(envelope as unknown as Record<string, unknown>)
+        .send(envelope )
         .catch((err) => {
           this._pendingCalls.delete(envelope.id);
           if (timer !== undefined) clearTimeout(timer);
@@ -535,7 +535,7 @@ export class SaikuroClient {
       target: "",
       args: [value],
     };
-    await this._transport.send(envelope as unknown as Record<string, unknown>);
+    await this._transport.send(envelope);
   }
 
   private _handleRaw(raw: Record<string, unknown>): void {

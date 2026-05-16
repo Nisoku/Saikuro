@@ -33,7 +33,7 @@ def find_dotnet() -> str | None:
 def ensure_dotnet() -> None:
     if find_dotnet():
         return
-    print("dotnet not found. Installing .NET SDK 8.0...", flush=True)
+    print(f"dotnet not found. Installing .NET SDK {DOTNET_CHANNEL}...", flush=True)
     installer = Path.home() / ".dotnet" / "dotnet-install.sh"
     installer.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(

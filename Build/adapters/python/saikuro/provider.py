@@ -321,8 +321,8 @@ class SaikuroProvider:
 
 #  Convenience decorator
 
-# Module-level default provider (optional convenience).
-_default_provider: Optional[SaikuroProvider] = None
+# Module-level default providers (optional convenience), keyed by namespace.
+_default_providers: Dict[str, SaikuroProvider] = {}
 
 
 def register_function(
@@ -336,22 +336,21 @@ def register_function(
 
     `target` must be in ``"namespace.function"`` format.
     """
-    global _default_provider
 
     ns, _, name = target.rpartition(".")
     if not ns or not name:
         raise ValueError(f"target must be 'namespace.function', got: {target!r}")
 
-    if _default_provider is None or _default_provider.namespace != ns:
-        _default_provider = SaikuroProvider(ns)
+    if ns not in _default_providers:
+        _default_providers[ns] = SaikuroProvider(ns)
 
     if fn is not None:
-        _default_provider.register_function(name, fn, capabilities=capabilities)
+        _default_providers[ns].register_function(name, fn, capabilities=capabilities)
         return fn
 
     # Used as a decorator without arguments.
     def decorator(f: Handler) -> Handler:
-        _default_provider.register_function(name, f, capabilities=capabilities)  # type: ignore[union-attr]
+        _default_providers[ns].register_function(name, f, capabilities=capabilities)
         return f
 
     return decorator

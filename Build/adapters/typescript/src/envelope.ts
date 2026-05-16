@@ -228,6 +228,24 @@ export function makeBatchEnvelope(items: readonly Envelope[]): Envelope {
 }
 
 /**
+ * Build the schema object (the body of an announce envelope) for a given
+ * namespace and its functions.
+ *
+ * Both `SaikuroProvider.schemaObject()` and `SchemaExtractor.buildSchema()`
+ * construct the same outer envelope shape.
+ */
+export function makeSchemaObject(
+  namespace: string,
+  functions: Readonly<Record<string, FunctionSchema>>,
+): SaikuroSchema {
+  return {
+    version: 1,
+    namespaces: { [namespace]: { functions } },
+    types: {},
+  };
+}
+
+/**
  * Construct a schema-announcement envelope.
  *
  * `schema` is a plain-object representation of the Saikuro Schema that will be

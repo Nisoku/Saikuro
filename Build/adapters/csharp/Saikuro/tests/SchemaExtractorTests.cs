@@ -6,11 +6,19 @@ namespace Saikuro.Tests;
 
 public class SchemaExtractorTests
 {
+    private static string ExtractorProjectPath
+    {
+        get
+        {
+            var repoRoot = FindRepoRoot();
+            return Path.Combine(repoRoot, "Build", "adapters", "csharp", "tools", "extractor", "extractor.csproj");
+        }
+    }
+
     [Fact]
     public async Task ExtractorTool_PrintsValidSchemaJson()
     {
-        var repoRoot = FindRepoRoot();
-        var extractorProject = Path.Combine(repoRoot, "Build", "adapters", "csharp", "tools", "extractor", "extractor.csproj");
+        var extractorProject = ExtractorProjectPath;
 
         var result = await RunProcess(
             "dotnet",
@@ -32,8 +40,7 @@ public class SchemaExtractorTests
     [Fact]
     public async Task ExtractorTool_SupportsCustomNamespaceArgument()
     {
-        var repoRoot = FindRepoRoot();
-        var extractorProject = Path.Combine(repoRoot, "Build", "adapters", "csharp", "tools", "extractor", "extractor.csproj");
+        var extractorProject = ExtractorProjectPath;
 
         var result = await RunProcess(
             "dotnet",

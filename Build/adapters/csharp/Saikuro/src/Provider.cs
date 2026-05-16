@@ -438,8 +438,7 @@ public sealed class SaikuroProvider
         }
         catch (Exception ex)
         {
-            await SendErrorAsync(transport, envelope.Id, "ProviderError", ex.Message, ct: ct)
-                .ConfigureAwait(false);
+            Log.Error($"stream handler for '{envelope.Target}' threw:  {ex.Message}");
             await transport
                 .SendAsync(
                     new Dictionary<string, object?>

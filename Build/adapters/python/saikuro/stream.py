@@ -5,7 +5,7 @@ Async iterators for Saikuro streams and channels.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Callable, Coroutine, Optional
 
 from .envelope import ResponseEnvelope
 from .error import SaikuroError, StreamClosedError, ChannelClosedError
@@ -76,10 +76,14 @@ class SaikuroChannel:
             print(msg)
     """
 
-    def __init__(self, invocation_id: str, send_fn) -> None:
+    def __init__(
+        self,
+        invocation_id: str,
+        send_fn: Callable[[str, Any], Coroutine[Any, Any, None]],
+    ) -> None:
         self._id = invocation_id
         self._inbound: asyncio.Queue[Optional[ResponseEnvelope]] = asyncio.Queue()
-        self._send_fn = send_fn  # coroutine: (value) -> None
+        self._send_fn = send_fn
         self._closed = False
 
     @property

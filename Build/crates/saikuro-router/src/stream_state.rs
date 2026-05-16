@@ -37,11 +37,11 @@ impl TryAdvanceSeq for AtomicU64 {
 /// Lifecycle state for an open server-to-client stream.
 pub struct StreamState {
     /// Next expected inbound sequence number (for in-order delivery enforcement).
-    pub next_seq: AtomicU64,
+    next_seq: AtomicU64,
     /// Whether the stream has been closed (end-of-stream sentinel received).
-    pub closed: AtomicBool,
+    closed: AtomicBool,
     /// Channel to deliver stream items to the waiting client receiver.
-    pub item_tx: mpsc::Sender<ResponseEnvelope>,
+    item_tx: mpsc::Sender<ResponseEnvelope>,
 }
 
 impl StreamState {
@@ -66,6 +66,10 @@ impl StreamState {
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::Acquire)
     }
+
+    pub fn item_tx(&self) -> &mpsc::Sender<ResponseEnvelope> {
+        &self.item_tx
+    }
 }
 
 // Channel state
@@ -73,15 +77,15 @@ impl StreamState {
 /// Lifecycle state for an open bidirectional channel.
 pub struct ChannelState {
     /// Sequence counter for inbound messages (client -> server).
-    pub inbound_seq: AtomicU64,
+    inbound_seq: AtomicU64,
     /// Sequence counter for outbound messages (server -> client).
-    pub outbound_seq: AtomicU64,
+    outbound_seq: AtomicU64,
     /// Whether the channel has been fully closed.
-    pub closed: AtomicBool,
+    closed: AtomicBool,
     /// Channel to deliver inbound messages to the provider.
-    pub inbound_tx: mpsc::Sender<ResponseEnvelope>,
+    inbound_tx: mpsc::Sender<ResponseEnvelope>,
     /// Channel to deliver outbound messages back to the client.
-    pub outbound_tx: mpsc::Sender<ResponseEnvelope>,
+    outbound_tx: mpsc::Sender<ResponseEnvelope>,
 }
 
 impl ChannelState {
@@ -112,6 +116,14 @@ impl ChannelState {
 
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::Acquire)
+    }
+
+    pub fn inbound_tx(&self) -> &mpsc::Sender<ResponseEnvelope> {
+        &self.inbound_tx
+    }
+
+    pub fn outbound_tx(&self) -> &mpsc::Sender<ResponseEnvelope> {
+        &self.outbound_tx
     }
 }
 

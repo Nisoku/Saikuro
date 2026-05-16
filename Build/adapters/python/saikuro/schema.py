@@ -93,7 +93,7 @@ def _annotation_to_type_str(annotation: Any) -> str:
 
 
 # Convert a type string (or already-shaped descriptor) to a structural descriptor
-def _type_str_to_desc(tstr: Any):
+def _type_str_to_desc(tstr: str):
     prims = (
         "bool",
         "i8",

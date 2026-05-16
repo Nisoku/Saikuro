@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 
-class InvocationType(str, enum.Enum):
+class InvocationType(enum.Enum):
     """Maps to the Rust InvocationType enum."""
 
     CALL = "call"
@@ -27,14 +27,14 @@ class InvocationType(str, enum.Enum):
     ANNOUNCE = "announce"
 
 
-class StreamControl(str, enum.Enum):
+class StreamControl(enum.Enum):
     END = "end"
     PAUSE = "pause"
     RESUME = "resume"
     ABORT = "abort"
 
 
-class LogLevel(str, enum.Enum):
+class LogLevel(enum.Enum):
     """Severity levels for structured log records forwarded over the transport."""
 
     TRACE = "trace"

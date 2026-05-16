@@ -262,7 +262,7 @@ impl InvocationRouter {
                 seq: envelope.seq,
                 stream_control: envelope.stream_control,
             };
-            if let Err(e) = channel.inbound_tx.send(resp).await {
+            if let Err(e) = channel.inbound_tx().send(resp).await {
                 return error_response(
                     id,
                     SaikuroError::ProviderUnavailable(format!("channel data delivery failed: {e}"))
@@ -423,7 +423,7 @@ impl InvocationRouter {
     }
 
     pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(response, |s| &s.inbound_tx, |s, seq| s.advance_inbound(seq))
+        self.route_channel_item(response, |s| s.inbound_tx(), |s, seq| s.advance_inbound(seq))
             .await
     }
 
@@ -435,7 +435,7 @@ impl InvocationRouter {
     pub async fn route_channel_outbound(&self, response: ResponseEnvelope) -> Result<()> {
         self.route_channel_item(
             response,
-            |s| &s.outbound_tx,
+            |s| s.outbound_tx(),
             |s, seq| s.advance_outbound(seq),
         )
         .await
@@ -468,7 +468,7 @@ impl InvocationRouter {
 
         // Send the item first so the receiver is still alive when we deliver.
         state
-            .item_tx
+            .item_tx()
             .send(response)
             .await
             .map_err(|_| RouterError::StreamClosed(id.to_string()))?;

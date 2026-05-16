@@ -104,7 +104,12 @@ SAIKURO_API int SAIKURO_CALL saikuro_channel_send_json(
 SAIKURO_API int SAIKURO_CALL saikuro_channel_close(saikuro_channel_t channel);
 SAIKURO_API int SAIKURO_CALL saikuro_channel_abort(saikuro_channel_t channel);
 
-/* Same contract as saikuro_channel_next_json: see above. */
+/** Blocking read of the next channel item (or end-of-stream signal).
+ *  On success returns 0, writes the JSON item into *out_item_json (caller must
+ *  free with saikuro_string_free), and sets *out_done to 0.
+ *  When the channel is closed, sets *out_done to 1 and *out_item_json to NULL.
+ *  On error returns non-zero.
+ */
 SAIKURO_API int SAIKURO_CALL saikuro_channel_next_json(
     saikuro_channel_t channel,
     char** out_item_json,
@@ -113,7 +118,7 @@ SAIKURO_API int SAIKURO_CALL saikuro_channel_next_json(
 
 SAIKURO_API void SAIKURO_CALL saikuro_channel_free(saikuro_channel_t channel);
 
-/* Same contract as saikuro_channel_next_json: see above. */
+/** Same contract as saikuro_channel_next_json. */
 SAIKURO_API int SAIKURO_CALL saikuro_stream_next_json(
     saikuro_stream_t stream,
     char** out_item_json,

@@ -338,6 +338,10 @@ public class SchemaExtractor
                 _xmlDocs[assembly.FullName ?? assembly.GetName().Name ?? "unknown"] = parser;
             }
         }
+        else
+        {
+            Console.Error.WriteLine($"[warn] XML doc file not found: {xmlPath}");
+        }
         return this;
     }
 
@@ -349,6 +353,10 @@ public class SchemaExtractor
         if (File.Exists(xmlPath))
         {
             _xmlDocs[assemblyName] = new XmlDocumentationParser(xmlPath);
+        }
+        else
+        {
+            Console.Error.WriteLine($"[warn] XML doc file not found: {xmlPath}");
         }
         return this;
     }

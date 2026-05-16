@@ -21,22 +21,7 @@ use saikuro_core::{
 use saikuro_transport::tcp::TcpTransportListener;
 use saikuro_transport::traits::{Transport, TransportListener, TransportReceiver, TransportSender};
 
-fn c(text: &str) -> CString {
-    CString::new(text).expect("CString should be created")
-}
-
-fn take_c_string(ptr: *mut std::ffi::c_char) -> String {
-    if ptr.is_null() {
-        return String::new();
-    }
-    let text = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().to_string();
-    unsafe { saikuro_string_free(ptr) };
-    text
-}
-
-fn take_error() -> String {
-    take_c_string(saikuro_last_error_message())
-}
+mod common;
 
 #[derive(Default)]
 struct ScriptReport {
@@ -163,79 +148,79 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
 fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout() {
     let (address, server) = spawn_scripted_server_for_client();
 
-    let handle = saikuro_client_connect(c(&address).as_ptr());
-    assert!(!handle.is_null(), "connect failed: {}", take_error());
+    let handle = saikuro_client_connect(common::c(&address).as_ptr());
+    assert!(!handle.is_null(), "connect failed: {}", common::take_error());
 
-    let resource = saikuro_client_resource_json(handle, c("files.read").as_ptr(), c("[]").as_ptr());
-    assert!(!resource.is_null(), "resource failed: {}", take_error());
-    assert_eq!(take_c_string(resource), "\"contents\"");
+    let resource = saikuro_client_resource_json(handle, common::c("files.read").as_ptr(), common::c("[]").as_ptr());
+    assert!(!resource.is_null(), "resource failed: {}", common::take_error());
+    assert_eq!(common::take_c_string(resource), "\"contents\"");
 
     let log_rc = saikuro_client_log(
         handle,
-        c("info").as_ptr(),
-        c("tests").as_ptr(),
-        c("hello").as_ptr(),
-        c("{}").as_ptr(),
+        common::c("info").as_ptr(),
+        common::c("tests").as_ptr(),
+        common::c("hello").as_ptr(),
+        common::c("{}").as_ptr(),
     );
-    assert_eq!(log_rc, 0, "log failed: {}", take_error());
+    assert_eq!(log_rc, 0, "log failed: {}", common::take_error());
 
-    let stream = saikuro_client_stream_json(handle, c("events.watch").as_ptr(), c("[]").as_ptr());
-    assert!(!stream.is_null(), "stream open failed: {}", take_error());
+    let stream = saikuro_client_stream_json(handle, common::c("events.watch").as_ptr(), common::c("[]").as_ptr());
+    assert!(!stream.is_null(), "stream open failed: {}", common::take_error());
 
     let mut out_json = ptr::null_mut();
     let mut out_done = 0;
     let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
     assert_eq!(out_done, 0);
-    assert_eq!(take_c_string(out_json), "1");
+    assert_eq!(common::take_c_string(out_json), "1");
 
     let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
     assert_eq!(out_done, 0);
-    assert_eq!(take_c_string(out_json), "2");
+    assert_eq!(common::take_c_string(out_json), "2");
 
     let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
     assert_eq!(out_done, 1);
 
-    let channel = saikuro_client_channel_json(handle, c("chat.open").as_ptr(), c("[]").as_ptr());
-    assert!(!channel.is_null(), "channel open failed: {}", take_error());
+    let channel = saikuro_client_channel_json(handle, common::c("chat.open").as_ptr(), common::c("[]").as_ptr());
+    assert!(!channel.is_null(), "channel open failed: {}", common::take_error());
 
     let rc = unsafe { saikuro_channel_next_json(channel, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
     assert_eq!(out_done, 0);
-    assert_eq!(take_c_string(out_json), "\"welcome\"");
+    assert_eq!(common::take_c_string(out_json), "\"welcome\"");
 
-    let send_rc = saikuro_channel_send_json(channel, c("\"ping\"").as_ptr());
-    assert_eq!(send_rc, 0, "channel send failed: {}", take_error());
+    let send_rc = saikuro_channel_send_json(channel, common::c("\"ping\"").as_ptr());
+    assert_eq!(send_rc, 0, "channel send failed: {}", common::take_error());
 
     let rc = unsafe { saikuro_channel_next_json(channel, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
     assert_eq!(out_done, 0);
-    assert_eq!(take_c_string(out_json), "\"pong\"");
+    assert_eq!(common::take_c_string(out_json), "\"pong\"");
 
     let close_rc = saikuro_channel_close(channel);
-    assert_eq!(close_rc, 0, "channel close failed: {}", take_error());
+    assert_eq!(close_rc, 0, "channel close failed: {}", common::take_error());
 
-    let call_fail = saikuro_client_call_json(handle, c("math.fail").as_ptr(), c("[]").as_ptr());
+    let call_fail = saikuro_client_call_json(handle, common::c("math.fail").as_ptr(), common::c("[]").as_ptr());
     assert!(call_fail.is_null(), "call should fail");
-    let call_error = take_error();
+    let call_error = common::take_error();
     assert!(
         call_error.contains("ProviderError") || call_error.contains("boom"),
         "unexpected error mapping: {call_error}"
     );
 
     let timeout =
-        saikuro_client_call_json_timeout(handle, c("slow.never").as_ptr(), c("[]").as_ptr(), 30);
+        saikuro_client_call_json_timeout(handle, common::c("slow.never").as_ptr(), common::c("[]").as_ptr(), 30);
     assert!(timeout.is_null(), "timeout call should fail");
-    let timeout_error = take_error();
+    let timeout_error = common::take_error();
     assert!(
         timeout_error.contains("timed out") || timeout_error.contains("Timeout"),
         "unexpected timeout error: {timeout_error}"
     );
 
     let client_close_rc = saikuro_client_close(handle);
-    assert_eq!(client_close_rc, 0, "client close failed: {}", take_error());
+    assert_eq!(client_close_rc, 0, "client close failed: {}", common::take_error());
     saikuro_client_free(handle);
 
     let report = server.join().expect("server thread");
@@ -250,7 +235,7 @@ unsafe extern "C" fn add_cb(
     _user_data: *mut std::ffi::c_void,
     _args_json: *const std::ffi::c_char,
 ) -> *mut std::ffi::c_char {
-    let result = c("42");
+    let result = common::c("42");
     saikuro_string_dup(result.as_ptr())
 }
 
@@ -320,19 +305,19 @@ fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptRep
 fn c_provider_announce_and_runtime_dispatch_roundtrip() {
     let (address, server) = spawn_scripted_server_for_provider();
 
-    let provider = saikuro_provider_new(c("math").as_ptr());
+    let provider = saikuro_provider_new(common::c("math").as_ptr());
     assert!(
         !provider.is_null(),
         "provider create failed: {}",
-        take_error()
+        common::take_error()
     );
 
     let register_rc =
-        saikuro_provider_register(provider, c("add").as_ptr(), Some(add_cb), ptr::null_mut());
-    assert_eq!(register_rc, 0, "provider register failed: {}", take_error());
+        saikuro_provider_register(provider, common::c("add").as_ptr(), Some(add_cb), ptr::null_mut());
+    assert_eq!(register_rc, 0, "provider register failed: {}", common::take_error());
 
-    let serve_rc = saikuro_provider_serve(provider, c(&address).as_ptr());
-    assert_eq!(serve_rc, 0, "provider serve failed: {}", take_error());
+    let serve_rc = saikuro_provider_serve(provider, common::c(&address).as_ptr());
+    assert_eq!(serve_rc, 0, "provider serve failed: {}", common::take_error());
 
     let report = server.join().expect("server thread");
     assert!(

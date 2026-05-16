@@ -242,19 +242,8 @@ public sealed record Envelope
     public static Envelope FromMsgpackDict(Dictionary<string, object?> d)
     {
         var typeStr = (string)d[WireKey.Type]!;
-        var sc =
-            d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
-                ? StreamControlExt.FromWire(scs)
-                : (StreamControl?)null;
-        var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
-            ? seqRaw switch
-            {
-                long l when l >= 0 => (ulong)l,
-                int i when i >= 0 => (ulong)i,
-                ulong u => u,
-                _ => (ulong?)null,
-            }
-            : null;
+        var sc = ParseStreamControl(d);
+        var seq = ParseSeq(d);
         var args =
             d.TryGetValue(WireKey.Args, out var argsRaw) && argsRaw is IList<object?> al
                 ? (IReadOnlyList<object?>)al.ToList()
@@ -297,6 +286,26 @@ public sealed record Envelope
     public string? FunctionName => LastDotIndex is { } i ? Target[(i + 1)..] : null;
 
     private static string NewId() => Guid.NewGuid().ToString();
+
+    internal static StreamControl? ParseStreamControl(Dictionary<string, object?> d)
+    {
+        return d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
+            ? StreamControlExt.FromWire(scs)
+            : null;
+    }
+
+    internal static ulong? ParseSeq(Dictionary<string, object?> d)
+    {
+        return d.TryGetValue(WireKey.Seq, out var seqRaw)
+            ? seqRaw switch
+            {
+                long l when l >= 0 => (ulong)l,
+                int i when i >= 0 => (ulong)i,
+                ulong u => u,
+                _ => (ulong?)null,
+            }
+            : null;
+    }
 }
 
 // ResponseEnvelope (inbound) 
@@ -320,19 +329,8 @@ public sealed class ResponseEnvelope
         if (d.TryGetValue(WireKey.Error, out var errRaw) && errRaw is Dictionary<string, object?> em)
             err = ErrorPayload.FromMap(em);
 
-        var sc =
-            d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
-                ? StreamControlExt.FromWire(scs)
-                : (StreamControl?)null;
-        var seq = d.TryGetValue(WireKey.Seq, out var seqRaw)
-            ? seqRaw switch
-            {
-                long l when l >= 0 => (ulong)l,
-                int i when i >= 0 => (ulong)i,
-                ulong u => u,
-                _ => (ulong?)null,
-            }
-            : null;
+        var sc = Envelope.ParseStreamControl(d);
+        var seq = Envelope.ParseSeq(d);
 
         return new ResponseEnvelope
         {
