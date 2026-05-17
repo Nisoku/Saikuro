@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
-#include <regex>
 #include <nlohmann/json.hpp>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -417,19 +417,24 @@ std::vector<Function> parse_functions(const std::string &source) {
 
   while (pos < len) {
     // Skip whitespace and semicolons.
-    while (pos < len && (std::isspace(static_cast<unsigned char>(clean_source[pos])) ||
-                         clean_source[pos] == ';')) {
+    while (pos < len &&
+           (std::isspace(static_cast<unsigned char>(clean_source[pos])) ||
+            clean_source[pos] == ';')) {
       ++pos;
     }
-    if (pos >= len) break;
+    if (pos >= len)
+      break;
 
     // Find the next identifier followed by '('.
     size_t name_start = pos;
-    while (name_start < len && !std::isalpha(static_cast<unsigned char>(clean_source[name_start])) &&
-           clean_source[name_start] != '_') {
+    while (
+        name_start < len &&
+        !std::isalpha(static_cast<unsigned char>(clean_source[name_start])) &&
+        clean_source[name_start] != '_') {
       ++name_start;
     }
-    if (name_start >= len) break;
+    if (name_start >= len)
+      break;
 
     size_t name_end = name_start;
     while (name_end < len &&
@@ -437,8 +442,12 @@ std::vector<Function> parse_functions(const std::string &source) {
             clean_source[name_end] == '_')) {
       ++name_end;
     }
-    const std::string name = clean_source.substr(name_start, name_end - name_start);
-    if (name.empty()) { pos = name_start + 1; continue; }
+    const std::string name =
+        clean_source.substr(name_start, name_end - name_start);
+    if (name.empty()) {
+      pos = name_start + 1;
+      continue;
+    }
 
     // Skip whitespace before '('.
     size_t paren_pos = name_end;
@@ -461,20 +470,26 @@ std::vector<Function> parse_functions(const std::string &source) {
       if (c == '(') {
         ++depth;
       } else if (c == ')') {
-        if (depth == 0) { found_paren = true; break; }
+        if (depth == 0) {
+          found_paren = true;
+          break;
+        }
         --depth;
       } else if (c == '"' || c == '\'') {
         char quote = c;
         ++args_end;
         while (args_end < len && clean_source[args_end] != quote) {
-          if (clean_source[args_end] == '\\') ++args_end;
+          if (clean_source[args_end] == '\\')
+            ++args_end;
           ++args_end;
         }
       }
     }
-    if (!found_paren) break;
+    if (!found_paren)
+      break;
 
-    const std::string args_raw = clean_source.substr(args_start, args_end - args_start);
+    const std::string args_raw =
+        clean_source.substr(args_start, args_end - args_start);
 
     // Expect ';' after ')', ignoring whitespace.
     size_t semi_pos = args_end + 1;
@@ -489,10 +504,12 @@ std::vector<Function> parse_functions(const std::string &source) {
 
     pos = semi_pos + 1; // advance past ';' for next iteration
 
-    if (name.find("saikuro_") == 0) continue;
+    if (name.find("saikuro_") == 0)
+      continue;
 
     // Return type is everything from the start of the declaration to the name.
-    const std::string returns = trim(clean_source.substr(pos, name_start - pos));
+    const std::string returns =
+        trim(clean_source.substr(pos, name_start - pos));
 
     Function f;
     f.name = name;
@@ -524,26 +541,26 @@ std::string extract_schema_from_header(const std::string &source,
     nlohmann::json args_arr = nlohmann::json::array();
     for (const Arg &arg : fn.args) {
       args_arr.push_back({
-        {"name", arg.name},
-        {"type", {{"kind", "primitive"}, {"type", arg.type}}},
-        {"optional", arg.optional},
+          {"name", arg.name},
+          {"type", {{"kind", "primitive"}, {"type", arg.type}}},
+          {"optional", arg.optional},
       });
     }
 
     functions_obj[fn.name] = {
-      {"args", std::move(args_arr)},
-      {"returns", {{"kind", "primitive"}, {"type", fn.returns}}},
-      {"visibility", "public"},
-      {"capabilities", nlohmann::json::array()},
-      {"idempotent", false},
+        {"args", std::move(args_arr)},
+        {"returns", {{"kind", "primitive"}, {"type", fn.returns}}},
+        {"visibility", "public"},
+        {"capabilities", nlohmann::json::array()},
+        {"idempotent", false},
     };
   }
 
   nlohmann::json doc = {
-    {"version", 1},
-    {"namespaces",
-     {{namespace_name, {{"functions", std::move(functions_obj)}}}}},
-    {"types", nlohmann::json::object()},
+      {"version", 1},
+      {"namespaces",
+       {{namespace_name, {{"functions", std::move(functions_obj)}}}}},
+      {"types", nlohmann::json::object()},
   };
 
   return doc.dump(pretty ? 2 : -1);

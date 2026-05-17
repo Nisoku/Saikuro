@@ -37,18 +37,18 @@ export interface ExtractedFunction {
 }
 export type TypeDescriptor =
   | {
-    kind: "primitive";
-    type:
-    | "bool"
-    | "i32"
-    | "i64"
-    | "f32"
-    | "f64"
-    | "string"
-    | "bytes"
-    | "any"
-    | "unit";
-  }
+      kind: "primitive";
+      type:
+        | "bool"
+        | "i32"
+        | "i64"
+        | "f32"
+        | "f64"
+        | "string"
+        | "bytes"
+        | "any"
+        | "unit";
+    }
   | { kind: "list"; item: TypeDescriptor }
   | { kind: "map"; key: TypeDescriptor; value: TypeDescriptor }
   | { kind: "optional"; inner: TypeDescriptor }
@@ -133,7 +133,7 @@ export class SchemaExtractor {
         if (key) return this.sourceFiles.get(key);
         return undefined;
       },
-      writeFile: () => { },
+      writeFile: () => {},
       readFile: (fileName) => {
         // Prefer in-memory source files (exact or basename matches).
         const key = findSourceKey(fileName);
@@ -309,12 +309,13 @@ export class SchemaExtractor {
     const tupTarget = (type as any).target;
     if (tupTarget?.objectFlags & ts.ObjectFlags.Tuple) {
       const tup = type as any;
-      const items = (
-        tup.resolvedTypeArguments ??
-        tup.typeArguments ??
-        []
-      ).map((e: ts.Type) => this.typeToDescriptor(e));
-      return { kind: "list", item: items[0] ?? { kind: "primitive", type: "any" } };
+      const items = (tup.resolvedTypeArguments ?? tup.typeArguments ?? []).map(
+        (e: ts.Type) => this.typeToDescriptor(e),
+      );
+      return {
+        kind: "list",
+        item: items[0] ?? { kind: "primitive", type: "any" },
+      };
     }
 
     if (type.flags & ts.TypeFlags.Union) {
@@ -425,8 +426,8 @@ export class SchemaExtractor {
     type: ts.Type,
     name: string,
   ): TypeDescriptor | undefined {
-    const typeArgs: readonly ts.Type[] | undefined = (type as any).typeArguments ??
-      (type as any).aliasTypeArguments;
+    const typeArgs: readonly ts.Type[] | undefined =
+      (type as any).typeArguments ?? (type as any).aliasTypeArguments;
     if (!typeArgs) return;
 
     if (name.startsWith("Promise") && typeArgs.length > 0) {

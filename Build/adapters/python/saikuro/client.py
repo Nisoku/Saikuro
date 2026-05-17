@@ -201,7 +201,9 @@ class SaikuroClient:
             items.append(Envelope.make_call(target, args_list, cap))
 
         batch_envelope = Envelope.make_batch(items)
-        response = await self._send_and_check(batch_envelope, timeout, "batch call failed")
+        response = await self._send_and_check(
+            batch_envelope, timeout, "batch call failed"
+        )
 
         raw = response.result
         if isinstance(raw, list):

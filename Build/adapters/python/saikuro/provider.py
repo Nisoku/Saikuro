@@ -40,6 +40,7 @@ Handler = Callable[..., Any]
 
 class _TransportSink(Protocol):
     """Minimal transport-like interface: only requires async send."""
+
     async def send(self, obj: dict) -> None: ...
 
 

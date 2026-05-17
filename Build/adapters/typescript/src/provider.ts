@@ -12,7 +12,11 @@
 
 import { makeTransport } from "./transport";
 import type { Transport } from "./transport";
-import { PROTOCOL_VERSION, makeAnnounceEnvelope, makeSchemaObject } from "./envelope";
+import {
+  PROTOCOL_VERSION,
+  makeAnnounceEnvelope,
+  makeSchemaObject,
+} from "./envelope";
 import { extractSchema } from "./schema_extractor";
 import type {
   Envelope,
@@ -397,7 +401,8 @@ export class SaikuroProvider {
         await this.dispatch(callEnvelope, sink);
 
         if (sink.capturedError !== null) {
-          const errCode = (sink.capturedError["code"] as string) ?? "ProviderError";
+          const errCode =
+            (sink.capturedError["code"] as string) ?? "ProviderError";
           const errMsg =
             (sink.capturedError["message"] as string) ?? "unknown error";
           await _sendError(transport, envelope.id, errCode, errMsg, {
@@ -538,7 +543,11 @@ export class SaikuroProvider {
     try {
       const schema = schemaOverride ?? this.schemaObject();
       const envelope = makeAnnounceEnvelope(schema);
-      const ack = await _waitForMessage(transport, () => transport.send(envelope), 5000);
+      const ack = await _waitForMessage(
+        transport,
+        () => transport.send(envelope),
+        5000,
+      );
       if (ack !== null) {
         if (ack["ok"] === true) {
           log.debug("schema announce acknowledged");

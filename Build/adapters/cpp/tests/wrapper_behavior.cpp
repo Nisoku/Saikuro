@@ -93,7 +93,9 @@ char *saikuro_string_dup(const char *input) {
 
 void saikuro_string_free(char *ptr) { std::free(ptr); }
 
-char *saikuro_last_error_message(void) { return dup_string(g_state.last_error); }
+char *saikuro_last_error_message(void) {
+  return dup_string(g_state.last_error);
+}
 
 saikuro_client_t saikuro_client_connect(const char *address) {
   g_state.last_connect_address = address == nullptr ? "" : address;
@@ -246,7 +248,9 @@ int saikuro_client_log(saikuro_client_t, const char *level, const char *,
   return 0;
 }
 
-saikuro_provider_t saikuro_provider_new(const char *) { return &g_state.provider; }
+saikuro_provider_t saikuro_provider_new(const char *) {
+  return &g_state.provider;
+}
 
 int saikuro_provider_register(saikuro_provider_t, const char *name,
                               saikuro_provider_handler_fn callback,
@@ -267,7 +271,8 @@ int saikuro_provider_serve(saikuro_provider_t, const char *) {
     return 1;
   }
   g_state.announce_sent = true;
-  char *result = g_state.registered_callback(g_state.registered_user_data, "[10,32]");
+  char *result =
+      g_state.registered_callback(g_state.registered_user_data, "[10,32]");
   if (result == nullptr) {
     g_state.last_error = "callback failed";
     return 1;

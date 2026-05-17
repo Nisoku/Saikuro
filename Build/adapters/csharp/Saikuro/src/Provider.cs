@@ -232,10 +232,18 @@ public sealed class SaikuroProvider
 
     //  Registration
 
-    private SaikuroProvider RegisterCore(string name, RegisterOptions? options, Action<HandlerEntry> setup)
+    private SaikuroProvider RegisterCore(
+        string name,
+        RegisterOptions? options,
+        AsyncHandler? asyncHandler = null,
+        StreamHandler? streamingHandler = null)
     {
-        var entry = new HandlerEntry { Options = options ?? new RegisterOptions() };
-        setup(entry);
+        var entry = new HandlerEntry
+        {
+            Options = options ?? new RegisterOptions(),
+            Async = asyncHandler,
+            Streaming = streamingHandler,
+        };
         _handlers[name] = entry;
         return this;
     }
@@ -249,21 +257,21 @@ public sealed class SaikuroProvider
         string name,
         Func<IReadOnlyList<object?>, object?> handler,
         RegisterOptions? options = null
-    ) => RegisterCore(name, options, e => e.Async = (args, _) => Task.FromResult(handler(args)));
+    ) => RegisterCore(name, options, asyncHandler: (args, _) => Task.FromResult(handler(args)));
 
     /// <summary>Register an async function.</summary>
     public SaikuroProvider Register(
         string name,
         Func<IReadOnlyList<object?>, Task<object?>> handler,
         RegisterOptions? options = null
-    ) => RegisterCore(name, options, e => e.Async = (args, ct) => handler(args));
+    ) => RegisterCore(name, options, asyncHandler: (args, ct) => handler(args));
 
     /// <summary>Register an async-enumerable (streaming) function.</summary>
     public SaikuroProvider Register(
         string name,
         Func<IReadOnlyList<object?>, IAsyncEnumerable<object?>> handler,
         RegisterOptions? options = null
-    ) => RegisterCore(name, options, e => e.Streaming = (args, _) => handler(args));
+    ) => RegisterCore(name, options, streamingHandler: (args, _) => handler(args));
 
     //  Schema
 
