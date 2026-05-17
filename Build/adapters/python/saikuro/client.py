@@ -108,6 +108,37 @@ class SaikuroClient:
 
     #  Invocation API
 
+    async def _send_and_wait(
+        self,
+        envelope: Envelope,
+        timeout: Optional[float] = None,
+    ) -> ResponseEnvelope:
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
+        self._pending_calls[envelope.id] = future
+
+        await self._transport.send(envelope.to_msgpack_dict())
+
+        try:
+            if timeout is not None:
+                return await asyncio.wait_for(future, timeout=timeout)
+            return await future
+        finally:
+            self._pending_calls.pop(envelope.id, None)
+
+    async def _send_and_check(
+        self,
+        envelope: Envelope,
+        timeout: Optional[float] = None,
+        error_message: str = "no error details",
+    ) -> ResponseEnvelope:
+        response = await self._send_and_wait(envelope, timeout)
+        if not response.ok:
+            raise SaikuroError.from_error_dict(
+                response.error or {"code": "Internal", "message": error_message}
+            )
+        return response
+
     async def call(
         self,
         target: str,
@@ -122,25 +153,7 @@ class SaikuroClient:
             asyncio.TimeoutError if `timeout` seconds elapse without a response.
         """
         envelope = Envelope.make_call(target, args, capability)
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[envelope.id] = future
-
-        await self._transport.send(envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error or {"code": "Internal", "message": "no error details"}
-            )
-
+        response = await self._send_and_check(envelope, timeout)
         return response.result
 
     async def cast(
@@ -188,31 +201,11 @@ class SaikuroClient:
             items.append(Envelope.make_call(target, args_list, cap))
 
         batch_envelope = Envelope.make_batch(items)
+        response = await self._send_and_check(batch_envelope, timeout, "batch call failed")
 
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[batch_envelope.id] = future
-
-        await self._transport.send(batch_envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(batch_envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error or {"code": "Internal", "message": "batch call failed"}
-            )
-
-        # The result is an ordered array of per-item results (None for failures).
         raw = response.result
         if isinstance(raw, list):
             return raw
-        # Graceful fallback: runtime returned something unexpected.
         return [raw]
 
     async def resource(
@@ -241,25 +234,7 @@ class SaikuroClient:
             print(handle.id, handle.mime_type, handle.size, handle.uri)
         """
         envelope = Envelope.make_resource(target, args, capability)
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[envelope.id] = future
-
-        await self._transport.send(envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error
-                or {"code": "Internal", "message": "resource call failed"}
-            )
+        response = await self._send_and_check(envelope, timeout, "resource call failed")
 
         if not isinstance(response.result, dict):
             raise ValueError(

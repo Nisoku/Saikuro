@@ -4,7 +4,6 @@ use bytes::Bytes;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
-    schema::{FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility},
     value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
@@ -23,108 +22,15 @@ use saikuro_transport::{
     memory::MemoryTransport,
     traits::{Transport, TransportReceiver, TransportSender},
 };
-use std::collections::HashMap;
 
-//  Helpers
+mod common;
 
-/// Build a minimal [`Schema`] with one namespace and one zero-argument function.
-fn simple_schema(namespace: &str, function: &str) -> Schema {
-    let mut functions = HashMap::new();
-    functions.insert(
-        function.to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    let mut namespaces = HashMap::new();
-    namespaces.insert(
-        namespace.to_owned(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
-    Schema {
-        version: 1,
-        namespaces,
-        types: HashMap::new(),
-    }
-}
-
-/// Serialise a [`Schema`] to a [`Value`] suitable for embedding in announce args.
-fn schema_to_value(schema: &Schema) -> Value {
-    let bytes = rmp_serde::to_vec_named(schema).expect("serialize schema");
-    rmp_serde::from_slice::<Value>(&bytes).expect("deserialize schema to Value")
-}
-
-/// Build an `Announce` envelope for the given schema.
-fn make_announce_envelope(schema: &Schema) -> Envelope {
-    Envelope::announce(schema_to_value(schema))
-}
-
-/// Send a single frame through a fresh `ConnectionHandler` and return the
-/// decoded [`ResponseEnvelope`]
-async fn round_trip(
-    schema_registry: SchemaRegistry,
-    provider_registry: ProviderRegistry,
-    envelope: Envelope,
-) -> ResponseEnvelope {
-    // test_transport: our side (we write frames, read responses).
-    // handler_transport: handler's side (it reads requests, writes responses).
-    // MemoryTransport::pair("test", "handler") gives:
-    //   test.send  -> handler.recv
-    //   handler.send -> test.recv
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
-    let (handler_sender, handler_receiver) = handler_transport.split();
-    let (mut test_sender, mut test_receiver) = test_transport.split();
-
-    let router = InvocationRouter::new(provider_registry.clone(), RouterConfig::default());
-    let validator = InvocationValidator::new(schema_registry.clone());
-    let capability_engine = CapabilityEngine::default();
-
-    let handler = ConnectionHandler {
-        peer_id: "test-peer".to_owned(),
-        sender: handler_sender,
-        receiver: handler_receiver,
-        validator,
-        capability_engine,
-        router,
-        peer_capabilities: CapabilitySet::empty(),
-        max_message_size: 4 * 1024 * 1024,
-        schema_registry,
-        provider_registry,
-    };
-
-    // Encode and send the envelope; drop our sender so the handler loop ends.
-    let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
-    test_sender.send(frame).await.expect("send frame");
-    // Drop test_sender explicitly:  the MemorySender holds the only Sender<Bytes>
-    // handle on the test->handler direction.  Dropping it closes that MPSC channel,
-    // causing handler_receiver.recv() to return Ok(None) after the queued frame,
-    // which makes the handler's run() loop exit cleanly.
-    drop(test_sender);
-
-    // Run the handler to completion (it will exit when our sender is dropped).
-    handler.run().await;
-
-    // Read the single response frame from the handler.
-    let resp_frame = test_receiver
-        .recv()
-        .await
-        .expect("recv response")
-        .expect("frame must be present");
-    ResponseEnvelope::from_msgpack(&resp_frame).expect("decode response")
-}
+use common::{make_announce_envelope, round_trip_via_handler, simple_schema};
 
 /// Send a single frame, read the response, **check the registry while the
 /// connection is still alive**, then close the connection.
 ///
-/// Unlike `round_trip`, this spawns the handler as a background task so that
+/// Unlike `round_trip_via_handler`, this spawns the handler as a background task so that
 /// the test can inspect shared state (schema registry) before EOF is sent.
 /// Returns the decoded response.
 async fn round_trip_while_alive(
@@ -246,7 +152,7 @@ fn announce_in_production_mode_returns_error() {
         let schema = simple_schema("frozen", "op");
         let env = make_announce_envelope(&schema);
 
-        let resp = round_trip(registry.clone(), providers, env).await;
+        let resp = round_trip_via_handler(registry.clone(), providers, env).await;
 
         assert!(!resp.ok, "announce in production mode must fail");
         let err = resp.error.expect("error detail must be present");
@@ -287,7 +193,7 @@ fn announce_with_invalid_schema_returns_error() {
             seq: None,
         };
 
-        let resp = round_trip(registry, providers, bad_env).await;
+        let resp = round_trip_via_handler(registry, providers, bad_env).await;
 
         assert!(!resp.ok, "announce with invalid schema must fail");
         let err = resp.error.expect("error detail");
@@ -320,7 +226,7 @@ fn announce_with_no_args_returns_error() {
             seq: None,
         };
 
-        let resp = round_trip(registry, providers, empty_env).await;
+        let resp = round_trip_via_handler(registry, providers, empty_env).await;
 
         assert!(!resp.ok, "announce with no args must fail");
         let err = resp.error.expect("error detail");
@@ -349,7 +255,7 @@ fn announce_does_not_route_to_provider() {
 
         let schema = simple_schema("intercept_test", "fn");
         let env = make_announce_envelope(&schema);
-        let resp = round_trip(registry, providers, env).await;
+        let resp = round_trip_via_handler(registry, providers, env).await;
 
         assert!(
             resp.ok,

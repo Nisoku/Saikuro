@@ -200,7 +200,12 @@ fn normalize_namespace_stem(ns_name: &str) -> String {
     if stem.is_empty() {
         stem.push('_');
     }
-    if stem.chars().next().unwrap().is_ascii_digit() {
+    if stem
+        .chars()
+        .next()
+        .expect("stem was just checked non-empty")
+        .is_ascii_digit()
+    {
         stem.insert(0, '_');
     }
     stem

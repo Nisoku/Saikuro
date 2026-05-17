@@ -232,6 +232,14 @@ public sealed class SaikuroProvider
 
     //  Registration
 
+    private SaikuroProvider RegisterCore(string name, RegisterOptions? options, Action<HandlerEntry> setup)
+    {
+        var entry = new HandlerEntry { Options = options ?? new RegisterOptions() };
+        setup(entry);
+        _handlers[name] = entry;
+        return this;
+    }
+
     /// <summary>
     /// Register a synchronous or async function.
     /// The <paramref name="handler"/> receives the args list and must return
@@ -241,45 +249,21 @@ public sealed class SaikuroProvider
         string name,
         Func<IReadOnlyList<object?>, object?> handler,
         RegisterOptions? options = null
-    )
-    {
-        _handlers[name] = new HandlerEntry
-        {
-            Async = (args, _) => Task.FromResult(handler(args)),
-            Options = options ?? new RegisterOptions(),
-        };
-        return this;
-    }
+    ) => RegisterCore(name, options, e => e.Async = (args, _) => Task.FromResult(handler(args)));
 
     /// <summary>Register an async function.</summary>
     public SaikuroProvider Register(
         string name,
         Func<IReadOnlyList<object?>, Task<object?>> handler,
         RegisterOptions? options = null
-    )
-    {
-        _handlers[name] = new HandlerEntry
-        {
-            Async = (args, ct) => handler(args),
-            Options = options ?? new RegisterOptions(),
-        };
-        return this;
-    }
+    ) => RegisterCore(name, options, e => e.Async = (args, ct) => handler(args));
 
     /// <summary>Register an async-enumerable (streaming) function.</summary>
     public SaikuroProvider Register(
         string name,
         Func<IReadOnlyList<object?>, IAsyncEnumerable<object?>> handler,
         RegisterOptions? options = null
-    )
-    {
-        _handlers[name] = new HandlerEntry
-        {
-            Streaming = (args, _) => handler(args),
-            Options = options ?? new RegisterOptions(),
-        };
-        return this;
-    }
+    ) => RegisterCore(name, options, e => e.Streaming = (args, _) => handler(args));
 
     //  Schema
 
@@ -288,46 +272,44 @@ public sealed class SaikuroProvider
     /// </summary>
     public Dictionary<string, object?> SchemaDict()
     {
-        var functions = new Dictionary<string, object?>();
+        var functions = new Dictionary<string, object?>(_handlers.Count);
         foreach (var (name, entry) in _handlers)
         {
-            var opts = entry.Options;
-            var argList = new List<object?>();
-            if (opts.Args is not null)
-            {
-                foreach (var a in opts.Args)
-                {
-                    var wireArg = new Dictionary<string, object?>
-                    {
-                        [WireKey.Name] = a.Name,
-                        [WireKey.Type] = (a.Type ?? T.Any()).ToWire(),
-                    };
-                    if (a.Optional)
-                        wireArg[WireKey.Optional] = true;
-                    if (a.Doc is not null)
-                        wireArg[WireKey.Doc] = a.Doc;
-                    if (a.Default is not null)
-                        wireArg[WireKey.Default] = a.Default;
-                    argList.Add(wireArg);
-                }
-            }
-
-            var fn = new Dictionary<string, object?>
-            {
-                [WireKey.Args] = argList,
-                [WireKey.Returns] = (opts.Returns ?? T.Any()).ToWire(),
-                [WireKey.Visibility] = opts.Visibility,
-                [WireKey.Capabilities] =
-                    (IReadOnlyList<object?>)(opts.Capabilities?.Cast<object?>().ToList() ?? []),
-            };
-            if (opts.Doc is not null)
-                fn[WireKey.Doc] = opts.Doc;
-            if (opts.Idempotent.HasValue)
-                fn[WireKey.Idempotent] = opts.Idempotent.Value;
-            functions[name] = fn;
+            functions[name] = BuildFunctionDict(entry.Options);
         }
-
         return WireKey.BuildSchemaDict(_namespace, functions);
+    }
+
+    private static Dictionary<string, object?> BuildFunctionDict(RegisterOptions opts)
+    {
+        var argList = opts.Args is not null
+            ? opts.Args.Select(BuildWireArg).Cast<object?>().ToList()
+            : new List<object?>();
+
+        var fn = new Dictionary<string, object?>
+        {
+            [WireKey.Args] = argList,
+            [WireKey.Returns] = (opts.Returns ?? T.Any()).ToWire(),
+            [WireKey.Visibility] = opts.Visibility,
+            [WireKey.Capabilities] =
+                (IReadOnlyList<object?>)(opts.Capabilities?.Cast<object?>().ToList() ?? []),
+        };
+        if (opts.Doc is not null) fn[WireKey.Doc] = opts.Doc;
+        if (opts.Idempotent.HasValue) fn[WireKey.Idempotent] = opts.Idempotent.Value;
+        return fn;
+    }
+
+    private static Dictionary<string, object?> BuildWireArg(ArgDescriptor a)
+    {
+        var wireArg = new Dictionary<string, object?>
+        {
+            [WireKey.Name] = a.Name,
+            [WireKey.Type] = (a.Type ?? T.Any()).ToWire(),
+        };
+        if (a.Optional) wireArg[WireKey.Optional] = true;
+        if (a.Doc is not null) wireArg[WireKey.Doc] = a.Doc;
+        if (a.Default is not null) wireArg[WireKey.Default] = a.Default;
+        return wireArg;
     }
 
     //  Dispatch

@@ -12,7 +12,6 @@
  *   const schema = extractor.buildSchema("my-namespace");
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as ts from "typescript";
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -38,18 +37,18 @@ export interface ExtractedFunction {
 }
 export type TypeDescriptor =
   | {
-      kind: "primitive";
-      type:
-        | "bool"
-        | "i32"
-        | "i64"
-        | "f32"
-        | "f64"
-        | "string"
-        | "bytes"
-        | "any"
-        | "unit";
-    }
+    kind: "primitive";
+    type:
+    | "bool"
+    | "i32"
+    | "i64"
+    | "f32"
+    | "f64"
+    | "string"
+    | "bytes"
+    | "any"
+    | "unit";
+  }
   | { kind: "list"; item: TypeDescriptor }
   | { kind: "map"; key: TypeDescriptor; value: TypeDescriptor }
   | { kind: "optional"; inner: TypeDescriptor }
@@ -134,7 +133,7 @@ export class SchemaExtractor {
         if (key) return this.sourceFiles.get(key);
         return undefined;
       },
-      writeFile: () => {},
+      writeFile: () => { },
       readFile: (fileName) => {
         // Prefer in-memory source files (exact or basename matches).
         const key = findSourceKey(fileName);
@@ -175,7 +174,7 @@ export class SchemaExtractor {
             moduleName,
             containingFile,
             options,
-            ts.sys as any,
+            ts.sys as ts.ModuleResolutionHost,
           );
           return res.resolvedModule || undefined;
         });
@@ -193,8 +192,8 @@ export class SchemaExtractor {
 
     // Use the TypeScript JSDoc helpers when available to robustly parse tags.
     try {
-      const tags = (ts as any).getJSDocTags
-        ? ((ts as any).getJSDocTags(node as any) as ts.JSDocTag[])
+      const tags: readonly ts.JSDocTag[] = ts.getJSDocTags
+        ? ts.getJSDocTags(node)
         : [];
 
       for (const tag of tags) {
@@ -203,11 +202,11 @@ export class SchemaExtractor {
         const comment = (tag.comment && String(tag.comment)) || "";
 
         if (tagName === "param") {
-          // Parameter tag may have a name property
-          const pName = (tag as any).name
-            ? (tag as any).name.getText
-              ? (tag as any).name.getText()
-              : String((tag as any).name)
+          const paramTag = tag as ts.JSDocParameterTag;
+          const pName = paramTag.name
+            ? paramTag.name.getText
+              ? paramTag.name.getText()
+              : String(paramTag.name)
             : "";
           if (pName) result.params!.set(pName, comment.trim());
         } else if (tagName === "returns" || tagName === "return") {
@@ -217,7 +216,7 @@ export class SchemaExtractor {
         } else if (tagName === "visibility") {
           const v = comment.trim();
           if (v === "public" || v === "internal" || v === "private")
-            result.visibility = v as any;
+            result.visibility = v;
         }
       }
     } catch {
@@ -279,11 +278,12 @@ export class SchemaExtractor {
     const primitive = this.typeToPrimitive(name);
     if (primitive) return primitive;
 
-    const asAny = type as any;
-    if (asAny.elementType) {
+    const hasElementType = !!(type as any).elementType;
+    if (hasElementType) {
+      const el = (type as any).elementType as ts.Type;
       return {
         kind: "list",
-        item: this.typeToDescriptor(asAny.elementType as ts.Type),
+        item: this.typeToDescriptor(el),
       };
     }
 
@@ -300,17 +300,20 @@ export class SchemaExtractor {
     }
 
     if (this.typeChecker!.isArrayType?.(type) ?? false) {
-      const el = asAny.elementType ??
-        asAny.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any };
+      const arr = type as any;
+      const el = (arr.elementType ??
+        arr.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any }) as ts.Type;
       return { kind: "list", item: this.typeToDescriptor(el) };
     }
 
-    if (asAny.target?.objectFlags & ts.ObjectFlags.Tuple) {
+    const tupTarget = (type as any).target;
+    if (tupTarget?.objectFlags & ts.ObjectFlags.Tuple) {
+      const tup = type as any;
       const items = (
-        asAny.resolvedTypeArguments ??
-        asAny.typeArguments ??
+        tup.resolvedTypeArguments ??
+        tup.typeArguments ??
         []
-      ).map((e: any) => this.typeToDescriptor(e as ts.Type));
+      ).map((e: ts.Type) => this.typeToDescriptor(e));
       return { kind: "list", item: items[0] ?? { kind: "primitive", type: "any" } };
     }
 
@@ -322,7 +325,9 @@ export class SchemaExtractor {
       return { kind: "primitive", type: "any" };
     }
 
-    if (asAny.typeArguments ?? asAny.aliasTypeArguments) {
+    const refTypeArgs = (type as any).typeArguments;
+    const refAliasTypeArgs = (type as any).aliasTypeArguments;
+    if (refTypeArgs ?? refAliasTypeArgs) {
       const ref = this.typeToReference(type, name);
       if (ref) return ref;
     }
@@ -366,14 +371,14 @@ export class SchemaExtractor {
 
   private typeToRecordFromType(type: ts.Type): TypeDescriptor | undefined {
     const ref = type as any;
-    const typeArgs = ref.typeArguments ?? ref.aliasTypeArguments;
-    if (typeArgs?.length >= 2) {
-      return {
-        kind: "map",
-        key: this.typeToDescriptor(typeArgs[0]),
-        value: this.typeToDescriptor(typeArgs[1]),
-      };
-    }
+    const typeArgs: readonly ts.Type[] | undefined =
+      ref.typeArguments ?? ref.aliasTypeArguments;
+    if (!typeArgs || typeArgs.length < 2) return;
+    return {
+      kind: "map",
+      key: this.typeToDescriptor(typeArgs[0]),
+      value: this.typeToDescriptor(typeArgs[1]),
+    };
   }
 
   private typeToUnion(type: ts.UnionType): TypeDescriptor {
@@ -420,8 +425,8 @@ export class SchemaExtractor {
     type: ts.Type,
     name: string,
   ): TypeDescriptor | undefined {
-    const typeArgs =
-      (type as any).typeArguments ?? (type as any).aliasTypeArguments;
+    const typeArgs: readonly ts.Type[] | undefined = (type as any).typeArguments ??
+      (type as any).aliasTypeArguments;
     if (!typeArgs) return;
 
     if (name.startsWith("Promise") && typeArgs.length > 0) {
@@ -503,12 +508,11 @@ export class SchemaExtractor {
 
       // Extract return type
       const returnType = signature.getReturnType();
+      const retSymbol = returnType.getSymbol();
       const isGenerator =
         name.startsWith("gen_") ||
         !!node.asteriskToken ||
-        ((returnType as any).symbol &&
-          (returnType as any).symbol.getName &&
-          (returnType as any).symbol.getName() === "AsyncGenerator");
+        !!(retSymbol && retSymbol.getName() === "AsyncGenerator");
 
       return {
         name,

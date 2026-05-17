@@ -27,7 +27,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Saikuro;
 
 namespace Saikuro.Schema;
@@ -224,52 +224,33 @@ public class XmlDocumentationParser
             return;
         }
 
-        var content = File.ReadAllText(xmlPath);
-        ParseXml(content);
+        ParseXml(XDocument.Load(xmlPath));
     }
 
-    private void ParseXml(string content)
+    private void ParseXml(XDocument doc)
     {
-        // Simple XML parsing - look for <member> elements with name and <summary>/<param>
-        var memberRegex = new System.Text.RegularExpressions.Regex(
-            @"<member\s+name=""([^""]+)""[^>]*>[\s\S]*?</member>",
-            System.Text.RegularExpressions.RegexOptions.Compiled
-        );
-
-        foreach (System.Text.RegularExpressions.Match match in memberRegex.Matches(content))
+        foreach (var member in doc.Descendants("member"))
         {
-            var name = match.Groups[1].Value;
-            var body = match.Groups[0].Value;
+            var name = member.Attribute("name")?.Value;
+            if (name is null) continue;
 
-            // Extract summary
-            var summaryMatch = System.Text.RegularExpressions.Regex.Match(
-                body,
-                @"<summary[^>]*>([\s\S]*?)</summary>"
-            );
-            if (summaryMatch.Success)
+            var summary = member.Element("summary")?.Value;
+            if (!string.IsNullOrWhiteSpace(summary))
             {
-                var summary = CleanXmlText(summaryMatch.Groups[1].Value);
-                if (!string.IsNullOrWhiteSpace(summary))
-                {
-                    _memberDocs[name] = summary;
-                }
+                _memberDocs[name] = NormalizeXmlText(summary);
             }
 
-            // Extract param docs
-            var paramMatches = System.Text.RegularExpressions.Regex.Matches(
-                body,
-                @"<param\s+name=""([^""]+)""[^>]*>([\s\S]*?)</param>"
-            );
-            if (paramMatches.Count > 0)
+            var paramElements = member.Elements("param");
+            if (paramElements.Any())
             {
                 var paramDocs = new Dictionary<string, string>();
-                foreach (System.Text.RegularExpressions.Match pm in paramMatches)
+                foreach (var p in paramElements)
                 {
-                    var paramName = pm.Groups[1].Value;
-                    var paramDoc = CleanXmlText(pm.Groups[2].Value);
-                    if (!string.IsNullOrWhiteSpace(paramDoc))
+                    var pName = p.Attribute("name")?.Value;
+                    var pDoc = p.Value;
+                    if (pName is not null && !string.IsNullOrWhiteSpace(pDoc))
                     {
-                        paramDocs[paramName] = paramDoc;
+                        paramDocs[pName] = NormalizeXmlText(pDoc);
                     }
                 }
                 if (paramDocs.Count > 0)
@@ -280,9 +261,9 @@ public class XmlDocumentationParser
         }
     }
 
-    private static string CleanXmlText(string text)
+    private static string NormalizeXmlText(string text)
     {
-        return Regex.Replace(text, @"\s+", " ").Trim();
+        return string.Join(" ", text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
     }
 
     public string? GetMemberDoc(string fullMemberName)

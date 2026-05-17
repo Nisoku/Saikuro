@@ -226,7 +226,9 @@ impl InvocationValidator {
     // Batch validation
 
     fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
-        let items = envelope.batch_items.as_ref().unwrap(); // checked in structural pass
+        let items = envelope.batch_items.as_ref().expect(
+            "batch envelope missing batch_items; should have been caught in structural pass",
+        );
 
         // Validate each item; collect the first error with its index.
         for (index, item) in items.iter().enumerate() {

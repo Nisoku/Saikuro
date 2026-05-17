@@ -3,6 +3,14 @@ project(saikuro_cpp_adapter LANGUAGES CXX)
 
 enable_testing()
 
+include(FetchContent)
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(saikuro_cpp_adapter INTERFACE)
 target_compile_features(saikuro_cpp_adapter INTERFACE cxx_std_11)
 
@@ -22,6 +30,7 @@ target_include_directories(saikuro_cpp_schema_extractor
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_link_libraries(saikuro_cpp_schema_extractor PUBLIC nlohmann_json::nlohmann_json)
 
 add_executable(saikuro_cpp_schema_cli src/saikuro_cpp_schema.cpp)
 target_link_libraries(saikuro_cpp_schema_cli PRIVATE saikuro_cpp_schema_extractor)

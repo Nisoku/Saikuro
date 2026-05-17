@@ -1,68 +1,22 @@
 //! Resource-envelope dispatch integration tests
 
-use bytes::Bytes;
 use saikuro_core::{
-    capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
     error::ErrorCode,
     resource::ResourceHandle,
-    schema::{FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility},
     value::Value,
     ResponseEnvelope,
 };
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::{InvocationRouter, RouterConfig},
+    router::InvocationRouter,
 };
-use saikuro_runtime::connection::ConnectionHandler;
-use saikuro_schema::{
-    capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
-};
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use saikuro_schema::registry::SchemaRegistry;
+
+mod common;
 
 //  Helpers
-
-/// Build a minimal [`Schema`] with one namespace and one zero-argument function
-/// accepting any number of arguments (uses `any` type for the first arg if needed).
-fn minimal_schema(namespace: &str, function: &str) -> Schema {
-    let mut functions = std::collections::HashMap::new();
-    functions.insert(
-        function.to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Any),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    let mut namespaces = std::collections::HashMap::new();
-    namespaces.insert(
-        namespace.to_owned(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
-    Schema {
-        version: 1,
-        namespaces,
-        types: std::collections::HashMap::new(),
-    }
-}
-
-/// Register a namespace schema into a `SchemaRegistry` so the validator accepts
-/// invocations to that namespace from a `ConnectionHandler`.
-fn register_namespace(registry: &SchemaRegistry, namespace: &str, function: &str) {
-    registry
-        .merge_schema(minimal_schema(namespace, function), "test-provider")
-        .expect("merge_schema must succeed");
-}
 
 /// Build a `ProviderRegistry` with a single provider subscribed to `namespace`.
 fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
@@ -94,48 +48,6 @@ fn spawn_responder(
 /// Build a `Value` that encodes a given `ResourceHandle` (same as the wire format).
 fn handle_to_value(handle: &ResourceHandle) -> Value {
     handle.to_value()
-}
-
-/// Run a single envelope through a full `ConnectionHandler` (the same plumbing
-/// used by the real runtime).  Mirrors the helper in `announce_dispatch.rs`.
-async fn round_trip_via_handler(
-    schema_registry: SchemaRegistry,
-    provider_registry: ProviderRegistry,
-    envelope: Envelope,
-) -> ResponseEnvelope {
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
-    let (handler_sender, handler_receiver) = handler_transport.split();
-    let (mut test_sender, mut test_receiver) = test_transport.split();
-
-    let router = InvocationRouter::new(provider_registry.clone(), RouterConfig::default());
-    let validator = InvocationValidator::new(schema_registry.clone());
-    let capability_engine = CapabilityEngine::default();
-
-    let handler = ConnectionHandler {
-        peer_id: "test-peer".to_owned(),
-        sender: handler_sender,
-        receiver: handler_receiver,
-        validator,
-        capability_engine,
-        router,
-        peer_capabilities: CapabilitySet::empty(),
-        max_message_size: 4 * 1024 * 1024,
-        schema_registry,
-        provider_registry,
-    };
-
-    let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
-    test_sender.send(frame).await.expect("send frame");
-    drop(test_sender);
-
-    handler.run().await;
-
-    let resp_frame = test_receiver
-        .recv()
-        .await
-        .expect("recv response")
-        .expect("frame must be present");
-    ResponseEnvelope::from_msgpack(&resp_frame).expect("decode response")
 }
 
 //  Tests
@@ -306,12 +218,11 @@ fn resource_dispatch_through_connection_handler() {
         let _responder = spawn_responder(work_rx, result_value.clone());
 
         let schema_registry = SchemaRegistry::new();
-        // Register the target function so the validator passes.
-        register_namespace(&schema_registry, "docs", "fetch");
+        common::register_namespace(&schema_registry, "docs", "fetch");
 
         let env = Envelope::resource("docs.fetch", vec![]);
 
-        let resp = round_trip_via_handler(schema_registry, provider_registry, env).await;
+        let resp = common::round_trip_via_handler(schema_registry, provider_registry, env).await;
 
         assert!(
             resp.ok,
@@ -336,7 +247,7 @@ fn resource_to_unknown_namespace_via_handler_returns_namespace_not_found() {
         let provider_registry = ProviderRegistry::new();
 
         let env = Envelope::resource("unknown_ns.open", vec![]);
-        let resp = round_trip_via_handler(schema_registry, provider_registry, env).await;
+        let resp = common::round_trip_via_handler(schema_registry, provider_registry, env).await;
 
         assert!(!resp.ok, "should fail for unregistered namespace");
         let err = resp.error.expect("error detail must be present");
@@ -377,9 +288,6 @@ fn resource_response_id_matches_request_id() {
 #[test]
 fn concurrent_resource_invocations_all_succeed() {
     saikuro_exec::block_on(async {
-        // Each concurrent call gets its own handle with a unique id.
-        // The echo-provider returns whatever value is sent:  here we just use a
-        // static handle value; the important thing is that all futures complete.
         let handle = ResourceHandle::new("concurrent-test");
         let result_value = handle_to_value(&handle);
 
@@ -424,7 +332,6 @@ fn resource_handle_from_value_rejects_non_map() {
 /// `ResourceHandle::from_value` returns `None` for a map that has no `id` field.
 #[test]
 fn resource_handle_from_value_rejects_missing_id() {
-    // Build a Value::Map that lacks the "id" key.
     use std::collections::BTreeMap;
     let mut map: BTreeMap<String, Value> = BTreeMap::new();
     map.insert("size".to_owned(), Value::Int(100));

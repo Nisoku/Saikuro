@@ -30,11 +30,12 @@ import re
 import sys
 from pathlib import Path
 from typing import Callable
+from types import ModuleType
 
 from .schema import SchemaBuilder
 
 
-def _load_module_from_path(path: Path):
+def _load_module_from_path(path: Path) -> ModuleType:
     """Import a Python file as a module.  Returns the module object."""
     spec = importlib.util.spec_from_file_location("_saikuro_schema_target", path)
     if spec is None or spec.loader is None:
@@ -55,7 +56,7 @@ def _load_module_from_path(path: Path):
     return module
 
 
-def _extract_functions(module) -> list[tuple[str, Callable]]:
+def _extract_functions(module: ModuleType) -> list[tuple[str, Callable]]:
     """Return all public top-level callables from *module*."""
     results = []
     for name, obj in inspect.getmembers(module, inspect.isfunction):

@@ -66,6 +66,8 @@
 
 - [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
 - [ ] Make WASM compilation of runtime work like how i imagined it
-- [X] WasmHostTransport for WASM
-  - A transport that uses BroadcastChannel
-- [ ] Language Adapter Template Generator
+
+## Other
+
+- [ ] Every language adapter independently re-implements the same wire protocol logic, so every protocol change requires updating all of them
+- [ ] Language Adapter Template Generator (using above)

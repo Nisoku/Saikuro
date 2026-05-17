@@ -336,13 +336,8 @@ class InMemoryTransport(BaseTransport):
             self._closed = True
             # Unblock any coroutine waiting in recv().
             await self._recv_queue.put(self._EOF)
-            # Remove from global registry if this is a named memory transport.
-            global _memory_channels, _memory_channels_lock
-            with _memory_channels_lock:
-                for name, transport in list(_memory_channels.items()):
-                    if transport is self:
-                        _memory_channels.pop(name, None)
-                        break
+            # Remove from transport registry if this is a named memory transport.
+            make_transport._remove_channel(self)
 
     async def send(self, obj: dict) -> None:
         if self._closed:
@@ -359,9 +354,8 @@ class InMemoryTransport(BaseTransport):
         return item  # type: ignore[return-value]
 
 
-#  Factory function
-_memory_channels: dict[str, "InMemoryTransport"] = {}
-_memory_channels_lock = threading.Lock()
+#  Factory function — channels dict scoped to the function as an attribute
+#  to avoid module-level mutable global state (see M30).
 
 
 def make_transport(address: str) -> BaseTransport:
@@ -381,7 +375,6 @@ def make_transport(address: str) -> BaseTransport:
       - Second call to ``memory://foo`` returns side B, connected to A
       - For tests, prefer ``InMemoryTransport.pair()`` for direct control
     """
-    global _memory_channels, _memory_channels_lock
 
     if address.startswith("memory://"):
         name = (
@@ -389,12 +382,12 @@ def make_transport(address: str) -> BaseTransport:
             if len(address) > len("memory://")
             else "default"
         )
-        with _memory_channels_lock:
-            if name in _memory_channels:
-                return _memory_channels.pop(name)
+        with make_transport._lock:
+            if name in make_transport._channels:
+                return make_transport._channels.pop(name)
             else:
                 a, b = InMemoryTransport.pair()
-                _memory_channels[name] = b
+                make_transport._channels[name] = b
                 return a
 
     if address.startswith("unix://"):
@@ -410,3 +403,25 @@ def make_transport(address: str) -> BaseTransport:
         f"unsupported transport address: {address!r}\n"
         "Supported schemes: unix://, tcp://, ws://, wss://, memory://"
     )
+
+
+make_transport._channels: dict[str, "InMemoryTransport"] = {}
+make_transport._lock = threading.Lock()
+
+
+def reset_transport_factory() -> None:
+    """Clear all cached in-memory channels.  Call between tests for isolation."""
+    with make_transport._lock:
+        make_transport._channels.clear()
+
+
+def _remove_channel(transport: "InMemoryTransport") -> None:
+    """Remove *transport* from the registry if present."""
+    with make_transport._lock:
+        for name, t in list(make_transport._channels.items()):
+            if t is transport:
+                make_transport._channels.pop(name, None)
+                break
+
+
+make_transport._remove_channel = _remove_channel

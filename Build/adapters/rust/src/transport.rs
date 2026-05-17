@@ -35,6 +35,25 @@ pub trait AdapterTransport: Send + 'static {
 }
 
 // Concrete implementations for each transport backend.
+#[cfg(any(feature = "tcp", feature = "unix", feature = "ws", feature = "wasm"))]
+macro_rules! impl_adapter_transport {
+    ($Adapter:ident) => {
+        #[async_trait::async_trait]
+        impl AdapterTransport for $Adapter {
+            async fn send(&mut self, frame: Bytes) -> Result<()> {
+                self.sender.send(frame).await.map_err(Into::into)
+            }
+
+            async fn recv(&mut self) -> Result<Option<Bytes>> {
+                self.receiver.recv().await.map_err(Into::into)
+            }
+
+            async fn close(&mut self) -> Result<()> {
+                self.sender.close().await.map_err(Into::into)
+            }
+        }
+    };
+}
 
 // TCP
 
@@ -66,20 +85,7 @@ mod tcp_impl {
         }
     }
 
-    #[async_trait::async_trait]
-    impl AdapterTransport for TcpAdapter {
-        async fn send(&mut self, frame: Bytes) -> Result<()> {
-            self.sender.send(frame).await.map_err(Into::into)
-        }
-
-        async fn recv(&mut self) -> Result<Option<Bytes>> {
-            self.receiver.recv().await.map_err(Into::into)
-        }
-
-        async fn close(&mut self) -> Result<()> {
-            self.sender.close().await.map_err(Into::into)
-        }
-    }
+    impl_adapter_transport!(TcpAdapter);
 
     pub async fn connect_tcp(host: &str, port: u16) -> Result<Box<dyn AdapterTransport>> {
         let addr: std::net::SocketAddr = format!("{host}:{port}")
@@ -118,20 +124,7 @@ mod unix_impl {
         }
     }
 
-    #[async_trait::async_trait]
-    impl AdapterTransport for UnixAdapter {
-        async fn send(&mut self, frame: Bytes) -> Result<()> {
-            self.sender.send(frame).await.map_err(Into::into)
-        }
-
-        async fn recv(&mut self) -> Result<Option<Bytes>> {
-            self.receiver.recv().await.map_err(Into::into)
-        }
-
-        async fn close(&mut self) -> Result<()> {
-            self.sender.close().await.map_err(Into::into)
-        }
-    }
+    impl_adapter_transport!(UnixAdapter);
 
     pub async fn connect_unix(path: &str) -> Result<Box<dyn AdapterTransport>> {
         Ok(Box::new(UnixAdapter::connect(path).await?))
@@ -164,20 +157,7 @@ mod ws_impl {
         }
     }
 
-    #[async_trait::async_trait]
-    impl AdapterTransport for WsAdapter {
-        async fn send(&mut self, frame: Bytes) -> Result<()> {
-            self.sender.send(frame).await.map_err(Into::into)
-        }
-
-        async fn recv(&mut self) -> Result<Option<Bytes>> {
-            self.receiver.recv().await.map_err(Into::into)
-        }
-
-        async fn close(&mut self) -> Result<()> {
-            self.sender.close().await.map_err(Into::into)
-        }
-    }
+    impl_adapter_transport!(WsAdapter);
 
     pub async fn connect_ws(url: &str) -> Result<Box<dyn AdapterTransport>> {
         Ok(Box::new(WsAdapter::connect(url).await?))
@@ -214,20 +194,7 @@ mod wasm_host_impl {
         }
     }
 
-    #[async_trait::async_trait]
-    impl AdapterTransport for WasmHostAdapter {
-        async fn send(&mut self, frame: Bytes) -> Result<()> {
-            self.sender.send(frame).await.map_err(Into::into)
-        }
-
-        async fn recv(&mut self) -> Result<Option<Bytes>> {
-            self.receiver.recv().await.map_err(Into::into)
-        }
-
-        async fn close(&mut self) -> Result<()> {
-            self.sender.close().await.map_err(Into::into)
-        }
-    }
+    impl_adapter_transport!(WasmHostAdapter);
 
     pub async fn connect_wasm_host(
         channel_name: Option<&str>,

@@ -71,7 +71,8 @@ public interface ITransport
 
 internal static class FrameCodec
 {
-    internal const int MaxFrameSize = 16 * 1024 * 1024; // 16 MiB
+    /// <summary>Maximum frame size: 16 MiB. Matches common runtime limits (e.g. WASM, gRPC).</summary>
+    public const int MaxFrameSize = 16 * 1024 * 1024;
 
     /// <summary>Write a length-prefixed frame to <paramref name="stream"/>.</summary>
     internal static async Task WriteFrameAsync(Stream stream, byte[] payload, CancellationToken ct)

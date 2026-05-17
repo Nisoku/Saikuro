@@ -136,6 +136,33 @@ export interface FunctionSchema {
   readonly returns?: TypeDescriptor;
 }
 
+// _CaptureSink
+
+/**
+ * Minimal in-process Transport sink that captures a single response from
+ * dispatch. Used in `_dispatchBatch` to collect per-item results.
+ */
+class _CaptureSink implements Transport {
+  captured: unknown = null;
+  capturedError: Record<string, unknown> | null = null;
+
+  async connect(): Promise<void> {}
+  async close(): Promise<void> {}
+  async send(obj: Record<string, unknown>): Promise<void> {
+    if (obj["ok"] === true) {
+      this.captured = obj["result"] ?? null;
+    } else {
+      this.capturedError = obj["error"] as Record<string, unknown>;
+    }
+  }
+  async recv(): Promise<null> {
+    return null;
+  }
+  onMessage(): void {}
+  offMessage(): void {}
+  onClose(): void {}
+}
+
 // SaikuroProvider
 
 /**
@@ -354,25 +381,7 @@ export class SaikuroProvider {
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        let captured: unknown = null;
-        let capturedError: Record<string, unknown> | null = null;
-
-        // A minimal in-process sink that records the response from dispatch.
-        const sink: Transport = {
-          connect: async () => {},
-          close: async () => {},
-          send: async (obj: Record<string, unknown>): Promise<void> => {
-            if (obj["ok"] === true) {
-              captured = obj["result"] ?? null;
-            } else {
-              capturedError = obj["error"] as Record<string, unknown>;
-            }
-          },
-          recv: async () => null,
-          onMessage: () => {},
-          offMessage: () => {},
-          onClose: () => {},
-        };
+        const sink = new _CaptureSink();
 
         // Rewrite type to "call" so the handler path runs normally.
         const callEnvelope: Envelope = {
@@ -387,10 +396,10 @@ export class SaikuroProvider {
 
         await this.dispatch(callEnvelope, sink);
 
-        if (capturedError !== null) {
-          const errCode = (capturedError["code"] as string) ?? "ProviderError";
+        if (sink.capturedError !== null) {
+          const errCode = (sink.capturedError["code"] as string) ?? "ProviderError";
           const errMsg =
-            (capturedError["message"] as string) ?? "unknown error";
+            (sink.capturedError["message"] as string) ?? "unknown error";
           await _sendError(transport, envelope.id, errCode, errMsg, {
             batch_index: i,
             target: item.target,
@@ -398,7 +407,7 @@ export class SaikuroProvider {
           return;
         }
 
-        results.push(captured);
+        results.push(sink.captured);
       }
 
       await _sendOk(transport, envelope.id, results);
@@ -529,37 +538,7 @@ export class SaikuroProvider {
     try {
       const schema = schemaOverride ?? this.schemaObject();
       const envelope = makeAnnounceEnvelope(schema);
-      // Register a one-shot listener for the ack before sending so we don't
-      // miss an immediate response from an in-memory transport.
-      let tid: ReturnType<typeof setTimeout> | null = null;
-      let onMsg: ((raw: Record<string, unknown>) => void) | null = null;
-      const ackPromise = new Promise<Record<string, unknown> | null>((res) => {
-        tid = setTimeout(() => {
-          log.warn("schema announce: timed out waiting for ack");
-          // Clean up listener on timeout
-          if (onMsg) transport.offMessage(onMsg);
-          res(null);
-        }, 5000);
-        onMsg = (raw: Record<string, unknown>): void => {
-          if (tid)
-            clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
-          if (onMsg) transport.offMessage(onMsg);
-          res(raw);
-        };
-        transport.onMessage(onMsg);
-      });
-
-      try {
-        await transport.send(envelope);
-      } catch (err) {
-        // Sending failed; remove listener and rethrow.
-        if (onMsg) transport.offMessage(onMsg);
-        if (tid) clearTimeout(tid as unknown as ReturnType<typeof setTimeout>);
-        throw err;
-      }
-
-      const ack = await ackPromise;
-
+      const ack = await _waitForMessage(transport, () => transport.send(envelope), 5000);
       if (ack !== null) {
         if (ack["ok"] === true) {
           log.debug("schema announce acknowledged");
@@ -578,6 +557,37 @@ export class SaikuroProvider {
 }
 
 // Helpers
+
+/**
+ * Register a one-shot message listener, invoke *sendFn*, and resolve with the
+ * first message received — or `null` on timeout. Cleans up listener and timer
+ * on all paths (success, timeout, send-failure).
+ */
+async function _waitForMessage(
+  transport: Transport,
+  sendFn: () => Promise<void>,
+  timeoutMs: number,
+): Promise<Record<string, unknown> | null> {
+  return new Promise<Record<string, unknown> | null>((resolve, reject) => {
+    const tid = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, timeoutMs);
+    const onMsg = (raw: Record<string, unknown>): void => {
+      cleanup();
+      resolve(raw);
+    };
+    const cleanup = (): void => {
+      clearTimeout(tid);
+      transport.offMessage(onMsg);
+    };
+    transport.onMessage(onMsg);
+    sendFn().catch((err: unknown) => {
+      cleanup();
+      reject(err);
+    });
+  });
+}
 
 function _isAsyncGenerator(value: unknown): boolean {
   if (value == null || typeof value !== "object") return false;

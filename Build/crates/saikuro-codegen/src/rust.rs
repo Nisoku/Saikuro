@@ -431,7 +431,12 @@ fn sanitize_type_name(s: &str) -> String {
     let ident = sanitize_ident(s);
     if ident.is_empty() {
         "_".to_string()
-    } else if ident.chars().next().unwrap().is_ascii_digit() {
+    } else if ident
+        .chars()
+        .next()
+        .expect("ident was just checked non-empty")
+        .is_ascii_digit()
+    {
         format!("_{}", ident)
     } else {
         // Avoid reserved keywords for type names

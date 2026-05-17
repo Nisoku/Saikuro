@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
-#include <iostream>
 #include <regex>
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -294,43 +294,6 @@ std::string remove_comments(const std::string &source) {
   return out;
 }
 
-std::string json_escape(const std::string &value) {
-  std::string out;
-  out.reserve(value.size());
-  constexpr const char hex[] = "0123456789abcdef";
-  for (size_t i = 0; i < value.size(); ++i) {
-    const unsigned char ch = static_cast<unsigned char>(value[i]);
-    const char c = static_cast<char>(ch);
-    switch (c) {
-    case '\\':
-      out += "\\\\";
-      break;
-    case '"':
-      out += "\\\"";
-      break;
-    case '\n':
-      out += "\\n";
-      break;
-    case '\r':
-      out += "\\r";
-      break;
-    case '\t':
-      out += "\\t";
-      break;
-    default:
-      if (ch < 0x20) {
-        out += "\\u00";
-        out += hex[(ch >> 4) & 0x0f];
-        out += hex[ch & 0x0f];
-      } else {
-        out += c;
-      }
-      break;
-    }
-  }
-  return out;
-}
-
 std::string map_cpp_type(const std::string &raw) {
   std::string normalized = raw;
 
@@ -442,35 +405,94 @@ bool parse_arg(const std::string &raw, size_t index, Arg *out) {
 }
 
 std::vector<Function> parse_functions(const std::string &source) {
-  // This parser intentionally supports a pragmatic subset of C++ declarations:
-  // simple, semicolon-terminated function prototypes. Argument tokenization is
-  // nesting-aware, but complex forms (e.g., function-pointer declarations) may
-  // still be skipped by the prototype regex.
-  const std::regex proto(
-      R"(([A-Za-z_][A-Za-z0-9_:<>\s\*&]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;)");
+  // Nesting-aware scanner for semicolon-terminated C++ function declarations.
+  // Scans for `name(` patterns (with nesting-aware paren matching) then
+  // backtracks to extract the return type.  Unlike a regex, this correctly
+  // handles nested parentheses in argument lists.
 
   std::vector<Function> functions;
   const std::string clean_source = remove_comments(source);
+  const size_t len = clean_source.size();
+  size_t pos = 0;
 
-  if (clean_source.find("(*") != std::string::npos ||
-      std::regex_search(clean_source, std::regex(R"(<[^>]*,[^>]*>)"))) {
-    // Parser skips declarations with function-pointer params or complex
-    // template arguments.  The regex-based parser intentionally targets simple
-    // prototypes.
-  }
+  while (pos < len) {
+    // Skip whitespace and semicolons.
+    while (pos < len && (std::isspace(static_cast<unsigned char>(clean_source[pos])) ||
+                         clean_source[pos] == ';')) {
+      ++pos;
+    }
+    if (pos >= len) break;
 
-  std::sregex_iterator it(clean_source.begin(), clean_source.end(), proto);
-  std::sregex_iterator end;
-  for (; it != end; ++it) {
-    const std::smatch match = *it;
+    // Find the next identifier followed by '('.
+    size_t name_start = pos;
+    while (name_start < len && !std::isalpha(static_cast<unsigned char>(clean_source[name_start])) &&
+           clean_source[name_start] != '_') {
+      ++name_start;
+    }
+    if (name_start >= len) break;
 
-    const std::string returns = trim(match[1].str());
-    const std::string name = match[2].str();
-    const std::string args_raw = match[3].str();
+    size_t name_end = name_start;
+    while (name_end < len &&
+           (std::isalnum(static_cast<unsigned char>(clean_source[name_end])) ||
+            clean_source[name_end] == '_')) {
+      ++name_end;
+    }
+    const std::string name = clean_source.substr(name_start, name_end - name_start);
+    if (name.empty()) { pos = name_start + 1; continue; }
 
-    if (name.find("saikuro_") == 0) {
+    // Skip whitespace before '('.
+    size_t paren_pos = name_end;
+    while (paren_pos < len &&
+           std::isspace(static_cast<unsigned char>(clean_source[paren_pos]))) {
+      ++paren_pos;
+    }
+    if (paren_pos >= len || clean_source[paren_pos] != '(') {
+      pos = name_start + 1;
       continue;
     }
+
+    // Nesting-aware scan for matching ')'.
+    int depth = 0;
+    size_t args_start = paren_pos + 1;
+    size_t args_end = args_start;
+    bool found_paren = false;
+    for (; args_end < len; ++args_end) {
+      char c = clean_source[args_end];
+      if (c == '(') {
+        ++depth;
+      } else if (c == ')') {
+        if (depth == 0) { found_paren = true; break; }
+        --depth;
+      } else if (c == '"' || c == '\'') {
+        char quote = c;
+        ++args_end;
+        while (args_end < len && clean_source[args_end] != quote) {
+          if (clean_source[args_end] == '\\') ++args_end;
+          ++args_end;
+        }
+      }
+    }
+    if (!found_paren) break;
+
+    const std::string args_raw = clean_source.substr(args_start, args_end - args_start);
+
+    // Expect ';' after ')', ignoring whitespace.
+    size_t semi_pos = args_end + 1;
+    while (semi_pos < len &&
+           std::isspace(static_cast<unsigned char>(clean_source[semi_pos]))) {
+      ++semi_pos;
+    }
+    if (semi_pos >= len || clean_source[semi_pos] != ';') {
+      pos = name_start + 1;
+      continue;
+    }
+
+    pos = semi_pos + 1; // advance past ';' for next iteration
+
+    if (name.find("saikuro_") == 0) continue;
+
+    // Return type is everything from the start of the declaration to the name.
+    const std::string returns = trim(clean_source.substr(pos, name_start - pos));
 
     Function f;
     f.name = name;
@@ -486,35 +508,8 @@ std::vector<Function> parse_functions(const std::string &source) {
 
     functions.push_back(f);
   }
+
   return functions;
-}
-
-void write_indent(std::ostringstream &out, bool pretty, int depth) {
-  if (!pretty) {
-    return;
-  }
-  out << '\n';
-  for (int i = 0; i < depth; ++i) {
-    out << "  ";
-  }
-}
-
-void write_type_obj(std::ostringstream &out, const std::string &primitive_type,
-                    bool pretty, int depth) {
-  out << '{';
-  if (pretty) {
-    write_indent(out, pretty, depth + 1);
-  }
-  out << "\"kind\":\"primitive\"";
-  out << ',';
-  if (pretty) {
-    write_indent(out, pretty, depth + 1);
-  }
-  out << "\"type\":\"" << json_escape(primitive_type) << "\"";
-  if (pretty) {
-    write_indent(out, pretty, depth);
-  }
-  out << '}';
 }
 
 } // namespace
@@ -524,90 +519,34 @@ std::string extract_schema_from_header(const std::string &source,
                                        bool pretty) {
   const std::vector<Function> functions = parse_functions(source);
 
-  std::ostringstream out;
-  out << '{';
-  write_indent(out, pretty, 1);
-  out << "\"version\":1,";
-  write_indent(out, pretty, 1);
-  out << "\"namespaces\":{";
-  write_indent(out, pretty, 2);
-  out << "\"" << json_escape(namespace_name) << "\":{";
-  write_indent(out, pretty, 3);
-  out << "\"functions\":{";
-
-  for (size_t i = 0; i < functions.size(); ++i) {
-    const Function &fn = functions[i];
-    write_indent(out, pretty, 4);
-    out << "\"" << json_escape(fn.name) << "\":{";
-
-    write_indent(out, pretty, 5);
-    out << "\"args\":[";
-    for (size_t ai = 0; ai < fn.args.size(); ++ai) {
-      const Arg &arg = fn.args[ai];
-      if (pretty) {
-        write_indent(out, pretty, 6);
-      }
-      out << '{';
-      if (pretty) {
-        write_indent(out, pretty, 7);
-      }
-      out << "\"name\":\"" << json_escape(arg.name) << "\",";
-      if (pretty) {
-        write_indent(out, pretty, 7);
-      }
-      out << "\"type\":";
-      write_type_obj(out, arg.type, pretty, 7);
-      out << ',';
-      if (pretty) {
-        write_indent(out, pretty, 7);
-      }
-      out << "\"optional\":" << (arg.optional ? "true" : "false");
-      if (pretty) {
-        write_indent(out, pretty, 6);
-      }
-      out << '}';
-      if (ai + 1 < fn.args.size()) {
-        out << ',';
-      }
+  nlohmann::json functions_obj;
+  for (const Function &fn : functions) {
+    nlohmann::json args_arr = nlohmann::json::array();
+    for (const Arg &arg : fn.args) {
+      args_arr.push_back({
+        {"name", arg.name},
+        {"type", {{"kind", "primitive"}, {"type", arg.type}}},
+        {"optional", arg.optional},
+      });
     }
-    if (pretty && !fn.args.empty()) {
-      write_indent(out, pretty, 5);
-    }
-    out << "],";
 
-    write_indent(out, pretty, 5);
-    out << "\"returns\":";
-    write_type_obj(out, fn.returns, pretty, 5);
-    out << ',';
-
-    write_indent(out, pretty, 5);
-    out << "\"visibility\":\"public\",";
-    write_indent(out, pretty, 5);
-    out << "\"capabilities\":[],";
-    write_indent(out, pretty, 5);
-    out << "\"idempotent\":false";
-    write_indent(out, pretty, 4);
-    out << '}';
-    if (i + 1 < functions.size()) {
-      out << ',';
-    }
+    functions_obj[fn.name] = {
+      {"args", std::move(args_arr)},
+      {"returns", {{"kind", "primitive"}, {"type", fn.returns}}},
+      {"visibility", "public"},
+      {"capabilities", nlohmann::json::array()},
+      {"idempotent", false},
+    };
   }
 
-  if (pretty && !functions.empty()) {
-    write_indent(out, pretty, 3);
-  }
-  out << '}';
-  write_indent(out, pretty, 2);
-  out << '}';
-  write_indent(out, pretty, 1);
-  out << "},";
+  nlohmann::json doc = {
+    {"version", 1},
+    {"namespaces",
+     {{namespace_name, {{"functions", std::move(functions_obj)}}}}},
+    {"types", nlohmann::json::object()},
+  };
 
-  write_indent(out, pretty, 1);
-  out << "\"types\":{}";
-  write_indent(out, pretty, 0);
-  out << '}';
-
-  return out.str();
+  return doc.dump(pretty ? 2 : -1);
 }
 
 std::string extract_schema_from_file(const std::string &path,

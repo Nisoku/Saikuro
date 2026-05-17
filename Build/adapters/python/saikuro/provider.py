@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from .envelope import Envelope, InvocationType, ResponseEnvelope, StreamControl
 from .error import SaikuroError
@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 # A handler is any callable (sync or async) that accepts positional args and
 # returns a value (or an async generator for streams).
 Handler = Callable[..., Any]
+
+
+class _TransportSink(Protocol):
+    """Minimal transport-like interface: only requires async send."""
+    async def send(self, obj: dict) -> None: ...
 
 
 class SaikuroProvider:
@@ -113,7 +118,7 @@ class SaikuroProvider:
     async def _dispatch(
         self,
         envelope: Envelope,
-        transport: BaseTransport,
+        transport: _TransportSink,
     ) -> None:
         """Handle one inbound invocation envelope."""
         if envelope.invocation_type == InvocationType.BATCH:
@@ -359,27 +364,18 @@ def register_function(
 #  Helpers
 
 
-class _ResultSink(BaseTransport):
-    """A no-op transport that captures the result or error from a single dispatch call."""
+class _ResultSink:
+    """Captures the result or error from a single dispatch call. Composed, not inherited."""
 
     def __init__(self) -> None:
         self.result: Any = None
         self.error: Optional[dict] = None
-
-    async def connect(self) -> None:
-        pass
-
-    async def close(self) -> None:
-        pass
 
     async def send(self, obj: dict) -> None:
         if obj.get("ok"):
             self.result = obj.get("result")
         else:
             self.error = obj.get("error")
-
-    async def recv(self) -> Optional[dict]:
-        return None
 
 
 def _make_ok(inv_id: str, result: Any) -> dict:

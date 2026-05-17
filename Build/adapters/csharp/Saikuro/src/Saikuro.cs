@@ -94,3 +94,50 @@ using XmlDocumentationParser = Saikuro.Schema.XmlDocumentationParser;
 using TcpTransport = Saikuro.TcpTransport;
 using UnixSocketTransport = Saikuro.UnixSocketTransport;
 #endif
+
+// Compile-time verification: if any aliased type is renamed, these references
+// will fail to compile, alerting the maintainer that the alias needs updating.
+// This runs only on Debug builds to avoid any JIT overhead.
+#if DEBUG
+internal static class _AliasVerifier
+{
+    internal static void Verify()
+    {
+        _ = typeof(ArgDescriptor);
+        _ = typeof(AsyncHandler);
+        _ = typeof(BufferOverflowException);
+        _ = typeof(CapabilityDeniedException);
+        _ = typeof(ChannelClosedException);
+        _ = typeof(ClientOptions);
+        _ = typeof(Envelope);
+        _ = typeof(FunctionNotFoundException);
+        _ = typeof(InMemoryTransport);
+        _ = typeof(InvalidArgumentsException);
+        _ = typeof(InvocationType);
+        _ = typeof(MalformedEnvelopeException);
+        _ = typeof(MessageTooLargeException);
+        _ = typeof(NoProviderException);
+        _ = typeof(OutOfOrderException);
+        _ = typeof(ProtocolVersionException);
+        _ = typeof(ProviderException);
+        _ = typeof(ProviderUnavailableException);
+        _ = typeof(RegisterOptions);
+        _ = typeof(ResourceHandle);
+        _ = typeof(ResponseEnvelope);
+        _ = typeof(SaikuroTimeoutException);
+        _ = typeof(SchemaExtractor);
+        _ = typeof(SchemaExtractorExtensions);
+        _ = typeof(StreamClosedException);
+        _ = typeof(StreamHandler);
+        _ = typeof(TransportException);
+        _ = typeof(TransportFactory);
+        _ = typeof(TypeDescriptor);
+        _ = typeof(WebSocketTransport);
+        _ = typeof(XmlDocumentationParser);
+#if !WASM
+        _ = typeof(TcpTransport);
+        _ = typeof(UnixSocketTransport);
+#endif
+    }
+}
+#endif

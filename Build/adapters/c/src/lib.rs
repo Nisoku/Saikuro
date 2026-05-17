@@ -189,6 +189,10 @@ struct ClientHandle {
 }
 
 impl ClientHandle {
+    fn client(&self) -> &Client {
+        self.client.as_ref().expect("client already closed")
+    }
+
     fn new(address: &str) -> Result<Self, String> {
         let rt = Arc::new(
             saikuro_exec::new_runtime()
@@ -350,10 +354,7 @@ pub extern "C" fn saikuro_client_call_json(
     let h = ok_or_ptr!(client_handle(handle));
     let target = ok_or_ptr!(cstr_to_string(target, "target"));
     let args = ok_or_ptr!(c_json_array(args_json));
-    ptr_saikuro(
-        h.rt.block_on(h.client.as_ref().unwrap().call(target, args)),
-        "call",
-    )
+    ptr_saikuro(h.rt.block_on(h.client().call(target, args)), "call")
 }
 
 #[no_mangle]
@@ -373,12 +374,7 @@ pub extern "C" fn saikuro_client_call_json_timeout(
     let args = ok_or_ptr!(c_json_array(args_json));
     let timeout = Duration::from_millis(timeout_ms as u64);
     ptr_saikuro(
-        h.rt.block_on(
-            h.client
-                .as_ref()
-                .unwrap()
-                .call_with_timeout(target, args, Some(timeout)),
-        ),
+        h.rt.block_on(h.client().call_with_timeout(target, args, Some(timeout))),
         "call",
     )
 }
@@ -393,10 +389,7 @@ pub extern "C" fn saikuro_client_cast_json(
     let h = ok_or_int!(client_handle(handle));
     let target = ok_or_int!(cstr_to_string(target, "target"));
     let args = ok_or_int!(c_json_array(args_json));
-    int_saikuro(
-        h.rt.block_on(h.client.as_ref().unwrap().cast(target, args)),
-        "cast",
-    )
+    int_saikuro(h.rt.block_on(h.client().cast(target, args)), "cast")
 }
 
 #[no_mangle]
@@ -408,7 +401,7 @@ pub extern "C" fn saikuro_client_batch_json(
     let h = ok_or_ptr!(client_handle(handle));
     let raw = ok_or_ptr!(cstr_to_string(calls_json, "calls_json"));
     let calls = ok_or_ptr!(parse_batch_calls(&raw));
-    match h.rt.block_on(h.client.as_ref().unwrap().batch(calls)) {
+    match h.rt.block_on(h.client().batch(calls)) {
         Ok(v) => match serde_json::to_string(&v) {
             Ok(json) => into_c_string_ptr(&json),
             Err(e) => {
@@ -434,10 +427,7 @@ pub extern "C" fn saikuro_client_stream_json(
     let target = ok_or_ptr!(cstr_to_string(target, "target"));
     let args = ok_or_ptr!(c_json_array(args_json));
     let rt = h.rt.clone();
-    let stream = match h
-        .rt
-        .block_on(h.client.as_ref().unwrap().stream(target, args))
-    {
+    let stream = match h.rt.block_on(h.client().stream(target, args)) {
         Ok(s) => s,
         Err(e) => {
             set_last_error(format!("stream open failed: {e}"));
@@ -536,10 +526,7 @@ pub extern "C" fn saikuro_client_channel_json(
     let target = ok_or_ptr!(cstr_to_string(target, "target"));
     let args = ok_or_ptr!(c_json_array(args_json));
     let rt = h.rt.clone();
-    let channel = match h
-        .rt
-        .block_on(h.client.as_ref().unwrap().channel(target, args))
-    {
+    let channel = match h.rt.block_on(h.client().channel(target, args)) {
         Ok(c) => c,
         Err(e) => {
             set_last_error(format!("channel open failed: {e}"));
@@ -713,10 +700,7 @@ pub extern "C" fn saikuro_client_resource_json(
     let h = ok_or_ptr!(client_handle(handle));
     let target = ok_or_ptr!(cstr_to_string(target, "target"));
     let args = ok_or_ptr!(c_json_array(args_json));
-    ptr_saikuro(
-        h.rt.block_on(h.client.as_ref().unwrap().resource(target, args)),
-        "resource",
-    )
+    ptr_saikuro(h.rt.block_on(h.client().resource(target, args)), "resource")
 }
 
 #[no_mangle]
@@ -745,7 +729,7 @@ pub extern "C" fn saikuro_client_log(
         }
     };
     int_saikuro(
-        h.rt.block_on(h.client.as_ref().unwrap().log(level, name, msg, fields)),
+        h.rt.block_on(h.client().log(level, name, msg, fields)),
         "log",
     )
 }

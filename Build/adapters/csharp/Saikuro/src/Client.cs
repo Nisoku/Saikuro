@@ -226,12 +226,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeCall(target, args, capability);
-        var resp = await SendAndWaitAsync(envelope, timeout, ct).ConfigureAwait(false);
-        if (!resp.Ok)
-        {
-            var p = resp.Error ?? new ErrorPayload { Code = "Internal", Message = "call failed" };
-            throw SaikuroException.FromPayload(p);
-        }
+        var resp = await SendAndWaitCheckedAsync(envelope, timeout, ct, "call failed").ConfigureAwait(false);
         return resp.Result;
     }
 
@@ -257,14 +252,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeResource(target, args, capability);
-        var resp = await SendAndWaitAsync(envelope, timeout, ct).ConfigureAwait(false);
-        if (!resp.Ok)
-        {
-            var p =
-                resp.Error
-                ?? new ErrorPayload { Code = "Internal", Message = "resource call failed" };
-            throw SaikuroException.FromPayload(p);
-        }
+        var resp = await SendAndWaitCheckedAsync(envelope, timeout, ct, "resource call failed").ConfigureAwait(false);
         if (
             resp.Result is not Dictionary<string, object?> map
             || ResourceHandle.FromMap(map) is not { } handle
@@ -321,14 +309,8 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var items = calls.Select(c => Envelope.MakeCall(c.Target, c.Args, c.Capability)).ToList();
         var batchEnvelope = Envelope.MakeBatch(items);
-        var resp = await SendAndWaitAsync(batchEnvelope, timeout, ct)
+        var resp = await SendAndWaitCheckedAsync(batchEnvelope, timeout, ct, "batch call failed")
             .ConfigureAwait(false);
-        if (!resp.Ok)
-        {
-            var p =
-                resp.Error ?? new ErrorPayload { Code = "Internal", Message = "batch call failed" };
-            throw SaikuroException.FromPayload(p);
-        }
         return resp.Result is System.Collections.IList list
             ? list.Cast<object?>().ToList().AsReadOnly()
             : new List<object?> { resp.Result }.AsReadOnly();
@@ -442,6 +424,18 @@ public sealed class SaikuroClient : IAsyncDisposable
             cancelReg.Dispose();
             timeoutCts?.Dispose();
         }
+    }
+
+    private async Task<ResponseEnvelope> SendAndWaitCheckedAsync(
+        Envelope envelope, TimeSpan? timeout, CancellationToken ct, string errorMessage)
+    {
+        var resp = await SendAndWaitAsync(envelope, timeout, ct).ConfigureAwait(false);
+        if (!resp.Ok)
+        {
+            var p = resp.Error ?? new ErrorPayload { Code = "Internal", Message = errorMessage };
+            throw SaikuroException.FromPayload(p);
+        }
+        return resp;
     }
 
     private Task ChannelSendAsync(string channelId, object? value)

@@ -92,8 +92,8 @@ def _annotation_to_type_str(annotation: Any) -> str:
     return "any"
 
 
-# Convert a type string (or already-shaped descriptor) to a structural descriptor
-def _type_str_to_desc(tstr: str):
+def _type_str_to_desc(tstr: str) -> dict:
+    """Convert a type string (or already-shaped descriptor) to a structural descriptor."""
     prims = (
         "bool",
         "i8",
@@ -143,6 +143,7 @@ class SchemaBuilder:
     """Accumulates function definitions and emits a schema announcement dict."""
 
     def __init__(self, namespace: str) -> None:
+        """Initialize builder for the given namespace."""
         self._namespace = namespace
         self._functions: Dict[str, FunctionDef] = {}
 
