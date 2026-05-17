@@ -423,8 +423,12 @@ impl InvocationRouter {
     }
 
     pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(response, |s| s.inbound_tx(), |s, seq| s.advance_inbound(seq))
-            .await
+        self.route_channel_item(
+            response,
+            |s| s.inbound_tx(),
+            |s, seq| s.advance_inbound(seq),
+        )
+        .await
     }
 
     /// Route an outbound channel item (provider -> client direction) to the

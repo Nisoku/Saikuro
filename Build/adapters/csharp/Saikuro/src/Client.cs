@@ -54,11 +54,6 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
                 _done = true;
                 yield break;
             }
-            if (item.IsStreamEnd)
-            {
-                _done = true;
-                yield break;
-            }
             if (!item.Ok)
             {
                 _done = true;
@@ -66,6 +61,11 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
                     item.Error
                     ?? new ErrorPayload { Code = "Internal", Message = "stream ended with error" };
                 throw SaikuroException.FromPayload(payload);
+            }
+            if (item.IsStreamEnd)
+            {
+                _done = true;
+                yield break;
             }
             yield return (T)item.Result!;
         }

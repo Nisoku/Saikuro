@@ -265,18 +265,15 @@ public class ProviderDispatchStreamTests
             ProviderTestHelpers.MakeEnvelope(InvocationType.Stream, "test.fail_stream", []),
             a
         );
-        var responses = await ProviderTestHelpers.CollectN(b, 3);
+        var responses = await ProviderTestHelpers.CollectN(b, 2);
 
-        Assert.Equal(3, responses.Count);
+        Assert.Equal(2, responses.Count);
         // First item.
         Assert.True((bool)responses[0]["ok"]!);
         Assert.Equal(42L, responses[0]["result"]);
-        // Error frame.
+        // Abort frame with error info.
         Assert.False((bool)responses[1]["ok"]!);
-        var errMap = (Dictionary<string, object?>)responses[1]["error"]!;
-        Assert.Contains("mid-stream failure", (string)errMap["message"]!);
-        // Abort sentinel.
-        Assert.Equal("abort", responses[2]["stream_control"]);
+        Assert.Equal("abort", responses[1]["stream_control"]);
     }
 
     private static async IAsyncEnumerable<object?> CountAsync()

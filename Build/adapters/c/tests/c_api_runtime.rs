@@ -1,4 +1,3 @@
-use std::ffi::{CStr, CString};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,8 +6,7 @@ use std::time::Duration;
 
 use saikuro_c::{
     saikuro_client_batch_json, saikuro_client_call_json, saikuro_client_cast_json,
-    saikuro_client_close, saikuro_client_connect, saikuro_client_free, saikuro_last_error_message,
-    saikuro_string_free,
+    saikuro_client_close, saikuro_client_connect, saikuro_client_free,
 };
 use saikuro_core::{
     capability::CapabilitySet,
@@ -180,19 +178,32 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
         common::take_error()
     );
 
-    let call_result =
-        saikuro_client_call_json(handle, common::c("math.add").as_ptr(), common::c("[2, 40]").as_ptr());
-    assert!(!call_result.is_null(), "call failed: {}", common::take_error());
+    let call_result = saikuro_client_call_json(
+        handle,
+        common::c("math.add").as_ptr(),
+        common::c("[2, 40]").as_ptr(),
+    );
+    assert!(
+        !call_result.is_null(),
+        "call failed: {}",
+        common::take_error()
+    );
     let call_json = common::take_c_string(call_result);
     assert_eq!(call_json, "42");
 
-    let cast_rc = saikuro_client_cast_json(handle, common::c("math.add").as_ptr(), common::c("[5, 6]").as_ptr());
+    let cast_rc = saikuro_client_cast_json(
+        handle,
+        common::c("math.add").as_ptr(),
+        common::c("[5, 6]").as_ptr(),
+    );
     assert_eq!(cast_rc, 0, "cast should succeed: {}", common::take_error());
 
-    let batch_calls = common::c(r#"[
+    let batch_calls = common::c(
+        r#"[
             {"target": "math.add", "args": [1, 2]},
             {"target": "math.add", "args": [3, 4]}
-        ]"#);
+        ]"#,
+    );
     let batch_result = saikuro_client_batch_json(handle, batch_calls.as_ptr());
     assert!(
         !batch_result.is_null(),
@@ -203,7 +214,12 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
     assert_eq!(batch_json, "[3,7]");
 
     let close_rc = saikuro_client_close(handle);
-    assert_eq!(close_rc, 0, "close should succeed: {}", common::take_error());
+    assert_eq!(
+        close_rc,
+        0,
+        "close should succeed: {}",
+        common::take_error()
+    );
     saikuro_client_free(handle);
 }
 
@@ -215,7 +231,11 @@ fn c_client_reports_transport_error_when_namespace_missing() {
     let handle = saikuro_client_connect(address.as_ptr());
     assert!(!handle.is_null());
 
-    let missing = saikuro_client_call_json(handle, common::c("missing.add").as_ptr(), common::c("[1, 1]").as_ptr());
+    let missing = saikuro_client_call_json(
+        handle,
+        common::c("missing.add").as_ptr(),
+        common::c("[1, 1]").as_ptr(),
+    );
     assert!(missing.is_null(), "unknown namespace call should fail");
 
     let message = common::take_error();
@@ -225,6 +245,11 @@ fn c_client_reports_transport_error_when_namespace_missing() {
     );
 
     let close_rc = saikuro_client_close(handle);
-    assert_eq!(close_rc, 0, "close should succeed: {}", common::take_error());
+    assert_eq!(
+        close_rc,
+        0,
+        "close should succeed: {}",
+        common::take_error()
+    );
     saikuro_client_free(handle);
 }

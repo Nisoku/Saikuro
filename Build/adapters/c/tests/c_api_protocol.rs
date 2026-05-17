@@ -1,4 +1,3 @@
-use std::ffi::{CStr, CString};
 use std::net::SocketAddr;
 use std::ptr;
 use std::thread;
@@ -8,9 +7,9 @@ use saikuro_c::{
     saikuro_channel_close, saikuro_channel_next_json, saikuro_channel_send_json,
     saikuro_client_call_json, saikuro_client_call_json_timeout, saikuro_client_channel_json,
     saikuro_client_close, saikuro_client_connect, saikuro_client_free, saikuro_client_log,
-    saikuro_client_resource_json, saikuro_client_stream_json, saikuro_last_error_message,
-    saikuro_provider_free, saikuro_provider_new, saikuro_provider_register, saikuro_provider_serve,
-    saikuro_stream_next_json, saikuro_string_dup, saikuro_string_free,
+    saikuro_client_resource_json, saikuro_client_stream_json, saikuro_provider_free,
+    saikuro_provider_new, saikuro_provider_register, saikuro_provider_serve,
+    saikuro_stream_next_json, saikuro_string_dup,
 };
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
@@ -149,10 +148,22 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     let (address, server) = spawn_scripted_server_for_client();
 
     let handle = saikuro_client_connect(common::c(&address).as_ptr());
-    assert!(!handle.is_null(), "connect failed: {}", common::take_error());
+    assert!(
+        !handle.is_null(),
+        "connect failed: {}",
+        common::take_error()
+    );
 
-    let resource = saikuro_client_resource_json(handle, common::c("files.read").as_ptr(), common::c("[]").as_ptr());
-    assert!(!resource.is_null(), "resource failed: {}", common::take_error());
+    let resource = saikuro_client_resource_json(
+        handle,
+        common::c("files.read").as_ptr(),
+        common::c("[]").as_ptr(),
+    );
+    assert!(
+        !resource.is_null(),
+        "resource failed: {}",
+        common::take_error()
+    );
     assert_eq!(common::take_c_string(resource), "\"contents\"");
 
     let log_rc = saikuro_client_log(
@@ -164,8 +175,16 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     );
     assert_eq!(log_rc, 0, "log failed: {}", common::take_error());
 
-    let stream = saikuro_client_stream_json(handle, common::c("events.watch").as_ptr(), common::c("[]").as_ptr());
-    assert!(!stream.is_null(), "stream open failed: {}", common::take_error());
+    let stream = saikuro_client_stream_json(
+        handle,
+        common::c("events.watch").as_ptr(),
+        common::c("[]").as_ptr(),
+    );
+    assert!(
+        !stream.is_null(),
+        "stream open failed: {}",
+        common::take_error()
+    );
 
     let mut out_json = ptr::null_mut();
     let mut out_done = 0;
@@ -183,8 +202,16 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     assert_eq!(rc, 0);
     assert_eq!(out_done, 1);
 
-    let channel = saikuro_client_channel_json(handle, common::c("chat.open").as_ptr(), common::c("[]").as_ptr());
-    assert!(!channel.is_null(), "channel open failed: {}", common::take_error());
+    let channel = saikuro_client_channel_json(
+        handle,
+        common::c("chat.open").as_ptr(),
+        common::c("[]").as_ptr(),
+    );
+    assert!(
+        !channel.is_null(),
+        "channel open failed: {}",
+        common::take_error()
+    );
 
     let rc = unsafe { saikuro_channel_next_json(channel, &mut out_json, &mut out_done) };
     assert_eq!(rc, 0);
@@ -200,9 +227,18 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     assert_eq!(common::take_c_string(out_json), "\"pong\"");
 
     let close_rc = saikuro_channel_close(channel);
-    assert_eq!(close_rc, 0, "channel close failed: {}", common::take_error());
+    assert_eq!(
+        close_rc,
+        0,
+        "channel close failed: {}",
+        common::take_error()
+    );
 
-    let call_fail = saikuro_client_call_json(handle, common::c("math.fail").as_ptr(), common::c("[]").as_ptr());
+    let call_fail = saikuro_client_call_json(
+        handle,
+        common::c("math.fail").as_ptr(),
+        common::c("[]").as_ptr(),
+    );
     assert!(call_fail.is_null(), "call should fail");
     let call_error = common::take_error();
     assert!(
@@ -210,8 +246,12 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
         "unexpected error mapping: {call_error}"
     );
 
-    let timeout =
-        saikuro_client_call_json_timeout(handle, common::c("slow.never").as_ptr(), common::c("[]").as_ptr(), 30);
+    let timeout = saikuro_client_call_json_timeout(
+        handle,
+        common::c("slow.never").as_ptr(),
+        common::c("[]").as_ptr(),
+        30,
+    );
     assert!(timeout.is_null(), "timeout call should fail");
     let timeout_error = common::take_error();
     assert!(
@@ -220,7 +260,12 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     );
 
     let client_close_rc = saikuro_client_close(handle);
-    assert_eq!(client_close_rc, 0, "client close failed: {}", common::take_error());
+    assert_eq!(
+        client_close_rc,
+        0,
+        "client close failed: {}",
+        common::take_error()
+    );
     saikuro_client_free(handle);
 
     let report = server.join().expect("server thread");
@@ -312,12 +357,26 @@ fn c_provider_announce_and_runtime_dispatch_roundtrip() {
         common::take_error()
     );
 
-    let register_rc =
-        saikuro_provider_register(provider, common::c("add").as_ptr(), Some(add_cb), ptr::null_mut());
-    assert_eq!(register_rc, 0, "provider register failed: {}", common::take_error());
+    let register_rc = saikuro_provider_register(
+        provider,
+        common::c("add").as_ptr(),
+        Some(add_cb),
+        ptr::null_mut(),
+    );
+    assert_eq!(
+        register_rc,
+        0,
+        "provider register failed: {}",
+        common::take_error()
+    );
 
     let serve_rc = saikuro_provider_serve(provider, common::c(&address).as_ptr());
-    assert_eq!(serve_rc, 0, "provider serve failed: {}", common::take_error());
+    assert_eq!(
+        serve_rc,
+        0,
+        "provider serve failed: {}",
+        common::take_error()
+    );
 
     let report = server.join().expect("server thread");
     assert!(

@@ -1,4 +1,3 @@
-use std::ffi::CString;
 use std::ptr;
 
 use saikuro_c::{
@@ -6,9 +5,9 @@ use saikuro_c::{
     saikuro_channel_send_json, saikuro_client_batch_json, saikuro_client_call_json,
     saikuro_client_call_json_timeout, saikuro_client_cast_json, saikuro_client_channel_json,
     saikuro_client_connect, saikuro_client_log, saikuro_client_resource_json,
-    saikuro_client_stream_json, saikuro_last_error_message, saikuro_provider_free,
-    saikuro_provider_new, saikuro_provider_register, saikuro_stream_free, saikuro_stream_next_json,
-    saikuro_string_dup, saikuro_string_free,
+    saikuro_client_stream_json, saikuro_provider_free, saikuro_provider_new,
+    saikuro_provider_register, saikuro_stream_free, saikuro_stream_next_json, saikuro_string_dup,
+    saikuro_string_free,
 };
 
 mod common;

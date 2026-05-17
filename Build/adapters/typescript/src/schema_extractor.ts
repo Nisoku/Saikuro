@@ -55,9 +55,7 @@ export type TypeDescriptor =
   | { kind: "optional"; inner: TypeDescriptor }
   | { kind: "named"; name: string }
   | { kind: "stream"; item: TypeDescriptor }
-  | { kind: "channel"; send: TypeDescriptor; recv: TypeDescriptor }
-  | { kind: "tuple"; items: TypeDescriptor[] }
-  | { kind: "union"; members: TypeDescriptor[] };
+  | { kind: "channel"; send: TypeDescriptor; recv: TypeDescriptor };
 
 interface JSDocInfo {
   doc?: string;
@@ -313,7 +311,7 @@ export class SchemaExtractor {
         asAny.typeArguments ??
         []
       ).map((e: any) => this.typeToDescriptor(e as ts.Type));
-      return { kind: "tuple", items };
+      return { kind: "list", item: items[0] ?? { kind: "primitive", type: "any" } };
     }
 
     if (type.flags & ts.TypeFlags.Union) {
@@ -388,9 +386,6 @@ export class SchemaExtractor {
 
     if ((hasNull || hasUndefined) && nonNull.length === 1) {
       return { kind: "optional", inner: this.typeToDescriptor(nonNull[0]) };
-    }
-    if (nonNull.length >= 2) {
-      return { kind: "union", members: nonNull.map((t) => this.typeToDescriptor(t as ts.Type)) };
     }
     return { kind: "primitive", type: "any" };
   }
