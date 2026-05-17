@@ -56,6 +56,15 @@ export type TypeDescriptor =
   | { kind: "stream"; item: TypeDescriptor }
   | { kind: "channel"; send: TypeDescriptor; recv: TypeDescriptor };
 
+// Helper augmented type for TS internal shapes we read from the checker.
+type TypeWithExtras = ts.Type & {
+  elementType?: ts.Type;
+  typeArguments?: readonly ts.Type[];
+  aliasTypeArguments?: readonly ts.Type[];
+  target?: { objectFlags?: ts.ObjectFlags } | undefined;
+  resolvedTypeArguments?: readonly ts.Type[];
+};
+
 interface JSDocInfo {
   doc?: string;
   params?: Map<string, string>;
@@ -278,9 +287,9 @@ export class SchemaExtractor {
     const primitive = this.typeToPrimitive(name);
     if (primitive) return primitive;
 
-    const hasElementType = !!(type as any).elementType;
+    const hasElementType = !!(type as TypeWithExtras).elementType;
     if (hasElementType) {
-      const el = (type as any).elementType as ts.Type;
+      const el = (type as TypeWithExtras).elementType as ts.Type;
       return {
         kind: "list",
         item: this.typeToDescriptor(el),
@@ -300,15 +309,14 @@ export class SchemaExtractor {
     }
 
     if (this.typeChecker!.isArrayType?.(type) ?? false) {
-      const arr = type as any;
-      const el = (arr.elementType ??
-        arr.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any }) as ts.Type;
+      const arr = type as TypeWithExtras;
+      const el = (arr.elementType ?? arr.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any }) as ts.Type;
       return { kind: "list", item: this.typeToDescriptor(el) };
     }
 
-    const tupTarget = (type as any).target;
-    if (tupTarget?.objectFlags & ts.ObjectFlags.Tuple) {
-      const tup = type as any;
+    const tupTarget = (type as TypeWithExtras).target;
+    if (((tupTarget?.objectFlags ?? 0) & ts.ObjectFlags.Tuple) !== 0) {
+      const tup = type as TypeWithExtras;
       const items = (tup.resolvedTypeArguments ?? tup.typeArguments ?? []).map(
         (e: ts.Type) => this.typeToDescriptor(e),
       );
@@ -326,8 +334,8 @@ export class SchemaExtractor {
       return { kind: "primitive", type: "any" };
     }
 
-    const refTypeArgs = (type as any).typeArguments;
-    const refAliasTypeArgs = (type as any).aliasTypeArguments;
+    const refTypeArgs = (type as TypeWithExtras).typeArguments;
+    const refAliasTypeArgs = (type as TypeWithExtras).aliasTypeArguments;
     if (refTypeArgs ?? refAliasTypeArgs) {
       const ref = this.typeToReference(type, name);
       if (ref) return ref;
@@ -371,7 +379,7 @@ export class SchemaExtractor {
   }
 
   private typeToRecordFromType(type: ts.Type): TypeDescriptor | undefined {
-    const ref = type as any;
+    const ref = type as TypeWithExtras;
     const typeArgs: readonly ts.Type[] | undefined =
       ref.typeArguments ?? ref.aliasTypeArguments;
     if (!typeArgs || typeArgs.length < 2) return;
@@ -427,7 +435,7 @@ export class SchemaExtractor {
     name: string,
   ): TypeDescriptor | undefined {
     const typeArgs: readonly ts.Type[] | undefined =
-      (type as any).typeArguments ?? (type as any).aliasTypeArguments;
+      (type as TypeWithExtras).typeArguments ?? (type as TypeWithExtras).aliasTypeArguments;
     if (!typeArgs) return;
 
     if (name.startsWith("Promise") && typeArgs.length > 0) {
