@@ -23,4 +23,4 @@ pub use transport::InMemoryTransport;
 pub use value::Value;
 
 #[cfg(any(feature = "storage", feature = "wasm-storage"))]
-pub use storage::create_storage;
+pub use storage::{create_storage, create_transient_storage};

@@ -42,7 +42,10 @@ impl CSharpGenerator {
     fn generate_types(&self, schema: &Schema) -> Result<String> {
         // Collect alias lines first so they appear before any type definitions.
         let mut aliases: Vec<String> = Vec::new();
-        for (type_name, type_def) in &schema.types {
+        let mut type_keys: Vec<&String> = schema.types.keys().collect();
+        type_keys.sort();
+        for type_name in type_keys {
+            let type_def = &schema.types[type_name];
             if let TypeDefinition::Alias { inner } = type_def {
                 let cs_type = self.type_to_cs(inner);
                 aliases.push(format!("// {type_name} is an alias for {cs_type}"));

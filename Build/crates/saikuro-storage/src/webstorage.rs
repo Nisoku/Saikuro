@@ -1,58 +1,20 @@
-use bytes::Bytes;
-
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
+// Re-export pure helpers from the unconditionally-compiled util module
+// so that the impl_web_storage! macro (which uses $crate::webstorage::*)
+// continues to work.
+#[allow(unused_imports)]
+pub(crate) use crate::util::{
+    apply_prefix, decode_bytes, encode_bytes, key_prefix, make_key, strip_prefix,
+    NAMESPACE_SEPARATOR,
 };
 
-pub(crate) const NAMESPACE_SEPARATOR: char = ':';
+use bytes::Bytes;
+
+use crate::util;
+
+use super::error::{Result, StorageError};
 
 pub(crate) fn window() -> Result<web_sys::Window> {
     web_sys::window().ok_or_else(|| StorageError::internal("no window object"))
-}
-
-pub(crate) fn encode_bytes(val: &Bytes) -> String {
-    val.iter().map(|&b| b as char).collect()
-}
-
-pub(crate) fn decode_bytes(s: &str) -> Bytes {
-    let vec: Vec<u8> = s.chars().map(|c| c as u8).collect();
-    Bytes::from(vec)
-}
-
-pub(crate) fn make_key(namespace: &str, key: &str) -> String {
-    format!(
-        "{namespace}{SEPARATOR}{key}",
-        SEPARATOR = NAMESPACE_SEPARATOR
-    )
-}
-
-pub(crate) fn key_prefix(namespace: &str) -> String {
-    format!("{namespace}{SEPARATOR}", SEPARATOR = NAMESPACE_SEPARATOR)
-}
-
-pub(crate) fn apply_prefix(config: &StorageConfig, namespace: &str) -> String {
-    match &config.namespace_prefix {
-        Some(prefix) => format!(
-            "{prefix}{SEPARATOR}{namespace}",
-            SEPARATOR = NAMESPACE_SEPARATOR
-        ),
-        None => namespace.to_owned(),
-    }
-}
-
-pub(crate) fn strip_prefix(config: &StorageConfig, stored: &str) -> String {
-    match &config.namespace_prefix {
-        Some(prefix) => {
-            let prefix_str = format!("{prefix}{SEPARATOR}", SEPARATOR = NAMESPACE_SEPARATOR);
-            if stored.starts_with(&prefix_str) {
-                stored[prefix_str.len()..].to_owned()
-            } else {
-                stored.to_owned()
-            }
-        }
-        None => stored.to_owned(),
-    }
 }
 
 pub(crate) fn get_all_keys(storage: &web_sys::Storage) -> Vec<String> {
@@ -67,7 +29,7 @@ pub(crate) fn get_all_keys(storage: &web_sys::Storage) -> Vec<String> {
 }
 
 pub(crate) fn get_keys_in_namespace(storage: &web_sys::Storage, namespace: &str) -> Vec<String> {
-    let prefix = key_prefix(namespace);
+    let prefix = util::key_prefix(namespace);
     let all = get_all_keys(storage);
     all.into_iter()
         .filter(|k| k.starts_with(&prefix))
@@ -80,7 +42,7 @@ pub(crate) fn get_namespaces(storage: &web_sys::Storage) -> Vec<String> {
     let mut namespaces: Vec<String> = all
         .iter()
         .filter_map(|k| {
-            k.split_once(NAMESPACE_SEPARATOR)
+            k.split_once(util::NAMESPACE_SEPARATOR)
                 .map(|(ns, _)| ns.to_owned())
         })
         .collect();
@@ -101,7 +63,7 @@ pub(crate) fn delete_keys_with_prefix(storage: &web_sys::Storage, prefix: &str) 
 
 pub(crate) fn storage_get(storage: &web_sys::Storage, key: &str) -> Result<Option<Bytes>> {
     match storage.get_item(key) {
-        Ok(Some(val)) => Ok(Some(decode_bytes(&val))),
+        Ok(Some(val)) => Ok(Some(util::decode_bytes(&val))),
         Ok(None) => Ok(None),
         Err(e) => Err(StorageError::internal(format!(
             "web storage get_item failed: {e:?}"
@@ -110,7 +72,7 @@ pub(crate) fn storage_get(storage: &web_sys::Storage, key: &str) -> Result<Optio
 }
 
 pub(crate) fn storage_set(storage: &web_sys::Storage, key: &str, value: &Bytes) -> Result<()> {
-    let encoded = encode_bytes(value);
+    let encoded = util::encode_bytes(value);
     storage
         .set_item(key, &encoded)
         .map_err(|e| StorageError::internal(format!("web storage set_item failed: {e:?}")))

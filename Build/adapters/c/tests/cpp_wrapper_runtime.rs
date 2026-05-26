@@ -374,8 +374,6 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
 
 #[test]
 fn cpp_wrapper_client_integrates_with_runtime() {
-    let (address, runtime_thread) = spawn_runtime_for_cpp_client();
-
     let exe = temp_probe_path("cpp_client_runtime_test");
 
     let source = r#"
@@ -399,7 +397,12 @@ int main(int argc, char** argv) {
 }
 "#;
 
+    // Build saikuro-c library FIRST (blocks on Once for ~78s on cold cache)
+    // before spawning the runtime thread, so the runtime's accept timeout
+    // doesn't expire during the build.
     compile_cpp(source, &exe);
+
+    let (address, runtime_thread) = spawn_runtime_for_cpp_client();
     run_cpp(&exe, &[&address]);
 
     let src_path = exe.with_extension("cpp");
@@ -411,8 +414,6 @@ int main(int argc, char** argv) {
 
 #[test]
 fn cpp_wrapper_provider_announce_and_dispatch_with_runtime() {
-    let (address, scripted_runtime) = spawn_scripted_runtime_for_cpp_provider();
-
     let exe = temp_probe_path("cpp_provider_runtime_test");
 
     let source = r#"
@@ -441,7 +442,12 @@ int main(int argc, char** argv) {
 }
 "#;
 
+    // Build saikuro-c library FIRST (blocks on Once for ~78s on cold cache)
+    // before spawning the runtime thread, so the runtime's accept timeout
+    // doesn't expire during the build.
     compile_cpp(source, &exe);
+
+    let (address, scripted_runtime) = spawn_scripted_runtime_for_cpp_provider();
     run_cpp(&exe, &[&address]);
 
     let src_path = exe.with_extension("cpp");

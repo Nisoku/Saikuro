@@ -276,10 +276,16 @@ fn main() {
         }
     };
 
-    let out = if args.pretty {
-        serde_json::to_string_pretty(&schema).expect("serialize schema")
+    let out = match if args.pretty {
+        serde_json::to_string_pretty(&schema)
     } else {
-        serde_json::to_string(&schema).expect("serialize schema")
+        serde_json::to_string(&schema)
+    } {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("failed to serialize schema: {e}");
+            std::process::exit(3);
+        }
     };
 
     println!("{out}");

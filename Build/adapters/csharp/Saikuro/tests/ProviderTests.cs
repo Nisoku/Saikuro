@@ -265,15 +265,22 @@ public class ProviderDispatchStreamTests
             ProviderTestHelpers.MakeEnvelope(InvocationType.Stream, "test.fail_stream", []),
             a
         );
-        var responses = await ProviderTestHelpers.CollectN(b, 2);
+        var responses = await ProviderTestHelpers.CollectN(b, 3);
 
-        Assert.Equal(2, responses.Count);
+        Assert.Equal(3, responses.Count);
         // First item.
         Assert.True((bool)responses[0]["ok"]!);
         Assert.Equal(42L, responses[0]["result"]);
-        // Abort frame with error info.
+        // Error frame.
         Assert.False((bool)responses[1]["ok"]!);
-        Assert.Equal("abort", responses[1]["stream_control"]);
+        var err = (Dictionary<string, object?>)responses[1]["error"]!;
+        Assert.Equal("ProviderError", err["code"]);
+#pragma warning disable xUnit2013 // Do not use equality check to compare collections
+        Assert.Contains("mid-stream failure", (string)err["message"]!);
+#pragma warning restore xUnit2013
+        // Abort frame.
+        Assert.False((bool)responses[2]["ok"]!);
+        Assert.Equal("abort", responses[2]["stream_control"]);
     }
 
     private static async IAsyncEnumerable<object?> CountAsync()

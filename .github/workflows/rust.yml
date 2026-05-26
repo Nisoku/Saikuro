@@ -9,6 +9,8 @@ on:
       - "Build/crates/**"
       - "Build/tests/**"
       - "Build/adapters/rust/**"
+      - "Build/scripts/rust.py"
+      - "Justfile"
       - ".github/workflows/rust.yml"
   pull_request:
     paths:
@@ -17,6 +19,8 @@ on:
       - "Build/crates/**"
       - "Build/tests/**"
       - "Build/adapters/rust/**"
+      - "Build/scripts/rust.py"
+      - "Justfile"
       - ".github/workflows/rust.yml"
 
 permissions:

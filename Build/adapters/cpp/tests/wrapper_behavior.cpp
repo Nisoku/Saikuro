@@ -145,7 +145,11 @@ int saikuro_client_cast_json(saikuro_client_t, const char *target,
 }
 
 char *saikuro_client_batch_json(saikuro_client_t, const char *calls_json) {
-  g_state.last_batch_calls = calls_json == nullptr ? "" : calls_json;
+  if (calls_json == nullptr) {
+    g_state.last_error = "calls_json must not be null";
+    return nullptr;
+  }
+  g_state.last_batch_calls = calls_json;
   if (std::strstr(calls_json, "fail") != nullptr) {
     g_state.last_error = "batch failed";
     return nullptr;

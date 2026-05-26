@@ -461,6 +461,7 @@ impl InvocationRouter {
         if let Some(seq) = response.seq {
             if !state.advance_seq(seq) {
                 warn!(%id, seq, "out-of-order stream item dropped");
+                return Ok(());
             }
         }
 

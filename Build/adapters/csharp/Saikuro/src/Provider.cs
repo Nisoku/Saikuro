@@ -429,6 +429,8 @@ public sealed class SaikuroProvider
         catch (Exception ex)
         {
             Log.Error($"stream handler for '{envelope.Target}' threw:  {ex.Message}");
+            await SendErrorAsync(transport, envelope.Id, "ProviderError", ex.Message, ct: ct)
+                .ConfigureAwait(false);
             await transport
                 .SendAsync(
                     new Dictionary<string, object?>
@@ -484,7 +486,7 @@ public sealed class SaikuroProvider
             }
             catch (Exception ex)
             {
-                Log.Error("transport recv error", ex.Message);
+                Log.ErrorWithDetail("transport recv error", ex.Message);
                 break;
             }
 
@@ -498,7 +500,7 @@ public sealed class SaikuroProvider
             }
             catch (Exception ex)
             {
-                Log.Error("malformed inbound envelope, skipping", ex.Message);
+                Log.ErrorWithDetail("malformed inbound envelope, skipping", ex.Message);
                 continue;
             }
 
@@ -512,7 +514,7 @@ public sealed class SaikuroProvider
                             var msg = t.Exception?.Flatten().InnerExceptions.Count > 0
                                 ? string.Join("; ", t.Exception.Flatten().InnerExceptions.Select(e => e.Message))
                                 : t.Exception?.Message ?? "unknown";
-                            Log.Error(
+                            Log.ErrorWithDetail(
                                 $"unhandled dispatch exception for target '{envelope.Target}'",
                                 msg
                             );

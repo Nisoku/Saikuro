@@ -109,12 +109,28 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn exists(&self, namespace: &str, key: &str) -> Result<bool> {
-        let ns = self.get_namespace(namespace)?;
+        let ns = match self.namespaces.get(&self.apply_prefix(namespace)) {
+            Some(ns) => ns,
+            None => {
+                if self.config.auto_create_namespaces {
+                    return Ok(false);
+                }
+                return Err(StorageError::namespace_not_found(namespace));
+            }
+        };
         Ok(ns.contains_key(key))
     }
 
     async fn get(&self, namespace: &str, key: &str) -> Result<Option<Bytes>> {
-        let ns = self.get_namespace(namespace)?;
+        let ns = match self.namespaces.get(&self.apply_prefix(namespace)) {
+            Some(ns) => ns,
+            None => {
+                if self.config.auto_create_namespaces {
+                    return Ok(None);
+                }
+                return Err(StorageError::namespace_not_found(namespace));
+            }
+        };
         Ok(ns.get(key).map(|v| v.clone()))
     }
 
@@ -134,7 +150,15 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn list_keys(&self, namespace: &str) -> Result<Vec<String>> {
-        let ns = self.get_namespace(namespace)?;
+        let ns = match self.namespaces.get(&self.apply_prefix(namespace)) {
+            Some(ns) => ns,
+            None => {
+                if self.config.auto_create_namespaces {
+                    return Ok(vec![]);
+                }
+                return Err(StorageError::namespace_not_found(namespace));
+            }
+        };
         Ok(ns.iter().map(|entry| entry.key().clone()).collect())
     }
 
@@ -165,7 +189,10 @@ impl KeyValueBackend for InMemoryStorage {
     }
 
     async fn clear_namespace(&self, namespace: &str) -> Result<()> {
-        let ns = self.get_namespace(namespace)?;
+        let ns = match self.namespaces.get(&self.apply_prefix(namespace)) {
+            Some(ns) => ns,
+            None => return Ok(()),
+        };
         ns.clear();
         Ok(())
     }

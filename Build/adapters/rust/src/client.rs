@@ -252,8 +252,8 @@ impl Client {
                     }
 
                     // Route inbound response frames to their waiting callers.
-                    result = transport.recv().fuse() => {
-                        match result {
+                    incoming = transport.recv().fuse() => {
+                        match incoming {
                             Ok(Some(frame)) => {
                                 handle_inbound(
                                     frame,

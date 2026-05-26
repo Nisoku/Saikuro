@@ -50,17 +50,17 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 // helpers
 
 /// Generate a 128-bit random hex connection identifier.
-fn short_id() -> String {
+fn short_id() -> Result<String> {
     let crypto: Crypto = Reflect::get(&js_sys::global(), &"crypto".into())
-        .expect("global crypto API available in browser/worker context")
+        .map_err(|e| TransportError::ConnectionLost(format!("crypto API not found: {e:?}")))?
         .unchecked_into();
     let mut buf = [0u8; 16];
     let _ = crypto.get_random_values_with_u8_array(&mut buf);
-    buf.iter().fold(String::with_capacity(32), |mut s, b| {
+    Ok(buf.iter().fold(String::with_capacity(32), |mut s, b| {
         use std::fmt::Write;
         let _ = write!(s, "{:02x}", b);
         s
-    })
+    }))
 }
 
 /// Create a JS object literal from key-value pairs.
@@ -238,7 +238,7 @@ impl TransportConnector for WasmHostConnector {
     type Output = WasmHostTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        let conn_id = short_id();
+        let conn_id = short_id()?;
         let private_name = format!("{}:{}", self.channel_name, conn_id);
 
         // Open private channel FIRST so we're listening before the

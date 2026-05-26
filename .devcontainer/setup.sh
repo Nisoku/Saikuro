@@ -7,8 +7,7 @@ echo "=== Saikuro Development Environment Setup ==="
 echo "Installing system packages..."
 sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     cmake \
-    clang-format \
-    >/dev/null 2>&1
+    clang-format
 
 # Rust toolchain
 echo "Setting up Rust..."
@@ -35,9 +34,13 @@ if ! command -v dotnet >/dev/null 2>&1; then
     echo "Installing .NET SDK 8.0..."
     curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
     chmod +x /tmp/dotnet-install.sh
-    /tmp/dotnet-install.sh --channel 8.0 >/dev/null 2>&1
+    /tmp/dotnet-install.sh --channel 8.0
     rm /tmp/dotnet-install.sh
-    export PATH="$HOME/.dotnet:$PATH"
+fi
+export PATH="$HOME/.dotnet:$PATH"
+# Persist dotnet in PATH for future shell sessions
+if ! grep -q '$HOME/.dotnet' "$HOME/.bashrc" 2>/dev/null; then
+    echo 'export PATH="$HOME/.dotnet:$PATH"' >> "$HOME/.bashrc"
 fi
 
 # Per-language project setup

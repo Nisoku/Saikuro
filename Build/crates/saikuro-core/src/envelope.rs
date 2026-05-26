@@ -227,9 +227,13 @@ impl Envelope {
 
 /// Split a `"namespace.function"` target string into its two components.
 ///
-/// Returns `None` when `target` contains no dot separator.
+/// Returns `None` when `target` contains no dot separator or when either
+/// component would be empty (e.g. `".fn"` or `"ns."`).
 pub fn split_target(target: &str) -> Option<(&str, &str)> {
     let dot = target.rfind('.')?;
+    if dot == 0 || dot == target.len() - 1 {
+        return None;
+    }
     Some((&target[..dot], &target[dot + 1..]))
 }
 

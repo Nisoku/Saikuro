@@ -26,7 +26,7 @@ def _ensure_clang_format() -> None:
     if platform == "darwin":
         subprocess.run(["brew", "install", "clang-format"], check=True)
     elif platform.startswith("linux"):
-        subprocess.run(["sh", "-c", "apt-get install -y clang-format"], check=True)
+        subprocess.run(["sudo", "apt-get", "install", "-y", "clang-format"], check=True)
     else:
         pip = shutil.which("pip3") or shutil.which("pip")
         if pip:
@@ -37,7 +37,7 @@ def _ensure_cmake() -> None:
     if shutil.which("cmake"):
         return
     print("cmake not found; installing...", flush=True)
-    subprocess.run(["sh", "-c", "apt-get install -y cmake"], check=True)
+    subprocess.run(["sudo", "apt-get", "install", "-y", "cmake"], check=True)
 
 
 def setup() -> int:
@@ -77,7 +77,8 @@ def main() -> None:
     elif cmd == "setup":
         exit(setup())
     elif cmd == "check":
-        exit(sum([fmt_check(), setup(), run(CMDS["test"])]))
+        failed = any([fmt_check() != 0, setup() != 0, run(CMDS["test"]) != 0])
+        exit(1 if failed else 0)
     if cmd in CMDS:
         exit(run(CMDS[cmd]))
     print(f"Usage: {sys.argv[0]} <check|fmt_check|setup|{'|'.join(CMDS)}>")

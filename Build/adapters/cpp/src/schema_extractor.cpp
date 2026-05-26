@@ -502,14 +502,15 @@ std::vector<Function> parse_functions(const std::string &source) {
       continue;
     }
 
+    // Return type is everything from the start of the declaration to the name.
+    // Capture before advancing pos so the length (name_start - pos) is valid.
+    const std::string returns =
+        trim(clean_source.substr(pos, name_start - pos));
+
     pos = semi_pos + 1; // advance past ';' for next iteration
 
     if (name.find("saikuro_") == 0)
       continue;
-
-    // Return type is everything from the start of the declaration to the name.
-    const std::string returns =
-        trim(clean_source.substr(pos, name_start - pos));
 
     Function f;
     f.name = name;

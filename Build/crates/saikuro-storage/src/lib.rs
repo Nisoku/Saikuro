@@ -7,6 +7,7 @@
 pub mod config;
 pub mod error;
 pub mod traits;
+pub mod util;
 
 #[cfg(feature = "inmemory")]
 pub mod inmemory;

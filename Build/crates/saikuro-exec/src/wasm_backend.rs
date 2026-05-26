@@ -165,7 +165,7 @@ pub mod mpsc {
 }
 
 pub mod oneshot {
-    pub use futures::channel::oneshot::{channel, Canceled, Receiver, Sender};
+    pub use futures::channel::oneshot::{channel, Receiver, Sender};
 }
 
 pub mod sync {
@@ -291,7 +291,10 @@ pub mod watch {
             } else if inner.closed {
                 Poll::Ready(Err(()))
             } else {
-                inner.wakers.push(cx.waker().clone());
+                let waker = cx.waker();
+                if !inner.wakers.iter().any(|w| w.will_wake(waker)) {
+                    inner.wakers.push(waker.clone());
+                }
                 if inner.closed {
                     Poll::Ready(Err(()))
                 } else if inner.changed {

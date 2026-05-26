@@ -460,7 +460,12 @@ export class SaikuroClient {
     };
     const streamHandle = new SaikuroStream<T>(patched.id);
     this._openStreams.set(patched.id, streamHandle as SaikuroStream<unknown>);
-    await this._transport.send(patched);
+    try {
+      await this._transport.send(patched);
+    } catch (err) {
+      this._openStreams.delete(patched.id);
+      throw err;
+    }
     return streamHandle;
   }
 
@@ -488,7 +493,12 @@ export class SaikuroClient {
       patched.id,
       channelHandle as SaikuroChannel<unknown, unknown>,
     );
-    await this._transport.send(patched);
+    try {
+      await this._transport.send(patched);
+    } catch (err) {
+      this._openChannels.delete(patched.id);
+      throw err;
+    }
     return channelHandle;
   }
 

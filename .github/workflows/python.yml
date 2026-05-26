@@ -5,10 +5,14 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/python/**"
+      - "Build/scripts/python.py"
+      - "Justfile"
       - ".github/workflows/python.yml"
   pull_request:
     paths:
       - "Build/adapters/python/**"
+      - "Build/scripts/python.py"
+      - "Justfile"
       - ".github/workflows/python.yml"
 
 permissions:

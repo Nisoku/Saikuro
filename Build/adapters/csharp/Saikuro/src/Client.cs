@@ -487,7 +487,7 @@ public sealed class SaikuroClient : IAsyncDisposable
                 {
                     SaikuroLogger
                         .GetLogger("saikuro.client")
-                        .Error("malformed inbound response, skipping", ex.Message);
+                        .ErrorWithDetail("malformed inbound response, skipping", ex.Message);
                 }
             }
         }

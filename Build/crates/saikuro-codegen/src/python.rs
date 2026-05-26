@@ -18,6 +18,28 @@ use crate::{
     to_pascal_case,
 };
 
+/// Sanitize a namespace name for use as a Python module file stem.
+///
+/// Replaces any character that is not alphanumeric or underscore with `_`.
+/// Prefixes with `_` when the result would be empty or start with a digit.
+fn sanitize_module_stem(name: &str) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if sanitized.is_empty() || sanitized.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{sanitized}")
+    } else {
+        sanitized
+    }
+}
+
 pub struct PythonGenerator;
 
 impl BindingGenerator for PythonGenerator {
@@ -28,13 +50,14 @@ impl BindingGenerator for PythonGenerator {
             &mut output,
             "types.py",
             self.generate_types(schema)?,
-            |ns| format!("{}_client.py", ns),
+            |ns| format!("{}_client.py", sanitize_module_stem(ns)),
             to_pascal_case,
             |ns, class_name, ns_schema| self.generate_namespace_client(ns, class_name, ns_schema),
         )?;
         let mut imports = vec!["from .types import *".to_owned()];
         for (ns_name, class_name) in &ns_pairs {
-            imports.push(format!("from .{ns_name}_client import {class_name}Client"));
+            let stem = sanitize_module_stem(ns_name);
+            imports.push(format!("from .{stem}_client import {class_name}Client"));
         }
         output.add("__init__.py", imports.join("\n") + "\n");
         Ok(output)

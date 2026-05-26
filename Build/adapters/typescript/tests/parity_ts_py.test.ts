@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extractSchema } from "../src/schema_extractor";
-import {
-  canonType,
-  canonFn,
-  normalizeReturns,
-  normalizeNumeric,
-} from "./canonicalize";
+import { canonType, canonFn, normalizeNumeric } from "./canonicalize";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
@@ -15,11 +10,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const pyAdapterRoot = resolve(__dirname, "../../python");
-const venvPython = resolve(pyAdapterRoot, ".venv/bin/python3");
 
 const TEST_TIMEOUT = 60000;
 
 function getPythonBin(): string {
+  if (process.platform === "win32") {
+    const venvPython = resolve(pyAdapterRoot, ".venv\\Scripts\\python.exe");
+    if (existsSync(venvPython)) return venvPython;
+    return "python.exe";
+  }
+  const venvPython = resolve(pyAdapterRoot, ".venv/bin/python3");
   if (existsSync(venvPython)) return venvPython;
   return "python3";
 }
@@ -67,6 +67,7 @@ describe("Schema parity: TypeScript <-> Python (basic)", () => {
       );
       const res = spawnSync(getPythonBin(), [pyFixture], {
         encoding: "utf-8",
+        timeout: TEST_TIMEOUT,
         env: {
           ...process.env,
           PYTHONPATH: resolve(__dirname, "../../python"),
@@ -88,7 +89,7 @@ describe("Schema parity: TypeScript <-> Python (basic)", () => {
           resolve(__dirname, "../../csharp/tools/extractor/extractor.csproj"),
           "parityns",
         ],
-        { encoding: "utf-8" },
+        { encoding: "utf-8", timeout: TEST_TIMEOUT },
       );
       if (csRes.error) throw csRes.error;
       if (csRes.status !== 0) throw new Error(`dotnet failed: ${csRes.stderr}`);

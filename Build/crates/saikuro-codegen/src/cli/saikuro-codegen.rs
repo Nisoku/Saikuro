@@ -82,25 +82,20 @@ fn main() -> anyhow::Result<()> {
         {
             anyhow::bail!("output file path '{rel_path}' is not allowed (absolute or contains parent/root dir)");
         }
-        if rel_path_obj.file_name().is_none() {
-            anyhow::bail!("output file path '{rel_path}' has no file name");
-        }
+        let file_name = match rel_path_obj.file_name() {
+            Some(f) => f.to_os_string(),
+            None => anyhow::bail!("output file path '{rel_path}' has no file name"),
+        };
         let path = out_dir.join(rel_path_obj);
         // Ensure the resulting path is inside out_dir
         let canon_path = if path.exists() {
             path.canonicalize()?
         } else if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(parent)?;
-            parent.canonicalize()?.join(
-                path.file_name()
-                    .expect("file_name should exist after filtering ParentDir/RootDir"),
-            )
+            parent.canonicalize()?.join(&file_name)
         } else {
             // No parent or empty parent means file is directly in out_dir
-            canon_out_dir.join(
-                path.file_name()
-                    .expect("file_name should exist after filtering ParentDir/RootDir"),
-            )
+            canon_out_dir.join(&file_name)
         };
         if !canon_path.starts_with(&canon_out_dir) {
             anyhow::bail!(

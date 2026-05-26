@@ -19,7 +19,7 @@
 | `wss://host/path`                     | yes            | yes                  | yes    | yes        | yes            | yes      |
 | `wasm-host://channel`                 | yes            | yes                  | no     | no         | yes            | yes      |
 | `wasm-host` (default)                 | yes            | yes                  | no     | no         | yes            | yes      |
-| `memory://` (testing)                 | doc only       | no                   | yes    | no         | no             | no       |
+| `memory://` (testing)                 | testing only   | no                   | yes    | no         | no             | no       |
 | **Transport Implementations**         |                |                      |        |            |                |          |
 | InMemoryTransport                     | yes            | yes                  | yes    | yes        | via Rust       | via Rust |
 | TCP Transport                         | yes            | yes (Node)           | yes    | yes        | via Rust       | via Rust |

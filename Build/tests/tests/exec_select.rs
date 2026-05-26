@@ -1,9 +1,7 @@
 //! select! macro tests for saikuro-exec.
 //!
 //! Tests the `saikuro_exec::select!` macro which delegates to
-//! `tokio::select!` on native and a custom poll-and-yield on WASM.
-//! These tests run on the tokio backend and validate the semantics
-//! that the WASM backend must match.
+//! `tokio::select!` on both native and WASM backends.
 
 use saikuro_exec::{mpsc, oneshot, select};
 

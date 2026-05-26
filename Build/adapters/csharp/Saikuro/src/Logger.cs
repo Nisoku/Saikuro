@@ -181,10 +181,10 @@ public sealed class SaikuroLogger
     public void Error(string msg, IReadOnlyDictionary<string, object?>? fields = null) =>
         Emit(LogLevel.Error, msg, fields);
 
-    // Convenience overload that takes a plain string detail.
-    public void Error(string msg, string detail) =>
+    // Convenience method that takes a plain string detail.
+    public void ErrorWithDetail(string msg, string detail) =>
         Emit(LogLevel.Error, msg, new Dictionary<string, object?> { ["detail"] = detail });
 
-    public void Warn(string msg, string detail) =>
+    public void WarnWithDetail(string msg, string detail) =>
         Emit(LogLevel.Warn, msg, new Dictionary<string, object?> { ["detail"] = detail });
 }

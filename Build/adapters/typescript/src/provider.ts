@@ -332,7 +332,7 @@ export class SaikuroProvider {
       const result = handler(...(envelope.args as unknown[]));
 
       // Async generator -> stream
-      if (_isAsyncGenerator(result)) {
+      if (_isAsyncIterable(result)) {
         await this._dispatchStream(
           envelope,
           result as AsyncGenerator<unknown>,
@@ -598,7 +598,7 @@ async function _waitForMessage(
   });
 }
 
-function _isAsyncGenerator(value: unknown): boolean {
+function _isAsyncIterable(value: unknown): boolean {
   if (value == null || typeof value !== "object") return false;
   return Symbol.asyncIterator in value;
 }

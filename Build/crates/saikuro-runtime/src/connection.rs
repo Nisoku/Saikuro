@@ -439,15 +439,16 @@ where
                     }
                 };
 
-                // If this is a Call, register the response_tx in the pending map.
-                if let Some(resp_tx) = item.response_tx {
-                    pending_clone.insert(item.envelope.id, resp_tx);
-                }
-
                 // Send the frame to the peer (via the connection handler's sender).
                 if forward_tx_clone.send(frame).await.is_err() {
                     warn!(peer = %peer_id, "forward channel closed; provider disconnected");
                     break;
+                }
+
+                // Register AFTER successful send so we don't orphan a pending
+                // response_tx if the channel is broken.
+                if let Some(resp_tx) = item.response_tx {
+                    pending_clone.insert(item.envelope.id, resp_tx);
                 }
             }
             debug!(peer = %peer_id, "wire-forward task exiting");

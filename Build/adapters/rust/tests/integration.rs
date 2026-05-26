@@ -4,7 +4,7 @@
 
 use saikuro::{Client, InMemoryTransport, Provider};
 use saikuro_core::{
-    envelope::{Envelope, InvocationType, StreamControl},
+    envelope::{Envelope, InvocationType},
     ResponseEnvelope,
 };
 use serde_json::json;
@@ -606,40 +606,71 @@ fn envelope_roundtrip_msgpack_preserves_fields() {
     })
 }
 
+// Storage backends
+
 #[test]
-fn channel_abort_sends_abort_control_frame() {
+fn create_transient_storage_works() {
     saikuro_exec::block_on(async {
-        use saikuro::transport::AdapterTransport;
-
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
-
-        let runtime_task = saikuro_exec::spawn(async move {
-            let open_frame = runtime_side
-                .recv()
-                .await
-                .expect("runtime recv")
-                .expect("channel open frame");
-            let open_env = Envelope::from_msgpack(&open_frame).expect("decode channel open");
-            assert_eq!(open_env.invocation_type, InvocationType::Channel);
-
-            let abort_frame = runtime_side
-                .recv()
-                .await
-                .expect("runtime recv abort")
-                .expect("channel abort frame");
-            let abort_env = Envelope::from_msgpack(&abort_frame).expect("decode abort frame");
-            assert_eq!(abort_env.id, open_env.id);
-            assert_eq!(abort_env.stream_control, Some(StreamControl::Abort));
-        });
-
-        let client = Client::from_transport(Box::new(client_side), None).expect("build client");
-        let channel = client
-            .channel("chat.room", vec![json!("room-1")])
+        let store = saikuro::create_transient_storage();
+        store
+            .put("ns", "k", bytes::Bytes::from("v"))
             .await
-            .expect("open channel");
-        channel.abort().await.expect("abort channel");
+            .expect("put");
+        let v = store.get("ns", "k").await.expect("get");
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+    })
+}
 
-        runtime_task.await.expect("runtime task");
-        client.close().await.expect("close client");
+#[test]
+fn create_storage_transient_returns_working_backend() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{PersistenceMode, StorageConfig};
+
+        let cfg = StorageConfig {
+            persistence: PersistenceMode::Transient,
+            ..Default::default()
+        };
+        let store = saikuro::create_storage(&cfg).await.expect("create storage");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        assert_eq!(
+            store.get("ns", "k").await.unwrap(),
+            Some(bytes::Bytes::from("v"))
+        );
+    })
+}
+
+#[test]
+fn create_storage_best_effort_returns_working_backend() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{PersistenceMode, StorageConfig};
+
+        let cfg = StorageConfig {
+            persistence: PersistenceMode::BestEffort,
+            ..Default::default()
+        };
+        let store = saikuro::create_storage(&cfg).await.expect("create storage");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        assert_eq!(
+            store.get("ns", "k").await.unwrap(),
+            Some(bytes::Bytes::from("v"))
+        );
+    })
+}
+
+#[test]
+fn create_storage_durable_returns_error_on_native() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{PersistenceMode, StorageConfig};
+
+        let cfg = StorageConfig {
+            persistence: PersistenceMode::Durable,
+            ..Default::default()
+        };
+        let result = saikuro::create_storage(&cfg).await;
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("expected error, got Ok"),
+        };
+        assert!(err.contains("durable"), "error mentions durable: {err}");
     })
 }

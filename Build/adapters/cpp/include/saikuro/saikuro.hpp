@@ -47,7 +47,9 @@ public:
     return *this;
   }
 
-  ~MoveOnlyHandle() { destroy(); }
+  ~MoveOnlyHandle() {
+    // handle_ must already be null, the derived destructor called destroy().
+  }
 
 protected:
   MoveOnlyHandle() = default;
@@ -91,6 +93,8 @@ public:
     bool next_json(std::string &out_item_json) {
       return next_json_from(out_item_json, saikuro_stream_next_json);
     }
+
+    ~Stream() { destroy(); }
 
   private:
     friend class MoveOnlyHandle<Stream, saikuro_stream_t>;
@@ -147,6 +151,8 @@ public:
       }
       return *this;
     }
+
+    ~Channel() { destroy(); }
 
   private:
     friend class MoveOnlyHandle<Channel, saikuro_channel_t>;
@@ -243,6 +249,8 @@ public:
     }
   }
 
+  ~Client() { destroy(); }
+
 private:
   friend class MoveOnlyHandle<Client, saikuro_client_t>;
   void destroy_impl() {
@@ -273,6 +281,8 @@ public:
       throw Error(last_error());
     }
   }
+
+  ~Provider() { destroy(); }
 
 private:
   friend class MoveOnlyHandle<Provider, saikuro_provider_t>;

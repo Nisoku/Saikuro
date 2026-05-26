@@ -80,7 +80,7 @@ impl WebSocketTransport {
 
         let open_shared = shared.clone();
         let onopen = Closure::<dyn FnMut(Event)>::new(move |_: Event| {
-            if let Some(s) = open_shared.lock().unwrap().take() {
+            if let Some(s) = open_shared.lock().unwrap_or_else(|e| e.into_inner()).take() {
                 let _ = s.send(Ok(()));
             }
         });
@@ -88,7 +88,11 @@ impl WebSocketTransport {
 
         let error_shared = shared;
         let onerror = Closure::<dyn FnMut(ErrorEvent)>::new(move |e: ErrorEvent| {
-            if let Some(s) = error_shared.lock().unwrap().take() {
+            if let Some(s) = error_shared
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+            {
                 let _ = s.send(Err(TransportError::ConnectionRefused(e.message())));
             }
         });

@@ -274,6 +274,8 @@ public sealed class TcpTransport : StreamTransport
 
     public override async Task ConnectAsync(CancellationToken ct = default)
     {
+        if (_client is not null || _stream is not null)
+            await CloseAsync(ct).ConfigureAwait(false);
         _client = new TcpClient();
         await _client.ConnectAsync(_host, _port, ct).ConfigureAwait(false);
         _stream = _client.GetStream();
@@ -299,6 +301,8 @@ public sealed class UnixSocketTransport : StreamTransport
 
     public override async Task ConnectAsync(CancellationToken ct = default)
     {
+        if (_socket is not null || _stream is not null)
+            await CloseAsync(ct).ConfigureAwait(false);
         _socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var ep = new UnixDomainSocketEndPoint(_path);
         await _socket.ConnectAsync(ep, ct).ConfigureAwait(false);

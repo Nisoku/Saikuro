@@ -19,7 +19,7 @@ def run(cmd: list[str]) -> int:
 
 def fmt_check() -> int:
     result = subprocess.run(
-        ["npm", "run", "format", "--", "--check"], cwd=DIR,
+        ["npm", "run", "format:check"], cwd=DIR,
         capture_output=True, text=True,
     )
     if result.returncode == 0:

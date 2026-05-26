@@ -22,10 +22,12 @@ compile_error!(
      Enable one of `tokio-runtime`, `wasm-runtime`, or `embassy-runtime`."
 );
 
+pub use tokio as _tokio;
+
 #[cfg(feature = "tokio-runtime")]
 mod tokio_backend;
 #[cfg(feature = "tokio-runtime")]
-pub use {tokio as _tokio, tokio_backend::*};
+pub use tokio_backend::*;
 
 #[cfg(feature = "wasm-runtime")]
 mod wasm_backend;
@@ -46,27 +48,8 @@ macro_rules! select {
 
 #[doc(hidden)]
 #[macro_export]
-#[cfg(feature = "tokio-runtime")]
 macro_rules! select_impl {
     ($($tt:tt)*) => {
         $crate::_tokio::select! { $($tt)* }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-#[cfg(feature = "wasm-runtime")]
-macro_rules! select_impl {
-    ($($tt:tt)*) => {
-        ::futures::select! { $($tt)* }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-#[cfg(feature = "embassy-runtime")]
-macro_rules! select_impl {
-    ($($tt:tt)*) => {
-        compile_error!("embassy-runtime select! is not implemented yet");
     };
 }

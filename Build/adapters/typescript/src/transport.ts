@@ -116,11 +116,12 @@ export class InMemoryTransport extends BaseTransport {
   async send(obj: object): Promise<void> {
     if (this._closed) throw new Error("transport is closed");
     const peer = this._peer;
-    if (peer && !peer._closed) {
-      const msg = obj as Record<string, unknown>;
-      peer._inbox.push(msg);
-      peer._dispatch(msg);
+    if (!peer || peer._closed) {
+      throw new Error("peer transport is closed");
     }
+    const msg = obj as Record<string, unknown>;
+    peer._inbox.push(msg);
+    peer._dispatch(msg);
   }
 
   async recv(): Promise<Record<string, unknown> | null> {
@@ -190,7 +191,7 @@ export class WebSocketTransport extends BaseTransport {
   }
 
   async send(obj: object): Promise<void> {
-    if (this._ws === undefined || this._ws.readyState !== WebSocket.OPEN) {
+    if (this._ws === undefined || this._ws.readyState !== this._WS.OPEN) {
       throw new Error("WebSocket is not connected");
     }
     const payload = encode(obj);
@@ -483,6 +484,7 @@ export class BroadcastChannelListener {
   constructor(channelName: string) {
     this._baseChannel = new BroadcastChannel(channelName);
     this._baseChannel.onmessage = (ev: MessageEvent) => {
+      if (this._closed) return;
       const data = ev.data as { type?: string; id?: string };
       if (data.type === "connect" && data.id) {
         const privateName = `${channelName}:${data.id}`;
@@ -527,7 +529,9 @@ export class BroadcastChannelListener {
     for (const queued of this._connectQueue.splice(0)) {
       queued.reject(new Error("BroadcastChannelListener is closed"));
     }
-    this._pendingConnections.length = 0;
+    for (const transport of this._pendingConnections.splice(0)) {
+      await transport.close();
+    }
   }
 }
 

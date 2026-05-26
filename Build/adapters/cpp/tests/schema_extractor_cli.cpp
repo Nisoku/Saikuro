@@ -14,7 +14,7 @@ static void contains_or_fail(const std::string &text,
   if (text.find(needle) == std::string::npos) {
     std::cerr << "Expected to find substring: '" << needle << "'\n";
     std::cerr << "Actual text:\n" << text << "\n";
-    assert(!"Expected to find substring");
+    throw std::runtime_error("Expected to find substring");
   }
 }
 

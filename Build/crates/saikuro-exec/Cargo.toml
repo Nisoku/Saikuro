@@ -9,12 +9,12 @@ repository.workspace = true
 
 [features]
 default = ["tokio-runtime"]
-tokio-runtime = ["tokio", "tokio-util"]
+tokio-runtime = ["tokio/full", "tokio-util"]
 wasm-runtime = ["wasm-bindgen-futures", "wasm-timer"]
 embassy-runtime = []
 
 [dependencies]
-tokio      = { version = "1.52.3", features = ["full"], optional = true }
+tokio      = { version = "1.52.3", default-features = false, features = ["macros"] }
 tokio-util = { version = "0.7.18", features = ["codec"], optional = true }
 
 futures = { workspace = true }
