@@ -310,7 +310,8 @@ export class SchemaExtractor {
 
     if (this.typeChecker!.isArrayType?.(type) ?? false) {
       const arr = type as TypeWithExtras;
-      const el = (arr.elementType ?? arr.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any }) as ts.Type;
+      const el = (arr.elementType ??
+        arr.typeArguments?.[0] ?? { flags: ts.TypeFlags.Any }) as ts.Type;
       return { kind: "list", item: this.typeToDescriptor(el) };
     }
 
@@ -435,7 +436,8 @@ export class SchemaExtractor {
     name: string,
   ): TypeDescriptor | undefined {
     const typeArgs: readonly ts.Type[] | undefined =
-      (type as TypeWithExtras).typeArguments ?? (type as TypeWithExtras).aliasTypeArguments;
+      (type as TypeWithExtras).typeArguments ??
+      (type as TypeWithExtras).aliasTypeArguments;
     if (!typeArgs) return;
 
     if (name.startsWith("Promise") && typeArgs.length > 0) {

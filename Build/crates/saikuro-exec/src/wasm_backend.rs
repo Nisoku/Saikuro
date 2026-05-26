@@ -172,10 +172,14 @@ pub mod sync {
     pub use futures::lock::Mutex;
 }
 
-/// TODO: Implement signal handling for WASM.
+/// Signal handling for WASM.
+///
+/// WASM has no OS signals, so `ctrl_c` is a no-op. This returns `Ok(())`
+/// immediately to maintain API parity with the native backend without
+/// breaking error chains.
 pub mod signal {
     pub async fn ctrl_c() -> Result<(), ()> {
-        Err(())
+        Ok(())
     }
 }
 
@@ -370,9 +374,23 @@ pub async fn yield_now() {
     .await
 }
 
-pub fn block_on<F>(_future: F) -> F::Output
+/// Run a future to completion on the current WASM thread.
+///
+/// This uses `futures::executor::block_on` which polls the future in a loop.
+///
+/// ## Important
+///
+/// On single-threaded WASM targets (no atomics) this **cannot** yield to the
+/// JavaScript event loop, so futures that depend on JS I/O (timers,
+/// `fetch`, `BroadcastChannel`, …) will never complete.  For those futures
+/// use `spawn_local` with an async entrypoint instead.
+///
+/// On WASM targets with atomics enabled (`RUSTFLAGS="--cfg
+/// target_feature=atomics"`), `block_on` uses `Atomics.wait()` for proper
+/// blocking, which allows the JS event loop to make progress.
+pub fn block_on<F>(future: F) -> F::Output
 where
     F: Future + 'static,
 {
-    panic!("block_on is not supported on wasm-runtime")
+    futures::executor::block_on(future)
 }

@@ -13,6 +13,12 @@ rustup target add wasm32-unknown-unknown
 echo "Installing just..."
 cargo install just
 
+# Install uv (Python package manager used by the Python adapter)
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Installing uv..."
+    pip install uv
+fi
+
 # Project setup via just
 just setup
 

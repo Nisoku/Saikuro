@@ -11,9 +11,15 @@ pub mod traits;
 #[cfg(feature = "inmemory")]
 pub mod inmemory;
 
+#[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
+pub mod indexeddb;
+
 pub use config::{CleanupPolicy, PersistenceMode, StorageConfig};
 pub use error::{Result, StorageError};
 pub use traits::{FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend};
 
 #[cfg(feature = "inmemory")]
 pub use inmemory::InMemoryStorage;
+
+#[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
+pub use indexeddb::IndexedDbStorage;

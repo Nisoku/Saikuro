@@ -133,7 +133,7 @@ mod unix_impl {
 
 // WebSocket
 
-#[cfg(feature = "ws")]
+#[cfg(any(feature = "ws", feature = "wasm"))]
 mod ws_impl {
     use super::*;
     use saikuro_transport::{
@@ -229,11 +229,11 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     }
 
     if address.starts_with("ws://") || address.starts_with("wss://") {
-        #[cfg(feature = "ws")]
+        #[cfg(any(feature = "ws", feature = "wasm"))]
         return ws_impl::connect_ws(address).await;
-        #[cfg(not(feature = "ws"))]
+        #[cfg(not(any(feature = "ws", feature = "wasm")))]
         return Err(Error::Transport(
-            "WebSocket transport is not available (feature 'ws' disabled)".into(),
+            "WebSocket transport is not available (feature 'ws' or 'wasm' disabled)".into(),
         ));
     }
 
