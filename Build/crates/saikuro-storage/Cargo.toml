@@ -10,9 +10,11 @@ keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 
 [features]
 default = ["native-storage"]
-native-storage = ["inmemory", "saikuro-exec/tokio-runtime"]
+native-storage = ["inmemory", "local-storage", "session-storage", "saikuro-exec/tokio-runtime"]
 inmemory = ["dashmap", "parking_lot"]
-wasm-storage = ["inmemory", "saikuro-exec/wasm-runtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
+local-storage = ["inmemory"]
+session-storage = ["inmemory"]
+wasm-storage = ["inmemory", "local-storage", "session-storage", "saikuro-exec/wasm-runtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
 saikuro-core = { workspace = true }
@@ -35,10 +37,20 @@ wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = [
+    "Blob",
     "BroadcastChannel",
-    "MessageEvent",
     "DomException",
     "DomStringList",
+    "File",
+    "FileSystemCreateWritableOptions",
+    "FileSystemDirectoryHandle",
+    "FileSystemFileHandle",
+    "FileSystemGetDirectoryOptions",
+    "FileSystemHandleKind",
+    "FileSystemGetFileOptions",
+    "FileSystemHandle",
+    "FileSystemRemoveOptions",
+    "FileSystemWritableFileStream",
     "IdbDatabase",
     "IdbFactory",
     "IdbKeyRange",
@@ -48,6 +60,10 @@ web-sys = { version = "0.3", optional = true, features = [
     "IdbTransaction",
     "IdbTransactionMode",
     "IdbVersionChangeEvent",
+    "MessageEvent",
+    "Navigator",
+    "Storage",
+    "StorageManager",
     "Window",
 ] }
 

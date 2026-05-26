@@ -23,27 +23,26 @@ def _ensure_clang_format() -> None:
         return
     print("clang-format not found; installing...", flush=True)
     platform = sys.platform
-    try:
-        if platform == "darwin":
-            subprocess.run(["brew", "install", "clang-format"], check=True)
-        elif platform.startswith("linux"):
-            subprocess.run(
-                ["sh", "-c",
-                 "apt-get install -y clang-format 2>/dev/null || "
-                 "dnf install -y clang-format 2>/dev/null || "
-                 "yum install -y clang-format 2>/dev/null"],
-                check=True,
-            )
-        else:
-            pip = shutil.which("pip3") or shutil.which("pip")
-            if pip:
-                subprocess.run([pip, "install", "clang-format"], check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("[WARN] could not install clang-format; C++ format check will be skipped", flush=True)
+    if platform == "darwin":
+        subprocess.run(["brew", "install", "clang-format"], check=True)
+    elif platform.startswith("linux"):
+        subprocess.run(["sh", "-c", "apt-get install -y clang-format"], check=True)
+    else:
+        pip = shutil.which("pip3") or shutil.which("pip")
+        if pip:
+            subprocess.run([pip, "install", "clang-format"], check=True)
+
+
+def _ensure_cmake() -> None:
+    if shutil.which("cmake"):
+        return
+    print("cmake not found; installing...", flush=True)
+    subprocess.run(["sh", "-c", "apt-get install -y cmake"], check=True)
 
 
 def setup() -> int:
     _ensure_clang_format()
+    _ensure_cmake()
     return run(["cmake", "-S", ".", "-B", "build"])
 
 

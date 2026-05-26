@@ -6,7 +6,7 @@ from pathlib import Path
 # Pinned SHA256 of https://dot.net/v1/dotnet-install.sh.
 # Update when upgrading the .NET SDK version.
 DOTNET_CHANNEL = "8.0"
-DOTNET_INSTALL_SHA256 = "102a6849303713f15462bb28eb10593bf874bbeec17122e0522f10a3b57ce442"
+DOTNET_INSTALL_SHA256 = "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
 
 DIR = Path(__file__).resolve().parents[1] / "adapters" / "csharp" / "Saikuro"
 SRC = DIR / "src"

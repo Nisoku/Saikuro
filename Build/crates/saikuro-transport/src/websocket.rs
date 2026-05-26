@@ -79,27 +79,27 @@ impl WebSocketTransport {
             Arc::new(Mutex::new(Some(tx)));
 
         let open_shared = shared.clone();
-        let onopen =
-            Closure::<dyn FnMut(Event)>::new(move |_: Event| {
-                if let Some(s) = open_shared.lock().unwrap().take() {
-                    let _ = s.send(Ok(()));
-                }
-            });
+        let onopen = Closure::<dyn FnMut(Event)>::new(move |_: Event| {
+            if let Some(s) = open_shared.lock().unwrap().take() {
+                let _ = s.send(Ok(()));
+            }
+        });
         ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
 
         let error_shared = shared;
-        let onerror =
-            Closure::<dyn FnMut(ErrorEvent)>::new(move |e: ErrorEvent| {
-                if let Some(s) = error_shared.lock().unwrap().take() {
-                    let _ = s.send(Err(TransportError::ConnectionRefused(e.message())));
-                }
-            });
+        let onerror = Closure::<dyn FnMut(ErrorEvent)>::new(move |e: ErrorEvent| {
+            if let Some(s) = error_shared.lock().unwrap().take() {
+                let _ = s.send(Err(TransportError::ConnectionRefused(e.message())));
+            }
+        });
         ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
 
-        let result = saikuro_exec::timeout(
-            std::time::Duration::from_secs(30),
-            async { rx.await.unwrap_or(Err(TransportError::ConnectionRefused("connection cancelled".into()))) },
-        ).await;
+        let result = saikuro_exec::timeout(std::time::Duration::from_secs(30), async {
+            rx.await.unwrap_or(Err(TransportError::ConnectionRefused(
+                "connection cancelled".into(),
+            )))
+        })
+        .await;
 
         ws.set_onopen(None);
         ws.set_onerror(None);
@@ -378,9 +378,12 @@ impl TransportSender for WebSocketSender {
 pub struct WebSocketReceiver {
     ws: send_wrapper::SendWrapper<web_sys::WebSocket>,
     rx: saikuro_exec::mpsc::Receiver<std::result::Result<Option<Bytes>, TransportError>>,
-    _onmsg: send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::MessageEvent)>>,
-    _onclose: send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::CloseEvent)>>,
-    _onerror: send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::ErrorEvent)>>,
+    _onmsg:
+        send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::MessageEvent)>>,
+    _onclose:
+        send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::CloseEvent)>>,
+    _onerror:
+        send_wrapper::SendWrapper<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::ErrorEvent)>>,
     url: String,
 }
 

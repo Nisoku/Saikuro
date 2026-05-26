@@ -885,6 +885,7 @@ dependencies = [
  "rmp-serde",
  "saikuro-core",
  "saikuro-exec",
+ "saikuro-storage",
  "saikuro-transport",
  "serde",
  "serde_json",

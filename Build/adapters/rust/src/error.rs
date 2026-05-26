@@ -23,6 +23,10 @@ pub enum Error {
     #[error("transport error: {0}")]
     Transport(String),
 
+    /// A storage backend operation failed.
+    #[error("storage error: {0}")]
+    Storage(String),
+
     /// A timeout elapsed before a response arrived.
     #[error("call to '{target}' timed out after {ms}ms")]
     Timeout { target: String, ms: u64 },
@@ -58,5 +62,11 @@ impl Error {
 impl From<saikuro_transport::TransportError> for Error {
     fn from(e: saikuro_transport::TransportError) -> Self {
         Self::Transport(e.to_string())
+    }
+}
+
+impl From<saikuro_storage::StorageError> for Error {
+    fn from(e: saikuro_storage::StorageError) -> Self {
+        Self::Storage(e.to_string())
     }
 }

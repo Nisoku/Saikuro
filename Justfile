@@ -30,6 +30,7 @@ setup:
     cd {{scripts}} && python3 rust.py setup
     cd {{scripts}} && python3 python.py setup
     cd {{scripts}} && python3 typescript.py setup
+    cd {{scripts}} && python3 csharp.py setup
     cd {{scripts}} && python3 cpp.py setup
 
 format:

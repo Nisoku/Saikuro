@@ -9,6 +9,16 @@
       "version": "1.8.0",
       "resolved": "ghcr.io/devcontainers/features/python@sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511",
       "integrity": "sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511"
+    },
+    "ghcr.io/devcontainers/features/dotnet:1": {
+      "version": "1.6.4",
+      "resolved": "ghcr.io/devcontainers/features/dotnet@sha256:0c2e19f44f68ff870c3d9ac3fcd8b483a6c00e83d32f456af8356ddc1f9e0a24",
+      "integrity": "sha256:0c2e19f44f68ff870c3d9ac3fcd8b483a6c00e83d32f456af8356ddc1f9e0a24"
+    },
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "1.0.3",
+      "resolved": "ghcr.io/devcontainers/features/sshd@sha256:1b98e39e09ba7c714ba7d4fc4f2f131974dc8816051ceba7967118c3a56e1b5b",
+      "integrity": "sha256:1b98e39e09ba7c714ba7d4fc4f2f131974dc8816051ceba7967118c3a56e1b5b"
     }
   }
 }
