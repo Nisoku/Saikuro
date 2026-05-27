@@ -40,9 +40,25 @@ def _ensure_cmake() -> None:
     subprocess.run(["sudo", "apt-get", "install", "-y", "cmake"], check=True)
 
 
+def _ensure_emsdk() -> None:
+    # Check for emcc first
+    if shutil.which("emcc"):
+        return
+    print("emcc not found; installing Emscripten SDK (emsdk)...", flush=True)
+    emsdk_dir = Path.home() / ".emsdk"
+    if not emsdk_dir.exists():
+        subprocess.run(["git", "clone", "https://github.com/emscripten-core/emsdk.git", str(emsdk_dir)], check=True)
+    # Install and activate latest
+    subprocess.run([str(emsdk_dir / "emsdk"), "install", "latest"], check=True, cwd=str(emsdk_dir))
+    subprocess.run([str(emsdk_dir / "emsdk"), "activate", "latest"], check=True, cwd=str(emsdk_dir))
+    print(f"Emscripten SDK installed to {emsdk_dir}.", flush=True)
+    print(f"To enable `emcc` in your shell, add the following to your shell rc:\n\n    source {emsdk_dir}/emsdk_env.sh\n", flush=True)
+
+
 def setup() -> int:
     _ensure_clang_format()
     _ensure_cmake()
+    _ensure_emsdk()
     return run(["cmake", "-S", ".", "-B", "build"])
 
 

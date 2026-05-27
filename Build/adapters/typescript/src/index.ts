@@ -74,6 +74,9 @@ export {
   BroadcastChannelTransport,
   BroadcastChannelConnector,
   BroadcastChannelListener,
+  BroadcastChannelTransport as WasmHostTransport,
+  BroadcastChannelConnector as WasmHostConnector,
+  BroadcastChannelListener as WasmHostListener,
   makeTransport,
 } from "./transport";
 

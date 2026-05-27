@@ -17,8 +17,8 @@
 | `unix:///path`                        | yes            | yes (Node)           | yes    | yes        | yes            | yes      |
 | `ws://host/path`                      | yes            | yes                  | yes    | yes        | yes            | yes      |
 | `wss://host/path`                     | yes            | yes                  | yes    | yes        | yes            | yes      |
-| `wasm-host://channel`                 | yes            | yes                  | no     | no         | yes            | yes      |
-| `wasm-host` (default)                 | yes            | yes                  | no     | no         | yes            | yes      |
+| `wasm-host://channel`                 | yes            | yes                  | no     | no         | yes        | yes      |
+| `wasm-host` (default)                 | yes            | yes                  | no     | no         | yes        | yes      |
 | `memory://` (testing)                 | testing only   | no                   | yes    | no         | no             | no       |
 | **Transport Implementations**         |                |                      |        |            |                |          |
 | InMemoryTransport                     | yes            | yes                  | yes    | yes        | via Rust       | via Rust |
@@ -26,6 +26,7 @@
 | Unix Socket Transport                 | yes            | yes (Node)           | yes    | yes        | via Rust       | via Rust |
 | WebSocket Transport                   | yes            | yes                  | yes    | yes        | via Rust       | via Rust |
 | BroadcastChannel Transport            | yes            | yes                  | no     | no         | via Rust       | via Rust |
+| WasmHost aliases                      | yes            | yes                  | no     | no         | via Rust       | via Rust |
 | **Features / Configuration**          |                |                      |        |            |                |          |
 | 4-byte BE length prefix (TCP/Unix)    | yes            | yes                  | yes    | yes        | yes            | yes      |
 | 16 MiB max frame size                 | yes            | yes                  | yes    | yes        | yes            | yes      |

@@ -25,6 +25,9 @@ c *args:
 cpp *args:
     cd {{scripts}} && python3 cpp.py {{args}}
 
+web_demo *args:
+    cd {{scripts}} && python3 web_demo.py {{args}}
+
 # Meta commands
 setup:
     cd {{scripts}} && python3 rust.py setup
