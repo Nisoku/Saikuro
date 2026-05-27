@@ -723,7 +723,8 @@ fn create_storage_backend_kind_sqlite_works() {
     saikuro_exec::block_on(async {
         use saikuro_storage::{BackendKind, StorageConfig};
 
-        let path = std::env::temp_dir().join(format!("saikuro_test_sqlite_{}.sqlite", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("saikuro_test_sqlite_{}.sqlite", std::process::id()));
 
         let cfg = StorageConfig::default()
             .with_backend(BackendKind::Sqlite)

@@ -168,35 +168,23 @@ impl KeyValueBackend for FilesystemStorage {
     }
 
     async fn exists(&self, namespace: &str, key: &str) -> Result<bool> {
-        let path = self
-            .kv_root
-            .join(self.apply_prefix(namespace))
-            .join(key);
+        let path = self.kv_root.join(self.apply_prefix(namespace)).join(key);
         block(move || exists(&path)).await
     }
 
     async fn get(&self, namespace: &str, key: &str) -> Result<Option<Bytes>> {
-        let path = self
-            .kv_root
-            .join(self.apply_prefix(namespace))
-            .join(key);
+        let path = self.kv_root.join(self.apply_prefix(namespace)).join(key);
         block(move || read_bytes(&path)).await
     }
 
     async fn put(&self, namespace: &str, key: &str, value: Bytes) -> Result<()> {
-        let path = self
-            .kv_root
-            .join(self.apply_prefix(namespace))
-            .join(key);
+        let path = self.kv_root.join(self.apply_prefix(namespace)).join(key);
         let val = value.to_vec();
         block(move || write_bytes(&path, &val)).await
     }
 
     async fn delete(&self, namespace: &str, key: &str) -> Result<()> {
-        let path = self
-            .kv_root
-            .join(self.apply_prefix(namespace))
-            .join(key);
+        let path = self.kv_root.join(self.apply_prefix(namespace)).join(key);
         block(move || delete(&path)).await
     }
 

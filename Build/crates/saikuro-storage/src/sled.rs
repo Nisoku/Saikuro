@@ -36,10 +36,7 @@ impl SledStorage {
     }
 
     /// Open or create a sled database with a custom configuration.
-    pub fn with_config(
-        path: impl AsRef<std::path::Path>,
-        config: StorageConfig,
-    ) -> Result<Self> {
+    pub fn with_config(path: impl AsRef<std::path::Path>, config: StorageConfig) -> Result<Self> {
         let db = sled::open(path).map_err(|e| StorageError::internal(format!("sled open: {e}")))?;
         Ok(Self {
             config,
@@ -49,10 +46,10 @@ impl SledStorage {
 
     /// Open an in-memory sled database (useful for testing).
     pub fn temporary() -> Result<Self> {
-        let db =
-            sled::Config::default().temporary(true).open().map_err(|e| {
-                StorageError::internal(format!("sled temporary: {e}"))
-            })?;
+        let db = sled::Config::default()
+            .temporary(true)
+            .open()
+            .map_err(|e| StorageError::internal(format!("sled temporary: {e}")))?;
         Ok(Self {
             config: StorageConfig::default(),
             db: Arc::new(db),
@@ -96,9 +93,9 @@ impl KeyValueBackend for SledStorage {
             let tree = db
                 .open_tree(&ns)
                 .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
-            Ok(tree.contains_key(key.as_bytes()).map_err(|e| {
-                StorageError::internal(format!("sled contains_key: {e}"))
-            })?)
+            Ok(tree
+                .contains_key(key.as_bytes())
+                .map_err(|e| StorageError::internal(format!("sled contains_key: {e}")))?)
         })
         .await
     }
@@ -131,7 +128,8 @@ impl KeyValueBackend for SledStorage {
                 .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
             tree.insert(key.as_bytes(), val)
                 .map_err(|e| StorageError::internal(format!("sled insert: {e}")))?;
-            db.flush().map_err(|e| StorageError::internal(format!("sled flush: {e}")))?;
+            db.flush()
+                .map_err(|e| StorageError::internal(format!("sled flush: {e}")))?;
             Ok(())
         })
         .await

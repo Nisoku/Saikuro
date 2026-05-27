@@ -45,10 +45,7 @@ impl SqliteStorage {
     }
 
     /// Open or create a SQLite database with a custom configuration.
-    pub fn with_config(
-        path: impl AsRef<std::path::Path>,
-        config: StorageConfig,
-    ) -> Result<Self> {
+    pub fn with_config(path: impl AsRef<std::path::Path>, config: StorageConfig) -> Result<Self> {
         let conn = rusqlite::Connection::open(path)
             .map_err(|e| StorageError::internal(format!("sqlite open: {e}")))?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
@@ -109,9 +106,7 @@ impl KeyValueBackend for SqliteStorage {
         block(move || {
             let conn = conn.lock().unwrap();
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT 1 FROM saikuro_kv WHERE namespace = ?1 AND key = ?2",
-                )
+                .prepare_cached("SELECT 1 FROM saikuro_kv WHERE namespace = ?1 AND key = ?2")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
             let exists = stmt
                 .exists(rusqlite::params![ns, key])
@@ -128,9 +123,7 @@ impl KeyValueBackend for SqliteStorage {
         block(move || {
             let conn = conn.lock().unwrap();
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT value FROM saikuro_kv WHERE namespace = ?1 AND key = ?2",
-                )
+                .prepare_cached("SELECT value FROM saikuro_kv WHERE namespace = ?1 AND key = ?2")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
             let result: Option<Vec<u8>> = stmt
                 .query_row(rusqlite::params![ns, key], |row| row.get(0))
@@ -181,9 +174,7 @@ impl KeyValueBackend for SqliteStorage {
         block(move || {
             let conn = conn.lock().unwrap();
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT key FROM saikuro_kv WHERE namespace = ?1 ORDER BY key",
-                )
+                .prepare_cached("SELECT key FROM saikuro_kv WHERE namespace = ?1 ORDER BY key")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
             let keys: Vec<String> = stmt
                 .query_map(rusqlite::params![ns], |row| row.get(0))
