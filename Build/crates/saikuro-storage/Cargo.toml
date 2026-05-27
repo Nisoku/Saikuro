@@ -14,6 +14,9 @@ native-storage = ["inmemory", "local-storage", "session-storage", "saikuro-exec/
 inmemory = ["dashmap", "parking_lot"]
 local-storage = ["inmemory"]
 session-storage = ["inmemory"]
+fs-storage = ["dep:tokio", "saikuro-exec/tokio-runtime"]
+sled-storage = ["dep:tokio", "dep:sled", "saikuro-exec/tokio-runtime"]
+sqlite-storage = ["dep:tokio", "dep:rusqlite", "saikuro-exec/tokio-runtime"]
 wasm-storage = ["inmemory", "local-storage", "session-storage", "saikuro-exec/wasm-runtime", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
@@ -31,6 +34,9 @@ tracing = { workspace = true }
 
 dashmap = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
+tokio = { version = "1", features = ["rt"], optional = true }
+sled = { version = "0.34", optional = true }
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2", optional = true }

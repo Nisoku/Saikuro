@@ -2,6 +2,34 @@
 
 use std::time::Duration;
 
+/// Selects which storage backend implementation to use at runtime.
+///
+/// When [`BackendKind::InMemory`] (the default), [`StorageConfig::persistence`]
+/// determines the backend via the platform-aware dispatch in
+/// [`create_storage`](crate::traits::StorageBackend).
+///
+/// Set this explicitly to bypass the automatic dispatch and force a specific
+/// backend (returns an error if the backend is not available on the current
+/// platform/feature set).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BackendKind {
+    /// In-memory DashMap backend. Works everywhere.
+    #[default]
+    InMemory,
+    /// Web Storage API (localStorage / sessionStorage). WASM only.
+    WebStorage,
+    /// IndexedDB (browser). WASM only.
+    IndexedDb,
+    /// OPFS (File System Access API). WASM only.
+    Opfs,
+    /// Native filesystem via `std::fs`. Native only.
+    Filesystem,
+    /// Sled embedded database. Native only.
+    Sled,
+    /// SQLite via `rusqlite`. Native only.
+    Sqlite,
+}
+
 /// Persistence mode controls how data is retained.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PersistenceMode {
@@ -39,8 +67,24 @@ pub enum CleanupPolicy {
 /// Configuration for a storage backend instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageConfig {
+    /// Which backend implementation to use.
+    ///
+    /// Defaults to [`BackendKind::InMemory`], which falls through to the
+    /// platform-aware dispatch based on [`persistence`](Self::persistence).
+    pub backend: BackendKind,
+
     /// How data should be persisted.
     pub persistence: PersistenceMode,
+
+    /// Filesystem / database path for native persistent backends.
+    ///
+    /// - [`BackendKind::Filesystem`]: base directory for kv + file storage.
+    /// - [`BackendKind::Sled`]: sled database directory.
+    /// - [`BackendKind::Sqlite`]: SQLite database file path.
+    ///
+    /// When `None`, the factory uses a built-in default
+    /// (`./saikuro_data`, `./saikuro_sled`, `./saikuro.sqlite`).
+    pub storage_path: Option<std::path::PathBuf>,
 
     /// Automatic cleanup policy.
     pub cleanup: CleanupPolicy,
@@ -58,11 +102,13 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
+            backend: BackendKind::InMemory,
             persistence: PersistenceMode::Transient,
             cleanup: CleanupPolicy::Never,
             namespace_prefix: None,
             auto_create_namespaces: true,
             sync_on_write: false,
+            storage_path: None,
         }
     }
 }
@@ -83,6 +129,18 @@ impl StorageConfig {
             sync_on_write: true,
             ..Default::default()
         }
+    }
+
+    /// Select a specific backend kind.
+    pub fn with_backend(mut self, backend: BackendKind) -> Self {
+        self.backend = backend;
+        self
+    }
+
+    /// Set the filesystem / database path for native persistent backends.
+    pub fn with_storage_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.storage_path = Some(path.into());
+        self
     }
 
     /// Set a namespace prefix.

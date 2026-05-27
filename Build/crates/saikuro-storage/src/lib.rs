@@ -167,7 +167,7 @@ macro_rules! impl_web_storage {
     };
 }
 
-pub use config::{CleanupPolicy, PersistenceMode, StorageConfig};
+pub use config::{BackendKind, CleanupPolicy, PersistenceMode, StorageConfig};
 pub use error::{Result, StorageError};
 pub use traits::{FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend};
 
@@ -185,3 +185,21 @@ pub use session_storage::SessionStorage;
 
 #[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
 pub use opfs::OpfsStorage;
+
+#[cfg(feature = "fs-storage")]
+pub mod fs;
+
+#[cfg(feature = "sled-storage")]
+pub mod sled;
+
+#[cfg(feature = "sqlite-storage")]
+pub mod sqlite;
+
+#[cfg(feature = "fs-storage")]
+pub use fs::FilesystemStorage;
+
+#[cfg(feature = "sled-storage")]
+pub use sled::SledStorage;
+
+#[cfg(feature = "sqlite-storage")]
+pub use sqlite::SqliteStorage;

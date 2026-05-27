@@ -674,3 +674,122 @@ fn create_storage_durable_returns_error_on_native() {
         assert!(err.contains("durable"), "error mentions durable: {err}");
     })
 }
+
+// BackendKind-based tests (feature-gated)
+
+#[test]
+#[cfg_attr(not(feature = "storage-fs"), ignore)]
+fn create_storage_backend_kind_filesystem_works() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let dir = std::env::temp_dir().join(format!("saikuro_test_fs_{}", std::process::id()));
+        // clean up from a previous run if any
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let cfg = StorageConfig::default()
+            .with_backend(BackendKind::Filesystem)
+            .with_storage_path(&dir);
+        let store = saikuro::create_storage(&cfg).await.expect("filesystem");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        let v = store.get("ns", "k").await.unwrap();
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    })
+}
+
+#[test]
+#[cfg_attr(not(feature = "storage-sled"), ignore)]
+fn create_storage_backend_kind_sled_works() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let dir = std::env::temp_dir().join(format!("saikuro_test_sled_{}", std::process::id()));
+
+        let cfg = StorageConfig::default()
+            .with_backend(BackendKind::Sled)
+            .with_storage_path(&dir);
+        let store = saikuro::create_storage(&cfg).await.expect("sled");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        let v = store.get("ns", "k").await.unwrap();
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+    })
+}
+
+#[test]
+#[cfg_attr(not(feature = "storage-sqlite"), ignore)]
+fn create_storage_backend_kind_sqlite_works() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let path = std::env::temp_dir().join(format!("saikuro_test_sqlite_{}.sqlite", std::process::id()));
+
+        let cfg = StorageConfig::default()
+            .with_backend(BackendKind::Sqlite)
+            .with_storage_path(&path);
+        let store = saikuro::create_storage(&cfg).await.expect("sqlite");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        let v = store.get("ns", "k").await.unwrap();
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+
+        let _ = std::fs::remove_file(&path);
+    })
+}
+
+#[test]
+fn create_storage_backend_kind_web_storage_returns_in_memory_on_native() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let cfg = StorageConfig::default().with_backend(BackendKind::WebStorage);
+        let store = saikuro::create_storage(&cfg).await.expect("web storage");
+        // WebStorage on native is an InMemoryStorage alias — does round-trip
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        let v = store.get("ns", "k").await.unwrap();
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+    })
+}
+
+#[test]
+fn create_storage_backend_kind_indexeddb_errors_on_native() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let cfg = StorageConfig::default().with_backend(BackendKind::IndexedDb);
+        let result = saikuro::create_storage(&cfg).await;
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("expected error, got Ok"),
+        };
+        assert!(err.contains("IndexedDB"), "error mentions IndexedDB: {err}");
+    })
+}
+
+#[test]
+fn create_storage_backend_kind_opfs_errors_on_native() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let cfg = StorageConfig::default().with_backend(BackendKind::Opfs);
+        let result = saikuro::create_storage(&cfg).await;
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("expected error, got Ok"),
+        };
+        assert!(err.contains("OPFS"), "error mentions OPFS: {err}");
+    })
+}
+
+#[test]
+fn create_storage_backend_kind_inmemory_works() {
+    saikuro_exec::block_on(async {
+        use saikuro_storage::{BackendKind, StorageConfig};
+
+        let cfg = StorageConfig::default().with_backend(BackendKind::InMemory);
+        let store = saikuro::create_storage(&cfg).await.expect("inmemory");
+        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
+        let v = store.get("ns", "k").await.unwrap();
+        assert_eq!(v, Some(bytes::Bytes::from("v")));
+    })
+}

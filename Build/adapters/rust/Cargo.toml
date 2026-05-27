@@ -22,8 +22,11 @@ ws   = ["saikuro-transport/native-ws"]
 wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport"]
 
 # Storage backends — platform-agnostic factory in storage module
-storage      = ["saikuro-storage/native-storage"]
-wasm-storage = ["saikuro-storage/wasm-storage"]
+storage         = ["saikuro-storage/native-storage"]
+storage-fs      = ["saikuro-storage/fs-storage"]
+storage-sled    = ["saikuro-storage/sled-storage"]
+storage-sqlite  = ["saikuro-storage/sqlite-storage"]
+wasm-storage    = ["saikuro-storage/wasm-storage"]
 
 [dependencies]
 saikuro-core      = { path = "../../crates/saikuro-core" }
