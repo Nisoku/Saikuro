@@ -20,7 +20,9 @@ static void contains_or_fail(const std::string &text,
 
 int main() {
   const std::string fixture = SAIKURO_SCHEMA_FIXTURE;
-  assert(!fixture.empty());
+  if (fixture.empty()) {
+    throw std::runtime_error("SAIKURO_SCHEMA_FIXTURE must not be empty");
+  }
 
   const std::string compact =
       saikuro::extract_schema_from_file(fixture, "parityns", false);
@@ -43,7 +45,9 @@ int main() {
   } catch (const std::exception &) {
     threw = true;
   }
-  assert(threw);
+  if (!threw) {
+    throw std::runtime_error("expected file-not-found to throw an exception");
+  }
 
   return 0;
 }

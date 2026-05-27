@@ -325,7 +325,7 @@ fn uuid_short() -> String {
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
     let count = PEER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{:016x}", millis.wrapping_add(count))
+    format!("{:012x}{:04x}", millis & 0xFFFF_FFFF_FFFF, count & 0xFFFF)
 }
 
 /// Wait for Ctrl-C (SIGINT) or SIGTERM.

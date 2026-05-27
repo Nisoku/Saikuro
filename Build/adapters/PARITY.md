@@ -34,7 +34,7 @@
 
 ## WASM Parity
 
-| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python (Pyodide)             | C# (Blazor WASM)    | C/C++ (wasm32)       |
+| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python ^                    | C# (Blazor WASM)    | C/C++ (wasm32)       |
 |-----------------------------|----------------------------|-------------------------------|------------------------------|---------------------|----------------------|
 | **WASM Compilation**        |                            |                               |                              |                     |                      |
 | WASM target supported       | yes                        | N/A (JS)                      | partial (Pyodide only)       | yes                 | yes                  |
@@ -98,3 +98,5 @@
 | error mapping propagation   | yes  | yes        | yes    | yes | yes | yes |
 | announce handshake          | yes  | yes        | yes    | yes | yes | yes |
 | core runtime integration    | yes  | yes        | yes    | yes | yes | yes |
+
+^ Python entries in WASM Parity refer to the Pyodide WASM build of CPython.

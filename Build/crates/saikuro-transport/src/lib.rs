@@ -68,7 +68,7 @@ pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
 #[macro_export]
 macro_rules! impl_native_sender {
     ($sender:ty, $addr_field:ident, $transport:literal) => {
-        #[async_trait]
+        #[async_trait::async_trait]
         impl $crate::traits::TransportSender for $sender {
             async fn send(&mut self, frame: bytes::Bytes) -> $crate::error::Result<()> {
                 tracing::trace!($addr_field = ?self.$addr_field, bytes = frame.len(), concat!($transport, " send"));
@@ -88,7 +88,7 @@ macro_rules! impl_native_sender {
 #[macro_export]
 macro_rules! impl_native_receiver {
     ($receiver:ty, $addr_field:ident, $transport:literal) => {
-        #[async_trait]
+        #[async_trait::async_trait]
         impl $crate::traits::TransportReceiver for $receiver {
             async fn recv(&mut self) -> $crate::error::Result<Option<bytes::Bytes>> {
                 match futures::StreamExt::next(&mut self.inner).await {

@@ -90,6 +90,15 @@ public:
       }
     }
 
+    Stream(Stream &&other) noexcept : MoveOnlyHandle(std::move(other)) {}
+
+    Stream &operator=(Stream &&other) noexcept {
+      if (this != &other) {
+        MoveOnlyHandle::operator=(std::move(other));
+      }
+      return *this;
+    }
+
     bool next_json(std::string &out_item_json) {
       return next_json_from(out_item_json, saikuro_stream_next_json);
     }
@@ -249,6 +258,15 @@ public:
     }
   }
 
+  Client(Client &&other) noexcept : MoveOnlyHandle(std::move(other)) {}
+
+  Client &operator=(Client &&other) noexcept {
+    if (this != &other) {
+      MoveOnlyHandle::operator=(std::move(other));
+    }
+    return *this;
+  }
+
   ~Client() { destroy(); }
 
 private:
@@ -280,6 +298,15 @@ public:
     if (saikuro_provider_serve(handle_, address.c_str()) != 0) {
       throw Error(last_error());
     }
+  }
+
+  Provider(Provider &&other) noexcept : MoveOnlyHandle(std::move(other)) {}
+
+  Provider &operator=(Provider &&other) noexcept {
+    if (this != &other) {
+      MoveOnlyHandle::operator=(std::move(other));
+    }
+    return *this;
   }
 
   ~Provider() { destroy(); }
