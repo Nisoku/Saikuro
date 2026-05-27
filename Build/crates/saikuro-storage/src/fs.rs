@@ -57,7 +57,7 @@ impl FilesystemStorage {
 // -- helpers run on the blocking pool --
 
 fn exists(path: &Path) -> Result<bool> {
-    Ok(path.try_exists().map_err(StorageError::from)?)
+    path.try_exists().map_err(StorageError::from)
 }
 
 fn read_bytes(path: &Path) -> Result<Option<Bytes>> {
@@ -147,7 +147,7 @@ fn clear_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn strip_ns_prefix<'a>(prefix: &Option<String>, name: &'a str) -> String {
+fn strip_ns_prefix(prefix: &Option<String>, name: &str) -> String {
     match prefix {
         Some(p) => {
             let pstr = format!("{p}:");

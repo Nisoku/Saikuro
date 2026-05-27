@@ -93,9 +93,9 @@ impl KeyValueBackend for SledStorage {
             let tree = db
                 .open_tree(&ns)
                 .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
-            Ok(tree
+            tree
                 .contains_key(key.as_bytes())
-                .map_err(|e| StorageError::internal(format!("sled contains_key: {e}")))?)
+                .map_err(|e| StorageError::internal(format!("sled contains_key: {e}")))
         })
         .await
     }

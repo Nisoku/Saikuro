@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use saikuro_storage::traits::StorageBackend;
 use saikuro_storage::{BackendKind, PersistenceMode, StorageConfig};
 
@@ -93,14 +91,14 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBac
 
 // Platform helper factories
 
-async fn create_filesystem(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_filesystem(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
     #[cfg(feature = "storage-fs")]
     {
-        let path = config
+        let path = _config
             .storage_path
             .clone()
-            .unwrap_or_else(|| PathBuf::from("./saikuro_data"));
-        let storage = saikuro_storage::FilesystemStorage::with_config(path, config.clone());
+            .unwrap_or_else(|| std::path::PathBuf::from("./saikuro_data"));
+        let storage = saikuro_storage::FilesystemStorage::with_config(path, _config.clone());
         Ok(Box::new(storage))
     }
     #[cfg(not(feature = "storage-fs"))]
@@ -111,14 +109,14 @@ async fn create_filesystem(config: &StorageConfig) -> Result<Box<dyn StorageBack
     }
 }
 
-async fn create_sled(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_sled(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
     #[cfg(feature = "storage-sled")]
     {
-        let path = config
+        let path = _config
             .storage_path
             .clone()
-            .unwrap_or_else(|| PathBuf::from("./saikuro_sled"));
-        let storage = saikuro_storage::SledStorage::with_config(path, config.clone())?;
+            .unwrap_or_else(|| std::path::PathBuf::from("./saikuro_sled"));
+        let storage = saikuro_storage::SledStorage::with_config(path, _config.clone())?;
         Ok(Box::new(storage))
     }
     #[cfg(not(feature = "storage-sled"))]
@@ -129,14 +127,14 @@ async fn create_sled(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> 
     }
 }
 
-async fn create_sqlite(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_sqlite(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
     #[cfg(feature = "storage-sqlite")]
     {
-        let path = config
+        let path = _config
             .storage_path
             .clone()
-            .unwrap_or_else(|| PathBuf::from("./saikuro.sqlite"));
-        let storage = saikuro_storage::SqliteStorage::with_config(path, config.clone())?;
+            .unwrap_or_else(|| std::path::PathBuf::from("./saikuro.sqlite"));
+        let storage = saikuro_storage::SqliteStorage::with_config(path, _config.clone())?;
         Ok(Box::new(storage))
     }
     #[cfg(not(feature = "storage-sqlite"))]
@@ -148,31 +146,27 @@ async fn create_sqlite(config: &StorageConfig) -> Result<Box<dyn StorageBackend>
 }
 
 async fn create_web_storage(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    // On wasm32 LocalStorage is the real web storage; on native it's an
-    // InMemoryStorage alias (see local_storage.rs).
     let storage = saikuro_storage::LocalStorage::with_config(config.clone());
     Ok(Box::new(storage))
 }
 
-async fn create_indexeddb(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_indexeddb(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
     #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
     {
-        let storage = saikuro_storage::IndexedDbStorage::with_config(config.clone());
+        let storage = saikuro_storage::IndexedDbStorage::with_config(_config.clone());
         return Ok(Box::new(storage));
     }
-    let _ = config;
     Err(Error::Storage(
         "IndexedDB backend is only available on wasm32 with the 'wasm-storage' feature".into(),
     ))
 }
 
-async fn create_opfs(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_opfs(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
     #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
     {
-        let storage = saikuro_storage::OpfsStorage::with_config(config.clone());
+        let storage = saikuro_storage::OpfsStorage::with_config(_config.clone());
         return Ok(Box::new(storage));
     }
-    let _ = config;
     Err(Error::Storage(
         "OPFS backend is only available on wasm32 with the 'wasm-storage' feature".into(),
     ))
