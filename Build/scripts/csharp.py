@@ -1,12 +1,9 @@
 """C# adapter commands."""
 
-import hashlib, os, shutil, subprocess, sys
+import subprocess, sys
 from pathlib import Path
 
-# Pinned SHA256 of https://dot.net/v1/dotnet-install.sh.
-# Update when upgrading the .NET SDK version.
-DOTNET_CHANNEL = "8.0"
-DOTNET_INSTALL_SHA256 = "082f7685e156738a1b2e2ed8381a621870d4ce8e8c59278034556f05c186eb2e"
+from dotnet import ensure_dotnet
 
 DIR = Path(__file__).resolve().parents[1] / "adapters" / "csharp" / "Saikuro"
 SRC = DIR / "src"
@@ -17,42 +14,6 @@ CMDS = {
     "build": ["dotnet", "build", str(SRC / "Saikuro.csproj"), "-c", "Release"],
     "test": ["dotnet", "test", str(TEST / "Saikuro.Tests.csproj"), "-c", "Release"],
 }
-
-
-def find_dotnet() -> str | None:
-    found = shutil.which("dotnet")
-    if found:
-        return found
-    home = Path.home() / ".dotnet" / "dotnet"
-    if home.is_file():
-        os.environ["PATH"] = str(home.parent) + os.pathsep + os.environ.get("PATH", "")
-        return str(home)
-    return None
-
-
-def ensure_dotnet() -> None:
-    if find_dotnet():
-        return
-    print(f"dotnet not found. Installing .NET SDK {DOTNET_CHANNEL}...", flush=True)
-    installer = Path.home() / ".dotnet" / "dotnet-install.sh"
-    installer.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["curl", "-sSL", "https://dot.net/v1/dotnet-install.sh", "-o", str(installer)],
-        check=True,
-    )
-    actual = hashlib.sha256(installer.read_bytes()).hexdigest()
-    if actual != DOTNET_INSTALL_SHA256:
-        print(f"SHA256 mismatch: expected {DOTNET_INSTALL_SHA256}, got {actual}", flush=True)
-        sys.exit(1)
-    installer.chmod(0o755)
-    subprocess.run(["bash", str(installer), "--channel", DOTNET_CHANNEL], check=True)
-    dotnet = Path.home() / ".dotnet" / "dotnet"
-    if dotnet.is_file():
-        os.environ["PATH"] = str(dotnet.parent) + os.pathsep + os.environ.get("PATH", "")
-        print("dotnet installed.", flush=True)
-    else:
-        print("dotnet installation failed; add ~/.dotnet to your PATH", flush=True)
-        sys.exit(1)
 
 
 def run(cmd: list[str]) -> int:

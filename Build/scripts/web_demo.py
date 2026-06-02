@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from dotnet import ensure_dotnet, ensure_dotnet_env
+
 SCRIPTS = Path(__file__).resolve().parent
 BUILD_ROOT = SCRIPTS.parent
 REPO_ROOT = BUILD_ROOT.parent
@@ -19,10 +21,11 @@ PUBLIC_WASM = DEMO / "public" / "wasm"
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
-    """Run a subprocess ensuring emsdk paths are available in PATH.
+    """Run a subprocess ensuring emsdk and dotnet paths are available.
 
-    This makes `emcc` and related tools discoverable even when the
-    caller's shell hasn't sourced `~/.emsdk/emsdk_env.sh`.
+    Makes ``emcc``, ``em++`` and ``dotnet`` discoverable even when the
+    caller's shell hasn't sourced ``~/.emsdk/emsdk_env.sh`` or added
+    ``~/.dotnet`` to ``PATH``.
     """
     env = os.environ.copy()
     emsdk_dir = Path.home() / ".emsdk"
@@ -33,6 +36,7 @@ def run(cmd: list[str], cwd: Path | None = None) -> int:
             if p not in old_path:
                 old_path = f"{p}:{old_path}"
         env["PATH"] = old_path
+    env = ensure_dotnet_env(env)
     return subprocess.run(cmd, cwd=cwd or REPO_ROOT, env=env).returncode
 
 
@@ -41,6 +45,7 @@ def ensure_dirs() -> None:
     (SRC_WASM / "cpp").mkdir(parents=True, exist_ok=True)
     (SRC_WASM / "runtime").mkdir(parents=True, exist_ok=True)
     (SRC_WASM / "rust").mkdir(parents=True, exist_ok=True)
+    (SRC_WASM / "csharp").mkdir(parents=True, exist_ok=True)
     (PUBLIC_WASM / "python").mkdir(parents=True, exist_ok=True)
     (PUBLIC_WASM / "csharp").mkdir(parents=True, exist_ok=True)
 
@@ -123,14 +128,7 @@ def build_cpp_wasm() -> int:
 
 
 def build_csharp_wasm() -> int:
-    # Ensure dotnet is available; attempt to install if missing
-    if shutil.which("dotnet") is None:
-        print("dotnet not found; installing .NET SDK...", flush=True)
-        rc_install = run(["bash", "-lc", "curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0"], cwd=REPO_ROOT)
-        if rc_install != 0:
-            print("Failed to install dotnet; please install it manually.")
-            return rc_install
-
+    ensure_dotnet()
     rc = run([
         "dotnet",
         "publish",
@@ -148,6 +146,9 @@ def build_csharp_wasm() -> int:
     if not publish_dir.exists():
         print(f"publish output not found: {publish_dir}")
         return 1
+
+    shutil.rmtree(SRC_WASM / "csharp", ignore_errors=True)
+    shutil.copytree(publish_dir, SRC_WASM / "csharp", dirs_exist_ok=True)
 
     shutil.rmtree(PUBLIC_WASM / "csharp", ignore_errors=True)
     shutil.copytree(publish_dir, PUBLIC_WASM / "csharp", dirs_exist_ok=True)

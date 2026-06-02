@@ -11,7 +11,7 @@ export async function loadCSharpSummary(): Promise<
   if (!csharpPromise) {
     csharpPromise = (async () => {
       const dotnetModule = await import(
-        /* @vite-ignore */ "/wasm/csharp/dotnet.js"
+        "../../wasm/csharp/dotnet.js"
       );
       const runtime = (await dotnetModule.createDotnetRuntime({
         locateFile: (path: string) => `/wasm/csharp/${path}`,

@@ -34,3 +34,6 @@ Build/adapters/cpp/build/
 .vscode/ 
 .DS_Store
 build_cpp/
+
+Demo/public/wasm/*
+Demo/src/wasm/*
