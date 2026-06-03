@@ -6,3 +6,6 @@
 
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
+
+# [build]
+# rustflags = ["--cfg=web_sys_unstable_apis"]

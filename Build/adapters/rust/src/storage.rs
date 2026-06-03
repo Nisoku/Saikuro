@@ -40,10 +40,13 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBac
         BackendKind::Opfs => {
             return create_opfs(config).await;
         }
+        BackendKind::FsAccess => {
+            return create_fs_access(config).await;
+        }
         BackendKind::InMemory => { /* fall through to persistence-based dispatch */ }
     }
 
-    // InMemory (default): persistence-mode-based dispatch (backward compat)
+    // InMemory (default): persistence-mode-based dispatch
     match config.persistence {
         PersistenceMode::Transient => {
             let storage = saikuro_storage::InMemoryStorage::with_config(config.clone());
@@ -51,7 +54,7 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBac
         }
 
         PersistenceMode::BestEffort => {
-            // wasm32 with wasm-storage → LocalStorage (persists across page reload)
+            // wasm32 with wasm-storage -> LocalStorage (persists across page reload)
             #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
             {
                 let storage = saikuro_storage::LocalStorage::with_config(config.clone());
@@ -67,7 +70,7 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBac
         }
 
         PersistenceMode::Durable => {
-            // wasm32 with wasm-storage → IndexedDB (survives page reload + clear)
+            // wasm32 with wasm-storage -> IndexedDB (survives page reload + clear)
             #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
             {
                 let storage = saikuro_storage::IndexedDbStorage::with_config(config.clone());
@@ -169,6 +172,17 @@ async fn create_opfs(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>>
     }
     Err(Error::Storage(
         "OPFS backend is only available on wasm32 with the 'wasm-storage' feature".into(),
+    ))
+}
+
+async fn create_fs_access(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
+    {
+        let storage = saikuro_storage::FsAccessStorage::pick(_config.clone()).await?;
+        return Ok(Box::new(storage));
+    }
+    Err(Error::Storage(
+        "FS Access backend is only available on wasm32 with the 'wasm-storage' feature".into(),
     ))
 }
 

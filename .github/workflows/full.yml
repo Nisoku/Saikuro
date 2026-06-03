@@ -52,4 +52,4 @@ jobs:
       - name: Run all checks
         run: just check
       - name: Build demo
-        run: python3 Build/scripts/web_demo.py build
+        run: just web_demo build

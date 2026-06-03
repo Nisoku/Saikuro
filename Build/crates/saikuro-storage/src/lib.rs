@@ -13,6 +13,9 @@ pub mod util;
 pub mod inmemory;
 
 #[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
+pub mod fs_access;
+
+#[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
 pub mod indexeddb;
 
 #[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
@@ -182,6 +185,9 @@ pub use local_storage::LocalStorage;
 
 #[cfg(feature = "session-storage")]
 pub use session_storage::SessionStorage;
+
+#[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
+pub use fs_access::FsAccessStorage;
 
 #[cfg(all(feature = "wasm-storage", target_arch = "wasm32"))]
 pub use opfs::OpfsStorage;

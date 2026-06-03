@@ -22,6 +22,8 @@ pub enum BackendKind {
     IndexedDb,
     /// OPFS (File System Access API). WASM only.
     Opfs,
+    /// File System Access API (user-picked directory). WASM only.
+    FsAccess,
     /// Native filesystem via `std::fs`. Native only.
     Filesystem,
     /// Sled embedded database. Native only.
