@@ -49,6 +49,9 @@ jobs:
       - name: Install npm deps for demo
         run: npm ci
         working-directory: Demo
+      - name: Restore C# WASM workload
+        run: dotnet workload restore
+        working-directory: Build/wasm/csharp/InsightLab
       - name: Run all checks
         run: just check
       - name: Build demo
