@@ -346,7 +346,7 @@ impl<T> Future for JoinHandle<T> {
 
 // Time utilities
 pub async fn sleep(dur: Duration) {
-    let _ = wasm_timer::Delay::new(dur).await;
+    let _ = fluvio_wasm_timer::Delay::new(dur).await;
 }
 
 pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
@@ -355,7 +355,7 @@ where
 {
     use futures::future::{Either, FutureExt};
     futures::pin_mut!(fut);
-    let delay = wasm_timer::Delay::new(dur).fuse();
+    let delay = fluvio_wasm_timer::Delay::new(dur).fuse();
     futures::pin_mut!(delay);
     match futures::future::select(fut, delay).await {
         Either::Left((res, _)) => Ok(res),

@@ -35,12 +35,12 @@ async-trait = "0.1"
 pin-project-lite = "0.2"
 
 # UUID
-uuid = { version = "1.10", features = ["v4", "serde", "js"] }
+uuid = { version = "1.23.2", features = ["v4", "serde", "js"] }
 
 # Logging / tracing: tracing itself is wasm-safe; the subscriber is not
 # used directly from WASM so it only appears in crates that explicitly need it.
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json"] }
 
 # Error handling:  both are wasm-safe
 thiserror = "2.0"

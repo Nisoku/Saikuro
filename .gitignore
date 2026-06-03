@@ -20,6 +20,20 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Cache
+cache/
+
+# Logs
+*.log
+
+# Hook markers
+.dirty
+
 node_modules/
 dist/
 bin/
