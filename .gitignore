@@ -25,6 +25,9 @@ target
 *.db-wal
 *.db-shm
 
+*.pid
+*.sock
+
 # Cache
 cache/
 

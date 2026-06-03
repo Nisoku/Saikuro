@@ -34,20 +34,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
       - name: Install cmake
         run: sudo apt-get update && sudo apt-get install -y cmake
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm-pack
         run: cargo install wasm-pack
-      - name: Install npm deps
-        run: npm ci
-        working-directory: Build/adapters/typescript
       - name: Install Python test deps
         run: python3 -m pip install 'msgpack==1.1.0' 'websockets==13.1'
-      - name: Install Python adapter deps
-        run: uv sync --extra dev --extra websocket
-        working-directory: Build/adapters/python
+      - name: Run setup
+        run: just setup
       - name: Install npm deps for demo
         run: npm ci
         working-directory: Demo
