@@ -106,7 +106,11 @@ export async function runPipeline(
     start: now,
   });
   log.info("Rust sentiment complete", { durationMs: sentiment.durationMs });
-  steps.push({ label: "Rust", language: "Rust", durationMs: sentiment.durationMs });
+  steps.push({
+    label: "Rust",
+    language: "Rust",
+    durationMs: sentiment.durationMs,
+  });
 
   const summary = await callStep<PipelineOutputs["summary"]>({
     client: runtime.client,
@@ -139,7 +143,11 @@ export async function runPipeline(
     start: now,
   });
   log.info("Python viz complete", { durationMs: viz.durationMs });
-  steps.push({ label: "Python", language: "Python", durationMs: viz.durationMs });
+  steps.push({
+    label: "Python",
+    language: "Python",
+    durationMs: viz.durationMs,
+  });
 
   log.info("runPipeline complete");
   return {

@@ -19,12 +19,15 @@ type NgramResult = {
 
 let cached: Promise<(text: string, topN: number) => NgramResult> | null = null;
 
-export async function loadCppNgrams(): Promise<(text: string, topN: number) => NgramResult> {
+export async function loadCppNgrams(): Promise<
+  (text: string, topN: number) => NgramResult
+> {
   if (!cached) {
     cached = (async () => {
       log.info("loading C++ WASM");
-      const moduleFactory = (await import("../../wasm/cpp/insight_cpp.js"))
-        .default as () => Promise<CppModule>;
+      const moduleFactory = (
+        await import("../../../public/wasm/cpp/insight_cpp.js")
+      ).default as () => Promise<CppModule>;
       log.info("C++ WASM module loaded, instantiating");
       const mod = await moduleFactory();
       log.info("C++ WASM instantiated");

@@ -8,7 +8,8 @@ export async function startRuntimeWasm(channel: string): Promise<void> {
   if (!runtimePromise) {
     runtimePromise = (async () => {
       log.info("loading runtime WASM", { channel });
-      const mod = await import("../../wasm/runtime/saikuro_web_runtime.js");
+      const mod =
+        await import("../../../public/wasm/runtime/saikuro_web_runtime.js");
       log.info("runtime WASM module loaded, initializing");
       await mod.default();
       log.info("runtime WASM initialized, starting runtime", { channel });

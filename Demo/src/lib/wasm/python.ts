@@ -4,14 +4,21 @@ const log = getLogger("demo.wasm.python");
 
 type Pyodide = {
   runPythonAsync: (code: string) => Promise<any>;
-  globals: { get: (name: string) => any; set: (name: string, value: any) => void };
+  globals: {
+    get: (name: string) => any;
+    set: (name: string, value: any) => void;
+  };
 };
 
 let pyodidePromise: Promise<Pyodide> | null = null;
 let vizFn: ((stats: any, ngrams: any, sentiment: any) => any) | null = null;
 
 export async function loadPythonViz(): Promise<
-  (stats: Record<string, unknown>, ngrams: Record<string, unknown>, sentiment: Record<string, unknown>) => Promise<any>
+  (
+    stats: Record<string, unknown>,
+    ngrams: Record<string, unknown>,
+    sentiment: Record<string, unknown>,
+  ) => Promise<any>
 > {
   if (!pyodidePromise) {
     pyodidePromise = (async () => {
@@ -35,7 +42,9 @@ export async function loadPythonViz(): Promise<
   const pyodide = await pyodidePromise;
   if (!vizFn) {
     log.info("loading Python insight.py script");
-    const code = await fetch("/wasm/python/insight.py").then((res) => res.text());
+    const code = await fetch("/public/wasm/python/insight.py").then((res) =>
+      res.text(),
+    );
     await pyodide.runPythonAsync(code);
     vizFn = pyodide.globals.get("prepare_viz");
     log.info("Python viz function ready");

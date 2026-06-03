@@ -44,16 +44,24 @@ function just(recipe) {
       if (code === 0) resolve();
       else reject(new Error(`just ${recipe} exited ${code}`));
     });
-    child.on("error", (e) => reject(new Error(`just ${recipe} failed: ${e.message}`)));
+    child.on("error", (e) =>
+      reject(new Error(`just ${recipe} failed: ${e.message}`)),
+    );
   });
 }
 
 // initial build
 async function initialBuild() {
   process.stdout.write(CLEAR);
-  console.log(`${BOLD}╔═══════════════════════════════════════════════════════════╗${RESET}`);
-  console.log(`${BOLD}║     Saikuro Insight Lab initial build                     ║${RESET}`);
-  console.log(`${BOLD}╚═══════════════════════════════════════════════════════════╝${RESET}`);
+  console.log(
+    `${BOLD}╔═══════════════════════════════════════════════════════════╗${RESET}`,
+  );
+  console.log(
+    `${BOLD}║     Saikuro Insight Lab initial build                     ║${RESET}`,
+  );
+  console.log(
+    `${BOLD}╚═══════════════════════════════════════════════════════════╝${RESET}`,
+  );
 
   const steps = [
     "wasm-rust-runtime",
@@ -98,9 +106,15 @@ function scheduleBuild(target, recipe, delay = 400) {
 function isIgnored(filename) {
   if (!filename) return true;
   const base = path.basename(filename);
-  if (base.startsWith(".") || base.endsWith("~") || base.endsWith(".swp")) return true;
+  if (base.startsWith(".") || base.endsWith("~") || base.endsWith(".swp"))
+    return true;
   const parts = filename.split(/[/\\]/);
-  if (parts.includes("target") || parts.includes("bin") || parts.includes("obj")) return true;
+  if (
+    parts.includes("target") ||
+    parts.includes("bin") ||
+    parts.includes("obj")
+  )
+    return true;
   return false;
 }
 
@@ -141,17 +155,27 @@ function watchFile(file, target, recipe) {
 function startWatcher() {
   console.log(`\n${BOLD} Watching for changes${RESET}\n`);
 
-  watchDir(path.join(WASM, "c"),                    "C",       "wasm-c");
-  watchDir(path.join(WASM, "cpp"),                  "C++",     "wasm-cpp");
-  watchDir(path.join(WASM, "python"),               "Python",  "wasm-python");
-  watchDir(path.join(WASM, "rust", "src"),          "Rust",    "wasm-rust-provider");
-  watchDir(path.join(WASM, "runtime", "src"),       "Runtime", "wasm-rust-runtime");
-  watchDir(path.join(WASM, "csharp", "InsightLab"), "C#",      "wasm-csharp");
+  watchDir(path.join(WASM, "c"), "C", "wasm-c");
+  watchDir(path.join(WASM, "cpp"), "C++", "wasm-cpp");
+  watchDir(path.join(WASM, "python"), "Python", "wasm-python");
+  watchDir(path.join(WASM, "rust", "src"), "Rust", "wasm-rust-provider");
+  watchDir(path.join(WASM, "runtime", "src"), "Runtime", "wasm-rust-runtime");
+  watchDir(path.join(WASM, "csharp", "InsightLab"), "C#", "wasm-csharp");
 
-  watchFile(path.join(WASM, "rust", "Cargo.toml"),    "Rust",     "wasm-rust-provider");
-  watchFile(path.join(WASM, "runtime", "Cargo.toml"), "Runtime",  "wasm-rust-runtime");
+  watchFile(
+    path.join(WASM, "rust", "Cargo.toml"),
+    "Rust",
+    "wasm-rust-provider",
+  );
+  watchFile(
+    path.join(WASM, "runtime", "Cargo.toml"),
+    "Runtime",
+    "wasm-rust-runtime",
+  );
 
-  console.log(`\n${BOLD} Ready. Edit a source file to trigger a partial rebuild${RESET}\n`);
+  console.log(
+    `\n${BOLD} Ready. Edit a source file to trigger a partial rebuild${RESET}\n`,
+  );
 }
 
 // main

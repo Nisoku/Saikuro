@@ -25,8 +25,9 @@ export async function loadCStats(): Promise<(text: string) => StatsResult> {
   if (!cached) {
     cached = (async () => {
       log.info("loading C WASM");
-      const moduleFactory = (await import("../../wasm/c/insight_c.js"))
-        .default as () => Promise<CModule>;
+      const moduleFactory = (
+        await import("../../../public/wasm/c/insight_c.js")
+      ).default as () => Promise<CModule>;
       log.info("C WASM module loaded, instantiating");
       const mod = await moduleFactory();
       log.info("C WASM instantiated");

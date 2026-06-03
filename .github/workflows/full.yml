@@ -46,5 +46,10 @@ jobs:
       - name: Install Python adapter deps
         run: uv sync --extra dev --extra websocket
         working-directory: Build/adapters/python
+      - name: Install npm deps for demo
+        run: npm ci
+        working-directory: Demo
       - name: Run all checks
         run: just check
+      - name: Build demo
+        run: python3 Build/scripts/web_demo.py build

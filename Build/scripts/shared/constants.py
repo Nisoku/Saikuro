@@ -19,5 +19,4 @@ CPP_FMT_DIRS = [CPP_DIR / "src", CPP_DIR / "include", CPP_DIR / "tests"]
 
 DEMO_DIR = REPO_ROOT / "Demo"
 WASM_DIR = DEMO_DIR / "wasm"
-SRC_WASM = DEMO_DIR / "src" / "wasm"
 PUBLIC_WASM = DEMO_DIR / "public" / "wasm"

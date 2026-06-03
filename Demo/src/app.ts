@@ -1,6 +1,11 @@
 import { getLogger } from "@nisoku/saikuro";
 import { ensureRuntime } from "./lib/runtime";
-import { runPipeline, type PipelineOutputs, type PipelinePreset, type PipelineResult } from "./lib/pipeline";
+import {
+  runPipeline,
+  type PipelineOutputs,
+  type PipelinePreset,
+  type PipelineResult,
+} from "./lib/pipeline";
 import { MessageLog, type MessageRecord } from "./lib/message-log";
 
 const log = getLogger("demo.app");
@@ -33,7 +38,6 @@ const STAGE_TO_KEY: Record<string, string> = {
   Rust: "Rust",
   "C#": "C#",
   Python: "Python",
-
 };
 
 /** Map a pipeline stage name to a CSS modifier for the log rail badge. */
@@ -93,8 +97,12 @@ export function bootstrapApp(): void {
   const vizBars = document.querySelector<HTMLDivElement>("#viz-bars");
   const gaugeFill = document.querySelector<SVGPathElement>(".gauge__fill");
   const messageList = document.querySelector<HTMLDivElement>("#message-list");
-  const ngramsDetailBigrams = document.querySelector<HTMLDivElement>("#ngrams-detail-bigrams");
-  const ngramsDetailTrigrams = document.querySelector<HTMLDivElement>("#ngrams-detail-trigrams");
+  const ngramsDetailBigrams = document.querySelector<HTMLDivElement>(
+    "#ngrams-detail-bigrams",
+  );
+  const ngramsDetailTrigrams = document.querySelector<HTMLDivElement>(
+    "#ngrams-detail-trigrams",
+  );
 
   if (!textArea || !presetSelect || !runButton || !statusEl) return;
 
@@ -112,12 +120,16 @@ export function bootstrapApp(): void {
 
   // Tab switching
   function switchTab(tabName: string) {
-    document.querySelectorAll<HTMLAnchorElement>("#sidebar-nav .nav-item").forEach((item) => {
-      item.classList.toggle("is-active", item.dataset.tab === tabName);
-    });
-    document.querySelectorAll<HTMLAnchorElement>("#bottom-nav .bottom-nav__item").forEach((item) => {
-      item.classList.toggle("is-active", item.dataset.tab === tabName);
-    });
+    document
+      .querySelectorAll<HTMLAnchorElement>("#sidebar-nav .nav-item")
+      .forEach((item) => {
+        item.classList.toggle("is-active", item.dataset.tab === tabName);
+      });
+    document
+      .querySelectorAll<HTMLAnchorElement>("#bottom-nav .bottom-nav__item")
+      .forEach((item) => {
+        item.classList.toggle("is-active", item.dataset.tab === tabName);
+      });
     document.querySelectorAll<HTMLElement>("[data-view]").forEach((view) => {
       view.classList.toggle("is-active", view.dataset.view === tabName);
     });
@@ -137,17 +149,26 @@ export function bootstrapApp(): void {
     if (!logRail) return;
     const items = messageLog.list().slice(0, limit);
     if (items.length === 0) {
-      logRail.innerHTML = '<span class="log-rail__placeholder">No messages yet.</span>';
+      logRail.innerHTML =
+        '<span class="log-rail__placeholder">No messages yet.</span>';
       return;
     }
     logRail.innerHTML = items
       .map((item) => {
         const cls = STAGE_TO_RAIL_CLASS[item.stage] ?? "";
         const stageLabel = escapeHtml(item.stage.replace(/\s+/g, "-"));
-        return '<div class="log-rail__item">' +
-          '<span class="log-rail__stage log-rail__stage--' + cls + '">' + stageLabel + "</span>" +
-          '<span class="log-rail__payload">' + escapeHtml(shortPreview(item.serialized)) + "</span>" +
-          "</div>";
+        return (
+          '<div class="log-rail__item">' +
+          '<span class="log-rail__stage log-rail__stage--' +
+          cls +
+          '">' +
+          stageLabel +
+          "</span>" +
+          '<span class="log-rail__payload">' +
+          escapeHtml(shortPreview(item.serialized)) +
+          "</span>" +
+          "</div>"
+        );
       })
       .join("");
   };
@@ -157,16 +178,27 @@ export function bootstrapApp(): void {
     if (!messageList) return;
     const items = messageLog.list();
     if (items.length === 0) {
-      messageList.innerHTML = '<div style="padding:24px;text-align:center;color:#718096;">No messages yet. Run the pipeline to see log entries.</div>';
+      messageList.innerHTML =
+        '<div style="padding:24px;text-align:center;color:#718096;">No messages yet. Run the pipeline to see log entries.</div>';
       return;
     }
     messageList.innerHTML = items
       .map((item) => {
         const dir = item.direction === "call" ? "call" : "response";
-        return '<div class="log-entry">' +
-          '<span class="log-entry__badge log-entry__badge--' + dir + '">' + escapeHtml(item.stage) + " " + dir + "</span>" +
-          '<code class="log-entry__data">' + escapeHtml(shortPreview(item.serialized, 200)) + "</code>" +
-          "</div>";
+        return (
+          '<div class="log-entry">' +
+          '<span class="log-entry__badge log-entry__badge--' +
+          dir +
+          '">' +
+          escapeHtml(item.stage) +
+          " " +
+          dir +
+          "</span>" +
+          '<code class="log-entry__data">' +
+          escapeHtml(shortPreview(item.serialized, 200)) +
+          "</code>" +
+          "</div>"
+        );
       })
       .join("");
   };
@@ -175,33 +207,64 @@ export function bootstrapApp(): void {
   const renderFlow = (steps: PipelineResult["steps"]) => {
     if (!flowTrack) return;
     const total = steps.reduce((acc, s) => acc + s.durationMs, 0) || 1;
-    flowTrack.querySelectorAll<HTMLDivElement>(".flow__segment").forEach((seg) => {
-      const key = seg.dataset.stage ?? "";
-      const step = steps.find((s) => STAGE_TO_KEY[s.label] === key);
-      if (!step) {
-        seg.style.width = "0%";
-        return;
-      }
-      const pct = Math.max(4, (step.durationMs / total) * 100);
-      seg.style.width = pct.toFixed(2) + "%";
-    });
+    flowTrack
+      .querySelectorAll<HTMLDivElement>(".flow__segment")
+      .forEach((seg) => {
+        const key = seg.dataset.stage ?? "";
+        const step = steps.find((s) => STAGE_TO_KEY[s.label] === key);
+        if (!step) {
+          seg.style.width = "0%";
+          return;
+        }
+        const pct = Math.max(4, (step.durationMs / total) * 100);
+        seg.style.width = pct.toFixed(2) + "%";
+      });
   };
 
   // N-Gram tag clouds
-  const renderNgrams = (bigrams: PipelineOutputs["ngrams"]["bigrams"], trigrams?: PipelineOutputs["ngrams"]["trigrams"]) => {
+  const renderNgrams = (
+    bigrams: PipelineOutputs["ngrams"]["bigrams"],
+    trigrams?: PipelineOutputs["ngrams"]["trigrams"],
+  ) => {
     if (ngramsCloud && Array.isArray(bigrams) && bigrams.length > 0) {
-      ngramsCloud.innerHTML = bigrams.slice(0, 8)
-        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
+      ngramsCloud.innerHTML = bigrams
+        .slice(0, 8)
+        .map(
+          ([word, count]) =>
+            '<span class="tag">' +
+            escapeHtml(word) +
+            " (" +
+            formatNumber(count) +
+            ")</span>",
+        )
         .join("");
     }
     if (ngramsDetailBigrams && Array.isArray(bigrams) && bigrams.length > 0) {
       ngramsDetailBigrams.innerHTML = bigrams
-        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
+        .map(
+          ([word, count]) =>
+            '<span class="tag">' +
+            escapeHtml(word) +
+            " (" +
+            formatNumber(count) +
+            ")</span>",
+        )
         .join("");
     }
-    if (ngramsDetailTrigrams && Array.isArray(trigrams) && trigrams.length > 0) {
+    if (
+      ngramsDetailTrigrams &&
+      Array.isArray(trigrams) &&
+      trigrams.length > 0
+    ) {
       ngramsDetailTrigrams.innerHTML = trigrams
-        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
+        .map(
+          ([word, count]) =>
+            '<span class="tag">' +
+            escapeHtml(word) +
+            " (" +
+            formatNumber(count) +
+            ")</span>",
+        )
         .join("");
     }
   };
@@ -216,12 +279,22 @@ export function bootstrapApp(): void {
       track.innerHTML = bins
         .map((b) => {
           const pct = Math.max(4, (b.value / max) * 100);
-          return '<div class="bar" style="height: ' + pct.toFixed(1) + '%" title="' + escapeHtml(b.label) + ": " + b.value + '"></div>';
+          return (
+            '<div class="bar" style="height: ' +
+            pct.toFixed(1) +
+            '%" title="' +
+            escapeHtml(b.label) +
+            ": " +
+            b.value +
+            '"></div>'
+          );
         })
         .join("");
     }
     if (labels) {
-      labels.innerHTML = bins.map((b) => "<span>" + escapeHtml(b.label) + "</span>").join("");
+      labels.innerHTML = bins
+        .map((b) => "<span>" + escapeHtml(b.label) + "</span>")
+        .join("");
     }
   };
 
@@ -233,35 +306,50 @@ export function bootstrapApp(): void {
   };
 
   // Provider cards (pipeline view)
-  const updateProviderCard = (providerName: string, status: "idle" | "running" | "done" | "error", durationMs?: number) => {
-    const card = document.querySelector<HTMLElement>('[data-provider="' + providerName + '"]');
+  const updateProviderCard = (
+    providerName: string,
+    status: "idle" | "running" | "done" | "error",
+    durationMs?: number,
+  ) => {
+    const card = document.querySelector<HTMLElement>(
+      '[data-provider="' + providerName + '"]',
+    );
     if (!card) return;
     card.classList.toggle("is-running", status === "running");
     const pill = card.querySelector<HTMLElement>("[data-provider-status]");
     if (pill) {
       const dot = pill.querySelector(".status-dot");
       pill.className = pill.className.replace(/status-pill--\w+/g, "").trim();
-      if (dot) dot.className = dot.className.replace(/status-dot--\w+/g, "").trim();
+      if (dot)
+        dot.className = dot.className.replace(/status-dot--\w+/g, "").trim();
       switch (status) {
         case "running":
           pill.classList.add("status-pill", "status-pill--running");
           if (dot) dot.classList.add("status-dot", "status-dot--pulse");
-          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Running"; });
+          pill.childNodes.forEach((n) => {
+            if (n.nodeType === Node.TEXT_NODE) n.textContent = " Running";
+          });
           break;
         case "done":
           pill.classList.add("status-pill", "status-pill--ready");
           if (dot) dot.classList.add("status-dot", "status-dot--ready");
-          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle"; });
+          pill.childNodes.forEach((n) => {
+            if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle";
+          });
           break;
         case "error":
           pill.classList.add("status-pill", "status-pill--error");
           if (dot) dot.classList.add("status-dot");
-          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Error"; });
+          pill.childNodes.forEach((n) => {
+            if (n.nodeType === Node.TEXT_NODE) n.textContent = " Error";
+          });
           break;
         default:
           pill.classList.add("status-pill", "status-pill--ready");
           if (dot) dot.classList.add("status-dot", "status-dot--ready");
-          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle"; });
+          pill.childNodes.forEach((n) => {
+            if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle";
+          });
       }
     }
     if (durationMs !== undefined) {
@@ -271,10 +359,12 @@ export function bootstrapApp(): void {
   };
 
   const resetAllProviderCards = () => {
-    document.querySelectorAll<HTMLElement>("[data-provider]").forEach((card) => {
-      const name = card.dataset.provider ?? "";
-      updateProviderCard(name, "idle");
-    });
+    document
+      .querySelectorAll<HTMLElement>("[data-provider]")
+      .forEach((card) => {
+        const name = card.dataset.provider ?? "";
+        updateProviderCard(name, "idle");
+      });
   };
 
   // Apply all results
@@ -325,7 +415,14 @@ export function bootstrapApp(): void {
 
       if (key === "sentiment.confidence") {
         const conf = outputs.sentiment.confidence;
-        el.textContent = typeof conf === "number" ? (conf > 0.7 ? "High" : conf > 0.4 ? "Medium" : "Low") : "\u2014";
+        el.textContent =
+          typeof conf === "number"
+            ? conf > 0.7
+              ? "High"
+              : conf > 0.4
+                ? "Medium"
+                : "Low"
+            : "\u2014";
         return;
       }
 
@@ -381,8 +478,14 @@ export function bootstrapApp(): void {
 
     try {
       const runtime = await ensureRuntime();
-      const preset = PRESETS.find((p) => p.id === presetSelect.value) ?? PRESETS[0];
-      const result = await runPipeline(textArea.value.trim(), preset, runtime, messageLog);
+      const preset =
+        PRESETS.find((p) => p.id === presetSelect.value) ?? PRESETS[0];
+      const result = await runPipeline(
+        textArea.value.trim(),
+        preset,
+        runtime,
+        messageLog,
+      );
 
       clearInterval(interval);
       providerOrder.forEach((name) => updateProviderCard(name, "done"));
@@ -396,10 +499,12 @@ export function bootstrapApp(): void {
       const message = err instanceof Error ? err.message : String(err);
       log.error("Pipeline failure", { error: message });
       statusEl.textContent = "Pipeline Error.";
-      document.querySelectorAll<HTMLElement>(".provider-card.is-running").forEach((card) => {
-        const name = card.dataset.provider;
-        if (name) updateProviderCard(name, "error");
-      });
+      document
+        .querySelectorAll<HTMLElement>(".provider-card.is-running")
+        .forEach((card) => {
+          const name = card.dataset.provider;
+          if (name) updateProviderCard(name, "error");
+        });
     } finally {
       setRunning(false);
     }

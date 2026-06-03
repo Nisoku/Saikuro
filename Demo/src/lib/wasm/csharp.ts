@@ -2,7 +2,9 @@ import { getLogger } from "@nisoku/saikuro";
 
 const log = getLogger("demo.wasm.csharp");
 
-let csharpPromise: Promise<(payload: Record<string, unknown>) => Promise<any>> | null = null;
+let csharpPromise: Promise<
+  (payload: Record<string, unknown>) => Promise<any>
+> | null = null;
 
 export async function loadCSharpSummary(): Promise<
   (payload: Record<string, unknown>) => Promise<any>
@@ -10,12 +12,11 @@ export async function loadCSharpSummary(): Promise<
   if (!csharpPromise) {
     csharpPromise = (async () => {
       log.info("loading C# WASM (dotnet.js)");
-      const { default: createDotnetRuntime } = await import(
-        "../../wasm/csharp/dotnet.js"
-      );
+      const { default: createDotnetRuntime } =
+        await import("../../../public/wasm/csharp/dotnet.js");
       log.info("C# dotnet.js loaded, creating runtime");
       const runtime = await createDotnetRuntime({
-        locateFile: (path: string) => `/wasm/csharp/${path}`,
+        locateFile: (path: string) => `/public/wasm/csharp/${path}`,
       } as any);
       log.info("C# runtime created, getting assembly exports");
 
