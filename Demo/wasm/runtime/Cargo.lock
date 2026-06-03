@@ -426,6 +426,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -803,6 +806,7 @@ name = "saikuro_web_runtime"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "instant",
  "once_cell",
  "saikuro-core",
  "saikuro-exec",
