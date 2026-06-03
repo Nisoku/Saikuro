@@ -34,9 +34,11 @@ export async function loadCStats(): Promise<(text: string) => StatsResult> {
       return (text: string) => {
         const len = mod.lengthBytesUTF8(text) + 1;
         const ptr = mod._malloc(len);
+        if (!ptr) throw new Error("C WASM malloc failed");
         try {
           mod.stringToUTF8(text, ptr, len);
           const outPtr = mod._insight_c_stats(ptr);
+        if (!outPtr) throw new Error("insight_c_stats returned null");
           const json = mod.UTF8ToString(outPtr);
           mod._insight_c_free(outPtr);
           return JSON.parse(json) as StatsResult;

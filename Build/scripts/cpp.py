@@ -19,7 +19,9 @@ def _ensure_cmake() -> None:
     if shutil.which("cmake"):
         return
     print("cmake not found; installing...", flush=True)
-    subprocess.run(["sudo", "apt-get", "install", "-y", "cmake"], check=True)
+    if sys.platform.startswith('linux'):
+            subprocess.run(["sudo", "apt-get", "update"], check=True)
+            subprocess.run(["sudo", "apt-get", "install", "-y", "cmake"], check=True)
 
 
 def _ensure_emsdk() -> None:

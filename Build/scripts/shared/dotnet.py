@@ -38,7 +38,7 @@ def ensure_dotnet() -> None:
     if dotnet.is_file():
         os.environ["PATH"] = str(dotnet.parent) + os.pathsep + os.environ.get("PATH", "")
         result = subprocess.run([str(dotnet), "--list-sdks"], capture_output=True, text=True)
-        if DOTNET_CHANNEL not in result.stdout:
+        if not any(line.strip().startswith(DOTNET_CHANNEL + ".") for line in result.stdout.splitlines()):
             print(f"warning: installed SDK version may not match channel {DOTNET_CHANNEL}", flush=True)
         print("dotnet installed.", flush=True)
     else:

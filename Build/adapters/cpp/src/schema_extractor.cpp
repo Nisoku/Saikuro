@@ -427,6 +427,7 @@ std::vector<Function> parse_functions(const std::string &source) {
 
     // Find the next identifier followed by '('.
     size_t name_start = pos;
+    size_t decl_start = pos;
     while (
         name_start < len &&
         !std::isalpha(static_cast<unsigned char>(clean_source[name_start])) &&
@@ -505,9 +506,10 @@ std::vector<Function> parse_functions(const std::string &source) {
     // Return type is everything from the start of the declaration to the name.
     // Capture before advancing pos so the length (name_start - pos) is valid.
     const std::string returns =
-        trim(clean_source.substr(pos, name_start - pos));
+        trim(clean_source.substr(decl_start, name_start - decl_start));
 
     pos = semi_pos + 1; // advance past ';' for next iteration
+    decl_start = pos;
 
     if (name.find("saikuro_") == 0)
       continue;

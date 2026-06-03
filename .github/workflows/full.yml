@@ -38,6 +38,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
       - name: Install npm deps
         run: npm ci
         working-directory: Build/adapters/typescript

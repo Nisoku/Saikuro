@@ -174,9 +174,9 @@ pub mod sync {
 
 /// Signal handling for WASM.
 ///
-/// WASM has no OS signals, so `ctrl_c` is a no-op. This returns `Ok(())`
-/// immediately to maintain API parity with the native backend without
-/// breaking error chains.
+/// WASM has no OS signals, so `ctrl_c` never completes: it awaits
+/// `std::future::pending()` so callers awaiting a shutdown signal simply
+/// stay parked instead of triggering an immediate (spurious) shutdown.
 pub mod signal {
     pub async fn ctrl_c() -> Result<(), ()> {
         std::future::pending().await

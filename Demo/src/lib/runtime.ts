@@ -38,7 +38,7 @@ async function bootRuntime(): Promise<RuntimeContext> {
   // Providers connect via BroadcastChannel and announce schemas.
   // The Rust provider runs in the background (fire-and-forget WASM), so
   // give it enough time to connect and announce before the client opens.
-  await new Promise((r) => setTimeout(r, 250));
+  await new Promise((r) => setTimeout(r, 500));
 
   log.info("connecting client via WasmHostConnector");
   const connector = new WasmHostConnector(CHANNEL);

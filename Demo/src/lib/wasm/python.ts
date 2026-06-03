@@ -11,7 +11,7 @@ type Pyodide = {
 };
 
 let pyodidePromise: Promise<Pyodide> | null = null;
-let vizFn: ((stats: any, ngrams: any, sentiment: any) => any) | null = null;
+let scriptLoaded: boolean = false;
 
 export async function loadPythonViz(): Promise<
   (
@@ -40,13 +40,13 @@ export async function loadPythonViz(): Promise<
   }
 
   const pyodide = await pyodidePromise;
-  if (!vizFn) {
+  if (!scriptLoaded) {
     log.info("loading Python insight.py script");
     const code = await fetch("/public/wasm/python/insight.py").then((res) =>
       res.text(),
     );
     await pyodide.runPythonAsync(code);
-    vizFn = pyodide.globals.get("prepare_viz");
+    scriptLoaded = true;
     log.info("Python viz function ready");
   }
 

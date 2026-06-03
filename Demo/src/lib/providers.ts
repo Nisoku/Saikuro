@@ -91,7 +91,8 @@ export async function startProviders(channel: string): Promise<void> {
 
   for (const p of [cProvider, cppProvider, csharpProvider, pythonProvider]) {
     const promise = serveProvider(p, channel).catch((err) =>
-      log.warn("provider failed to serve", { provider: p.namespace, err }),
+      log.warn("provider failed to serve", { provider: p.namespace, err })
+,
     );
     activeProviders.push(promise);
   }
@@ -110,5 +111,7 @@ async function serveProvider(
     namespace: provider.namespace,
   });
   // serveOn enters the dispatch loop and never resolves.
-  provider.serveOn(transport);
+  provider.serveOn(transport).catch((err) =>
+  log.warn("provider dispatch failed", { provider: provider.namespace, err })
+);
 }

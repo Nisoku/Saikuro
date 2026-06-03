@@ -38,8 +38,11 @@ def main() -> None:
     if cmd == "lint":
         sys.exit(lint())
     if cmd == "check":
-        sys.exit(sum([fmt_check(), lint(), run(CMDS["test"], cwd=BUILD_ROOT),
-                  run(CMDS["wasm_check"], cwd=BUILD_ROOT), run(CMDS["adapter_test"], cwd=BUILD_ROOT)]))
+        failed = any([fmt_check() != 0, lint() != 0,
+                      run(CMDS["test"], cwd=BUILD_ROOT) != 0,
+                      run(CMDS["wasm_check"], cwd=BUILD_ROOT) != 0,
+                      run(CMDS["adapter_test"], cwd=BUILD_ROOT) != 0])
+        sys.exit(1 if failed else 0)
     if cmd in CMDS:
         sys.exit(run(CMDS[cmd], cwd=BUILD_ROOT))
     print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
