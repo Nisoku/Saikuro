@@ -143,10 +143,10 @@ export function bootstrapApp(): void {
     logRail.innerHTML = items
       .map((item) => {
         const cls = STAGE_TO_RAIL_CLASS[item.stage] ?? "";
-        const stageLabel = item.stage.replace(/\s+/g, "-");
+        const stageLabel = escapeHtml(item.stage.replace(/\s+/g, "-"));
         return '<div class="log-rail__item">' +
           '<span class="log-rail__stage log-rail__stage--' + cls + '">' + stageLabel + "</span>" +
-          '<span class="log-rail__payload">' + shortPreview(item.serialized) + "</span>" +
+          '<span class="log-rail__payload">' + escapeHtml(shortPreview(item.serialized)) + "</span>" +
           "</div>";
       })
       .join("");

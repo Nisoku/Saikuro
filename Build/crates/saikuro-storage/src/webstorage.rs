@@ -57,7 +57,7 @@ pub(crate) fn delete_keys_with_prefix(storage: &web_sys::Storage, prefix: &str) 
         .filter(|k| k.starts_with(prefix))
         .collect();
     for key in keys {
-        let _ = storage.delete(&key);
+        storage_remove(storage, &key);
     }
 }
 

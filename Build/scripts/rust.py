@@ -1,10 +1,10 @@
 """Rust workspace + adapter commands."""
 
-import subprocess, sys
-from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-ADAPTER = ROOT / "adapters" / "rust"
+from shared.constants import BUILD_ROOT, RUST_DIR
+from shared.run import run
+from shared.format import check
 
 CMDS = {
     "setup": ["rustup", "target", "add", "wasm32-unknown-unknown"],
@@ -14,47 +14,36 @@ CMDS = {
 }
 
 
-def run(cmd: list[str], cwd: Path = ROOT) -> int:
-    return subprocess.run(cmd, cwd=cwd).returncode
-
-
-def _try_fmt(extra_args: list[str], cwd: Path, label: str) -> int:
-    cmd = ["cargo", "fmt", *extra_args, "--", "--check"]
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
-    if result.returncode == 0:
-        return 0
-    print(result.stdout, result.stderr, sep="", end="", flush=True)
-    subprocess.run(["cargo", "fmt", *extra_args], cwd=cwd)
-    print(f"[WARN] {label} format issues auto-fixed. Stage changes before committing.", flush=True)
-    return result.returncode
-
-
 def fmt_check() -> int:
-    rc = _try_fmt(["--all"], ROOT, "Rust workspace")
-    rc += _try_fmt([], ADAPTER, "Rust adapter")
+    rc = check("Rust workspace",
+               ["cargo", "fmt", "--all", "--", "--check"],
+               ["cargo", "fmt", "--all"],
+               cwd=BUILD_ROOT)
+    rc += check("Rust adapter",
+                ["cargo", "fmt", "--", "--check"],
+                ["cargo", "fmt"],
+                cwd=RUST_DIR)
     return rc
 
 
 def lint() -> int:
-    return run(["cargo", "clippy", "--workspace", "--", "-D", "warnings"]) + \
-           run(["cargo", "clippy", "--", "-D", "warnings"], cwd=ADAPTER)
+    return run(["cargo", "clippy", "--workspace", "--", "-D", "warnings"], cwd=BUILD_ROOT) + \
+           run(["cargo", "clippy", "--", "-D", "warnings"], cwd=RUST_DIR)
 
 
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
-
     if cmd == "fmt_check":
         sys.exit(fmt_check())
-    elif cmd == "lint":
+    if cmd == "lint":
         sys.exit(lint())
-    elif cmd == "check":
-        sys.exit(sum([fmt_check(), lint(), run(CMDS["test"]),
-                  run(CMDS["wasm_check"]), run(CMDS["adapter_test"])]))
-    elif cmd in CMDS:
-        sys.exit(run(CMDS[cmd]))
-    else:
-        print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
-        sys.exit(1)
+    if cmd == "check":
+        sys.exit(sum([fmt_check(), lint(), run(CMDS["test"], cwd=BUILD_ROOT),
+                  run(CMDS["wasm_check"], cwd=BUILD_ROOT), run(CMDS["adapter_test"], cwd=BUILD_ROOT)]))
+    if cmd in CMDS:
+        sys.exit(run(CMDS[cmd], cwd=BUILD_ROOT))
+    print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

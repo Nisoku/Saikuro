@@ -35,7 +35,10 @@ pub async fn start_runtime(channel: String) -> Result<(), JsValue> {
                     handle.accept_transport(transport, peer_id, CapabilitySet::default());
                 }
                 Ok(None) => break,
-                Err(_) => break,
+                Err(_) => {
+                    // Non-fatal accept error: continue rather than
+                    // permanently stopping the accept loop.
+                }
             }
         }
     });

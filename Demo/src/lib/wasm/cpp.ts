@@ -8,6 +8,7 @@ type CppModule = {
   stringToUTF8: (input: string, ptr: number, max: number) => void;
   lengthBytesUTF8: (input: string) => number;
   _malloc: (size: number) => number;
+  _free: (ptr: number) => void;
   UTF8ToString: (ptr: number) => string;
 };
 
@@ -30,11 +31,15 @@ export async function loadCppNgrams(): Promise<(text: string, topN: number) => N
       return (text: string, topN: number) => {
         const len = mod.lengthBytesUTF8(text) + 1;
         const ptr = mod._malloc(len);
-        mod.stringToUTF8(text, ptr, len);
-        const outPtr = mod._insight_cpp_ngrams(ptr, topN);
-        const json = mod.UTF8ToString(outPtr);
-        mod._insight_cpp_free(outPtr);
-        return JSON.parse(json) as NgramResult;
+        try {
+          mod.stringToUTF8(text, ptr, len);
+          const outPtr = mod._insight_cpp_ngrams(ptr, topN);
+          const json = mod.UTF8ToString(outPtr);
+          mod._insight_cpp_free(outPtr);
+          return JSON.parse(json) as NgramResult;
+        } finally {
+          mod._free(ptr);
+        }
       };
     })();
   }

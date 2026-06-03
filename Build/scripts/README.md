@@ -40,8 +40,10 @@ git clone https://github.com/emscripten-core/emsdk.git ~/.emsdk
 cd ~/.emsdk
 ./emsdk install latest
 ./emsdk activate latest
-# Add to your shell rc (bash/zsh/fish):
+# Add to your shell rc (bash/zsh):
 source ~/.emsdk/emsdk_env.sh
+# For fish shell:
+# source ~/.emsdk/emsdk_env.fish
 ```
 
 After installing, verify with:

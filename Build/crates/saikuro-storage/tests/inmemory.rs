@@ -147,6 +147,8 @@ fn list_keys_isolates_namespaces() {
         s.put("ns2", "k", Bytes::from("v")).await.unwrap();
         let keys1 = s.list_keys("ns1").await.unwrap();
         assert_eq!(keys1, vec!["k"]);
+        let keys2 = s.list_keys("ns2").await.unwrap();
+        assert_eq!(keys2, vec!["k"]);
     })
 }
 

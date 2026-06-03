@@ -281,6 +281,12 @@ function generateId(): Uint8Array {
     return buf;
   }
   // Fallback: Math.random (browser / Node.js without Web Crypto).
+  //
+  // Math.random is NOT cryptographically secure, but it is acceptable
+  // here because these IDs are only used for correlation/tracing, not
+  // for security or unguessability. If cryptographic randomness is
+  // ever required, replace this with crypto.getRandomValues or
+  // crypto.randomFillSync.
   for (let i = 0; i < 16; i++) {
     buf[i] = (Math.random() * 256) | 0;
   }

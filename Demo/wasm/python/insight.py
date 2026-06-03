@@ -1,6 +1,6 @@
 def prepare_viz(stats, ngrams, sentiment):
     tokens = ngrams.get("bigrams", [])
-    token_lengths = [len(item[0]) for item in tokens]
+    token_lengths = [max(len(w) for w in item[0].split()) for item in tokens]
     buckets = {
         "short": 0,
         "medium": 0,

@@ -9,24 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotnet import ensure_dotnet, ensure_dotnet_env
-
-SCRIPTS = Path(__file__).resolve().parent
-BUILD_ROOT = SCRIPTS.parent
-REPO_ROOT = BUILD_ROOT.parent
-DEMO = REPO_ROOT / "Demo"
-WASM = DEMO / "wasm"
-SRC_WASM = DEMO / "src" / "wasm"
-PUBLIC_WASM = DEMO / "public" / "wasm"
+from shared.constants import DEMO_DIR, WASM_DIR, SRC_WASM, PUBLIC_WASM, REPO_ROOT, BUILD_ROOT
+from shared.dotnet import ensure_dotnet, ensure_dotnet_env
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
-    """Run a subprocess ensuring emsdk and dotnet paths are available.
-
-    Makes ``emcc``, ``em++`` and ``dotnet`` discoverable even when the
-    caller's shell hasn't sourced ``~/.emsdk/emsdk_env.sh`` or added
-    ``~/.dotnet`` to ``PATH``.
-    """
     env = os.environ.copy()
     emsdk_dir = Path.home() / ".emsdk"
     if emsdk_dir.exists():
@@ -54,18 +41,16 @@ def setup() -> int:
     rc = run(["npm", "install"], cwd=BUILD_ROOT / "adapters" / "typescript")
     if rc != 0:
         return rc
-    return run(["npm", "install"], cwd=DEMO)
+    return run(["npm", "install"], cwd=DEMO_DIR)
 
 
 def build_rust_runtime() -> int:
     return run([
         "wasm-pack",
         "build",
-        str(WASM / "runtime"),
-        "--target",
-        "web",
-        "--out-dir",
-        str(SRC_WASM / "runtime"),
+        str(WASM_DIR / "runtime"),
+        "--target", "web",
+        "--out-dir", str(SRC_WASM / "runtime"),
         "--release",
     ])
 
@@ -74,11 +59,9 @@ def build_rust_provider() -> int:
     return run([
         "wasm-pack",
         "build",
-        str(WASM / "rust"),
-        "--target",
-        "web",
-        "--out-dir",
-        str(SRC_WASM / "rust"),
+        str(WASM_DIR / "rust"),
+        "--target", "web",
+        "--out-dir", str(SRC_WASM / "rust"),
         "--release",
     ])
 
@@ -93,56 +76,40 @@ def build_rust_wasm() -> int:
 def build_c_wasm() -> int:
     return run([
         "emcc",
-        str(WASM / "c" / "insight_c.c"),
+        str(WASM_DIR / "c" / "insight_c.c"),
         "-O3",
-        "-s",
-        "MODULARIZE=1",
-        "-s",
-        "EXPORT_ES6=1",
-        "-s",
-        "ENVIRONMENT=web",
-        "-s",
-        "ALLOW_MEMORY_GROWTH=1",
-        "-s",
-        "EXPORTED_FUNCTIONS=_insight_c_stats,_insight_c_free,_malloc,_free",
-        "-s",
-        "EXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString",
-        "-o",
-        str(SRC_WASM / "c" / "insight_c.js"),
+        "-s", "MODULARIZE=1",
+        "-s", "EXPORT_ES6=1",
+        "-s", "ENVIRONMENT=web",
+        "-s", "ALLOW_MEMORY_GROWTH=1",
+        "-s", "EXPORTED_FUNCTIONS=_insight_c_stats,_insight_c_free,_malloc,_free",
+        "-s", "EXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString",
+        "-o", str(SRC_WASM / "c" / "insight_c.js"),
     ])
 
 
 def build_cpp_wasm() -> int:
     return run([
         "em++",
-        str(WASM / "cpp" / "insight_cpp.cpp"),
+        str(WASM_DIR / "cpp" / "insight_cpp.cpp"),
         "-O3",
         "-std=c++17",
-        "-s",
-        "MODULARIZE=1",
-        "-s",
-        "EXPORT_ES6=1",
-        "-s",
-        "ENVIRONMENT=web",
-        "-s",
-        "ALLOW_MEMORY_GROWTH=1",
-        "-s",
-        "EXPORTED_FUNCTIONS=_insight_cpp_ngrams,_insight_cpp_free,_malloc,_free",
-        "-s",
-        "EXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString",
-        "-o",
-        str(SRC_WASM / "cpp" / "insight_cpp.js"),
+        "-s", "MODULARIZE=1",
+        "-s", "EXPORT_ES6=1",
+        "-s", "ENVIRONMENT=web",
+        "-s", "ALLOW_MEMORY_GROWTH=1",
+        "-s", "EXPORTED_FUNCTIONS=_insight_cpp_ngrams,_insight_cpp_free,_malloc,_free",
+        "-s", "EXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString",
+        "-o", str(SRC_WASM / "cpp" / "insight_cpp.js"),
     ])
 
 
 def build_csharp_wasm() -> int:
     ensure_dotnet()
     rc = run([
-        "dotnet",
-        "publish",
-        str(WASM / "csharp" / "InsightLab"),
-        "-c",
-        "Release",
+        "dotnet", "publish",
+        str(WASM_DIR / "csharp" / "InsightLab"),
+        "-c", "Release",
         "-p:RuntimeIdentifier=browser-wasm",
         "-p:SelfContained=true",
         "-p:WasmBuildNative=true",
@@ -150,10 +117,8 @@ def build_csharp_wasm() -> int:
     if rc != 0:
         return rc
 
-    # .NET 8 browser-wasm publishes to AppBundle/_framework/
-    bundle_dir = WASM / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "AppBundle" / "_framework"
-    # Fallback for older tooling
-    fallback_dir = WASM / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "publish"
+    bundle_dir = WASM_DIR / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "AppBundle" / "_framework"
+    fallback_dir = WASM_DIR / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "publish"
     publish_dir = bundle_dir if bundle_dir.exists() else fallback_dir
     if not publish_dir.exists():
         print(f"publish output not found: {publish_dir}")
@@ -161,16 +126,13 @@ def build_csharp_wasm() -> int:
 
     shutil.rmtree(SRC_WASM / "csharp", ignore_errors=True)
     shutil.copytree(publish_dir, SRC_WASM / "csharp", dirs_exist_ok=True)
-
     shutil.rmtree(PUBLIC_WASM / "csharp", ignore_errors=True)
     shutil.copytree(publish_dir, PUBLIC_WASM / "csharp", dirs_exist_ok=True)
     return 0
 
 
 def copy_python() -> int:
-    src = WASM / "python" / "insight.py"
-    dst = PUBLIC_WASM / "python" / "insight.py"
-    shutil.copy2(src, dst)
+    shutil.copy2(WASM_DIR / "python" / "insight.py", PUBLIC_WASM / "python" / "insight.py")
     return 0
 
 
@@ -180,12 +142,11 @@ def build_all() -> int:
         rc = step()
         if rc != 0:
             return rc
-    return run(["npm", "run", "build"], cwd=DEMO)
+    return run(["npm", "run", "build"], cwd=DEMO_DIR)
 
 
 def dev() -> int:
-    """Incremental dev mode: initial build, then watch & auto-rebuild per language."""
-    return run(["node", "dev.mjs"], cwd=DEMO)
+    return run(["node", "dev.mjs"], cwd=DEMO_DIR)
 
 
 def main() -> int:
@@ -198,9 +159,8 @@ def main() -> int:
     if cmd == "dev":
         return dev()
     if cmd == "check":
-        return run(["npm", "run", "typecheck"], cwd=DEMO)
+        return run(["npm", "run", "typecheck"], cwd=DEMO_DIR)
 
-    # Individual build steps (used by just wasm-* recipes)
     steps = {
         "build-c":            build_c_wasm,
         "build-cpp":          build_cpp_wasm,

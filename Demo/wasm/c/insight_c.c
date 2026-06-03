@@ -21,14 +21,28 @@ char *insight_c_stats(const char *input) {
         return make_json_result(0, 0, 0, 0);
     }
     int bytes = (int)strlen(input);
+    int chars = 0;
     int ascii = 0;
     int non_ascii = 0;
-    for (int i = 0; i < bytes; i++) {
+    for (int i = 0; i < bytes; chars++) {
         unsigned char c = (unsigned char)input[i];
-        if (c < 128) ascii++;
-        else non_ascii++;
+        if (c < 128) {
+            ascii++;
+            i++;
+        } else if ((c & 0xE0) == 0xC0) {
+            non_ascii++;
+            i += 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            non_ascii++;
+            i += 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            non_ascii++;
+            i += 4;
+        } else {
+            non_ascii++;
+            i++;
+        }
     }
-    int chars = bytes;
     return make_json_result(bytes, chars, ascii, non_ascii);
 }
 

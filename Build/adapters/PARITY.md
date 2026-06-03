@@ -35,42 +35,43 @@
 
 ## WASM Parity
 
-| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python ^                     | C# (Blazor WASM)    | C/C++ (wasm32)       |
-|-----------------------------|----------------------------|-------------------------------|------------------------------|---------------------|----------------------|
-| **WASM Compilation**        |                            |                               |                              |                     |                      |
-| WASM target supported       | yes                        | N/A (JS)                      | partial (Pyodide only)       | yes                 | yes                  |
-| Feature flag for WASM       | `--features wasm`          | N/A                           | none                         | `#if WASM` constant | `--features wasm`    |
-| **Runtime Transports**      |                            |                               |                              |                     |                      |
-| InMemoryTransport           | yes                        | yes                           | partial                      | yes                 | yes                  |
-| WebSocket Transport         | yes (needs `ws` feature)   | yes                           | no                           | yes                 | yes (via Rust)       |
-| BroadcastChannel/WasmHost   | yes (needs `wasm` feature) | yes                           | no                           | no                  | yes (via Rust)       |
-| TCP Transport               | no                         | no                            | no                           | no                  | no                   |
-| Unix Socket Transport       | no                         | no                            | no                           | no                  | no                   |
-| **Address Factory on WASM** |                            |                               |                              |                     |                      |
-| `ws://` / `wss://`          | yes                        | yes                           | no                           | yes                 | yes                  |
-| `wasm-host://`              | yes                        | yes                           | no                           | no                  | yes                  |
-| `tcp://`                    | no                         | no                            | no                           | no                  | no                   |
-| `unix://`                   | no                         | no                            | no                           | no                  | no                   |
-| **Runtime Environment**     |                            |                               |                              |                     |                      |
-| WASM executor               | wasm-bindgen-futures       | N/A (JS event loop)           | Pyodide event loop           | Blazor JS interop   | wasm-bindgen-futures |
-| Uses tokio?                 | no (wasm-runtime feature)  | N/A                           | no                           | no                  | no (wasm-runtime)    |
-| Uses `asyncio`?             | no                         | N/A                           | no (Pyodide asyncio differs) | N/A                 | no                   |
-| **Interop Capability**      |                            |                               |                              |                     |                      |
-| Rust WASM ↔ JS              | yes (wasm-bindgen)         | N/A                           | yes (Pyodide)                | yes (IJSRuntime)    | yes (via Rust)       |
-| BroadcastChannel JS API     | via `web-sys` crate        | direct via `BroadcastChannel` | via `js` module              | via JS interop      | via Rust `web-sys`   |
+| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python  | C# (Blazor WASM)    | C/C++ (wasm32)       |
+|-----------------------------|----------------------------|-------------------------------|---------|---------------------|----------------------|
+| **WASM Compilation**        |                            |                               |         |                     |                      |
+| WASM target supported       | yes                        | N/A (JS)                      | no      | yes                 | yes                  |
+| Feature flag for WASM       | `--features wasm`          | N/A                           | none    | `#if WASM` constant | `--features wasm`    |
+| **Runtime Transports**      |                            |                               |         |                     |                      |
+| InMemoryTransport           | yes                        | yes                           | partial | yes                 | yes                  |
+| WebSocket Transport         | yes (needs `ws` feature)   | yes                           | no      | yes                 | yes (via Rust)       |
+| BroadcastChannel/WasmHost   | yes (needs `wasm` feature) | yes                           | no      | no                  | yes (via Rust)       |
+| TCP Transport               | no                         | no                            | no      | no                  | no                   |
+| Unix Socket Transport       | no                         | no                            | no      | no                  | no                   |
+| **Address Factory on WASM** |                            |                               |         |                     |                      |
+| `ws://` / `wss://`          | yes                        | yes                           | no      | yes                 | yes                  |
+| `wasm-host://`              | yes                        | yes                           | no      | no                  | yes                  |
+| `tcp://`                    | no                         | no                            | no      | no                  | no                   |
+| `unix://`                   | no                         | no                            | no      | no                  | no                   |
+| **Runtime Environment**     |                            |                               |         |                     |                      |
+| WASM executor               | wasm-bindgen-futures       | N/A (JS event loop)           | N/A     | Blazor JS interop   | wasm-bindgen-futures |
+| Uses tokio?                 | no (wasm-runtime feature)  | N/A                           | N/A     | no                  | no (wasm-runtime)    |
+| Uses `asyncio`?             | no                         | N/A                           | yes     | N/A                 | no                   |
+| **Interop Capability**      |                            |                               |         |                     |                      |
+| Rust WASM ↔ JS              | yes (wasm-bindgen)         | N/A                           | no      | yes (IJSRuntime)    | yes (via Rust)       |
+| BroadcastChannel JS API     | via `web-sys` crate        | direct via `BroadcastChannel` | no      | via JS interop      | via Rust `web-sys`   |
 
 ## Capability Parity
 
-| Capability                  | Rust | TypeScript | Python | C#  | C   | C++ |
-|-----------------------------|------|------------|--------|-----|-----|-----|
-| call                        | yes  | yes        | yes    | yes | yes | yes |
-| cast                        | yes  | yes        | yes    | yes | yes | yes |
-| batch                       | yes  | yes        | yes    | yes | yes | yes |
-| stream                      | yes  | yes        | yes    | yes | yes | yes |
-| channel                     | yes  | yes        | yes    | yes | yes | yes |
-| resource invocation helpers | yes  | yes        | yes    | yes | yes | yes |
-| log forwarding helper       | yes  | yes        | yes    | yes | yes | yes |
-| provider registration       | yes  | yes        | yes    | yes | yes | yes |
+| Capability                   | Rust | TypeScript | Python | C#  | C   | C++ |
+|------------------------------|------|------------|--------|-----|-----|-----|
+| call                         | yes  | yes        | yes    | yes | yes | yes |
+| cast                         | yes  | yes        | yes    | yes | yes | yes |
+| batch                        | yes  | yes        | yes    | yes | yes | yes |
+| stream                       | yes  | yes        | yes    | yes | yes | yes |
+| channel                      | yes  | yes        | yes    | yes | yes | yes |
+| resource invocation helpers  | yes  | yes        | yes    | yes | yes | yes |
+| log forwarding helper        | yes  | yes        | yes    | yes | yes | yes |
+| provider registration        | yes  | yes        | yes    | yes | yes | yes |
+| runtime schema inference[^1] | no   | yes        | no     | no  | no  | no  |
 
 ## Tooling Parity
 
@@ -81,23 +82,23 @@
 
 ## Test Coverage
 
-| Test                        | Rust | TypeScript | Python | C#  | C   | C++ |
-|-----------------------------|------|------------|--------|-----|-----|-----|
-| call                        | yes  | yes        | yes    | yes | yes | yes |
-| cast                        | yes  | yes        | yes    | yes | yes | yes |
-| batch                       | yes  | yes        | yes    | yes | yes | yes |
-| stream                      | yes  | yes        | yes    | yes | yes | yes |
-| channel                     | yes  | yes        | yes    | yes | yes | yes |
-| resource invocation helpers | yes  | yes        | yes    | yes | yes | yes |
-| log forwarding helper       | yes  | yes        | yes    | yes | yes | yes |
-| provider registration       | yes  | yes        | yes    | yes | yes | yes |
-| schema extractor CLI tests  | yes  | yes        | yes    | yes | yes | yes |
-| typed codegen output        | yes  | yes        | yes    | yes | yes | yes |
-| envelope roundtrip          | yes  | yes        | yes    | yes | yes | yes |
-| transport behavior          | yes  | yes        | yes    | yes | yes | yes |
-| timeout and cancellation    | yes  | yes        | yes    | yes | yes | yes |
-| error mapping propagation   | yes  | yes        | yes    | yes | yes | yes |
-| announce handshake          | yes  | yes        | yes    | yes | yes | yes |
-| core runtime integration    | yes  | yes        | yes    | yes | yes | yes |
+| Test                        | Rust    | TypeScript | Python | C#  | C       | C++     |
+|-----------------------------|---------|------------|--------|-----|---------|---------|
+| call                        | yes     | yes        | yes    | yes | yes     | yes     |
+| cast                        | yes     | yes        | yes    | yes | yes     | yes     |
+| batch                       | yes     | yes        | yes    | yes | yes     | yes     |
+| stream                      | yes     | yes        | yes    | yes | yes     | yes     |
+| channel                     | yes     | yes        | yes    | yes | yes     | yes     |
+| resource invocation helpers | yes     | yes        | yes    | yes | yes     | yes     |
+| log forwarding helper       | yes     | yes        | yes    | yes | yes     | yes     |
+| provider registration       | partial | yes        | yes    | yes | yes     | yes     |
+| schema extractor CLI tests  | yes     | partial    | yes    | yes | yes     | yes     |
+| typed codegen output        | yes     | no         | no     | no  | yes     | yes     |
+| envelope roundtrip          | yes     | partial    | yes    | yes | no      | yes     |
+| transport behavior          | yes     | yes        | yes    | yes | partial | no      |
+| timeout and cancellation    | yes     | yes        | yes    | yes | yes     | partial |
+| error mapping propagation   | yes     | yes        | yes    | yes | yes     | partial |
+| announce handshake          | yes     | yes        | yes    | yes | yes     | yes     |
+| core runtime integration    | yes     | yes        | yes    | yes | yes     | yes     |
 
-[^1] Python entries in WASM Parity refer to the Pyodide WASM build of CPython.
+[^1]: Auto-detects parameter names, defaults, optionality, and stream return types from handler function signatures via `Function.toString()`. Unique to TypeScript. Other adapters require explicit schema declarations.

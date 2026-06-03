@@ -14,7 +14,11 @@ export type RuntimeContext = {
 
 export async function ensureRuntime(): Promise<RuntimeContext> {
   if (!bootPromise) {
-    bootPromise = bootRuntime();
+    bootPromise = bootRuntime().catch((err) => {
+      log.error("bootRuntime failed, resetting for retry", { err });
+      bootPromise = null;
+      throw err;
+    });
   }
   return bootPromise;
 }

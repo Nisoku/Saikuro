@@ -257,7 +257,9 @@ impl KeyValueBackend for IndexedDbStorage {
         let (_tx, store) = tx(&db, IdbTransactionMode::Readonly).await?;
         match store_get(&store, &JsValue::from(make_key(namespace, key)))?.await {
             Ok(val) => Ok(!val.is_undefined() && !val.is_null()),
-            Err(_) => Ok(false),
+            Err(e) => Err(StorageError::internal(format!(
+                "IndexedDB exists failed: {e:?}"
+            ))),
         }
     }
 
@@ -288,7 +290,7 @@ impl KeyValueBackend for IndexedDbStorage {
         let (_tx, store) = tx(&db, IdbTransactionMode::Readwrite).await?;
         store_delete(&store, &JsValue::from(make_key(namespace, key)))?
             .await
-            .ok();
+            .map_err(|e| StorageError::internal(format!("IndexedDB delete failed: {e:?}")))?;
         Ok(())
     }
 

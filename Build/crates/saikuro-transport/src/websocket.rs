@@ -116,8 +116,14 @@ impl WebSocketTransport {
                     url,
                 })
             }
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(TransportError::ConnectionRefused("connect timeout".into())),
+            Ok(Err(e)) => {
+                ws.close().ok();
+                Err(e)
+            }
+            Err(_) => {
+                ws.close().ok();
+                Err(TransportError::ConnectionRefused("connect timeout".into()))
+            }
         }
     }
 

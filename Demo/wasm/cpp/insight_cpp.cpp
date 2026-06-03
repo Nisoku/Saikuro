@@ -51,8 +51,9 @@ static std::vector<std::pair<std::string, int>> top_ngrams(
     }
     std::vector<std::pair<std::string, int>> vec(counts.begin(), counts.end());
     std::sort(vec.begin(), vec.end(), [](const auto &a, const auto &b) {
-        return b.second < a.second ? false : (b.second > a.second ? true : a.first < b.first);
+        return a.second > b.second || (a.second == b.second && a.first < b.first);
     });
+    if (topN < 0) topN = 0;
     if ((int)vec.size() > topN) {
         vec.resize((size_t)topN);
     }

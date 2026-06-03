@@ -55,7 +55,11 @@ fn short_id() -> Result<String> {
         .map_err(|e| TransportError::ConnectionLost(format!("crypto API not found: {e:?}")))?
         .unchecked_into();
     let mut buf = [0u8; 16];
-    let _ = crypto.get_random_values_with_u8_array(&mut buf);
+    crypto
+        .get_random_values_with_u8_array(&mut buf)
+        .map_err(|e| {
+            TransportError::ConnectionLost(format!("crypto get_random_values failed: {e:?}"))
+        })?;
     Ok(buf.iter().fold(String::with_capacity(32), |mut s, b| {
         use std::fmt::Write;
         let _ = write!(s, "{:02x}", b);

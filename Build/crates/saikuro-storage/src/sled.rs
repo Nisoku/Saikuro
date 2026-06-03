@@ -127,8 +127,6 @@ impl KeyValueBackend for SledStorage {
                 .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
             tree.insert(key.as_bytes(), val)
                 .map_err(|e| StorageError::internal(format!("sled insert: {e}")))?;
-            db.flush()
-                .map_err(|e| StorageError::internal(format!("sled flush: {e}")))?;
             Ok(())
         })
         .await
@@ -176,15 +174,12 @@ impl KeyValueBackend for SledStorage {
                 .into_iter()
                 .filter_map(|n| String::from_utf8(n.to_vec()).ok())
                 .filter(|n| !n.is_empty() && n != "__sled__default")
+                .filter(|n| match &prefix {
+                    Some(p) => n.starts_with(&format!("{p}:")),
+                    None => true,
+                })
                 .map(|n| match &prefix {
-                    Some(p) => {
-                        let pstr = format!("{p}:");
-                        if n.starts_with(&pstr) {
-                            n[pstr.len()..].to_owned()
-                        } else {
-                            n
-                        }
-                    }
+                    Some(p) => n[format!("{p}:").len()..].to_owned(),
                     None => n,
                 })
                 .collect();

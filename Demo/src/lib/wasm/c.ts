@@ -8,6 +8,7 @@ type CModule = {
   stringToUTF8: (input: string, ptr: number, max: number) => void;
   lengthBytesUTF8: (input: string) => number;
   _malloc: (size: number) => number;
+  _free: (ptr: number) => void;
   UTF8ToString: (ptr: number) => string;
 };
 
@@ -32,11 +33,15 @@ export async function loadCStats(): Promise<(text: string) => StatsResult> {
       return (text: string) => {
         const len = mod.lengthBytesUTF8(text) + 1;
         const ptr = mod._malloc(len);
-        mod.stringToUTF8(text, ptr, len);
-        const outPtr = mod._insight_c_stats(ptr);
-        const json = mod.UTF8ToString(outPtr);
-        mod._insight_c_free(outPtr);
-        return JSON.parse(json) as StatsResult;
+        try {
+          mod.stringToUTF8(text, ptr, len);
+          const outPtr = mod._insight_c_stats(ptr);
+          const json = mod.UTF8ToString(outPtr);
+          mod._insight_c_free(outPtr);
+          return JSON.parse(json) as StatsResult;
+        } finally {
+          mod._free(ptr);
+        }
       };
     })();
   }

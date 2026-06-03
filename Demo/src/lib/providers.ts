@@ -67,12 +67,11 @@ export async function startProviders(channel: string): Promise<void> {
     },
   );
 
-  activeProviders.push(
-    serveProvider(cProvider, channel),
-    serveProvider(cppProvider, channel),
-    serveProvider(csharpProvider, channel),
-    serveProvider(pythonProvider, channel),
-  );
+  for (const p of [cProvider, cppProvider, csharpProvider, pythonProvider]) {
+    const promise = serveProvider(p, channel)
+      .catch((err) => log.warn("provider failed to serve", { provider: p.name, err }));
+    activeProviders.push(promise);
+  }
 
   log.info("all providers serving");
 }

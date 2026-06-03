@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tokio::task::spawn_blocking;
 
 use super::{
@@ -147,6 +147,23 @@ fn clear_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
+    let rel = Path::new(rel);
+    if rel.is_absolute() {
+        return Err(StorageError::internal(format!(
+            "path must not be absolute: {rel:?}"
+        )));
+    }
+    for comp in rel.components() {
+        if matches!(comp, Component::ParentDir) {
+            return Err(StorageError::internal(format!(
+                "path must not contain '..': {rel:?}"
+            )));
+        }
+    }
+    Ok(root.join(rel))
+}
+
 fn strip_ns_prefix(prefix: &Option<String>, name: &str) -> String {
     match prefix {
         Some(p) => {
@@ -209,12 +226,12 @@ impl KeyValueBackend for FilesystemStorage {
     async fn create_namespace(&self, namespace: &str) -> Result<()> {
         let ns = namespace.to_owned();
         let path = self.kv_root.join(self.apply_prefix(namespace));
-        block(move || {
-            if path.exists() {
-                return Err(StorageError::namespace_already_exists(&ns));
+        block(move || match std::fs::create_dir_all(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                Err(StorageError::namespace_already_exists(&ns))
             }
-            std::fs::create_dir_all(&path)?;
-            Ok(())
+            Err(e) => Err(e.into()),
         })
         .await
     }
@@ -233,7 +250,7 @@ impl KeyValueBackend for FilesystemStorage {
 #[async_trait]
 impl FileBackend for FilesystemStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         let path_owned = path.to_owned();
         block(move || read_bytes(&full))
             .await?
@@ -241,34 +258,34 @@ impl FileBackend for FilesystemStorage {
     }
 
     async fn write_file(&self, path: &str, content: Bytes) -> Result<()> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         let bytes = content.to_vec();
         block(move || write_bytes(&full, &bytes)).await
     }
 
     async fn append_file(&self, path: &str, content: Bytes) -> Result<()> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         let bytes = content.to_vec();
         block(move || append_bytes(&full, &bytes)).await
     }
 
     async fn delete_file(&self, path: &str) -> Result<()> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         block(move || delete(&full)).await
     }
 
     async fn file_exists(&self, path: &str) -> Result<bool> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         block(move || exists(&full)).await
     }
 
     async fn list_dir(&self, path: &str) -> Result<Vec<String>> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         block(move || list_files(&full)).await
     }
 
     async fn create_dir(&self, path: &str) -> Result<()> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         block(move || {
             std::fs::create_dir_all(&full)?;
             Ok(())
@@ -277,7 +294,7 @@ impl FileBackend for FilesystemStorage {
     }
 
     async fn delete_dir(&self, path: &str) -> Result<()> {
-        let full = self.files_root.join(path);
+        let full = safe_join(&self.files_root, path)?;
         block(move || remove_dir(&full)).await
     }
 }

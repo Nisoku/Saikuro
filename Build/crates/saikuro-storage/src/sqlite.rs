@@ -104,7 +104,9 @@ impl KeyValueBackend for SqliteStorage {
         let ns = self.apply_prefix(namespace);
         let key = key.to_owned();
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             let mut stmt = conn
                 .prepare_cached("SELECT 1 FROM saikuro_kv WHERE namespace = ?1 AND key = ?2")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
@@ -121,7 +123,9 @@ impl KeyValueBackend for SqliteStorage {
         let ns = self.apply_prefix(namespace);
         let key = key.to_owned();
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             let mut stmt = conn
                 .prepare_cached("SELECT value FROM saikuro_kv WHERE namespace = ?1 AND key = ?2")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
@@ -140,7 +144,9 @@ impl KeyValueBackend for SqliteStorage {
         let key = key.to_owned();
         let val = value.to_vec();
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             conn.execute(
                 "INSERT INTO saikuro_kv (namespace, key, value) VALUES (?1, ?2, ?3)
                  ON CONFLICT(namespace, key) DO UPDATE SET value = excluded.value",
@@ -157,7 +163,9 @@ impl KeyValueBackend for SqliteStorage {
         let ns = self.apply_prefix(namespace);
         let key = key.to_owned();
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             conn.execute(
                 "DELETE FROM saikuro_kv WHERE namespace = ?1 AND key = ?2",
                 rusqlite::params![ns, key],
@@ -172,7 +180,9 @@ impl KeyValueBackend for SqliteStorage {
         let conn = self.conn.clone();
         let ns = self.apply_prefix(namespace);
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             let mut stmt = conn
                 .prepare_cached("SELECT key FROM saikuro_kv WHERE namespace = ?1 ORDER BY key")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
@@ -190,7 +200,9 @@ impl KeyValueBackend for SqliteStorage {
         let conn = self.conn.clone();
         let prefix = self.config.namespace_prefix.clone();
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             let mut stmt = conn
                 .prepare_cached("SELECT DISTINCT namespace FROM saikuro_kv ORDER BY namespace")
                 .map_err(|e| StorageError::internal(format!("sqlite prepare: {e}")))?;
@@ -198,15 +210,12 @@ impl KeyValueBackend for SqliteStorage {
                 .query_map([], |row| row.get(0))
                 .map_err(|e| StorageError::internal(format!("sqlite query_map: {e}")))?
                 .filter_map(|r| r.ok())
+                .filter(|n: &String| match &prefix {
+                    Some(p) => n.starts_with(&format!("{p}:")),
+                    None => true,
+                })
                 .map(|n: String| match &prefix {
-                    Some(p) => {
-                        let pstr = format!("{p}:");
-                        if n.starts_with(&pstr) {
-                            n[pstr.len()..].to_owned()
-                        } else {
-                            n
-                        }
-                    }
+                    Some(p) => n[format!("{p}:").len()..].to_owned(),
                     None => n,
                 })
                 .collect();
@@ -223,7 +232,9 @@ impl KeyValueBackend for SqliteStorage {
         let conn = self.conn.clone();
         let ns = self.apply_prefix(namespace);
         block(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn
+                .lock()
+                .map_err(|e| StorageError::internal(format!("mutex poisoned: {e}")))?;
             conn.execute(
                 "DELETE FROM saikuro_kv WHERE namespace = ?1",
                 rusqlite::params![ns],

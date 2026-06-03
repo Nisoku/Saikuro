@@ -179,7 +179,7 @@ pub mod sync {
 /// breaking error chains.
 pub mod signal {
     pub async fn ctrl_c() -> Result<(), ()> {
-        Ok(())
+        std::future::pending().await
     }
 }
 

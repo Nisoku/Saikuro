@@ -6,7 +6,7 @@ use std::time::Duration;
 ///
 /// When [`BackendKind::InMemory`] (the default), [`StorageConfig::persistence`]
 /// determines the backend via the platform-aware dispatch in
-/// [`create_storage`](crate::traits::StorageBackend).
+/// [`StorageBackend`](crate::traits::StorageBackend).
 ///
 /// Set this explicitly to bypass the automatic dispatch and force a specific
 /// backend (returns an error if the backend is not available on the current
