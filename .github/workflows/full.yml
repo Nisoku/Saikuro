@@ -51,7 +51,7 @@ jobs:
         working-directory: Demo
       - name: Restore C# WASM workload
         run: dotnet workload restore
-        working-directory: Build/wasm/csharp/InsightLab
+        working-directory: Build/wasm/csharp
       - name: Run all checks
         run: just check
       - name: Build demo
