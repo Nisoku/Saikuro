@@ -74,7 +74,7 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBac
                 return Ok(Box::new(storage));
             }
 
-            // Not available with the default backend selection — the caller
+            // Not available with the default backend selection. the caller
             // should set `BackendKind::Filesystem` (or `Sled`, `Sqlite`) explicitly.
             #[cfg(not(all(target_arch = "wasm32", feature = "wasm-storage")))]
             {

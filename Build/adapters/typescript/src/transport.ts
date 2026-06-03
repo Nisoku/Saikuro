@@ -376,6 +376,10 @@ export class BroadcastChannelTransport extends BaseTransport {
         } else {
           return;
         }
+        log.debug("broadcast recv", {
+          type: (msg.type as string) ?? "msg",
+          target: (msg.target as string) ?? "-",
+        });
         this._dispatch(msg);
       } catch (err) {
         log.error("broadcast channel frame decode error", {
@@ -400,9 +404,16 @@ export class BroadcastChannelTransport extends BaseTransport {
       const privateName = `${this._baseChannel}:${connId}`;
       const privateChannel = new BroadcastChannel(privateName);
 
+      log.debug("broadcast connect handshake start", {
+        connId,
+        baseChannel: this._baseChannel,
+        privateName,
+      });
+
       const timeoutId = setTimeout(() => {
         privateChannel.removeEventListener("message", acceptHandler);
         privateChannel.close();
+        log.warn("broadcast connect timeout", { connId });
         reject(new Error("BroadcastChannelTransport: connect timeout"));
       }, 10000);
 
@@ -414,6 +425,7 @@ export class BroadcastChannelTransport extends BaseTransport {
         this._channel = privateChannel;
         this._connected = true;
         this._setupMessageHandler();
+        log.info("broadcast connect accepted", { connId, privateName });
         resolve();
       };
       privateChannel.addEventListener("message", acceptHandler);
@@ -426,6 +438,7 @@ export class BroadcastChannelTransport extends BaseTransport {
 
   async close(): Promise<void> {
     if (this._closed) return;
+    log.debug("broadcast close");
     this._closed = true;
     this._connected = false;
     this._channel?.close();
@@ -443,6 +456,9 @@ export class BroadcastChannelTransport extends BaseTransport {
       payload.byteOffset,
       payload.byteOffset + payload.byteLength,
     );
+    log.debug("broadcast send", {
+      type: (obj as Record<string, string>).type ?? "msg",
+    });
     ch.postMessage(buffer);
   }
 
@@ -483,14 +499,23 @@ export class BroadcastChannelListener {
 
   constructor(channelName: string) {
     this._baseChannel = new BroadcastChannel(channelName);
+    log.debug("broadcast listener created", { channelName });
     this._baseChannel.onmessage = (ev: MessageEvent) => {
       if (this._closed) return;
       const data = ev.data as { type?: string; id?: string };
       if (data.type === "connect" && data.id) {
+        log.debug("broadcast listener got connect request", {
+          connId: data.id,
+          channelName,
+        });
         const privateName = `${channelName}:${data.id}`;
         const privateChannel = new BroadcastChannel(privateName);
 
         privateChannel.postMessage({ type: "accept", id: data.id });
+        log.debug("broadcast listener sent accept", {
+          connId: data.id,
+          privateName,
+        });
 
         const transport = BroadcastChannelTransport.fromChannel(privateChannel);
 

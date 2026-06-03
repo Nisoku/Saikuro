@@ -8,7 +8,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    splitting: false,
+    splitting: true,
     treeshake: true,
     platform: "node",
     target: "es2022",
@@ -16,6 +16,19 @@ export default defineConfig([
     esbuildOptions(options) {
       options.pure = ["console.log"];
     },
+  },
+  // Schema extractor (separate chunk, pulls in the full TypeScript compiler)
+  // Import via: import { extractSchema } from "@nisoku/saikuro/schema-extractor"
+  {
+    entry: { schema_extractor: "src/schema_extractor.ts" },
+    format: ["cjs", "esm"],
+    dts: true,
+    sourcemap: true,
+    clean: false,
+    splitting: false,
+    treeshake: true,
+    platform: "node",
+    target: "es2022",
   },
   // CLI binary (CommonJS, executable)
   {

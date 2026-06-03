@@ -439,16 +439,18 @@ where
                     }
                 };
 
+                // Register before sending so an incoming response can find the
+                // pending entry; remove it if the send fails to preserve the
+                // original orphan-prevention behavior.
+                if let Some(resp_tx) = item.response_tx {
+                    pending_clone.insert(item.envelope.id, resp_tx);
+                }
+
                 // Send the frame to the peer (via the connection handler's sender).
                 if forward_tx_clone.send(frame).await.is_err() {
                     warn!(peer = %peer_id, "forward channel closed; provider disconnected");
+                    pending_clone.remove(&item.envelope.id);
                     break;
-                }
-
-                // Register AFTER successful send so we don't orphan a pending
-                // response_tx if the channel is broken.
-                if let Some(resp_tx) = item.response_tx {
-                    pending_clone.insert(item.envelope.id, resp_tx);
                 }
             }
             debug!(peer = %peer_id, "wire-forward task exiting");

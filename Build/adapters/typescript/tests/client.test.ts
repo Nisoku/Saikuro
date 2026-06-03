@@ -53,7 +53,7 @@ async function makeHarness(namespace = "test"): Promise<Harness> {
           | "resource"
           | "log"
           | "announce",
-        id: raw["id"] as string,
+        id: raw["id"] as Uint8Array,
         target: raw["target"] as string,
         args: (raw["args"] as unknown[]) ?? [],
       };
@@ -336,9 +336,10 @@ describe("SaikuroClient.channel", () => {
     });
 
     const ch = await h.client.channel<string, string>("test.chat", []);
-    expect(typeof ch.invocationId).toBe("string");
-    expect(ch.invocationId.length).toBeGreaterThan(0);
+    expect(ch.invocationId).toBeInstanceOf(Uint8Array);
+    expect(ch.invocationId.length).toBe(16);
     // Consume the channel to completion.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for await (const _ of ch) {
       /* drain */
     }

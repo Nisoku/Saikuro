@@ -109,10 +109,4 @@ export {
 export type { Logger, LogLevel, LogRecord, TransportLike } from "./logger";
 
 // Schema Extraction (Development Mode)
-
-export { SchemaExtractor, extractSchema } from "./schema_extractor";
-export type {
-  ExtractedArg,
-  ExtractedFunction,
-  TypeDescriptor as ExtractedTypeDescriptor,
-} from "./schema_extractor";
+// Import from "@nisoku/saikuro/schema-extractor".

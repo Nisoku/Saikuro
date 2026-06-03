@@ -1,5 +1,8 @@
+import { getLogger } from "@nisoku/saikuro";
 import type { SaikuroClient } from "@nisoku/saikuro";
 import type { MessageLog } from "./message-log";
+
+const log = getLogger("demo.pipeline");
 
 export type PipelinePreset = {
   id: string;
@@ -56,14 +59,19 @@ export async function runPipeline(
   input: string,
   preset: PipelinePreset,
   runtime: RuntimeContext,
-  log: MessageLog,
+  messageLog: MessageLog,
 ): Promise<PipelineResult> {
+  log.info("runPipeline start", {
+    inputLen: input.length,
+    preset: preset.id,
+  });
+
   const steps: PipelineStep[] = [];
   const now = () => performance.now();
 
   const stats = await callStep<PipelineOutputs["stats"]>({
     client: runtime.client,
-    log,
+    log: messageLog,
     stage: "C Stats",
     language: "C",
     target: "c.stats",
@@ -71,11 +79,12 @@ export async function runPipeline(
     preset,
     start: now,
   });
+  log.info("C stats complete", { durationMs: stats.durationMs });
   steps.push({ label: "C", language: "C", durationMs: stats.durationMs });
 
   const ngrams = await callStep<PipelineOutputs["ngrams"]>({
     client: runtime.client,
-    log,
+    log: messageLog,
     stage: "C++ NGrams",
     language: "C++",
     target: "cpp.ngrams",
@@ -83,11 +92,12 @@ export async function runPipeline(
     preset,
     start: now,
   });
+  log.info("C++ ngrams complete", { durationMs: ngrams.durationMs });
   steps.push({ label: "C++", language: "C++", durationMs: ngrams.durationMs });
 
   const sentiment = await callStep<PipelineOutputs["sentiment"]>({
     client: runtime.client,
-    log,
+    log: messageLog,
     stage: "Rust Sentiment",
     language: "Rust",
     target: "rust.sentiment",
@@ -95,11 +105,12 @@ export async function runPipeline(
     preset,
     start: now,
   });
+  log.info("Rust sentiment complete", { durationMs: sentiment.durationMs });
   steps.push({ label: "Rust", language: "Rust", durationMs: sentiment.durationMs });
 
   const summary = await callStep<PipelineOutputs["summary"]>({
     client: runtime.client,
-    log,
+    log: messageLog,
     stage: "C# Summary",
     language: "C#",
     target: "csharp.summary",
@@ -114,11 +125,12 @@ export async function runPipeline(
     preset,
     start: now,
   });
+  log.info("C# summary complete", { durationMs: summary.durationMs });
   steps.push({ label: "C#", language: "C#", durationMs: summary.durationMs });
 
   const viz = await callStep<PipelineOutputs["viz"]>({
     client: runtime.client,
-    log,
+    log: messageLog,
     stage: "Python Viz",
     language: "Python",
     target: "python.viz",
@@ -126,8 +138,10 @@ export async function runPipeline(
     preset,
     start: now,
   });
+  log.info("Python viz complete", { durationMs: viz.durationMs });
   steps.push({ label: "Python", language: "Python", durationMs: viz.durationMs });
 
+  log.info("runPipeline complete");
   return {
     steps,
     outputs: {

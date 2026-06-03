@@ -17,8 +17,8 @@
 | `unix:///path`                        | yes            | yes (Node)           | yes    | yes        | yes            | yes      |
 | `ws://host/path`                      | yes            | yes                  | yes    | yes        | yes            | yes      |
 | `wss://host/path`                     | yes            | yes                  | yes    | yes        | yes            | yes      |
-| `wasm-host://channel`                 | yes            | yes                  | no     | no         | yes        | yes      |
-| `wasm-host` (default)                 | yes            | yes                  | no     | no         | yes        | yes      |
+| `wasm-host://channel`                 | yes            | yes                  | no     | no         | yes            | yes      |
+| `wasm-host` (default)                 | yes            | yes                  | no     | no         | yes            | yes      |
 | `memory://` (testing)                 | testing only   | no                   | yes    | no         | no             | no       |
 | **Transport Implementations**         |                |                      |        |            |                |          |
 | InMemoryTransport                     | yes            | yes                  | yes    | yes        | via Rust       | via Rust |
@@ -35,7 +35,7 @@
 
 ## WASM Parity
 
-| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python ^                    | C# (Blazor WASM)    | C/C++ (wasm32)       |
+| Capability                  | Rust (wasm32)              | TypeScript (WASM Context)     | Python ^                     | C# (Blazor WASM)    | C/C++ (wasm32)       |
 |-----------------------------|----------------------------|-------------------------------|------------------------------|---------------------|----------------------|
 | **WASM Compilation**        |                            |                               |                              |                     |                      |
 | WASM target supported       | yes                        | N/A (JS)                      | partial (Pyodide only)       | yes                 | yes                  |
@@ -100,4 +100,4 @@
 | announce handshake          | yes  | yes        | yes    | yes | yes | yes |
 | core runtime integration    | yes  | yes        | yes    | yes | yes | yes |
 
-^ Python entries in WASM Parity refer to the Pyodide WASM build of CPython.
+[^1] Python entries in WASM Parity refer to the Pyodide WASM build of CPython.

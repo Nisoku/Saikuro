@@ -1,6 +1,9 @@
+import { getLogger } from "@nisoku/saikuro";
 import { ensureRuntime } from "./lib/runtime";
-import { runPipeline, type PipelinePreset } from "./lib/pipeline";
-import { MessageLog } from "./lib/message-log";
+import { runPipeline, type PipelineOutputs, type PipelinePreset, type PipelineResult } from "./lib/pipeline";
+import { MessageLog, type MessageRecord } from "./lib/message-log";
+
+const log = getLogger("demo.app");
 
 const DEFAULT_TEXT =
   "Saikuro lets polyglot systems feel like one runtime. This demo pipes the same text through C, C++, Rust, C#, Python, and TypeScript in the browser.";
@@ -23,298 +26,384 @@ const PRESETS: PipelinePreset[] = [
   },
 ];
 
-const LANGUAGE_CARDS = [
-  {
-    name: "C (WASM)",
-    role: "Byte-level character stats",
-    source: "Demo/wasm/c/insight_c.c",
-    snippet: "const char* insight_c_stats(const char* input) {\n  // counts bytes, ascii, non-ascii\n}",
-  },
-  {
-    name: "C++ (WASM)",
-    role: "Tokenization + n-gram frequency",
-    source: "Demo/wasm/cpp/insight_cpp.cpp",
-    snippet: "std::string insight_cpp_ngrams(const std::string& text, int topN)",
-  },
-  {
-    name: "Rust (WASM)",
-    role: "Sentiment scoring and tags",
-    source: "Demo/wasm/rust/src/lib.rs",
-    snippet: "provider.register(\"sentiment\", |args| async move { ... })",
-  },
-  {
-    name: "C# (WASM)",
-    role: "Business logic summary",
-    source: "Demo/wasm/csharp/InsightLab/Summarizer.cs",
-    snippet: "[JSExport] public static string Summarize(string json)",
-  },
-  {
-    name: "Python (Pyodide)",
-    role: "Visualization preparation",
-    source: "Demo/wasm/python/insight.py",
-    snippet: "def prepare_viz(stats, ngrams, sentiment):\n    return {\"bins\": ... }",
-  },
-  {
-    name: "TypeScript (Vite)",
-    role: "Orchestration + UI + Saikuro client",
-    source: "Demo/src/lib/pipeline.ts",
-    snippet: "await client.call(\"c.stats\", [text])",
-  },
-];
+/** Map a PipelineStep label to a flow segment data-stage key. */
+const STAGE_TO_KEY: Record<string, string> = {
+  C: "C",
+  "C++": "C++",
+  Rust: "Rust",
+  "C#": "C#",
+  Python: "Python",
+
+};
+
+/** Map a pipeline stage name to a CSS modifier for the log rail badge. */
+const STAGE_TO_RAIL_CLASS: Record<string, string> = {
+  "C Stats": "c",
+  "C++ NGrams": "cpp",
+  "Rust Sentiment": "rust",
+  "C# Summary": "cs",
+  "Python Viz": "py",
+};
+
+/** Map a pipeline step label to a provider card data-provider attribute. */
+const STEP_TO_PROVIDER: Record<string, string> = {
+  C: "C",
+  "C++": "C++",
+  Rust: "Rust",
+  "C#": "C#",
+  Python: "Python",
+};
+
+/** A short, single-line payload preview for the log rail. */
+function shortPreview(s: string, max = 64): string {
+  const trimmed = s.replace(/\s+/g, " ").trim();
+  return trimmed.length > max ? trimmed.slice(0, max - 1) + "\u2026" : trimmed;
+}
+
+/** Format a number with thousands separators. */
+function formatNumber(n: number): string {
+  return new Intl.NumberFormat("en-US").format(n);
+}
+
+/** Minimal HTML-escape for user-derived strings injected into the DOM. */
+const AMP = String.fromCharCode(38) + "amp;";
+const LT = String.fromCharCode(38) + "lt;";
+const GT = String.fromCharCode(38) + "gt;";
+const QUOT = String.fromCharCode(38) + "quot;";
+const APOS = String.fromCharCode(38) + "#39;";
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, AMP)
+    .replace(/</g, LT)
+    .replace(/>/g, GT)
+    .replace(/"/g, QUOT)
+    .replace(/'/g, APOS);
+}
 
 export function bootstrapApp(): void {
-  const root = document.querySelector<HTMLDivElement>("#app");
-  if (!root) return;
-
-  root.innerHTML = buildAppHtml();
-
-  const textArea = root.querySelector<HTMLTextAreaElement>("#input-text");
-  const presetSelect = root.querySelector<HTMLSelectElement>("#preset");
-  const runButton = root.querySelector<HTMLButtonElement>("#run-btn");
-  const statusEl = root.querySelector<HTMLDivElement>("#status");
+  // DOM references
+  const textArea = document.querySelector<HTMLTextAreaElement>("#input-text");
+  const presetSelect = document.querySelector<HTMLSelectElement>("#preset");
+  const runButton = document.querySelector<HTMLButtonElement>("#run-btn");
+  const statusEl = document.querySelector<HTMLSpanElement>("#status-text");
+  const logRail = document.querySelector<HTMLDivElement>("#log-rail");
+  const flowTrack = document.querySelector<HTMLDivElement>("#flow-track");
+  const ngramsCloud = document.querySelector<HTMLDivElement>("#ngrams-cloud");
+  const vizBars = document.querySelector<HTMLDivElement>("#viz-bars");
+  const gaugeFill = document.querySelector<SVGPathElement>(".gauge__fill");
+  const messageList = document.querySelector<HTMLDivElement>("#message-list");
+  const ngramsDetailBigrams = document.querySelector<HTMLDivElement>("#ngrams-detail-bigrams");
+  const ngramsDetailTrigrams = document.querySelector<HTMLDivElement>("#ngrams-detail-trigrams");
 
   if (!textArea || !presetSelect || !runButton || !statusEl) return;
 
+  // Initial UI state
   textArea.value = DEFAULT_TEXT;
   for (const preset of PRESETS) {
     const option = document.createElement("option");
     option.value = preset.id;
-    option.textContent = `${preset.name} - ${preset.description}`;
+    option.textContent = preset.name;
     presetSelect.appendChild(option);
   }
   presetSelect.value = PRESETS[0].id;
 
   const messageLog = new MessageLog();
 
-  const updateStatus = (text: string) => {
-    statusEl.textContent = text;
+  // Tab switching
+  function switchTab(tabName: string) {
+    document.querySelectorAll<HTMLAnchorElement>("#sidebar-nav .nav-item").forEach((item) => {
+      item.classList.toggle("is-active", item.dataset.tab === tabName);
+    });
+    document.querySelectorAll<HTMLAnchorElement>("#bottom-nav .bottom-nav__item").forEach((item) => {
+      item.classList.toggle("is-active", item.dataset.tab === tabName);
+    });
+    document.querySelectorAll<HTMLElement>("[data-view]").forEach((view) => {
+      view.classList.toggle("is-active", view.dataset.view === tabName);
+    });
+    const main = document.querySelector<HTMLElement>(".main");
+    if (main) main.scrollTop = 0;
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-tab]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      switchTab(el.dataset.tab ?? "dashboard");
+    });
+  });
+
+  // Log rail (footer)
+  const renderLogRail = (limit = 6) => {
+    if (!logRail) return;
+    const items = messageLog.list().slice(0, limit);
+    if (items.length === 0) {
+      logRail.innerHTML = '<span class="log-rail__placeholder">No messages yet.</span>';
+      return;
+    }
+    logRail.innerHTML = items
+      .map((item) => {
+        const cls = STAGE_TO_RAIL_CLASS[item.stage] ?? "";
+        const stageLabel = item.stage.replace(/\s+/g, "-");
+        return '<div class="log-rail__item">' +
+          '<span class="log-rail__stage log-rail__stage--' + cls + '">' + stageLabel + "</span>" +
+          '<span class="log-rail__payload">' + shortPreview(item.serialized) + "</span>" +
+          "</div>";
+      })
+      .join("");
   };
 
-  const updateInspector = () => {
-    const list = root.querySelector<HTMLDivElement>("#message-list");
-    if (!list) return;
+  // Logs view (full message list)
+  const renderLogsView = () => {
+    if (!messageList) return;
     const items = messageLog.list();
-    list.innerHTML = items
-      .map(
-        (item) => `
-        <div class="message">
-          <div><strong>${item.stage}</strong> - ${item.language} - ${item.direction}</div>
-          <div class="status">${item.kind}</div>
-          <pre>${item.serialized}</pre>
-        </div>
-      `,
-      )
-      .join("");
-  };
-
-  const updateGraph = (steps: Array<{ label: string; durationMs: number }>) => {
-    const graph = root.querySelector<HTMLDivElement>("#graph");
-    const list = root.querySelector<HTMLDivElement>("#step-list");
-    if (!graph || !list) return;
-
-    const width = 520;
-    const height = 120;
-    const gap = width / (steps.length + 1);
-
-    const circles = steps
-      .map((step, index) => {
-        const x = gap * (index + 1);
-        const y = height / 2;
-        return `<circle cx="${x}" cy="${y}" r="18" fill="rgba(73,198,178,0.3)" stroke="#49c6b2" />`;
-      })
-      .join("");
-
-    const labels = steps
-      .map((step, index) => {
-        const x = gap * (index + 1);
-        const y = height / 2 + 36;
-        return `<text x="${x}" y="${y}" fill="#9fb2bf" font-size="10" text-anchor="middle">${step.label}</text>`;
-      })
-      .join("");
-
-    const links = steps
-      .slice(1)
-      .map((_, index) => {
-        const x1 = gap * (index + 1) + 18;
-        const x2 = gap * (index + 2) - 18;
-        const y = height / 2;
-        return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="rgba(249,178,51,0.5)" stroke-width="2" />`;
-      })
-      .join("");
-
-    graph.innerHTML = `
-      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Pipeline graph">
-        ${links}
-        ${circles}
-        ${labels}
-      </svg>
-    `;
-
-    list.innerHTML = steps
-      .map(
-        (step) => `
-        <div class="step">
-          <div>${step.label}</div>
-          <div class="pill">${step.durationMs.toFixed(1)} ms</div>
-        </div>
-      `,
-      )
-      .join("");
-  };
-
-  const updateResults = (result: any) => {
-    const statsEl = root.querySelector<HTMLDivElement>("#stats");
-    const ngramsEl = root.querySelector<HTMLUListElement>("#ngrams");
-    const sentimentEl = root.querySelector<HTMLDivElement>("#sentiment");
-    const summaryEl = root.querySelector<HTMLDivElement>("#summary");
-    const vizEl = root.querySelector<HTMLUListElement>("#viz");
-
-    if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="kv"><span>Bytes</span>${result.stats.bytes}</div>
-        <div class="kv"><span>Chars</span>${result.stats.chars}</div>
-        <div class="kv"><span>ASCII</span>${result.stats.ascii}</div>
-        <div class="kv"><span>Non-ASCII</span>${result.stats.non_ascii}</div>
-      `;
+    if (items.length === 0) {
+      messageList.innerHTML = '<div style="padding:24px;text-align:center;color:#718096;">No messages yet. Run the pipeline to see log entries.</div>';
+      return;
     }
+    messageList.innerHTML = items
+      .map((item) => {
+        const dir = item.direction === "call" ? "call" : "response";
+        return '<div class="log-entry">' +
+          '<span class="log-entry__badge log-entry__badge--' + dir + '">' + escapeHtml(item.stage) + " " + dir + "</span>" +
+          '<code class="log-entry__data">' + escapeHtml(shortPreview(item.serialized, 200)) + "</code>" +
+          "</div>";
+      })
+      .join("");
+  };
 
-    if (ngramsEl) {
-      ngramsEl.innerHTML = result.ngrams.bigrams
-        .map(
-          (item: [string, number]) =>
-            `<li>${item[0]} <span class="pill">${item[1]}</span></li>`,
-        )
+  // Execution flow segments
+  const renderFlow = (steps: PipelineResult["steps"]) => {
+    if (!flowTrack) return;
+    const total = steps.reduce((acc, s) => acc + s.durationMs, 0) || 1;
+    flowTrack.querySelectorAll<HTMLDivElement>(".flow__segment").forEach((seg) => {
+      const key = seg.dataset.stage ?? "";
+      const step = steps.find((s) => STAGE_TO_KEY[s.label] === key);
+      if (!step) {
+        seg.style.width = "0%";
+        return;
+      }
+      const pct = Math.max(4, (step.durationMs / total) * 100);
+      seg.style.width = pct.toFixed(2) + "%";
+    });
+  };
+
+  // N-Gram tag clouds
+  const renderNgrams = (bigrams: PipelineOutputs["ngrams"]["bigrams"], trigrams?: PipelineOutputs["ngrams"]["trigrams"]) => {
+    if (ngramsCloud && Array.isArray(bigrams) && bigrams.length > 0) {
+      ngramsCloud.innerHTML = bigrams.slice(0, 8)
+        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
         .join("");
     }
-
-    if (sentimentEl) {
-      sentimentEl.innerHTML = `
-        <div class="kv"><span>Sentiment</span>${result.sentiment.label}</div>
-        <div class="kv"><span>Score</span>${result.sentiment.score.toFixed(2)}</div>
-        <div class="kv"><span>Confidence</span>${result.sentiment.confidence.toFixed(2)}</div>
-      `;
+    if (ngramsDetailBigrams && Array.isArray(bigrams) && bigrams.length > 0) {
+      ngramsDetailBigrams.innerHTML = bigrams
+        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
+        .join("");
     }
-
-    if (summaryEl) {
-      summaryEl.textContent = result.summary.text;
-    }
-
-    if (vizEl) {
-      vizEl.innerHTML = result.viz.bins
-        .map(
-          (item: { label: string; value: number }) =>
-            `<li>${item.label} <span class="pill">${item.value}</span></li>`,
-        )
+    if (ngramsDetailTrigrams && Array.isArray(trigrams) && trigrams.length > 0) {
+      ngramsDetailTrigrams.innerHTML = trigrams
+        .map(([word, count]) => '<span class="tag">' + escapeHtml(word) + " (" + formatNumber(count) + ")</span>")
         .join("");
     }
   };
 
-  const updateLanguages = () => {
-    const container = root.querySelector<HTMLDivElement>("#language-grid");
-    if (!container) return;
-    container.innerHTML = LANGUAGE_CARDS.map(
-      (lang) => `
-        <div class="language-card">
-          <h3>${lang.name}</h3>
-          <small>${lang.role} - ${lang.source}</small>
-          <pre>${lang.snippet}</pre>
-        </div>
-      `,
-    ).join("");
+  // Viz bar chart
+  const renderVizBars = (bins: PipelineOutputs["viz"]["bins"]) => {
+    if (!vizBars || !Array.isArray(bins) || bins.length === 0) return;
+    const max = Math.max(...bins.map((b) => b.value), 1);
+    const track = vizBars.querySelector<HTMLDivElement>(".bars__track");
+    const labels = vizBars.querySelector<HTMLDivElement>(".bars__labels");
+    if (track) {
+      track.innerHTML = bins
+        .map((b) => {
+          const pct = Math.max(4, (b.value / max) * 100);
+          return '<div class="bar" style="height: ' + pct.toFixed(1) + '%" title="' + escapeHtml(b.label) + ": " + b.value + '"></div>';
+        })
+        .join("");
+    }
+    if (labels) {
+      labels.innerHTML = bins.map((b) => "<span>" + escapeHtml(b.label) + "</span>").join("");
+    }
   };
 
-  updateLanguages();
+  // Gauge ring
+  const renderGauge = (score: number) => {
+    if (!gaugeFill) return;
+    const clamped = Math.max(0, Math.min(100, score));
+    gaugeFill.setAttribute("stroke-dasharray", clamped + ", 100");
+  };
 
+  // Provider cards (pipeline view)
+  const updateProviderCard = (providerName: string, status: "idle" | "running" | "done" | "error", durationMs?: number) => {
+    const card = document.querySelector<HTMLElement>('[data-provider="' + providerName + '"]');
+    if (!card) return;
+    card.classList.toggle("is-running", status === "running");
+    const pill = card.querySelector<HTMLElement>("[data-provider-status]");
+    if (pill) {
+      const dot = pill.querySelector(".status-dot");
+      pill.className = pill.className.replace(/status-pill--\w+/g, "").trim();
+      if (dot) dot.className = dot.className.replace(/status-dot--\w+/g, "").trim();
+      switch (status) {
+        case "running":
+          pill.classList.add("status-pill", "status-pill--running");
+          if (dot) dot.classList.add("status-dot", "status-dot--pulse");
+          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Running"; });
+          break;
+        case "done":
+          pill.classList.add("status-pill", "status-pill--ready");
+          if (dot) dot.classList.add("status-dot", "status-dot--ready");
+          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle"; });
+          break;
+        case "error":
+          pill.classList.add("status-pill", "status-pill--error");
+          if (dot) dot.classList.add("status-dot");
+          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Error"; });
+          break;
+        default:
+          pill.classList.add("status-pill", "status-pill--ready");
+          if (dot) dot.classList.add("status-dot", "status-dot--ready");
+          pill.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.textContent = " Idle"; });
+      }
+    }
+    if (durationMs !== undefined) {
+      const dur = card.querySelector<HTMLElement>("[data-provider-duration]");
+      if (dur) dur.textContent = Math.round(durationMs) + "ms";
+    }
+  };
+
+  const resetAllProviderCards = () => {
+    document.querySelectorAll<HTMLElement>("[data-provider]").forEach((card) => {
+      const name = card.dataset.provider ?? "";
+      updateProviderCard(name, "idle");
+    });
+  };
+
+  // Apply all results
+  const applyResults = (result: PipelineResult) => {
+    const outputs = result.outputs;
+    const steps = result.steps;
+    const totalMs = steps.reduce((acc, s) => acc + s.durationMs, 0);
+
+    document.querySelectorAll<HTMLElement>("[data-result]").forEach((el) => {
+      const key = el.getAttribute("data-result");
+      if (!key) return;
+      const path = key.split(".");
+      let val: unknown = outputs;
+      for (const p of path) {
+        const obj = val as Record<string, unknown> | undefined;
+        if (obj && typeof obj === "object" && p in obj) {
+          val = obj[p];
+        } else {
+          val = undefined;
+          break;
+        }
+      }
+
+      if (key === "stats.asciiPct") {
+        const stats = outputs.stats;
+        const denom = stats.ascii + stats.non_ascii;
+        const pct = denom > 0 ? (stats.ascii / denom) * 100 : 0;
+        el.textContent = pct.toFixed(1) + "%";
+        return;
+      }
+
+      if (key === "stats.nullTerminated") {
+        el.textContent = outputs.stats.non_ascii === 0 ? "True" : "False";
+        return;
+      }
+
+      if (key === "performance.total" || key === "performance.runtime") {
+        el.textContent = Math.round(totalMs) + "ms";
+        return;
+      }
+
+      if (key === "sentiment.score") {
+        const score = outputs.sentiment.score ?? 0;
+        el.textContent = Math.round(score) + "%";
+        renderGauge(score);
+        return;
+      }
+
+      if (key === "sentiment.confidence") {
+        const conf = outputs.sentiment.confidence;
+        el.textContent = typeof conf === "number" ? (conf > 0.7 ? "High" : conf > 0.4 ? "Medium" : "Low") : "\u2014";
+        return;
+      }
+
+      if (val === undefined || val === null) {
+        el.textContent = "\u2014";
+      } else if (typeof val === "number") {
+        el.textContent = formatNumber(val);
+      } else if (typeof val === "object") {
+        el.textContent = JSON.stringify(val);
+      } else {
+        el.textContent = String(val);
+      }
+    });
+
+    renderFlow(steps);
+    renderNgrams(outputs.ngrams.bigrams, outputs.ngrams.trigrams);
+    renderVizBars(outputs.viz.bins);
+
+    steps.forEach((step) => {
+      const providerName = STEP_TO_PROVIDER[step.label];
+      if (providerName) {
+        updateProviderCard(providerName, "done", step.durationMs);
+      }
+    });
+  };
+
+  // Run button state
+  const setRunning = (running: boolean) => {
+    runButton.disabled = running;
+    runButton.classList.toggle("is-loading", running);
+  };
+
+  // Pipeline execution
   runButton.addEventListener("click", async () => {
-    runButton.disabled = true;
+    setRunning(true);
     messageLog.clear();
-    updateInspector();
-    updateStatus("Booting runtime...");
+    renderLogRail();
+    renderLogsView();
+    statusEl.textContent = "Analyzing pipeline...";
+    resetAllProviderCards();
 
-    const preset = PRESETS.find((p) => p.id === presetSelect.value) ?? PRESETS[0];
+    const providerOrder = ["C", "C++", "Rust", "C#", "Python"];
+    let providerIdx = 0;
+    const interval = setInterval(() => {
+      if (providerIdx < providerOrder.length) {
+        updateProviderCard(providerOrder[providerIdx], "running");
+        if (providerIdx > 0) {
+          updateProviderCard(providerOrder[providerIdx - 1], "done");
+        }
+        providerIdx++;
+      }
+    }, 200);
 
     try {
       const runtime = await ensureRuntime();
-      updateStatus("Running pipeline...");
+      const preset = PRESETS.find((p) => p.id === presetSelect.value) ?? PRESETS[0];
       const result = await runPipeline(textArea.value.trim(), preset, runtime, messageLog);
-      updateResults(result.outputs);
-      updateGraph(result.steps.map((step) => ({ label: step.label, durationMs: step.durationMs })));
-      updateInspector();
-      updateStatus("Pipeline complete.");
+
+      clearInterval(interval);
+      providerOrder.forEach((name) => updateProviderCard(name, "done"));
+
+      applyResults(result);
+      renderLogRail();
+      renderLogsView();
+      statusEl.textContent = "Analysis Complete.";
     } catch (err) {
-      updateStatus(`Pipeline failed: ${String(err)}`);
+      clearInterval(interval);
+      const message = err instanceof Error ? err.message : String(err);
+      log.error("Pipeline failure", { error: message });
+      statusEl.textContent = "Pipeline Error.";
+      document.querySelectorAll<HTMLElement>(".provider-card.is-running").forEach((card) => {
+        const name = card.dataset.provider;
+        if (name) updateProviderCard(name, "error");
+      });
     } finally {
-      runButton.disabled = false;
+      setRunning(false);
     }
   });
 }
 
-function buildAppHtml(): string {
-  return `
-    <header class="hero">
-      <div>
-        <h1>Polyglot Insight Lab</h1>
-        <p>One Saikuro runtime, six languages, and a live pipeline you can poke. Each step is a real module compiled to WASM and wired through Saikuro messaging.</p>
-      </div>
-      <div class="badge-row">
-        <div class="badge">Runtime: WASM</div>
-        <div class="badge">Transport: wasm-host</div>
-        <div class="badge">Pipeline: Live</div>
-      </div>
-    </header>
-
-    <main class="grid">
-      <section class="panel">
-        <h2>Input + Preset</h2>
-        <textarea id="input-text"></textarea>
-        <div style="height: 10px"></div>
-        <select id="preset"></select>
-        <div style="height: 12px"></div>
-        <button id="run-btn">Run Insight Pipeline</button>
-        <div style="height: 12px"></div>
-        <div class="status" id="status">Idle.</div>
-      </section>
-
-      <section class="panel">
-        <h2>Pipeline Graph</h2>
-        <div class="graph" id="graph"></div>
-        <div class="step-list" id="step-list"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Character Stats (C)</h2>
-        <div class="kv-grid" id="stats"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Top Bigrams (C++)</h2>
-        <ul class="list" id="ngrams"></ul>
-      </section>
-
-      <section class="panel">
-        <h2>Sentiment (Rust)</h2>
-        <div class="kv-grid" id="sentiment"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Summary (C#)</h2>
-        <div id="summary" class="status"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Viz Prep (Python)</h2>
-        <ul class="list" id="viz"></ul>
-      </section>
-
-      <section class="panel">
-        <h2>Message Inspector</h2>
-        <div id="message-list" class="graph"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Language Detail</h2>
-        <div id="language-grid" class="language-grid"></div>
-      </section>
-    </main>
-  `;
-}
+export type { MessageRecord };

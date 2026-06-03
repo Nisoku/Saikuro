@@ -1,7 +1,6 @@
-type DotnetRuntime = {
-  getAssemblyExports: (assembly: string) => Promise<any>;
-  dispose: () => void;
-};
+import { getLogger } from "@nisoku/saikuro";
+
+const log = getLogger("demo.wasm.csharp");
 
 let csharpPromise: Promise<(payload: Record<string, unknown>) => Promise<any>> | null = null;
 
@@ -10,15 +9,19 @@ export async function loadCSharpSummary(): Promise<
 > {
   if (!csharpPromise) {
     csharpPromise = (async () => {
-      const dotnetModule = await import(
+      log.info("loading C# WASM (dotnet.js)");
+      const { default: createDotnetRuntime } = await import(
         "../../wasm/csharp/dotnet.js"
       );
-      const runtime = (await dotnetModule.createDotnetRuntime({
+      log.info("C# dotnet.js loaded, creating runtime");
+      const runtime = await createDotnetRuntime({
         locateFile: (path: string) => `/wasm/csharp/${path}`,
-      })) as DotnetRuntime;
+      } as any);
+      log.info("C# runtime created, getting assembly exports");
 
       const exports = await runtime.getAssemblyExports("InsightLab.dll");
       const summarizer = exports.InsightLab.SummaryEngine;
+      log.info("C# assembly exports ready");
 
       return async (payload: Record<string, unknown>) => {
         const json = JSON.stringify(payload);

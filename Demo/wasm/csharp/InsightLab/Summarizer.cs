@@ -1,8 +1,14 @@
 using System;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Runtime.InteropServices.JavaScript;
 
 namespace InsightLab;
+
+public record SummaryResult([property: JsonPropertyName("text")] string Text);
+
+[JsonSerializable(typeof(SummaryResult))]
+public partial class SummaryJsonContext : JsonSerializerContext { }
 
 public static partial class SummaryEngine
 {
@@ -11,7 +17,7 @@ public static partial class SummaryEngine
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return "{\"text\":\"No input provided.\"}";
+            return JsonSerializer.Serialize(new SummaryResult("No input provided."), SummaryJsonContext.Default.SummaryResult);
         }
 
         using var doc = JsonDocument.Parse(json);
@@ -36,6 +42,6 @@ public static partial class SummaryEngine
             _ => $"Balanced mode: {label} tone. ASCII ratio {ratio:F2}. Top phrase '{topBigram}'."
         };
 
-        return JsonSerializer.Serialize(new { text = message });
+        return JsonSerializer.Serialize(new SummaryResult(message), SummaryJsonContext.Default.SummaryResult);
     }
 }

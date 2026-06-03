@@ -17,7 +17,6 @@ import {
   makeAnnounceEnvelope,
   makeSchemaObject,
 } from "./envelope";
-import { extractSchema } from "./schema_extractor";
 import type {
   Envelope,
   SaikuroSchema,
@@ -250,37 +249,164 @@ export class SaikuroProvider {
   // Schema
 
   /**
+   * Auto-detect parameter names from a handler function's source code.
+   *
+   * Works in both Node.js and browser since it uses `Function.toString()`.
+   * Types are erased at runtime, so all detected params get type `"any"`.
+   * This is a best-effort heuristic and may not be perfect in all cases, but it handles common patterns,
+   * and is only used as a fallback when no explicit args were given at registration.
+   */
+  private static _detectHandlerParams(
+    fn: AnyHandler,
+  ): { name: string; optional: boolean; default?: string }[] {
+    const src = fn.toString().trim();
+
+    // Locate the parameter-list parentheses.
+    let paramsStr = "";
+
+    // Arrow with single param  e.g.  x => …  or  async x => …
+    const singleArrow = /^(?:async\s+)?([$\w]+)\s*=>/.exec(src);
+    if (singleArrow) {
+      return [{ name: singleArrow[1], optional: false }];
+    }
+
+    // Parenthesised list  (…)
+    const parenMatch = src.match(
+      /^(?:async\s+)?(?:function\s*(?:\*\s*)?(?:\w+\s*)?)?\s*\(([^)]*)\)/,
+    );
+    if (parenMatch) {
+      paramsStr = parenMatch[1];
+    }
+
+    if (!paramsStr.trim()) return [];
+
+    // Split by top-level commas (ignoring those inside <…>, {…}, […], "…").
+    const parts: string[] = [];
+    let depth = 0;
+    let current = "";
+    for (const ch of paramsStr) {
+      if (ch === "<" || ch === "{" || ch === "[" || ch === '"' || ch === "'") {
+        depth++;
+      } else if (
+        ch === ">" ||
+        ch === "}" ||
+        ch === "]" ||
+        ch === '"' ||
+        ch === "'"
+      ) {
+        depth = Math.max(0, depth - 1);
+      } else if (ch === "," && depth === 0) {
+        parts.push(current);
+        current = "";
+        continue;
+      }
+      current += ch;
+    }
+    if (current.trim()) parts.push(current);
+
+    // Parse each parameter.
+    return parts
+      .map((p) => {
+        p = p.trim();
+        if (!p) return null;
+
+        // Destructuring, use a descriptive placeholder
+        if (/^[{[]/.test(p)) {
+          const placeholder = p
+            .replace(/\s+/g, " ")
+            .slice(0, 24)
+            .replace(/[^$\w\s{}[\].,:?]/g, "");
+          return { name: placeholder, optional: false };
+        }
+
+        // Rest parameter  ...name
+        if (p.startsWith("...")) {
+          return { name: p.slice(3).trim(), optional: false };
+        }
+
+        // Strip inline TypeScript type annotation  name: Type
+        const nameOnly = p.split(":")[0].trim();
+
+        // Default value  name = expr
+        const eqIdx = nameOnly.indexOf("=");
+        if (eqIdx !== -1) {
+          const rawDefault = nameOnly.slice(eqIdx + 1).trim();
+          return {
+            name: nameOnly.slice(0, eqIdx).trim(),
+            optional: true,
+            default: rawDefault,
+          };
+        }
+
+        return { name: nameOnly, optional: false };
+      })
+      .filter(Boolean) as {
+      name: string;
+      optional: boolean;
+      default?: string;
+    }[];
+  }
+
+  /**
    * Return the namespace schema as a plain {@link SaikuroSchema} object
    * suitable for schema announcement.
    *
-   * TypeScript doesn't carry runtime type information, so all arguments default
-   * to `any` and return types to `unit`. Use the code-generator for typed
-   * schemas.
+   * When a handler was registered without explicit *args* or *returns*,
+   * the missing information is auto-detected via `Function.toString()`
+   * at schema-emission time.  This provides a useful schema in both
+   * Node.js and browser environments without requiring a static analysis
+   * pass over source files.
    */
   schemaObject(): SaikuroSchema {
     const functions: Record<string, WireFunctionSchema> = {};
     for (const [name, meta] of this._schema.entries()) {
-      // Map stored ArgDescriptors to wire ArgumentDescriptors.
-      // Fall back to [] when no args were provided at register() time.
-      const wireArgs: WireFunctionSchema["args"] =
-        meta.args !== undefined
-          ? meta.args.map((a) => {
-              const wireArg: Record<string, unknown> = {
-                name: a.name,
-                type: a.type ?? { kind: "primitive", type: "any" },
-              };
-              if (a.optional !== undefined) wireArg["optional"] = a.optional;
-              if (a.default !== undefined) wireArg["default"] = a.default;
-              if (a.doc !== undefined) wireArg["doc"] = a.doc;
-              return wireArg as unknown as import("./envelope").ArgumentDescriptor;
-            })
+      // If no explicit args were given, try auto-detection from the handler.
+      const handler = this._handlers.get(name);
+      const hasExplicitArgs = meta.args !== undefined;
+      const hasExplicitReturns = meta.returns !== undefined;
+      // Auto-detect params only when no explicit args were registered.
+      const autoParams =
+        !hasExplicitArgs && handler
+          ? SaikuroProvider._detectHandlerParams(handler)
+          : undefined;
+
+      const wireArgs: WireFunctionSchema["args"] = hasExplicitArgs
+        ? meta.args!.map((a) => {
+            const wireArg: Record<string, unknown> = {
+              name: a.name,
+              type: a.type ?? { kind: "primitive", type: "any" },
+            };
+            if (a.optional !== undefined) wireArg["optional"] = a.optional;
+            if (a.default !== undefined) wireArg["default"] = a.default;
+            if (a.doc !== undefined) wireArg["doc"] = a.doc;
+            return wireArg as unknown as import("./envelope").ArgumentDescriptor;
+          })
+        : autoParams
+          ? autoParams.map((p) => ({
+              name: p.name,
+              type: { kind: "primitive", type: "any" } as const,
+              optional: p.optional,
+              ...(p.default !== undefined && { default: p.default }),
+            }))
           : [];
 
-      // Fall back to "any" when no returns was provided.
-      const wireReturns: unknown = meta.returns ?? {
-        kind: "primitive",
-        type: "any",
-      };
+      // When no explicit return type was given, infer from constructor name.
+      let wireReturns: unknown;
+      if (hasExplicitReturns) {
+        wireReturns = meta.returns;
+      } else if (handler) {
+        const ctor = handler.constructor.name;
+        if (ctor === "AsyncGeneratorFunction" || ctor === "GeneratorFunction") {
+          wireReturns = {
+            kind: "stream",
+            item: { kind: "primitive", type: "any" },
+          };
+        } else {
+          wireReturns = { kind: "primitive", type: "any" };
+        }
+      } else {
+        wireReturns = { kind: "primitive", type: "any" };
+      }
 
       const fn: WireFunctionSchema = {
         args: wireArgs,
@@ -310,13 +436,16 @@ export class SaikuroProvider {
 
     const isCast = envelope.type === "cast";
 
-    // Extract the local function name (last segment of "namespace.fn_name").
     const fnName = envelope.target.includes(".")
       ? envelope.target.slice(envelope.target.lastIndexOf(".") + 1)
       : envelope.target;
 
     const handler = this._handlers.get(fnName);
     if (handler === undefined) {
+      log.warn("dispatch: handler not found", {
+        target: envelope.target,
+        fnName,
+      });
       if (!isCast) {
         await _sendError(
           transport,
@@ -328,11 +457,18 @@ export class SaikuroProvider {
       return;
     }
 
+    log.debug("dispatch executing", {
+      target: envelope.target,
+      fnName,
+      type: envelope.type,
+      argsCount: envelope.args?.length ?? 0,
+    });
+
     try {
       const result = handler(...(envelope.args as unknown[]));
 
-      // Async generator -> stream
       if (_isAsyncIterable(result)) {
+        log.debug("dispatch streaming", { target: envelope.target });
         await this._dispatchStream(
           envelope,
           result as AsyncGenerator<unknown>,
@@ -341,12 +477,15 @@ export class SaikuroProvider {
         return;
       }
 
-      // Regular async or sync result
       const resolved = await Promise.resolve(result);
       if (!isCast) {
         await _sendOk(transport, envelope.id, resolved);
       }
     } catch (err) {
+      log.error("dispatch error", {
+        target: envelope.target,
+        err: err instanceof Error ? err.message : String(err),
+      });
       if (isCast) return;
       if (err instanceof SaikuroError) {
         await _sendError(
@@ -488,15 +627,32 @@ export class SaikuroProvider {
     transport: Transport,
     options?: { dev?: boolean; sourceFiles?: string[] },
   ): Promise<void> {
+    log.info("serveOn starting", {
+      namespace: this._namespace,
+      dev: options?.dev ?? false,
+      sourceFiles: options?.sourceFiles?.length
+        ? options.sourceFiles.length
+        : undefined,
+      handlers: this._handlers.size,
+    });
+
     if (options?.dev && Array.isArray(options.sourceFiles)) {
       try {
+        // Use cache-busting query param in dev mode so edits to schema_extractor.ts
+        // are picked up without restarting the process.
+        const cacheBuster = `?t=${Date.now()}`;
+        const { extractSchema } = await import(
+          `./schema_extractor${cacheBuster}`
+        );
         const schema = await extractSchema(
           options.sourceFiles,
           this._namespace,
         );
+        log.info("dev schema extracted, announcing", {
+          namespace: this._namespace,
+        });
         await this._announce(transport, schema as SaikuroSchema);
       } catch (err) {
-        // If extraction fails, fallback to regular announce behavior.
         log.warn("dev schema extraction failed, falling back to built schema", {
           err: err instanceof Error ? err.message : String(err),
         });
@@ -506,6 +662,7 @@ export class SaikuroProvider {
       await this._announce(transport);
     }
 
+    log.info("serveOn entering dispatch loop", { namespace: this._namespace });
     await this._runServeLoop(transport);
   }
 
@@ -569,7 +726,7 @@ export class SaikuroProvider {
 
 /**
  * Register a one-shot message listener, invoke *sendFn*, and resolve with the
- * first message received — or `null` on timeout. Cleans up listener and timer
+ * first message received, or `null` on timeout. Cleans up listener and timer
  * on all paths (success, timeout, send-failure).
  */
 async function _waitForMessage(
@@ -610,7 +767,7 @@ function _rawToEnvelope(raw: Record<string, unknown>): Envelope | null {
     const scratch: Record<string, unknown> = {
       version: (raw["version"] as number) ?? PROTOCOL_VERSION,
       type: raw["type"] as Envelope["type"],
-      id: raw["id"] as string,
+      id: raw["id"] as Uint8Array,
       target: raw["target"] as string,
       args: (raw["args"] as unknown[]) ?? [],
     };
@@ -625,9 +782,11 @@ function _rawToEnvelope(raw: Record<string, unknown>): Envelope | null {
 
     const envelope = scratch as unknown as Envelope;
     // Validate mandatory fields so callers can rely on them being present.
-    if (typeof envelope.id !== "string" || envelope.id.length === 0) {
+    const isValidId =
+      (envelope.id instanceof Uint8Array && envelope.id.length === 16) || false;
+    if (!isValidId) {
       throw new TypeError(
-        `missing or invalid 'id' field: ${JSON.stringify(raw["id"])}`,
+        `missing or invalid 'id' field: expected 16-byte Uint8Array`,
       );
     }
     // `target` may be empty for batch envelopes; only reject a missing field.
@@ -648,7 +807,7 @@ function _rawToEnvelope(raw: Record<string, unknown>): Envelope | null {
 
 async function _sendOk(
   transport: Transport,
-  id: string,
+  id: Uint8Array,
   result: unknown,
 ): Promise<void> {
   await transport.send({ id, ok: true, result });
@@ -656,7 +815,7 @@ async function _sendOk(
 
 async function _sendError(
   transport: Transport,
-  id: string,
+  id: Uint8Array,
   code: string,
   message: string,
   details?: Readonly<Record<string, unknown>>,

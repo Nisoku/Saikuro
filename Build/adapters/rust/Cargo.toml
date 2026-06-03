@@ -21,7 +21,7 @@ unix = ["saikuro-transport/native-transport"]
 ws   = ["saikuro-transport/native-ws"]
 wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport"]
 
-# Storage backends — platform-agnostic factory in storage module
+# Storage backends: platform-agnostic factory in storage module
 storage         = ["saikuro-storage/native-storage"]
 storage-fs      = ["saikuro-storage/fs-storage"]
 storage-sled    = ["saikuro-storage/sled-storage"]

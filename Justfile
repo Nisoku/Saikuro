@@ -28,6 +28,30 @@ cpp *args:
 web_demo *args:
     cd {{scripts}} && python3 web_demo.py {{args}}
 
+# Demo WASM build recipes (individual, used by dev.mjs watcher)
+wasm-c:
+    @cd {{scripts}} && python3 web_demo.py build-c
+
+wasm-cpp:
+    @cd {{scripts}} && python3 web_demo.py build-cpp
+
+wasm-csharp:
+    @cd {{scripts}} && python3 web_demo.py build-csharp
+
+wasm-rust-runtime:
+    @cd {{scripts}} && python3 web_demo.py build-rust-runtime
+
+wasm-rust-provider:
+    @cd {{scripts}} && python3 web_demo.py build-rust-provider
+
+wasm-python:
+    @cd {{scripts}} && python3 web_demo.py build-python
+
+wasm-rust:
+    @cd {{scripts}} && python3 web_demo.py build-rust
+
+wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python
+
 # Meta commands
 setup:
     cd {{scripts}} && python3 rust.py setup
@@ -41,6 +65,7 @@ format:
     cd {{scripts}} && python3 typescript.py fmt_check
     cd {{scripts}} && python3 python.py fmt_check
     cd {{scripts}} && python3 csharp.py fmt_check
+    cd {{scripts}} && python3 c.py fmt_check
     cd {{scripts}} && python3 cpp.py fmt_check
 
 test:
@@ -61,11 +86,3 @@ check:
 
 all: setup check
 
-# Utilities
-dotnet-install:
-    @if ! command -v dotnet >/dev/null 2>&1; then \
-        echo "Installing dotnet SDK..."; \
-        curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0; \
-    else \
-        echo "dotnet already installed"; \
-    fi

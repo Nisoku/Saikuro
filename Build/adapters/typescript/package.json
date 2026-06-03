@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./schema-extractor": {
+      "types": "./dist/schema_extractor.d.ts",
+      "import": "./dist/schema_extractor.mjs",
+      "require": "./dist/schema_extractor.js"
     }
   },
   "bin": {
@@ -44,6 +49,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0",
+    "@nisoku/satori": "^0.1.3",
     "typescript": "^5.5.0"
   },
   "devDependencies": {

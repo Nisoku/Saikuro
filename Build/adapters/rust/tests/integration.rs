@@ -745,7 +745,7 @@ fn create_storage_backend_kind_web_storage_returns_in_memory_on_native() {
 
         let cfg = StorageConfig::default().with_backend(BackendKind::WebStorage);
         let store = saikuro::create_storage(&cfg).await.expect("web storage");
-        // WebStorage on native is an InMemoryStorage alias — does round-trip
+        // WebStorage on native is an InMemoryStorage alias that does round-trip
         store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
         let v = store.get("ns", "k").await.unwrap();
         assert_eq!(v, Some(bytes::Bytes::from("v")));

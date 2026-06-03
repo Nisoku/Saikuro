@@ -354,7 +354,7 @@ class InMemoryTransport(BaseTransport):
         return item  # type: ignore[return-value]
 
 
-#  Factory function — channels dict scoped to the function as an attribute
+#  Factory function: channels dict scoped to the function as an attribute
 #  to avoid module-level mutable global state (see M30).
 
 

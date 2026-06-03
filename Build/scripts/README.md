@@ -4,15 +4,15 @@ Per-language build/check scripts used by the `Justfile` and CI.
 
 ## Usage
 
-Don't call these directly — use the `Justfile` from the repo root:
+Don't call these directly, use the `Justfile` from the repo root:
 
 ```bash
 just rust check       # fmt (auto-fix) + clippy + tests + wasm check
 just python check     # ruff lint (auto-fix) + pytest
 just typescript check # eslint (auto-fix) + tsc + vitest + tsup
 just csharp check     # dotnet format (auto-fix) + build + tests
-just c check          # build + test C adapter
-just cpp check        # cmake config + header compile test
+just c check          # clang-format + build + test C adapter
+just cpp check        # clang-format + cmake config + header compile test
 just check            # all of the above
 just web_demo         # build + run the polyglot WASM demo
 ```

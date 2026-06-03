@@ -1,2 +1,3 @@
-const env: Record<string, unknown> = {};
-export default env;
+export function now(): number {
+  return performance.now();
+}

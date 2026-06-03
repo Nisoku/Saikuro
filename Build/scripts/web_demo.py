@@ -57,8 +57,8 @@ def setup() -> int:
     return run(["npm", "install"], cwd=DEMO)
 
 
-def build_rust_wasm() -> int:
-    rc = run([
+def build_rust_runtime() -> int:
+    return run([
         "wasm-pack",
         "build",
         str(WASM / "runtime"),
@@ -68,8 +68,9 @@ def build_rust_wasm() -> int:
         str(SRC_WASM / "runtime"),
         "--release",
     ])
-    if rc != 0:
-        return rc
+
+
+def build_rust_provider() -> int:
     return run([
         "wasm-pack",
         "build",
@@ -80,6 +81,13 @@ def build_rust_wasm() -> int:
         str(SRC_WASM / "rust"),
         "--release",
     ])
+
+
+def build_rust_wasm() -> int:
+    rc = build_rust_runtime()
+    if rc != 0:
+        return rc
+    return build_rust_provider()
 
 
 def build_c_wasm() -> int:
@@ -142,7 +150,11 @@ def build_csharp_wasm() -> int:
     if rc != 0:
         return rc
 
-    publish_dir = WASM / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "publish"
+    # .NET 8 browser-wasm publishes to AppBundle/_framework/
+    bundle_dir = WASM / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "AppBundle" / "_framework"
+    # Fallback for older tooling
+    fallback_dir = WASM / "csharp" / "InsightLab" / "bin" / "Release" / "net8.0" / "browser-wasm" / "publish"
+    publish_dir = bundle_dir if bundle_dir.exists() else fallback_dir
     if not publish_dir.exists():
         print(f"publish output not found: {publish_dir}")
         return 1
@@ -172,12 +184,8 @@ def build_all() -> int:
 
 
 def dev() -> int:
-    ensure_dirs()
-    for step in [build_rust_wasm, build_c_wasm, build_cpp_wasm, build_csharp_wasm, copy_python]:
-        rc = step()
-        if rc != 0:
-            return rc
-    return run(["npm", "run", "dev"], cwd=DEMO)
+    """Incremental dev mode: initial build, then watch & auto-rebuild per language."""
+    return run(["node", "dev.mjs"], cwd=DEMO)
 
 
 def main() -> int:
@@ -192,7 +200,20 @@ def main() -> int:
     if cmd == "check":
         return run(["npm", "run", "typecheck"], cwd=DEMO)
 
-    print("Usage: web_demo.py [setup|build|dev|check]")
+    # Individual build steps (used by just wasm-* recipes)
+    steps = {
+        "build-c":            build_c_wasm,
+        "build-cpp":          build_cpp_wasm,
+        "build-csharp":       build_csharp_wasm,
+        "build-rust-runtime":  build_rust_runtime,
+        "build-rust-provider": build_rust_provider,
+        "build-python":       copy_python,
+        "build-rust":         build_rust_wasm,
+    }
+    if cmd in steps:
+        return steps[cmd]()
+
+    print("Usage: web_demo.py [setup|build|dev|check|build-c|build-cpp|build-csharp|build-rust-runtime|build-rust-provider|build-python]")
     return 1
 
 
