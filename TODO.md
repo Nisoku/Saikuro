@@ -6,17 +6,18 @@
 
 - [ ] JavaScript (maybe TS wrapper idk but useful, or we can have `tsup` compile it to JS)
 - [ ] Bash (lol, I know some Bash but this is the scariest adapter haha we don't want to delete anything from the system, it needs to be EXTREMELY SANDBOXED/safe)
+- [ ] Zsh (ditto)
 - [ ] AssemblyScript (lol this technically isn't needed since TS adapter but we could have a wasm-specific adapter using it (I don't know AS but it's really similar to TS from what i've heard))
 - [ ] Swift Adapter (Ladybird would benefit from it (bit too late for that but either way))
 - [ ] Lua (super useful, especially for games and game engines and so much more (Picotility might benefit hehe))
 - [ ] AppleScript (yes really, it's powerful but painful to write in)
+- [ ] Kotlin (so good)
+- [ ] Java Adapter
 
 ### Need help
 
 - [ ] Nim (Compiles to C. Easy adapter. I just don’t know Nim at all.)
 - [ ] F# (easy, since we already have a C# one but idk F#)
-- [ ] Java Adapter (Not good at Java in the slightest but I know a few people who are :D)
-- [ ] Kotlin (genuinely super useful but again, idk Kotlin)
 - [ ] Zig (genuinely super useful but again, idk Zig)
 - [ ] Go (Go brrrr. I don’t know Go. Someone else can go do Go. Go do Go.)
 - [ ] Ruby (old but common, super useful)
@@ -51,7 +52,6 @@
 - [ ] [Vale](https://github.com/ValeLang/Vale)
 - [ ] [Forth](https://www.forthlang.org/)
 - [ ] VB.NET
-- [ ] Zsh
 - [ ] Nushell
 - [ ] [Tungsten](https://github.com/RickIsGone/tungsten) (beta)
 
@@ -64,7 +64,7 @@
 
 ## Features
 
-- [ ] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
+- [X] Storage backend (will be working on soon), allows all FS access to be agnostic and stuff
 
 ## Other
 

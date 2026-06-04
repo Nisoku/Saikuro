@@ -113,15 +113,7 @@ public sealed class ResourceHandle
             return null;
 
         string? mime = map.TryGetValue(WireKey.MimeType, out var m) && m is string ms ? ms : null;
-        long? size = map.TryGetValue(WireKey.Size, out var s)
-            ? s switch
-            {
-                long l => l,
-                int i => (long)i,
-                ulong u when u <= long.MaxValue => (long)u,
-                _ => (long?)null,
-            }
-            : null;
+        long? size = map.TryGetValue(WireKey.Size, out var s) ? Envelope.CoerceInt64(s) : null;
         string? uri = map.TryGetValue(WireKey.Uri, out var u2) && u2 is string us ? us : null;
 
         return new ResourceHandle
@@ -212,6 +204,56 @@ public sealed record Envelope
             Args = [schemaDict],
         };
 
+    // Helper methods
+
+    /// <summary>
+    /// Coerces a value to a UInt64, handling common numeric types.
+    /// </summary>
+    public static ulong? CoerceUInt64(object? value)
+    {
+        return value switch
+        {
+            ulong u => u,
+            long l => l >= 0 ? (ulong)l : null,
+            int i => i >= 0 ? (ulong)i : null,
+            uint u => u,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Coerces a value to a Int64, handling common numeric types.
+    /// </summary>
+    public static long? CoerceInt64(object? value)
+    {
+        return value switch
+        {
+            long l => l,
+            int i => i,
+            ulong u => u <= long.MaxValue ? (long)u : null,
+            uint u => u,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets a required string value from a dictionary, throwing if missing.
+    /// </summary>
+    public static string GetRequiredString(Dictionary<string, object?> dict, string key)
+    {
+        return dict.TryGetValue(key, out var value) && value is string s ? s
+            : throw new MalformedEnvelopeException("MissingRequiredField", $"Missing required field: {key}", null);
+    }
+
+    /// <summary>
+    /// Gets a required boolean value from a dictionary, throwing if missing or invalid.
+    /// </summary>
+    public static bool GetRequiredBool(Dictionary<string, object?> dict, string key)
+    {
+        return dict.TryGetValue(key, out var value) && value is bool b ? b
+            : throw new MalformedEnvelopeException("MissingRequiredField", $"Missing or invalid boolean field: {key}", null);
+    }
+
     // Serialisation
 
     /// <summary>Serialise to the canonical MessagePack-ready dictionary.</summary>
@@ -266,11 +308,11 @@ public sealed record Envelope
                 ? (uint)Convert.ToInt32(v)
                 : Protocol.Version,
             Type = InvocationTypeExt.FromWire(typeStr),
-            Id = (string)d[WireKey.Id]!,
-            Target = (string)d[WireKey.Target]!,
+            Id = Envelope.GetRequiredString(d, WireKey.Id),
+            Target = Envelope.GetRequiredString(d, WireKey.Target),
             Args = args,
             Meta = meta,
-            Capability = d.TryGetValue(WireKey.Capability, out var cap) ? cap as string : null,
+            Capability = d.TryGetValue(WireKey.Capability, out var cap) && cap is string cs ? cs : null,
             BatchItems = items,
             StreamControlValue = sc,
             Seq = seq,
@@ -287,28 +329,20 @@ public sealed record Envelope
 
     private static string NewId() => Guid.NewGuid().ToString();
 
-    internal static StreamControl? ParseStreamControl(Dictionary<string, object?> d)
+    public static StreamControl? ParseStreamControl(Dictionary<string, object?> d)
     {
         return d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
             ? StreamControlExt.FromWire(scs)
             : null;
     }
 
-    internal static ulong? ParseSeq(Dictionary<string, object?> d)
+    public static ulong? ParseSeq(Dictionary<string, object?> d)
     {
-        return d.TryGetValue(WireKey.Seq, out var seqRaw)
-            ? seqRaw switch
-            {
-                long l when l >= 0 => (ulong)l,
-                int i when i >= 0 => (ulong)i,
-                ulong u => u,
-                _ => (ulong?)null,
-            }
-            : null;
+        return d.TryGetValue(WireKey.Seq, out var seqRaw) ? CoerceUInt64(seqRaw) : null;
     }
 }
 
-// ResponseEnvelope (inbound) 
+// ResponseEnvelope (inbound)
 
 /// <summary>Inbound response envelope.</summary>
 public sealed class ResponseEnvelope
@@ -334,8 +368,8 @@ public sealed class ResponseEnvelope
 
         return new ResponseEnvelope
         {
-            Id = (string)d[WireKey.Id]!,
-            Ok = (bool)d[WireKey.Ok]!,
+            Id = Envelope.GetRequiredString(d, WireKey.Id),
+            Ok = Envelope.GetRequiredBool(d, WireKey.Ok),
             Result = d.TryGetValue(WireKey.Result, out var res) ? res : null,
             Error = err,
             Seq = seq,

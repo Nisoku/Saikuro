@@ -74,6 +74,9 @@ internal static class FrameCodec
     /// <summary>Maximum frame size: 16 MiB. Matches common runtime limits (e.g. WASM, gRPC).</summary>
     public const int MaxFrameSize = 16 * 1024 * 1024;
 
+    /// <summary>Header size: 4-byte big-endian length prefix.</summary>
+    public const int HeaderSize = 4;
+
     /// <summary>Write a length-prefixed frame to <paramref name="stream"/>.</summary>
     internal static async Task WriteFrameAsync(Stream stream, byte[] payload, CancellationToken ct)
     {
@@ -324,7 +327,7 @@ public sealed class UnixSocketTransport : StreamTransport
 /// </summary>
 public sealed class WebSocketTransport : ITransport
 {
-    private const int WebSocketBufferSize = 4096;
+    private const int WebSocketBufferSize = FrameCodec.MaxFrameSize;
 
     private readonly Uri _uri;
     private ClientWebSocket? _ws;

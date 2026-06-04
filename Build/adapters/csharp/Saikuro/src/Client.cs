@@ -49,26 +49,44 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
             yield break;
         await foreach (var item in _ch.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (item is null)
-            {
-                _done = true;
-                yield break;
-            }
-            if (!item.Ok)
-            {
-                _done = true;
-                var payload =
-                    item.Error
-                    ?? new ErrorPayload { Code = "Internal", Message = "stream ended with error" };
-                throw SaikuroException.FromPayload(payload);
-            }
             if (item.IsStreamEnd)
             {
                 _done = true;
                 yield break;
             }
-            yield return (T)item.Result!;
+            yield return await ProcessResponseAsync(item).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Determines if a stream/channel should be closed after receiving a response.
+    /// </summary>
+    protected bool ShouldCloseAfterResponse(ResponseEnvelope item) => item.IsStreamEnd || !item.Ok;
+
+    /// <summary>
+    /// Shared response processing logic for both streams and channels.
+    /// </summary>
+    protected async Task<T> ProcessResponseAsync(ResponseEnvelope? item)
+    {
+        if (item is null)
+        {
+            _done = true;
+            throw new TransportException("ConnectionLost", "stream ended unexpectedly", null);
+        }
+        if (ShouldCloseAfterResponse(item))
+        {
+            _done = true;
+            if (!item.Ok)
+            {
+                var payload =
+                    item.Error
+                    ?? new ErrorPayload { Code = "Internal", Message = "stream ended with error" };
+                throw SaikuroException.FromPayload(payload);
+            }
+            // Stream end is a normal condition, not an error
+            throw new StreamClosedException("StreamEnd", "stream ended normally", null);
+        }
+        return (T)item.Result!;
     }
 }
 
@@ -81,6 +99,8 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
 public sealed class SaikuroStream<T> : BaseSaikuroHandle<T>
 {
     internal SaikuroStream(string id) : base(id) { }
+
+    public void Close() => ((IDeliverable)this).Close();
 }
 
 //  SaikuroChannel<TIn, TOut>
@@ -106,6 +126,8 @@ public sealed class SaikuroChannel<TIn, TOut> : BaseSaikuroHandle<TIn>
             throw new InvalidOperationException("Channel is already closed.");
         return _sendFn(_id, value);
     }
+
+    public void Close() => ((IDeliverable)this).Close();
 }
 
 //  ClientOptions
@@ -226,8 +248,7 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeCall(target, args, capability);
-        var resp = await SendAndWaitCheckedAsync(envelope, timeout, ct, "call failed").ConfigureAwait(false);
-        return resp.Result;
+        return await SendAndWaitForResultAsync(envelope, GetEffectiveTimeout(timeout), ct, "call failed").ConfigureAwait(false);
     }
 
     /// <summary>Fire-and-forget invocation.  No response is expected.</summary>
@@ -252,18 +273,14 @@ public sealed class SaikuroClient : IAsyncDisposable
     )
     {
         var envelope = Envelope.MakeResource(target, args, capability);
-        var resp = await SendAndWaitCheckedAsync(envelope, timeout, ct, "resource call failed").ConfigureAwait(false);
-        if (
-            resp.Result is not Dictionary<string, object?> map
-            || ResourceHandle.FromMap(map) is not { } handle
-        )
+        var resp = await SendAndWaitForResultAsync(envelope, GetEffectiveTimeout(timeout), ct, "resource call failed").ConfigureAwait(false);
+        if (resp is not Dictionary<string, object?> map || ResourceHandle.FromMap(map) is not { } handle)
         {
             throw SaikuroException.FromPayload(
                 new ErrorPayload
                 {
                     Code = "ProviderError",
-                    Message =
-                        $"resource invocation for \"{target}\" returned an invalid or missing ResourceHandle",
+                    Message = $"resource invocation for \"{target}\" returned an invalid or missing ResourceHandle",
                 }
             );
         }
@@ -309,11 +326,10 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var items = calls.Select(c => Envelope.MakeCall(c.Target, c.Args, c.Capability)).ToList();
         var batchEnvelope = Envelope.MakeBatch(items);
-        var resp = await SendAndWaitCheckedAsync(batchEnvelope, timeout, ct, "batch call failed")
-            .ConfigureAwait(false);
-        return resp.Result is System.Collections.IList list
+        var resp = await SendAndWaitForResultAsync(batchEnvelope, GetEffectiveTimeout(timeout), ct, "batch call failed").ConfigureAwait(false);
+        return resp is System.Collections.IList list
             ? list.Cast<object?>().ToList().AsReadOnly()
-            : new List<object?> { resp.Result }.AsReadOnly();
+            : new List<object?> { resp }.AsReadOnly();
     }
 
     /// <summary>Open a server-to-client stream. Returns an async-enumerable of items.</summary>
@@ -326,14 +342,14 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var envelope = Envelope.MakeStreamOpen(target, args) with { Capability = capability };
         var handle = new SaikuroStream<T>(envelope.Id);
-        _openStreams[envelope.Id] = (IDeliverable)handle;
         try
         {
             await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+            _openStreams.TryAdd(envelope.Id, handle);
         }
         catch
         {
-            _openStreams.TryRemove(envelope.Id, out _);
+            handle.Close();
             throw;
         }
         return handle;
@@ -349,14 +365,14 @@ public sealed class SaikuroClient : IAsyncDisposable
     {
         var envelope = Envelope.MakeChannelOpen(target, args) with { Capability = capability };
         var handle = new SaikuroChannel<TIn, TOut>(envelope.Id, ChannelSendAsync);
-        _openChannels[envelope.Id] = (IDeliverable)handle;
         try
         {
             await _transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
+            _openChannels.TryAdd(envelope.Id, handle);
         }
         catch
         {
-            _openChannels.TryRemove(envelope.Id, out _);
+            handle.Close();
             throw;
         }
         return handle;
@@ -364,13 +380,20 @@ public sealed class SaikuroClient : IAsyncDisposable
 
     // Internal
 
+    /// <summary>
+    /// Gets the effective timeout to use, falling back to the default if none is specified.
+    /// </summary>
+    private TimeSpan GetEffectiveTimeout(TimeSpan? timeout) => timeout ?? _options.DefaultTimeout;
+
+
+
     private async Task<ResponseEnvelope> SendAndWaitAsync(
         Envelope envelope,
         TimeSpan? timeout,
         CancellationToken ct
     )
     {
-        var effectiveTimeout = timeout ?? _options.DefaultTimeout;
+        var effectiveTimeout = GetEffectiveTimeout(timeout);
         var tcs = new TaskCompletionSource<ResponseEnvelope>(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -436,6 +459,16 @@ public sealed class SaikuroClient : IAsyncDisposable
             throw SaikuroException.FromPayload(p);
         }
         return resp;
+    }
+
+    /// <summary>
+    /// Sends an envelope, waits for a response, checks for errors, and returns the Result.
+    /// </summary>
+    private async Task<object?> SendAndWaitForResultAsync(
+        Envelope envelope, TimeSpan? timeout, CancellationToken ct, string errorMessage)
+    {
+        var resp = await SendAndWaitCheckedAsync(envelope, timeout, ct, errorMessage).ConfigureAwait(false);
+        return resp.Result;
     }
 
     private Task ChannelSendAsync(string channelId, object? value)

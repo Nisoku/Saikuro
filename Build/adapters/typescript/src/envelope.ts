@@ -262,6 +262,25 @@ export function makeAnnounceEnvelope(schema: SaikuroSchema): Envelope {
   };
 }
 
+/**
+ * Build a log envelope for forwarding a structured log record to the runtime.
+ *
+ * @param logRecord  The log record payload (ts, level, name, msg, optional fields).
+ * @param ts         Timestamp string used for the envelope id.
+ */
+export function makeLogEnvelope(
+  logRecord: Record<string, unknown>,
+  ts: string,
+): Record<string, unknown> {
+  return {
+    version: PROTOCOL_VERSION,
+    type: "log",
+    id: `log-${ts}`,
+    target: "$log",
+    args: [logRecord],
+  };
+}
+
 /** Hex-encode a Uint8Array for use as a Map key. */
 export function idToKey(id: Uint8Array): string {
   return Array.from(id)

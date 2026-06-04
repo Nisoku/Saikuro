@@ -37,6 +37,7 @@
 // Envelopes:
 //   - Envelope, ResponseEnvelope, InvocationType
 //   - Envelope.MakeCall, MakeCast, MakeStreamOpen, MakeChannelOpen, MakeAnnounce, MakeResource, MakeBatch
+//   - WireKey: protocol constants
 //
 // Logging:
 //   - SaikuroLogger, LogLevel
@@ -89,6 +90,7 @@ using TransportException = Saikuro.TransportException;
 using TransportFactory = Saikuro.TransportFactory;
 using TypeDescriptor = Saikuro.TypeDescriptor;
 using WebSocketTransport = Saikuro.WebSocketTransport;
+using WireKey = Saikuro.WireKey;
 using XmlDocumentationParser = Saikuro.Schema.XmlDocumentationParser;
 #if !WASM
 using TcpTransport = Saikuro.TcpTransport;

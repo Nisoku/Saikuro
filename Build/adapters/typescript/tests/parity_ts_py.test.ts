@@ -181,53 +181,27 @@ describe("Schema parity: TypeScript <-> Python (basic)", () => {
           return null;
         };
 
-        const norm = normalizeAnyComplex(a.returns, b.returns);
-        if (norm) {
-          b.returns = norm;
-        }
-        const norm2 = normalizeAnyComplex(a.returns, c.returns);
-        if (norm2) {
-          c.returns = norm2;
-        }
-        const norm3 = normalizeAnyComplex(b.returns, a.returns);
-        if (norm3) {
-          a.returns = norm3;
-        }
-        const norm4 = normalizeAnyComplex(b.returns, c.returns);
-        if (norm4) {
-          c.returns = norm4;
-        }
-        const norm5 = normalizeAnyComplex(c.returns, a.returns);
-        if (norm5) {
-          a.returns = norm5;
-        }
-        const norm6 = normalizeAnyComplex(c.returns, b.returns);
-        if (norm6) {
-          b.returns = norm6;
+        const rets = [a, b, c];
+        for (let i = 0; i < rets.length; i++) {
+          for (let j = 0; j < rets.length; j++) {
+            if (i === j) continue;
+            const norm = normalizeAnyComplex(rets[i].returns, rets[j].returns);
+            if (norm) rets[j].returns = norm;
+          }
         }
 
         // Also normalize argument types where one side reports `any` but
         // another reports structured list/map/stream.
-        const argCount = Math.max(a.args.length, b.args.length, c.args.length);
+        const argSources = [a, b, c];
+        const argCount = Math.max(...argSources.map((s) => s.args.length));
         for (let i = 0; i < argCount; i++) {
-          const ta = a.args[i] ? a.args[i][1] : null;
-          const tb = b.args[i] ? b.args[i][1] : null;
-          const tc = c.args[i] ? c.args[i][1] : null;
-          const anySide = isAny(ta) || isAny(tb) || isAny(tc);
-          const complexSide =
-            isList(ta) ||
-            isMap(ta) ||
-            isStream(ta) ||
-            isList(tb) ||
-            isMap(tb) ||
-            isStream(tb) ||
-            isList(tc) ||
-            isMap(tc) ||
-            isStream(tc);
+          const types = argSources.map((s) => (s.args[i] ? s.args[i][1] : null));
+          const anySide = types.some((t) => isAny(t));
+          const complexSide = types.some((t) => isList(t) || isMap(t) || isStream(t));
           if (anySide && complexSide) {
-            if (a.args[i]) a.args[i][1] = ["p", "any"];
-            if (b.args[i]) b.args[i][1] = ["p", "any"];
-            if (c.args[i]) c.args[i][1] = ["p", "any"];
+            for (const s of argSources) {
+              if (s.args[i]) s.args[i][1] = ["p", "any"];
+            }
           }
         }
 

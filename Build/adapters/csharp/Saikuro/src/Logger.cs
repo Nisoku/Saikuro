@@ -61,13 +61,13 @@ public static class SaikuroLogSink
     {
         var obj = new Dictionary<string, object?>
         {
-            ["ts"] = record.Ts,
-            ["level"] = record.Level,
-            ["name"] = record.Name,
-            ["msg"] = record.Msg,
+            [WireKey.Ts] = record.Ts,
+            [WireKey.Level] = record.Level,
+            [WireKey.Name] = record.Name,
+            [WireKey.Msg] = record.Msg,
         };
         if (record.Fields is { Count: > 0 })
-            obj["fields"] = record.Fields;
+            obj[WireKey.Fields] = record.Fields;
         var line = JsonSerializer.Serialize(obj);
         Console.Error.WriteLine(line);
     }
@@ -89,21 +89,21 @@ public static class SaikuroLogSink
         {
             var logObj = new Dictionary<string, object?>
             {
-                ["ts"] = record.Ts,
-                ["level"] = record.Level,
-                ["name"] = record.Name,
-                ["msg"] = record.Msg,
+                [WireKey.Ts] = record.Ts,
+                [WireKey.Level] = record.Level,
+                [WireKey.Name] = record.Name,
+                [WireKey.Msg] = record.Msg,
             };
             if (record.Fields is { Count: > 0 })
-                logObj["fields"] = record.Fields;
+                logObj[WireKey.Fields] = record.Fields;
 
             var envelope = new Dictionary<string, object?>
             {
-                ["version"] = (int)Protocol.Version,
-                ["type"] = "log",
+                [WireKey.Version] = (int)Protocol.Version,
+                [WireKey.Type] = "log",
                 [WireKey.Id] = $"{WireKey.LogIdPrefix}{record.Ts}",
                 [WireKey.Target] = WireKey.LogTarget,
-                ["args"] = new object?[] { logObj },
+                [WireKey.Args] = new object?[] { logObj },
             };
             // Fire-and-forget; swallow errors to prevent infinite recursion.
             _ = transport.SendAsync(envelope).ContinueWith(_ => { }, TaskScheduler.Default);

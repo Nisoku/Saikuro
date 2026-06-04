@@ -28,6 +28,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 using Saikuro;
 
 namespace Saikuro.Schema;
@@ -263,7 +264,8 @@ public class XmlDocumentationParser
 
     private static string NormalizeXmlText(string text)
     {
-        return string.Join(" ", text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
+        // Replace all whitespace sequences (including newlines, tabs) with a single space
+        return Regex.Replace(text, @"\s+", " ").Trim();
     }
 
     public string? GetMemberDoc(string fullMemberName)

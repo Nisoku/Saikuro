@@ -24,7 +24,7 @@
  */
 
 import type { Transport } from "./transport";
-import { PROTOCOL_VERSION } from "./envelope";
+import { makeLogEnvelope } from "./envelope";
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
@@ -88,16 +88,8 @@ export function createLoggingHandler(
       logRecord.fields = fields;
     }
 
-    const envelope: Record<string, unknown> = {
-      version: PROTOCOL_VERSION,
-      type: "log",
-      id: `log-${ts}`,
-      target: "$log",
-      args: [logRecord],
-    };
-
     // Fire-and-forget; swallow errors to prevent infinite recursion.
-    transport.send(envelope).catch(() => {});
+    transport.send(makeLogEnvelope(logRecord, ts)).catch(() => {});
   };
 }
 

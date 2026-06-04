@@ -638,8 +638,6 @@ export class SaikuroProvider {
 
     if (options?.dev && Array.isArray(options.sourceFiles)) {
       try {
-        // Use cache-busting query param in dev mode so edits to schema_extractor.ts
-        // are picked up without restarting the process.
         const cacheBuster = `?t=${Date.now()}`;
         const { extractSchema } = await import(
           `./schema_extractor${cacheBuster}`
