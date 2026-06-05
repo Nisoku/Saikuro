@@ -417,34 +417,19 @@ fn sanitize_pascal_preserve_leading(s: &str) -> String {
     }
     if leading {
         format!("_{}", body)
+    } else if RUST_KEYWORDS.contains(&body.as_str()) {
+        format!("{}_", body)
     } else {
-        // Avoid reserved keywords
-        if RUST_KEYWORDS.contains(&body.as_str()) {
-            format!("{}_", body)
-        } else {
-            body
-        }
+        body
     }
 }
 
 fn sanitize_type_name(s: &str) -> String {
     let ident = sanitize_ident(s);
-    if ident.is_empty() {
+    if ident.is_empty() || ident == "_" {
         "_".to_string()
-    } else if ident
-        .chars()
-        .next()
-        .expect("ident was just checked non-empty")
-        .is_ascii_digit()
-    {
-        format!("_{}", ident)
     } else {
-        // Avoid reserved keywords for type names
-        if RUST_KEYWORDS.contains(&ident.as_str()) {
-            format!("{}_", ident)
-        } else {
-            ident
-        }
+        ident
     }
 }
 

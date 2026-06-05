@@ -56,7 +56,7 @@ where
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("failed to build tokio runtime")
+            .unwrap_or_else(|e| panic!("failed to build tokio runtime: {e}"))
     });
     rt.block_on(future)
 }

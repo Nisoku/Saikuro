@@ -32,6 +32,12 @@ use crate::{
     Value,
 };
 
+/// Default capacity for the outbound frame channel and stream/channel buffers.
+const CHANNEL_CAPACITY: usize = 256;
+
+/// Capacity for stream and channel pending item buffers.
+const STREAM_CHANNEL_CAPACITY: usize = 128;
+
 /// Options for [`Client`].
 #[derive(Debug, Clone, Default)]
 pub struct ClientOptions {
@@ -217,7 +223,7 @@ impl Client {
         // Outbound frame channel: callers push frames here; the I/O task
         // drains them and writes to the transport.  The channel capacity is
         // large enough that a burst of concurrent calls never blocks a caller.
-        let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(256);
+        let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(CHANNEL_CAPACITY);
 
         let pending_recv = pending.clone();
         let channel_senders_recv = channel_senders.clone();
@@ -311,7 +317,8 @@ impl Client {
 
         drop(self.send_tx);
         if let Some(task) = self.recv_task.take() {
-            let _ = saikuro_exec::timeout(Duration::from_secs(5), task).await;
+            const CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+            let _ = saikuro_exec::timeout(CLOSE_TIMEOUT, task).await;
         }
         Ok(())
     }
@@ -379,7 +386,7 @@ impl Client {
         let envelope = make_envelope(InvocationType::Stream, &target, args, None);
         let id = envelope.id;
 
-        let (tx, rx) = mpsc::channel(128);
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
         self.pending.insert(id, PendingSlot::Stream(tx));
 
         if let Err(e) = self.send_envelope(&envelope).await {
@@ -446,7 +453,7 @@ impl Client {
         let envelope = make_envelope(InvocationType::Channel, &target, args, None);
         let id = envelope.id;
 
-        let (tx, rx) = mpsc::channel(128);
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
         self.pending.insert(id, PendingSlot::Channel(tx));
         let channel_send = Arc::new(Mutex::new(Some(self.send_tx.clone())));
         self.channel_senders.insert(id, channel_send.clone());

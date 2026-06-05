@@ -14,11 +14,7 @@ use saikuro_router::{
 
 //  Helpers
 
-fn register_echo_provider(
-    registry: &ProviderRegistry,
-    namespace: &str,
-    response: Value,
-) -> mpsc::Receiver<ProviderWorkItem> {
+fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response: Value) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),
@@ -39,11 +35,6 @@ fn register_echo_provider(
             }
         }
     });
-
-    // Return a dummy receiver:  we've already handed ownership to the task.
-    // We need to return something; use a channel that is immediately dropped.
-    let (_dummy_tx, _dummy_rx) = mpsc::channel(1);
-    _dummy_rx
 }
 
 //  Tests

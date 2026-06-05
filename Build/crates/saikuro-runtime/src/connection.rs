@@ -59,6 +59,7 @@ use saikuro_schema::{
     validator::InvocationValidator,
 };
 use saikuro_transport::traits::{TransportReceiver, TransportSender};
+use serde::Serialize;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -67,6 +68,13 @@ use tracing::{debug, error, info, instrument, warn};
 /// Tracks in-flight `Call` invocations forwarded to a wire-connected provider.
 /// Maps `InvocationId -> oneshot::Sender<ResponseEnvelope>`.
 type PendingCalls = Arc<DashMap<InvocationId, oneshot::Sender<ResponseEnvelope>>>;
+
+/// Encode a serializable value as MessagePack `Bytes`.
+fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
+    rmp_serde::to_vec_named(value)
+        .map(Bytes::from)
+        .map_err(|e| e.to_string())
+}
 
 /// A handler for a single connected peer.
 ///
@@ -348,10 +356,9 @@ where
     ) -> ResponseEnvelope {
         let id = envelope.id;
 
-        // args[0] must be the serialised Schema (a map value).
         let schema: Option<Schema> = envelope.args.into_iter().next().and_then(|v| {
-            let bytes = rmp_serde::to_vec_named(&v).ok()?;
-            rmp_serde::from_slice::<Schema>(&bytes).ok()
+            let bytes = encode_bytes(&v).ok()?;
+            rmp_serde::from_slice(&bytes).ok()
         });
 
         match schema {
@@ -421,9 +428,8 @@ where
 
         spawn(async move {
             while let Some(item) = work_rx.recv().await {
-                // Encode the envelope for the wire.
-                let frame = match rmp_serde::to_vec_named(&item.envelope) {
-                    Ok(bytes) => Bytes::from(bytes),
+                let frame = match encode_bytes(&item.envelope) {
+                    Ok(bytes) => bytes,
                     Err(e) => {
                         warn!(peer = %peer_id, "failed to encode forwarded call: {e}");
                         if let Some(tx) = item.response_tx {
@@ -498,27 +504,20 @@ where
     /// is allowed to call.
     async fn push_sandbox_schema(&mut self, filtered: Schema) -> Result<(), String> {
         let schema_value: Value = {
-            let bytes = rmp_serde::to_vec_named(&filtered)
-                .map_err(|e| format!("sandbox schema encode error: {e}"))?;
+            let bytes =
+                encode_bytes(&filtered).map_err(|e| format!("sandbox schema encode error: {e}"))?;
             rmp_serde::from_slice::<Value>(&bytes)
                 .map_err(|e| format!("sandbox schema value decode error: {e}"))?
         };
         let announce = Envelope::announce(schema_value);
-        let frame = rmp_serde::to_vec_named(&announce)
-            .map_err(|e| format!("announce frame encode error: {e}"))?;
+        let frame =
+            encode_bytes(&announce).map_err(|e| format!("announce frame encode error: {e}"))?;
         info!(peer = %self.peer_id, "pushing sandbox-filtered schema to peer");
-        self.sender
-            .send(Bytes::from(frame))
-            .await
-            .map_err(|e| e.to_string())
+        self.sender.send(frame).await.map_err(|e| e.to_string())
     }
 
     async fn send_response(&mut self, response: ResponseEnvelope) -> Result<(), String> {
-        let frame = rmp_serde::to_vec_named(&response)
-            .map_err(|e| format!("response encode error: {e}"))?;
-        self.sender
-            .send(Bytes::from(frame))
-            .await
-            .map_err(|e| e.to_string())
+        let frame = encode_bytes(&response).map_err(|e| format!("response encode error: {e}"))?;
+        self.sender.send(frame).await.map_err(|e| e.to_string())
     }
 }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use saikuro_router::{provider::ProviderRegistry, router::InvocationRouter};
+use saikuro_router::provider::ProviderRegistry;
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
@@ -108,11 +108,6 @@ impl SaikuroRuntime {
     /// Build an [`InvocationValidator`] configured for this runtime.
     pub fn validator(&self) -> InvocationValidator {
         InvocationValidator::new(self.schema_registry.clone())
-    }
-
-    /// Build an [`InvocationRouter`] configured for this runtime.
-    pub fn router(&self) -> InvocationRouter {
-        InvocationRouter::new(self.provider_registry.clone(), self.config.router_config())
     }
 
     /// Produce a cheap [`RuntimeHandle`] that can be cloned and shared across

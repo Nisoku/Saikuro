@@ -179,24 +179,22 @@ fn self_type_name(ty: &Type) -> String {
 }
 
 fn insert_function(functions: &mut serde_json::Map<String, Value>, key: String, schema: Value) {
-    if !functions.contains_key(&key) {
-        functions.insert(key, schema);
-        return;
-    }
-
-    let mut n = 2usize;
-    loop {
-        let candidate = format!("{key}#{n}");
-        if !functions.contains_key(&candidate) {
-            eprintln!(
-                "warning: duplicate extracted function name '{}', stored as '{}'",
-                key, candidate
-            );
-            functions.insert(candidate, schema);
-            break;
+    if functions.contains_key(&key) {
+        let mut n = 2usize;
+        loop {
+            let candidate = format!("{key}#{n}");
+            if !functions.contains_key(&candidate) {
+                eprintln!(
+                    "warning: duplicate extracted function name '{}', stored as '{}'",
+                    key, candidate
+                );
+                functions.insert(candidate, schema);
+                return;
+            }
+            n += 1;
         }
-        n += 1;
     }
+    functions.insert(key, schema);
 }
 
 fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {

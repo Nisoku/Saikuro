@@ -8,7 +8,7 @@ use saikuro::{Client, Provider, SaikuroChannel, Value};
 use saikuro_exec::Runtime;
 use std::sync::Arc;
 
-// TODO: Modularize a bit haha
+// C API helpers for client handle validation and result serialization
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };

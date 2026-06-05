@@ -4,6 +4,7 @@
 //! `"unix:///tmp/saikuro.sock"` and returns a connected boxed transport.
 
 use bytes::Bytes;
+use saikuro_transport::DEFAULT_CHANNEL_CAPACITY;
 
 use crate::error::{Error, Result};
 
@@ -320,8 +321,8 @@ impl InMemoryTransport {
     ///
     /// Bytes sent on one side are received on the other.
     pub fn pair() -> (Self, Self) {
-        let (a_tx, b_rx) = saikuro_exec::mpsc::channel(256);
-        let (b_tx, a_rx) = saikuro_exec::mpsc::channel(256);
+        let (a_tx, b_rx) = saikuro_exec::mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
+        let (b_tx, a_rx) = saikuro_exec::mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
         (
             Self {
                 sender: a_tx,

@@ -331,17 +331,21 @@ fn uuid_short() -> String {
 /// Wait for Ctrl-C (SIGINT) or SIGTERM.
 async fn wait_for_shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl-C handler");
+        if let Err(e) = signal::ctrl_c().await {
+            error!("failed to install Ctrl-C handler: {e}");
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                error!("failed to install SIGTERM handler: {e}");
+            }
+        }
     };
 
     #[cfg(not(unix))]
