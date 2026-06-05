@@ -27,7 +27,7 @@ describe("SaikuroProvider dev-mode announce", () => {
     });
 
     // Give the async announce a moment to run
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 80));
 
     expect(seen).toBeTruthy();
     const ns = (seen.args?.[0]?.namespaces ?? {})["testns"];

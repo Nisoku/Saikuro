@@ -313,7 +313,10 @@ public:
 
 private:
   friend class MoveOnlyHandle<Provider, saikuro_provider_t>;
-  void destroy_impl() { saikuro_provider_free(handle_); }
+  void destroy_impl() {
+    std::ignore = saikuro_provider_close(handle_);
+    saikuro_provider_free(handle_);
+  }
 };
 
 } // namespace saikuro

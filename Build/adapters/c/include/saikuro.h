@@ -128,6 +128,8 @@ SAIKURO_API int SAIKURO_CALL saikuro_provider_register(
 
 SAIKURO_API int SAIKURO_CALL saikuro_provider_serve(saikuro_provider_t handle,
                                                     const char *address);
+/** Close the given provider.  Returns 0 on success, non-zero on error. */
+SAIKURO_API int SAIKURO_CALL saikuro_provider_close(saikuro_provider_t handle);
 SAIKURO_API void SAIKURO_CALL saikuro_provider_free(saikuro_provider_t handle);
 
 #ifdef __cplusplus

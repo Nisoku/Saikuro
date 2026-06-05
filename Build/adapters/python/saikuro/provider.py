@@ -168,7 +168,7 @@ class SaikuroProvider:
     async def _dispatch_batch(
         self,
         envelope: Envelope,
-        transport: BaseTransport,
+        transport: _TransportSink,
     ) -> None:
         """Dispatch a batch envelope: run each item and return results as a list.
 
@@ -327,9 +327,6 @@ class SaikuroProvider:
 
 #  Convenience decorator
 
-# Module-level default providers (optional convenience), keyed by namespace.
-_default_providers: Dict[str, SaikuroProvider] = {}
-
 
 def register_function(
     target: str,
@@ -343,23 +340,28 @@ def register_function(
     `target` must be in ``"namespace.function"`` format.
     """
 
+    providers = register_function._default_providers
+
     ns, _, name = target.rpartition(".")
     if not ns or not name:
         raise ValueError(f"target must be 'namespace.function', got: {target!r}")
 
-    if ns not in _default_providers:
-        _default_providers[ns] = SaikuroProvider(ns)
+    if ns not in providers:
+        providers[ns] = SaikuroProvider(ns)
 
     if fn is not None:
-        _default_providers[ns].register_function(name, fn, capabilities=capabilities)
+        providers[ns].register_function(name, fn, capabilities=capabilities)
         return fn
 
     # Used as a decorator without arguments.
     def decorator(f: Handler) -> Handler:
-        _default_providers[ns].register_function(name, f, capabilities=capabilities)
+        providers[ns].register_function(name, f, capabilities=capabilities)
         return f
 
     return decorator
+
+
+register_function._default_providers: dict[str, SaikuroProvider] = {}
 
 
 #  Helpers

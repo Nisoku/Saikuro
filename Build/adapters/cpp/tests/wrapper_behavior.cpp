@@ -285,6 +285,8 @@ int saikuro_provider_serve(saikuro_provider_t, const char *) {
   return 0;
 }
 
+int saikuro_provider_close(saikuro_provider_t) { return 0; }
+
 void saikuro_provider_free(saikuro_provider_t) {}
 }
 

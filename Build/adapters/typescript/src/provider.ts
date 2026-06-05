@@ -638,9 +638,8 @@ export class SaikuroProvider {
 
     if (options?.dev && Array.isArray(options.sourceFiles)) {
       try {
-        const cacheBuster = `?t=${Date.now()}`;
         const { extractSchema } = await import(
-          `./schema_extractor${cacheBuster}`
+          "./schema_extractor"
         );
         const schema = await extractSchema(
           options.sourceFiles,

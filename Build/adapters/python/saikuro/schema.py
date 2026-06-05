@@ -157,7 +157,7 @@ class SchemaBuilder:
         """Introspect `fn` and add it to the schema."""
         try:
             hints = get_type_hints(fn)
-        except Exception as exc:
+        except (NameError, AttributeError) as exc:
             # `get_type_hints` can fail for built-in functions or functions
             # with forward references that can't be resolved.  Log the
             # failure so it's visible and fall back to un-typed args.

@@ -10,6 +10,8 @@ use std::sync::Arc;
 
 // C API helpers for client handle validation and result serialization
 
+const ERR_HANDLE_NULL: &str = "handle must not be null";
+
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
 }
@@ -145,7 +147,7 @@ fn c_json_array(ptr: *const c_char) -> Result<Vec<Value>, String> {
 /// Validate and dereference a client handle.
 fn client_handle(h: *mut c_void) -> Result<&'static mut ClientHandle, String> {
     if h.is_null() {
-        return Err("handle must not be null".to_owned());
+        return Err(ERR_HANDLE_NULL.to_owned());
     }
     let h = unsafe { &mut *(h as *mut ClientHandle) };
     if h.client.is_none() {
@@ -322,7 +324,7 @@ pub extern "C" fn saikuro_client_connect(address: *const c_char) -> *mut c_void 
 pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
     clear_last_error();
     if handle.is_null() {
-        set_last_error("handle must not be null");
+        set_last_error(ERR_HANDLE_NULL);
         return 1;
     }
     match unsafe { &mut *(handle as *mut ClientHandle) }.close() {
@@ -772,10 +774,11 @@ pub extern "C" fn saikuro_provider_register(
     clear_last_error();
 
     if handle.is_null() {
-        set_last_error("handle must not be null");
+        set_last_error(ERR_HANDLE_NULL);
         return 1;
     }
 
+    let handle = unsafe { &mut *(handle as *mut ProviderHandle) };
     let callback = match callback {
         Some(cb) => cb,
         None => {
@@ -843,7 +846,7 @@ pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_
     clear_last_error();
 
     if handle.is_null() {
-        set_last_error("handle must not be null");
+        set_last_error(ERR_HANDLE_NULL);
         return 1;
     }
 
@@ -874,9 +877,31 @@ pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_
 }
 
 #[no_mangle]
+pub extern "C" fn saikuro_provider_close(handle: *mut c_void) -> c_int {
+    clear_last_error();
+
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+
+    let handle = unsafe { &mut *(handle as *mut ProviderHandle) };
+    // If the provider was registered but never served, drop it now.
+    // If serve() already consumed it, there's nothing left to close.
+    let _ = handle.provider.take();
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn saikuro_provider_free(handle: *mut c_void) {
     if handle.is_null() {
         return;
+    }
+
+    // Close first so registered handlers are cleaned up before the runtime drops.
+    unsafe {
+        let h = &mut *(handle as *mut ProviderHandle);
+        let _ = h.provider.take();
     }
 
     let _ = unsafe { Box::from_raw(handle as *mut ProviderHandle) };
