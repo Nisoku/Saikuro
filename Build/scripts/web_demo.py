@@ -115,7 +115,13 @@ def build_wasm_pack_component(
     ]
     
     logger.info(f"Building {component_name} component with wasm-pack")
-    return run_command(command)
+    result = run_command(command)
+    if result:
+        gitignore = output_path / ".gitignore"
+        if gitignore.exists():
+            gitignore.unlink()
+            logger.info(f"Removed wasm-pack .gitignore from {output_path}")
+    return result
 
 
 def build_rust_runtime() -> bool:
