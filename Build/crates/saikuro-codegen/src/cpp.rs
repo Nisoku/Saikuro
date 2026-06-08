@@ -271,9 +271,9 @@ fn escape_cpp_string_literal(s: &str) -> String {
             '\x0C' => out.push_str("\\f"),
             '\0' => out.push_str("\\0"),
             '\x0B' => out.push_str("\\v"),
-            c if c.is_control() || (c as u32) < 0x20 || (c as u32) == 0x7F => {
+            c if c.is_control() || u32::from(c) < 0x20 || u32::from(c) == 0x7F => {
                 use std::fmt::Write;
-                let code = c as u32;
+                let code = u32::from(c);
                 if code <= 0xFF {
                     let _ = write!(out, "\\x{code:02X}");
                 } else if code <= 0xFFFF {

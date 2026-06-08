@@ -37,6 +37,12 @@ pin-project-lite = "0.2"
 # UUID
 uuid = { version = "1.23.2", features = ["v4", "serde", "js"] }
 
+# Duration / utility serde helpers
+serde_with = "3.0"
+
+# Enum string conversion
+strum = { version = "0.28.0", features = ["derive"] }
+
 # Logging / tracing: tracing itself is wasm-safe; the subscriber is not
 # used directly from WASM so it only appears in crates that explicitly need it.
 tracing = "0.1"

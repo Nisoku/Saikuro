@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import shutil
@@ -11,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Dict
 
-from shared.constants import DEMO_DIR, WASM_DIR, PUBLIC_WASM, REPO_ROOT, BUILD_ROOT
+from shared.constants import C_DIR, CPP_DIR, CSHARP_DIR, DEMO_DIR, WASM_DIR, PUBLIC_WASM, REPO_ROOT, BUILD_ROOT
 from shared.dotnet import ensure_dotnet, ensure_dotnet_env
 
 # Configure logging
@@ -30,15 +31,18 @@ def run_command(
 ) -> bool:
     """Run a shell command with error handling and logging."""
     env = env or os.environ.copy()
+
     emsdk_dir = Path.home() / ".emsdk"
     if emsdk_dir.exists():
-        ems_paths = [str(emsdk_dir), str(emsdk_dir / "upstream" / "emscripten")]
+        ems_paths = [
+            str(emsdk_dir / "upstream" / "bin"),
+        ]
         old_path = env.get("PATH", "")
         for path in ems_paths:
             if path not in old_path:
                 old_path = f"{path}:{old_path}"
         env["PATH"] = old_path
-    
+
     env = ensure_dotnet_env(env)
     
     try:
@@ -93,7 +97,7 @@ def setup_dependencies() -> bool:
     return True
 
 
-def build_rust_component(
+def build_wasm_pack_component(
     component_name: str, 
     source_path: Path, 
     output_path: Path
@@ -110,13 +114,13 @@ def build_rust_component(
         "--release"
     ]
     
-    logger.info(f"Building Rust {component_name} component")
+    logger.info(f"Building {component_name} component with wasm-pack")
     return run_command(command)
 
 
 def build_rust_runtime() -> bool:
     """Build the Rust runtime component."""
-    return build_rust_component(
+    return build_wasm_pack_component(
         "runtime",
         WASM_DIR / "runtime",
         PUBLIC_WASM / "runtime"
@@ -125,7 +129,7 @@ def build_rust_runtime() -> bool:
 
 def build_rust_provider() -> bool:
     """Build the Rust provider component."""
-    return build_rust_component(
+    return build_wasm_pack_component(
         "provider",
         WASM_DIR / "rust",
         PUBLIC_WASM / "rust"
@@ -139,60 +143,21 @@ def build_rust_wasm() -> bool:
     return build_rust_provider()
 
 
-def build_emscripten_component(
-    language: str,
-    source_file: Path,
-    output_file: Path,
-    compiler: str = "emcc",
-    extra_flags: list[str] | None = None
-) -> bool:
-    """Build a C/C++ component using Emscripten."""
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    base_flags = [
-        "-O3",
-        "-s", "MODULARIZE=1",
-        "-s", "EXPORT_ES6=1",
-        "-s", "ENVIRONMENT=web",
-        "-s", "ALLOW_MEMORY_GROWTH=1",
-        "-s", "EXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString",
-        "-o", str(output_file)
-    ]
-    
-    if language == "cpp":
-        base_flags.extend(["-std=c++17"])
-    
-    if extra_flags:
-        base_flags.extend(extra_flags)
-    
-    command = [compiler, str(source_file)] + base_flags
-    
-    logger.info(f"Building {language.upper()} WASM component")
-    return run_command(command)
-
-
 def build_c_wasm() -> bool:
-    """Build the C WASM component."""
-    return build_emscripten_component(
-        "c",
-        WASM_DIR / "c" / "insight_c.c",
-        PUBLIC_WASM / "c" / "insight_c.js",
-        extra_flags=[
-            "-s", "EXPORTED_FUNCTIONS=_insight_c_stats,_insight_c_free,_malloc,_free"
-        ]
+    """Build the C WASM component via wasm-pack + cc crate."""
+    return build_wasm_pack_component(
+        "C",
+        WASM_DIR / "c",
+        PUBLIC_WASM / "c"
     )
 
 
 def build_cpp_wasm() -> bool:
-    """Build the C++ WASM component."""
-    return build_emscripten_component(
-        "cpp",
-        WASM_DIR / "cpp" / "insight_cpp.cpp",
-        PUBLIC_WASM / "cpp" / "insight_cpp.js",
-        compiler="em++",
-        extra_flags=[
-            "-s", "EXPORTED_FUNCTIONS=_insight_cpp_ngrams,_insight_cpp_free,_malloc,_free"
-        ]
+    """Build the C++ WASM component via wasm-pack + cc crate."""
+    return build_wasm_pack_component(
+        "C++",
+        WASM_DIR / "cpp",
+        PUBLIC_WASM / "cpp"
     )
 
 
@@ -226,6 +191,11 @@ def build_csharp_wasm() -> bool:
     try:
         shutil.rmtree(PUBLIC_WASM / "csharp", ignore_errors=True)
         shutil.copytree(publish_dir, PUBLIC_WASM / "csharp", dirs_exist_ok=True)
+
+        # Copy the Saikuro BroadcastChannel JS module alongside the dotnet runtime
+        bc_js = CSHARP_DIR / "src" / "BroadcastChannel" / "wwwroot" / "Saikuro.BroadcastChannel.js"
+        if bc_js.exists():
+            shutil.copy2(bc_js, PUBLIC_WASM / "csharp" / "Saikuro.BroadcastChannel.js")
         
         return True
     except Exception as e:
@@ -233,14 +203,52 @@ def build_csharp_wasm() -> bool:
         return False
 
 
+def build_python_wheel() -> bool:
+    """Build the saikuro Python wheel with uv and deploy to public directory."""
+    python_dir = BUILD_ROOT / "adapters" / "python"
+    dist_dir = PUBLIC_WASM / "python"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+
+    import tempfile
+    import glob as glob_module
+    with tempfile.TemporaryDirectory() as tmp:
+        result = subprocess.run(
+            ["uv", "build", "--wheel", "--out-dir", tmp],
+            cwd=python_dir,
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            logger.error("uv build failed:\n%s", result.stderr)
+            return False
+
+        wheels = glob_module.glob(os.path.join(tmp, "*.whl"))
+        if not wheels:
+            logger.error("no wheel produced by uv build")
+            return False
+
+        wheel_src = wheels[0]
+        wheel_dst = dist_dir / os.path.basename(wheel_src)
+        shutil.copy2(wheel_src, wheel_dst)
+        logger.info("Built Python wheel: %s (%d bytes)", wheel_dst, wheel_dst.stat().st_size)
+
+        # Remove old hand-rolled wheel if present
+        old = dist_dir / "saikuro-0.1.0-py3-none-any.whl"
+        if old.exists() and old.name != wheel_dst.name:
+            old.unlink()
+
+    return True
+
+
 def copy_python_files() -> bool:
-    """Copy Python files to the public WASM directory."""
+    """Copy Python files and wheel to the public WASM directory."""
     try:
         (PUBLIC_WASM / "python").mkdir(parents=True, exist_ok=True)
         shutil.copy2(
             WASM_DIR / "python" / "insight.py", 
             PUBLIC_WASM / "python" / "insight.py"
         )
+        if not build_python_wheel():
+            return False
         logger.info("Copied Python files successfully")
         return True
     except Exception as e:
@@ -272,9 +280,13 @@ def build_all() -> bool:
 
 
 def run_dev_server() -> bool:
-    """Run the development server."""
+    """Run the development server with live output."""
     logger.info("Starting development server...")
-    return run_command(["node", "dev.mjs"], cwd=DEMO_DIR)
+    try:
+        subprocess.run(["node", "dev.mjs"], cwd=DEMO_DIR, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 
 def run_type_check() -> bool:
@@ -285,11 +297,14 @@ def run_type_check() -> bool:
 
 def main() -> int:
     """Main entry point for the web demo script."""
-    if len(sys.argv) < 2:
-        logger.info("No command specified, defaulting to 'dev'")
-        command = "dev"
-    else:
-        command = sys.argv[1]
+    parser = argparse.ArgumentParser(description="Build and run the polyglot web demo")
+    parser.add_argument("command", nargs="?", default="dev",
+                        choices=["setup", "build", "dev", "check",
+                                 "build-c", "build-cpp", "build-csharp",
+                                 "build-rust-runtime", "build-rust-provider",
+                                 "build-python", "build-rust"])
+    args = parser.parse_args()
+    command = args.command
 
     # Define command mappings
     command_map = {
@@ -305,18 +320,11 @@ def main() -> int:
         "build-python": copy_python_files,
         "build-rust": build_rust_wasm
     }
-    
+
     # Execute the command
-    if command in command_map:
-        logger.info(f"Executing command: {command}")
-        success = command_map[command]()
-        return 0 if success else 1
-    
-    # Show usage if command not found
-    logger.error("Invalid command")
-    logger.info("\nUsage: web_demo.py [setup|build|dev|check|build-c|build-cpp|build-csharp|"
-              "build-rust-runtime|build-rust-provider|build-python|build-rust]")
-    return 1
+    logger.info(f"Executing command: {command}")
+    success = command_map[command]()
+    return 0 if success else 1
 
 
 if __name__ == "__main__":

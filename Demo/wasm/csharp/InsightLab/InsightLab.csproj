@@ -7,5 +7,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../Build/adapters/csharp/Saikuro/src/Saikuro.csproj" />
+  </ItemGroup>
 </Project>

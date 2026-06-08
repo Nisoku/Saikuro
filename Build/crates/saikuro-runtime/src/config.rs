@@ -1,6 +1,7 @@
 //! Runtime configuration.
 
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::time::Duration;
 
 use saikuro_router::router::RouterConfig;
@@ -8,6 +9,7 @@ use saikuro_schema::registry::RegistryMode;
 use saikuro_transport::selector::TransportConfig;
 
 /// Top-level runtime configuration.
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfig {
     /// Whether the runtime starts in development or production mode.
@@ -19,7 +21,8 @@ pub struct RuntimeConfig {
     pub max_in_flight_calls: usize,
 
     /// Default timeout for `Call` invocations.
-    #[serde(with = "duration_serde", default = "default_call_timeout")]
+    #[serde_as(as = "serde_with::DurationMilliSeconds")]
+    #[serde(default = "default_call_timeout")]
     pub call_timeout: Duration,
 
     /// Transport override (optional; if absent the selector auto-picks).
@@ -94,19 +97,4 @@ fn default_max_message_size() -> usize {
 }
 fn default_stream_capacity() -> usize {
     128
-}
-
-/// Serde helper to (de)serialise `Duration` as milliseconds.
-mod duration_serde {
-    use serde::{Deserialize, Deserializer, Serializer};
-    use std::time::Duration;
-
-    pub fn serialize<S: Serializer>(d: &Duration, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_u64(d.as_millis() as u64)
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
-        let ms = u64::deserialize(d)?;
-        Ok(Duration::from_millis(ms))
-    }
 }

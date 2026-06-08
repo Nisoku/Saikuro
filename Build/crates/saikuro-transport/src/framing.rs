@@ -44,7 +44,11 @@ impl Decoder for LengthPrefixedCodec {
             }
         };
 
-        let frame_len = frame_len as usize;
+        let frame_len =
+            usize::try_from(frame_len).map_err(|_| TransportError::MessageTooLarge {
+                size: frame_len as usize,
+                limit: MAX_FRAME_SIZE,
+            })?;
 
         if frame_len > MAX_FRAME_SIZE {
             return Err(TransportError::MessageTooLarge {
@@ -80,7 +84,12 @@ impl Encoder<Bytes> for LengthPrefixedCodec {
         }
 
         dst.reserve(4 + len);
-        dst.put_u32(len as u32);
+        dst.put_u32(
+            u32::try_from(len).map_err(|_| TransportError::MessageTooLarge {
+                size: len,
+                limit: MAX_FRAME_SIZE,
+            })?,
+        );
         dst.put(item);
         Ok(())
     }

@@ -17,46 +17,28 @@ use crate::value::Value;
 //  Log level
 
 /// Severity level of a log record, ordered from least to most severe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum LogLevel {
     Trace,
     Debug,
     Info,
     Warn,
     Error,
-}
-
-impl std::fmt::Display for LogLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl LogLevel {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Trace => "trace",
-            Self::Debug => "debug",
-            Self::Info => "info",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        }
-    }
-}
-
-impl TryFrom<&str> for LogLevel {
-    type Error = ();
-    fn try_from(s: &str) -> Result<Self, <Self as TryFrom<&str>>::Error> {
-        match s {
-            "trace" => Ok(Self::Trace),
-            "debug" => Ok(Self::Debug),
-            "info" => Ok(Self::Info),
-            "warn" => Ok(Self::Warn),
-            "error" => Ok(Self::Error),
-            _ => Err(()),
-        }
-    }
 }
 
 //  Log record
@@ -169,8 +151,8 @@ pub type LogSink = Box<dyn Fn(LogRecord) + Send + Sync + 'static>;
 /// writes it to stderr.  Used when no richer sink is configured.
 pub fn stderr_log_sink() -> LogSink {
     Box::new(|record: LogRecord| {
-        // Minimal JSON serialisation without pulling in serde_json :  just emit
-        // the Display representation which is always human-readable.
-        eprintln!("[saikuro] {record}");
+        if let Ok(json) = serde_json::to_string(&record) {
+            eprintln!("{}", json);
+        }
     })
 }

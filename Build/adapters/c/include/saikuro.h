@@ -126,6 +126,20 @@ SAIKURO_API int SAIKURO_CALL saikuro_provider_register(
     saikuro_provider_t handle, const char *name,
     saikuro_provider_handler_fn callback, void *user_data);
 
+/** Register a handler with explicit schema information.
+ *
+ *  `nargs` specifies the number of arguments the function accepts (each typed
+ *  as `Any`).  Use this when the function has a known argument count so the
+ *  runtime can validate calls before dispatching.
+ *
+ *  `return_type_json` is a JSON string describing the return type
+ *  (e.g. `"Any"`, `"String"`, `"Integer"`).  Pass NULL for the default `"Any"`.
+ */
+SAIKURO_API int SAIKURO_CALL saikuro_provider_register_with_schema(
+    saikuro_provider_t handle, const char *name,
+    saikuro_provider_handler_fn callback, void *user_data, int nargs,
+    const char *return_type_json);
+
 SAIKURO_API int SAIKURO_CALL saikuro_provider_serve(saikuro_provider_t handle,
                                                     const char *address);
 /** Close the given provider.  Returns 0 on success, non-zero on error. */

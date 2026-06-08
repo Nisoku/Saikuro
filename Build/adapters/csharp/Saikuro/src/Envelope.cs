@@ -241,8 +241,20 @@ public sealed record Envelope
     /// </summary>
     public static string GetRequiredString(Dictionary<string, object?> dict, string key)
     {
-        return dict.TryGetValue(key, out var value) && value is string s ? s
-            : throw new MalformedEnvelopeException("MissingRequiredField", $"Missing required field: {key}", null);
+        if (dict.TryGetValue(key, out var value))
+        {
+            if (value is string s) return s;
+            if (value is byte[] b && b.Length == 16)
+            {
+                return new Guid(
+                    b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3],
+                    (short)(b[4] << 8 | b[5]),
+                    (short)(b[6] << 8 | b[7]),
+                    b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+                ).ToString("D");
+            }
+        }
+        throw new MalformedEnvelopeException("MissingRequiredField", $"Missing required field: {key}", null);
     }
 
     /// <summary>

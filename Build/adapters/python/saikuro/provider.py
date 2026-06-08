@@ -258,7 +258,7 @@ class SaikuroProvider:
         async with transport:
             await self._run_serve_loop(transport)
 
-    async def serve_on_transport(self, transport: BaseTransport) -> None:
+    async def serve_on(self, transport: BaseTransport) -> None:
         """Serve invocations on an already-connected transport."""
         async with transport:
             await self._run_serve_loop(transport)

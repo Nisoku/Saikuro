@@ -2,66 +2,55 @@ import { getLogger } from "@nisoku/saikuro";
 
 const log = getLogger("demo.wasm.python");
 
-type Pyodide = {
-  runPythonAsync: (code: string) => Promise<any>;
-  globals: {
-    get: (name: string) => any;
-    set: (name: string, value: any) => void;
-  };
-};
+let bootPromise: Promise<void> | null = null;
 
-let pyodidePromise: Promise<Pyodide> | null = null;
-let scriptLoaded: boolean = false;
-
-export async function loadPythonViz(): Promise<
-  (
-    stats: Record<string, unknown>,
-    ngrams: Record<string, unknown>,
-    sentiment: Record<string, unknown>,
-  ) => Promise<any>
-> {
-  if (!pyodidePromise) {
-    pyodidePromise = (async () => {
-      log.info("loading Pyodide from CDN");
+export async function startPythonProvider(channel: string): Promise<void> {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      log.info("loading Pyodide from CDN", { channel });
       const module = await import(
         /* @vite-ignore */ "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"
       );
-      const loadPyodide = module.loadPyodide ?? window.loadPyodide;
-      if (!loadPyodide) {
-        throw new Error("loadPyodide not available");
-      }
+      const loadPyodide = module.loadPyodide ?? (window as any).loadPyodide;
+      if (!loadPyodide) throw new Error("loadPyodide not available");
+
       log.info("starting Pyodide runtime");
-      const pyod = (await loadPyodide({
+      const pyodide = await loadPyodide({
         indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/",
-      })) as Pyodide;
+      });
       log.info("Pyodide runtime ready");
-      return pyod;
+
+      log.info("installing saikuro package");
+      await pyodide.loadPackage("micropip");
+      const micropip = pyodide.pyimport("micropip");
+      const wheelUrl = new URL(
+        "wasm/python/saikuro-0.1.0-py3-none-any.whl",
+        document.baseURI,
+      ).href;
+      await micropip.install(wheelUrl);
+      log.info("packages installed");
+
+      log.info("loading Python insight.py script");
+      const insightUrl = new URL(
+        "wasm/python/insight.py",
+        document.baseURI,
+      ).href;
+      const resp = await fetch(insightUrl);
+      if (!resp.ok) {
+        throw new Error(`Failed to fetch insight.py: ${resp.status}`);
+      }
+      const code = await resp.text();
+
+      // Set the channel argument before running the script
+      await pyodide.runPythonAsync(`
+import sys
+sys.argv = ["insight.py", ${JSON.stringify(channel)}]
+      `);
+
+      // Run the insight.py provider (uses SaikuroProvider internally)
+      await pyodide.runPythonAsync(code);
+      log.info("Python provider started", { channel });
     })();
   }
-
-  const pyodide = await pyodidePromise;
-  if (!scriptLoaded) {
-    log.info("loading Python insight.py script");
-    const code = await fetch("/public/wasm/python/insight.py").then((res) =>
-      res.text(),
-    );
-    await pyodide.runPythonAsync(code);
-    scriptLoaded = true;
-    log.info("Python viz function ready");
-  }
-
-  return async (stats, ngrams, sentiment) => {
-    // Pyodide passes JS objects as JsProxy which lack .get() and other dict
-    // methods.  Round-trip through JSON so the Python code receives proper dicts.
-    pyodide.globals.set("__s", JSON.stringify(stats));
-    pyodide.globals.set("__n", JSON.stringify(ngrams));
-    pyodide.globals.set("__m", JSON.stringify(sentiment));
-    const result = await pyodide.runPythonAsync(
-      "import json\nprepare_viz(json.loads(__s), json.loads(__n), json.loads(__m))",
-    );
-    if (result && typeof result.toJs === "function") {
-      return result.toJs({ dict_converter: Object });
-    }
-    return result;
-  };
+  return bootPromise;
 }

@@ -397,3 +397,39 @@ where
 {
     futures::executor::block_on(future)
 }
+
+/// Stub Runtime for wasm that mirrors tokio's runtime API so
+/// `saikuro-c` (and other consumers) can use the same code
+/// path on wasm32-unknown-unknown.
+pub struct Runtime {
+    _private: (),
+}
+
+/// Stub builder that always produces a Runtime successfully.
+pub struct RuntimeBuilder {
+    _private: (),
+}
+
+impl RuntimeBuilder {
+    /// No-op: everything is already enabled on wasm.
+    pub fn enable_all(self) -> Self {
+        self
+    }
+
+    /// Always returns Ok(Runtime).
+    pub fn build(self) -> Result<Runtime, Box<dyn std::error::Error>> {
+        Ok(Runtime { _private: () })
+    }
+}
+
+/// Create a new runtime builder for the wasm backend.
+pub fn new_runtime() -> RuntimeBuilder {
+    RuntimeBuilder { _private: () }
+}
+
+impl Runtime {
+    /// Block on a future using the single-threaded wasm executor.
+    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
+        futures::executor::block_on(future)
+    }
+}

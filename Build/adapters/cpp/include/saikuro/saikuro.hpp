@@ -294,6 +294,17 @@ public:
     }
   }
 
+  void register_handler_with_schema(const std::string &name,
+                                    saikuro_provider_handler_fn callback,
+                                    void *user_data, int nargs,
+                                    const std::string &return_type = "Any") {
+    if (saikuro_provider_register_with_schema(handle_, name.c_str(), callback,
+                                              user_data, nargs,
+                                              return_type.c_str()) != 0) {
+      throw Error(last_error());
+    }
+  }
+
   void serve(const std::string &address) {
     if (saikuro_provider_serve(handle_, address.c_str()) != 0) {
       throw Error(last_error());

@@ -493,6 +493,13 @@ public sealed class SaikuroProvider
             if (raw is null)
                 break; // EOF
 
+            // Silently drop announce-ack responses that arrive late (e.g. in WASM
+            // where the broadcast channel can be delayed).  Announced acks are
+            // bare { "ok": true } dicts, not full envelopes, so they cannot
+            // be parsed by FromMsgpackDict.
+            if (raw.TryGetValue(WireKey.Ok, out _) && !raw.ContainsKey(WireKey.Type))
+                continue;
+
             Envelope envelope;
             try
             {
@@ -505,23 +512,23 @@ public sealed class SaikuroProvider
             }
 
             // Fire dispatch without awaiting :  allows concurrent invocations.
-            _ = DispatchAsync(envelope, transport, ct)
-                .ContinueWith(
-                    t =>
+            _ = Task.Run(
+                async () =>
+                {
+                    try
                     {
-                        if (t.IsFaulted)
-                        {
-                            var msg = t.Exception?.Flatten().InnerExceptions.Count > 0
-                                ? string.Join("; ", t.Exception.Flatten().InnerExceptions.Select(e => e.Message))
-                                : t.Exception?.Message ?? "unknown";
-                            Log.ErrorWithDetail(
-                                $"unhandled dispatch exception for target '{envelope.Target}'",
-                                msg
-                            );
-                        }
-                    },
-                    TaskScheduler.Default
-                );
+                        await DispatchAsync(envelope, transport, ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.ErrorWithDetail(
+                            $"unhandled dispatch exception for target '{envelope.Target}'",
+                            ex.Message
+                        );
+                    }
+                },
+                ct
+            );
         }
     }
 
@@ -532,24 +539,7 @@ public sealed class SaikuroProvider
             var schema = SchemaDict();
             var envelope = Envelope.MakeAnnounce(schema);
             await transport.SendAsync(envelope.ToMsgpackDict(), ct).ConfigureAwait(false);
-
-            using var timeoutCts = new CancellationTokenSource(AnnounceTimeout);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                ct,
-                timeoutCts.Token
-            );
-            try
-            {
-                var ack = await transport.RecvAsync(linked.Token).ConfigureAwait(false);
-                if (ack is not null && ack.TryGetValue(WireKey.Ok, out var okVal) && okVal is true)
-                    Log.Debug("schema announce acknowledged");
-                else
-                    Log.Warn("schema announce rejected by runtime");
-            }
-            catch (OperationCanceledException)
-            {
-                Log.Warn("schema announce: timed out waiting for ack");
-            }
+            Log.Debug("schema announce sent");
         }
         catch (Exception ex)
         {

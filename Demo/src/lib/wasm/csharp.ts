@@ -2,37 +2,64 @@ import { getLogger } from "@nisoku/saikuro";
 
 const log = getLogger("demo.wasm.csharp");
 
-let csharpPromise: Promise<
-  (payload: Record<string, unknown>) => Promise<any>
-> | null = null;
+let bootPromise: Promise<void> | null = null;
 
-export async function loadCSharpSummary(): Promise<
-  (payload: Record<string, unknown>) => Promise<any>
-> {
-  if (!csharpPromise) {
-    csharpPromise = (async () => {
-      log.info("loading C# WASM (dotnet.js)");
-      const { default: createDotnetRuntime } =
-        await import("../../../public/wasm/csharp/dotnet.js");
+export async function startCSharpProvider(channel: string): Promise<void> {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      log.info("loading C# WASM (dotnet.js)", { channel });
+
+      // Load the Saikuro BroadcastChannel JS module.
+      // This registers globalThis functions that the C# [JSImport] bindings
+      // call for channel creation, handshake, send, and message dequeue.
+      await import("../../../public/wasm/csharp/Saikuro.BroadcastChannel.js");
+
+      // Load dotnet.js from the public path (not through Vite's bundler) so
+      // that import.meta.url inside it resolves to /wasm/csharp/ instead of
+      // assets/
+      const dotnetUrl = new URL(
+        "wasm/csharp/dotnet.js",
+        document.baseURI,
+      ).href;
+      const { dotnet } = await import(dotnetUrl);
       log.info("C# dotnet.js loaded, creating runtime");
-      const runtime = await createDotnetRuntime({
-        locateFile: (path: string) => `/public/wasm/csharp/${path}`,
-      } as any);
-      log.info("C# runtime created, getting assembly exports");
 
-      const exports = await runtime.getAssemblyExports("InsightLab.dll");
-      const summarizer = exports.InsightLab.SummaryEngine;
-      log.info("C# assembly exports ready");
+      // Use the builder API to configure the entry point and create the
+      // runtime.
+      const dotnetApi: any = await (dotnet as any)
+        .withMainAssembly("InsightLab.dll")
+        .withApplicationArguments(channel)
+        .create();
 
-      return async (payload: Record<string, unknown>) => {
-        const json = JSON.stringify(payload);
-        const result = summarizer.Summarize(json);
-        if (typeof result === "string") {
-          return JSON.parse(result);
+      log.info("C# runtime created, starting provider", { channel });
+
+      // Verify the JS interop functions that the C# code relies on are
+      // registered on globalThis.
+      const requiredFns = [
+        "Saikuro_ConnectToRuntime",
+        "Saikuro_DequeueRuntimeMessage",
+        "Saikuro_SendRuntime",
+        "Saikuro_CloseRuntime",
+      ];
+      for (const fn of requiredFns) {
+        if (typeof (globalThis as any)[fn] !== "function") {
+          log.warn("missing globalThis function", { fn });
         }
-        return result;
-      };
+      }
+
+      // Start Program.Main in the background.  This connects the C# provider
+      // to the Rust runtime via BroadcastChannel, announces the "csharp"
+      // namespace, and enters the serve loop.  We use runMain (not
+      // runMainAndExit) so Main runs without mono_exit.
+      dotnetApi.runMain("InsightLab.dll", [channel]).catch((e: unknown) => {
+        const message = e instanceof Error ? e.message : String(e);
+        const details =
+          e instanceof Error
+            ? { stack: e.stack, name: e.name, message: e.message }
+            : { raw: e };
+        log.error("C# dotnet runtime error", { error: message, details });
+      });
     })();
   }
-  return csharpPromise;
+  return bootPromise;
 }

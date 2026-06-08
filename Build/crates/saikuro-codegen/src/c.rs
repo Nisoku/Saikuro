@@ -164,7 +164,7 @@ fn escape_c_string_literal(s: &str) -> String {
             '\t' => out.push_str("\\t"),
             _ if c.is_control() => {
                 use std::fmt::Write;
-                let _ = write!(out, "\\x{:02X}", c as u32);
+                let _ = write!(out, "\\x{:02X}", u32::from(c));
             }
             _ => out.push(c),
         }

@@ -195,9 +195,13 @@ describe("Schema parity: TypeScript <-> Python (basic)", () => {
         const argSources = [a, b, c];
         const argCount = Math.max(...argSources.map((s) => s.args.length));
         for (let i = 0; i < argCount; i++) {
-          const types = argSources.map((s) => (s.args[i] ? s.args[i][1] : null));
+          const types = argSources.map((s) =>
+            s.args[i] ? s.args[i][1] : null,
+          );
           const anySide = types.some((t) => isAny(t));
-          const complexSide = types.some((t) => isList(t) || isMap(t) || isStream(t));
+          const complexSide = types.some(
+            (t) => isList(t) || isMap(t) || isStream(t),
+          );
           if (anySide && complexSide) {
             for (const s of argSources) {
               if (s.args[i]) s.args[i][1] = ["p", "any"];

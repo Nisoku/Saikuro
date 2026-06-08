@@ -638,9 +638,7 @@ export class SaikuroProvider {
 
     if (options?.dev && Array.isArray(options.sourceFiles)) {
       try {
-        const { extractSchema } = await import(
-          "./schema_extractor"
-        );
+        const { extractSchema } = await import("./schema_extractor");
         const schema = await extractSchema(
           options.sourceFiles,
           this._namespace,

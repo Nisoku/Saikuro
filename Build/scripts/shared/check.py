@@ -1,4 +1,3 @@
-import sys
 from typing import Callable
 
 
@@ -12,8 +11,8 @@ def run_checks(*steps: tuple[str, Callable[[], int]]) -> int:
 
 
 def main_entry(aliases: dict[str, Callable[[], int]], default: str = "check") -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else default
-    if cmd in aliases:
-        sys.exit(aliases[cmd]())
-    print(f"Usage: {sys.argv[0]} <{'|'.join(aliases)}>", flush=True)
-    sys.exit(1)
+    import argparse, sys
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", nargs="?", default=default, choices=list(aliases))
+    args = parser.parse_args()
+    sys.exit(aliases[args.command]())

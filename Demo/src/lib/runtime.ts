@@ -26,20 +26,18 @@ export async function ensureRuntime(): Promise<RuntimeContext> {
 async function bootRuntime(): Promise<RuntimeContext> {
   log.info("bootRuntime start", { channel: CHANNEL });
 
-  log.info("starting runtime WASM");
+  // Start the Rust-based Saikuro runtime WASM (accept loop on BroadcastChannel)
   await startRuntimeWasm(CHANNEL);
 
-  log.info("starting Rust provider (background)");
+  // Fire all providers in background (each loads its own WASM module and
+  //    registers itself with the Runtime via wasm-host transport)
   startRustProvider(CHANNEL);
-
-  log.info("starting C/C++/C#/Python providers");
   await startProviders(CHANNEL);
 
-  // Providers connect via BroadcastChannel and announce schemas.
-  // The Rust provider runs in the background (fire-and-forget WASM), so
-  // give it enough time to connect and announce before the client opens.
+  // Wait for providers to connect and announce
   await new Promise((r) => setTimeout(r, 500));
 
+  // Create a client that talks to the runtime over the same channel
   log.info("connecting client via WasmHostConnector");
   const connector = new WasmHostConnector(CHANNEL);
   const transport = await connector.connect();

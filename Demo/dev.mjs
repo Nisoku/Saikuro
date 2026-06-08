@@ -155,8 +155,8 @@ function watchFile(file, target, recipe) {
 function startWatcher() {
   console.log(`\n${BOLD} Watching for changes${RESET}\n`);
 
-  watchDir(path.join(WASM, "c"), "C", "wasm-c");
-  watchDir(path.join(WASM, "cpp"), "C++", "wasm-cpp");
+  watchDir(path.join(WASM, "c", "src"), "C", "wasm-c");
+  watchDir(path.join(WASM, "cpp", "src"), "C++", "wasm-cpp");
   watchDir(path.join(WASM, "python"), "Python", "wasm-python");
   watchDir(path.join(WASM, "rust", "src"), "Rust", "wasm-rust-provider");
   watchDir(path.join(WASM, "runtime", "src"), "Runtime", "wasm-rust-runtime");
@@ -171,6 +171,26 @@ function startWatcher() {
     path.join(WASM, "runtime", "Cargo.toml"),
     "Runtime",
     "wasm-rust-runtime",
+  );
+  watchFile(
+    path.join(WASM, "c", "Cargo.toml"),
+    "C",
+    "wasm-c",
+  );
+  watchFile(
+    path.join(WASM, "cpp", "Cargo.toml"),
+    "C++",
+    "wasm-cpp",
+  );
+  watchFile(
+    path.join(WASM, "c", "insight_c.c"),
+    "C",
+    "wasm-c",
+  );
+  watchFile(
+    path.join(WASM, "cpp", "insight_cpp.cpp"),
+    "C++",
+    "wasm-cpp",
   );
 
   console.log(

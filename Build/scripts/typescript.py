@@ -1,5 +1,6 @@
 """TypeScript adapter commands."""
 
+import argparse
 import sys
 
 from shared.constants import TYPESCRIPT_DIR
@@ -34,8 +35,11 @@ def lint() -> int:
 
 
 def main() -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
-    if cmd == "check":
+    parser = argparse.ArgumentParser(description="TypeScript adapter commands")
+    parser.add_argument("command", nargs="?", default="check",
+                        choices=["check", "fmt_check", "lint"] + list(CMDS))
+    args = parser.parse_args()
+    if args.command == "check":
         steps = [
             ("lint", lint),
             ("typecheck", lambda: run(CMDS["typecheck"], cwd=TYPESCRIPT_DIR)),
@@ -48,14 +52,12 @@ def main() -> None:
                 print(f"[FAIL] {name} exited with code {code}", flush=True)
                 sys.exit(code)
         sys.exit(0)
-    if cmd == "fmt_check":
+    if args.command == "fmt_check":
         sys.exit(fmt_check())
-    if cmd == "lint":
+    if args.command == "lint":
         sys.exit(lint())
-    if cmd in CMDS:
-        sys.exit(run(CMDS[cmd], cwd=TYPESCRIPT_DIR))
-    print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
-    sys.exit(1)
+    if args.command in CMDS:
+        sys.exit(run(CMDS[args.command], cwd=TYPESCRIPT_DIR))
 
 
 if __name__ == "__main__":

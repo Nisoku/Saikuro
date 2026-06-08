@@ -406,8 +406,13 @@ export function bootstrapApp(): void {
         return;
       }
 
+      if (key === "performance.status") {
+        el.textContent = "Ready";
+        return;
+      }
+
       if (key === "sentiment.score") {
-        const score = outputs.sentiment.score ?? 0;
+        const score = (outputs.sentiment.score ?? 0) * 100;
         el.textContent = Math.round(score) + "%";
         renderGauge(score);
         return;

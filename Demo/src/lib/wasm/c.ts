@@ -2,51 +2,21 @@ import { getLogger } from "@nisoku/saikuro";
 
 const log = getLogger("demo.wasm.c");
 
-type CModule = {
-  _insight_c_stats: (inputPtr: number) => number;
-  _insight_c_free: (ptr: number) => void;
-  stringToUTF8: (input: string, ptr: number, max: number) => void;
-  lengthBytesUTF8: (input: string) => number;
-  _malloc: (size: number) => number;
-  _free: (ptr: number) => void;
-  UTF8ToString: (ptr: number) => string;
-};
+let bootPromise: Promise<void> | null = null;
 
-type StatsResult = {
-  bytes: number;
-  chars: number;
-  ascii: number;
-  non_ascii: number;
-};
-
-let cached: Promise<(text: string) => StatsResult> | null = null;
-
-export async function loadCStats(): Promise<(text: string) => StatsResult> {
-  if (!cached) {
-    cached = (async () => {
-      log.info("loading C WASM");
-      const moduleFactory = (
-        await import("../../../public/wasm/c/insight_c.js")
-      ).default as () => Promise<CModule>;
-      log.info("C WASM module loaded, instantiating");
-      const mod = await moduleFactory();
-      log.info("C WASM instantiated");
-      return (text: string) => {
-        const len = mod.lengthBytesUTF8(text) + 1;
-        const ptr = mod._malloc(len);
-        if (!ptr) throw new Error("C WASM malloc failed");
-        try {
-          mod.stringToUTF8(text, ptr, len);
-          const outPtr = mod._insight_c_stats(ptr);
-        if (!outPtr) throw new Error("insight_c_stats returned null");
-          const json = mod.UTF8ToString(outPtr);
-          mod._insight_c_free(outPtr);
-          return JSON.parse(json) as StatsResult;
-        } finally {
-          mod._free(ptr);
-        }
-      };
+export async function startCProvider(channel: string): Promise<void> {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      log.info("loading C WASM", { channel });
+      const mod = await import(
+        "../../../public/wasm/c/saikuro_c_insight.js"
+      );
+      log.info("C WASM module loaded, initializing");
+      await mod.default();
+      log.info("C WASM initialized, starting provider", { channel });
+      mod.start_c_provider(channel);
+      log.info("C provider started (background)", { channel });
     })();
   }
-  return cached;
+  return bootPromise;
 }

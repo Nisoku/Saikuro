@@ -4,7 +4,10 @@ use std::ptr;
 use std::thread_local;
 use std::time::Duration;
 
-use saikuro::{Client, Provider, SaikuroChannel, Value};
+use saikuro::{
+    ArgDescriptor, Client, FunctionSchema, PrimitiveType, Provider, RegisterOptions,
+    SaikuroChannel, TypeDescriptor, Value,
+};
 use saikuro_exec::Runtime;
 use std::sync::Arc;
 
@@ -764,6 +767,36 @@ pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void 
 /// `user_data` is freed or becomes dangling while the provider remains
 /// registered, subsequent callback invocations will dereference invalid
 /// memory and cause undefined behavior.
+async fn invoke_c_handler(
+    callback: ProviderHandler,
+    user_data_addr: usize,
+    args: Vec<Value>,
+) -> Result<Value, saikuro::Error> {
+    let args_json = serde_json::to_string(&args)
+        .map_err(|e| saikuro::Error::InvalidState(format!("args encode failed: {e}")))?;
+    let args_c = CString::new(args_json)
+        .map_err(|_| saikuro::Error::InvalidState("args contain NUL byte".to_owned()))?;
+
+    let result_ptr = unsafe { (callback)(user_data_addr as *mut c_void, args_c.as_ptr()) };
+    if result_ptr.is_null() {
+        return Err(saikuro::Error::InvalidState(
+            "C handler returned null".to_owned(),
+        ));
+    }
+
+    let result_owned = unsafe { CString::from_raw(result_ptr) };
+    let result_str = result_owned
+        .to_str()
+        .map_err(|_| saikuro::Error::InvalidState("C handler returned non-UTF8".to_owned()))?
+        .to_owned();
+
+    let value: Value = serde_json::from_str(&result_str).map_err(|e| {
+        saikuro::Error::InvalidState(format!("C handler returned invalid JSON: {e}"))
+    })?;
+
+    Ok(value)
+}
+
 #[no_mangle]
 pub extern "C" fn saikuro_provider_register(
     handle: *mut c_void,
@@ -807,36 +840,105 @@ pub extern "C" fn saikuro_provider_register(
     let user_data_addr = user_data as usize;
 
     provider.register(name, move |args: Vec<Value>| {
-        let func = callback;
-        let user_data = user_data_addr;
-        async move {
-            let args_json = serde_json::to_string(&args)
-                .map_err(|e| saikuro::Error::InvalidState(format!("args encode failed: {e}")))?;
-            let args_c = CString::new(args_json)
-                .map_err(|_| saikuro::Error::InvalidState("args contain NUL byte".to_owned()))?;
-
-            let result_ptr = unsafe { (func)(user_data as *mut c_void, args_c.as_ptr()) };
-            if result_ptr.is_null() {
-                return Err(saikuro::Error::InvalidState(
-                    "C handler returned null".to_owned(),
-                ));
-            }
-
-            let result_owned = unsafe { CString::from_raw(result_ptr) };
-            let result_str = result_owned
-                .to_str()
-                .map_err(|_| {
-                    saikuro::Error::InvalidState("C handler returned non-UTF8".to_owned())
-                })?
-                .to_owned();
-
-            let value: Value = serde_json::from_str(&result_str).map_err(|e| {
-                saikuro::Error::InvalidState(format!("C handler returned invalid JSON: {e}"))
-            })?;
-
-            Ok(value)
-        }
+        invoke_c_handler(callback, user_data_addr, args)
     });
+
+    0
+}
+
+/// Register a handler with schema metadata.
+///
+/// `nargs` is the number of arguments the function accepts (each typed `Any`).
+/// `return_type_json` is a JSON type name (e.g. `"Any"`, `"String"`)
+/// or NULL for the default `"Any"`.
+#[no_mangle]
+pub extern "C" fn saikuro_provider_register_with_schema(
+    handle: *mut c_void,
+    name: *const c_char,
+    callback: Option<ProviderHandler>,
+    user_data: *mut c_void,
+    nargs: c_int,
+    return_type_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+
+    let handle = match unsafe { (handle as *mut ProviderHandle).as_mut() } {
+        Some(h) => h,
+        None => {
+            set_last_error(ERR_HANDLE_NULL);
+            return 1;
+        }
+    };
+
+    let callback = match callback {
+        Some(cb) => cb,
+        None => {
+            set_last_error("callback must not be null");
+            return 1;
+        }
+    };
+
+    let name = match cstr_to_string(name, "name") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+
+    let nargs = if nargs < 0 { 0 } else { nargs as usize };
+
+    let return_type = if return_type_json.is_null() {
+        TypeDescriptor::primitive(PrimitiveType::Any)
+    } else {
+        match cstr_to_string(return_type_json, "return_type_json") {
+            Ok(s) => match s.to_lowercase().as_str() {
+                "string" => TypeDescriptor::primitive(PrimitiveType::String),
+                "i64" | "int" | "integer" => TypeDescriptor::primitive(PrimitiveType::I64),
+                "f64" | "float" => TypeDescriptor::primitive(PrimitiveType::F64),
+                "bool" | "boolean" => TypeDescriptor::primitive(PrimitiveType::Bool),
+                "unit" => TypeDescriptor::primitive(PrimitiveType::Unit),
+                _ => TypeDescriptor::primitive(PrimitiveType::Any),
+            },
+            Err(_) => TypeDescriptor::primitive(PrimitiveType::Any),
+        }
+    };
+
+    let provider = match handle.provider.as_mut() {
+        Some(p) => p,
+        None => {
+            set_last_error("provider has already started serving");
+            return 1;
+        }
+    };
+
+    let user_data_addr = user_data as usize;
+
+    let args: Vec<ArgDescriptor> = (0..nargs)
+        .map(|i| ArgDescriptor {
+            name: format!("arg{i}"),
+            r#type: TypeDescriptor::primitive(PrimitiveType::Any),
+            optional: false,
+            doc: None,
+        })
+        .collect();
+
+    let schema = FunctionSchema {
+        doc: Some(format!(
+            "C/C++ function `{name}` ({nargs} arg(s), returns {return_type:?})"
+        )),
+        args,
+        returns: Some(return_type),
+        ..Default::default()
+    };
+
+    provider.register_with_options(
+        name,
+        move |args: Vec<Value>| invoke_c_handler(callback, user_data_addr, args),
+        RegisterOptions {
+            schema: Some(schema),
+        },
+    );
 
     0
 }
@@ -867,6 +969,18 @@ pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_
         }
     };
 
+    #[cfg(target_arch = "wasm32")]
+    {
+        // On single-threaded wasm (no atomics), `block_on` cannot yield to the
+        // JS event loop, so futures that depend on JS I/O will never complete.
+        // Spawn the serve loop on the event loop and return immediately.
+        saikuro_exec::spawn(async move {
+            let _ = provider.serve(address).await;
+        });
+        0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     match handle.rt.block_on(provider.serve(address)) {
         Ok(()) => 0,
         Err(e) => {

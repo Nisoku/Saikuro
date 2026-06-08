@@ -63,8 +63,15 @@ class SaikuroClient:
 
     @classmethod
     def from_transport(cls, transport: BaseTransport) -> "SaikuroClient":
-        """Construct a client from an already-instantiated transport."""
+        """Construct a client from an already-instantiated transport without connecting."""
         return cls(transport)
+
+    @classmethod
+    async def open_on(cls, transport: BaseTransport) -> "SaikuroClient":
+        """Connect an already-instantiated transport and return a ready client."""
+        client = cls(transport)
+        await client._connect()
+        return client
 
     #  Lifecycle
 

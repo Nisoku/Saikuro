@@ -318,7 +318,8 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      const payload: ErrorPayload = response.error ?? fallbackErrorPayload("call failed");
+      const payload: ErrorPayload =
+        response.error ?? fallbackErrorPayload("call failed");
       log.warn("client call failed", { target, error: payload });
       throw SaikuroError.fromPayload(payload);
     }
@@ -365,7 +366,9 @@ export class SaikuroClient {
     const response = await this._sendAndWait(envelope, timeoutMs);
 
     if (!response.ok) {
-      throw SaikuroError.fromPayload(response.error ?? fallbackErrorPayload("resource call failed"));
+      throw SaikuroError.fromPayload(
+        response.error ?? fallbackErrorPayload("resource call failed"),
+      );
     }
 
     const handle = decodeResourceHandle(response.result);
@@ -430,7 +433,9 @@ export class SaikuroClient {
     const response = await this._sendAndWait(batchEnvelope, timeoutMs);
 
     if (!response.ok) {
-      throw SaikuroError.fromPayload(response.error ?? fallbackErrorPayload("batch call failed"));
+      throw SaikuroError.fromPayload(
+        response.error ?? fallbackErrorPayload("batch call failed"),
+      );
     }
 
     // The result should be an array; if the runtime returns a single value
@@ -470,22 +475,30 @@ export class SaikuroClient {
       envelope.id,
       (id: Uint8Array, value: unknown) => this._channelSend(id, value),
     );
-    await this._openHandle(this._openChannels, envelope, channelHandle, options);
+    await this._openHandle(
+      this._openChannels,
+      envelope,
+      channelHandle,
+      options,
+    );
     return channelHandle;
   }
 
   //  Internal
 
   /** Open a handle (stream/channel), send the envelope, and register cleanup. */
-  private async _openHandle<THandle extends { _deliver(resp: ResponseEnvelope): void; _close(): void }>(
+  private async _openHandle<
+    THandle extends { _deliver(resp: ResponseEnvelope): void; _close(): void },
+  >(
     map: Map<string, THandle>,
     envelope: Envelope,
     handle: THandle,
     options?: { capability?: string },
   ): Promise<void> {
-    const patched = options?.capability !== undefined
-      ? { ...envelope, capability: options.capability }
-      : envelope;
+    const patched =
+      options?.capability !== undefined
+        ? { ...envelope, capability: options.capability }
+        : envelope;
     const idKey = idToKey(patched.id);
     map.set(idKey, handle);
     try {
@@ -598,7 +611,9 @@ export class SaikuroClient {
   }
 
   /** Deliver a response to a single map entry and return whether the delivery happened. */
-  private _deliverToMap<THandle extends { _deliver(resp: ResponseEnvelope): void }>(
+  private _deliverToMap<
+    THandle extends { _deliver(resp: ResponseEnvelope): void },
+  >(
     map: Map<string, THandle>,
     idKey: string,
     resp: ResponseEnvelope,
@@ -611,7 +626,11 @@ export class SaikuroClient {
       id: idKey,
       stream_control: resp.stream_control,
     });
-    if (resp.stream_control === "end" || resp.stream_control === "abort" || !resp.ok) {
+    if (
+      resp.stream_control === "end" ||
+      resp.stream_control === "abort" ||
+      !resp.ok
+    ) {
       map.delete(idKey);
     }
     return true;

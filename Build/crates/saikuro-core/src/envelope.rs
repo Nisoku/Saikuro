@@ -14,10 +14,11 @@ use crate::{
 
 /// The type of an outgoing invocation.
 ///
-/// This is the primary discriminator that tells the runtime :  and the
-/// recipient adapter :  how to handle a message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// This is the primary discriminator that tells the runtime and the
+/// recipient adapter how to handle a message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum InvocationType {
     /// Request/response: caller blocks until a single response arrives.
     Call,
@@ -44,22 +45,6 @@ pub enum InvocationType {
     /// the namespaces into the live schema registry, then returns `ok_empty`.
     /// No provider is involved and no capability check is required.
     Announce,
-}
-
-impl std::fmt::Display for InvocationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::Call => "call",
-            Self::Cast => "cast",
-            Self::Stream => "stream",
-            Self::Channel => "channel",
-            Self::Batch => "batch",
-            Self::Resource => "resource",
-            Self::Log => "log",
-            Self::Announce => "announce",
-        };
-        f.write_str(s)
-    }
 }
 
 /// Control frames sent within a stream or channel to signal lifecycle events.

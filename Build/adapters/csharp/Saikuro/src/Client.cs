@@ -29,7 +29,7 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
     protected readonly string _id;
     private readonly System.Threading.Channels.Channel<ResponseEnvelope?> _ch =
         System.Threading.Channels.Channel.CreateUnbounded<ResponseEnvelope?>();
-    protected bool _done;
+    protected int _done;
 
     protected BaseSaikuroHandle(string id) => _id = id;
 
@@ -45,13 +45,13 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
         CancellationToken cancellationToken = default
     )
     {
-        if (_done)
+        if (Volatile.Read(ref _done) != 0)
             yield break;
         await foreach (var item in _ch.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
             if (item.IsStreamEnd)
             {
-                _done = true;
+                Volatile.Write(ref _done, 1);
                 yield break;
             }
             yield return await ProcessResponseAsync(item).ConfigureAwait(false);
@@ -70,12 +70,12 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
     {
         if (item is null)
         {
-            _done = true;
+            Volatile.Write(ref _done, 1);
             throw new TransportException("ConnectionLost", "stream ended unexpectedly", null);
         }
         if (ShouldCloseAfterResponse(item))
         {
-            _done = true;
+            Volatile.Write(ref _done, 1);
             if (!item.Ok)
             {
                 var payload =
@@ -83,7 +83,6 @@ public abstract class BaseSaikuroHandle<T> : IAsyncEnumerable<T>, IDeliverable
                     ?? new ErrorPayload { Code = "Internal", Message = "stream ended with error" };
                 throw SaikuroException.FromPayload(payload);
             }
-            // Stream end is a normal condition, not an error
             throw new StreamClosedException("StreamEnd", "stream ended normally", null);
         }
         return (T)item.Result!;
@@ -122,7 +121,7 @@ public sealed class SaikuroChannel<TIn, TOut> : BaseSaikuroHandle<TIn>
     /// <summary>Send a message to the provider side of the channel.</summary>
     public Task SendAsync(TOut value, CancellationToken ct = default)
     {
-        if (_done)
+        if (Volatile.Read(ref _done) != 0)
             throw new InvalidOperationException("Channel is already closed.");
         return _sendFn(_id, value);
     }
@@ -393,38 +392,10 @@ public sealed class SaikuroClient : IAsyncDisposable
         CancellationToken ct
     )
     {
-        var effectiveTimeout = GetEffectiveTimeout(timeout);
         var tcs = new TaskCompletionSource<ResponseEnvelope>(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
         _pendingCalls[envelope.Id] = tcs;
-
-        CancellationTokenSource? timeoutCts = null;
-        CancellationTokenRegistration reg = default;
-        CancellationTokenRegistration cancelReg = default;
-
-        if (effectiveTimeout > TimeSpan.Zero)
-        {
-            timeoutCts = new CancellationTokenSource(effectiveTimeout);
-            reg = timeoutCts.Token.Register(() =>
-            {
-                if (_pendingCalls.TryRemove(envelope.Id, out _))
-                    tcs.TrySetException(
-                        new TimeoutException(
-                            $"Call to \"{envelope.Target}\" timed out after {effectiveTimeout.TotalMilliseconds}ms."
-                        )
-                    );
-            });
-        }
-
-        if (ct.CanBeCanceled)
-        {
-            cancelReg = ct.Register(() =>
-            {
-                if (_pendingCalls.TryRemove(envelope.Id, out _))
-                    tcs.TrySetCanceled(ct);
-            });
-        }
 
         try
         {
@@ -433,19 +404,23 @@ public sealed class SaikuroClient : IAsyncDisposable
         catch (Exception ex)
         {
             _pendingCalls.TryRemove(envelope.Id, out _);
-            timeoutCts?.Dispose();
             tcs.TrySetException(ex);
         }
 
         try
         {
-            return await tcs.Task.ConfigureAwait(false);
+            var task = tcs.Task;
+            var effectiveTimeout = GetEffectiveTimeout(timeout);
+            if (effectiveTimeout > TimeSpan.Zero)
+                task = task.WaitAsync(effectiveTimeout, ct);
+            else
+                task = task.WaitAsync(ct);
+            return await task.ConfigureAwait(false);
         }
-        finally
+        catch
         {
-            reg.Dispose();
-            cancelReg.Dispose();
-            timeoutCts?.Dispose();
+            _pendingCalls.TryRemove(envelope.Id, out _);
+            throw;
         }
     }
 

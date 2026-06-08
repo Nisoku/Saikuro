@@ -16,7 +16,9 @@ export async function startRustProvider(channel: string): Promise<void> {
 
       // start_rust_provider is async and runs serve_on (dispatch loop) forever.
       // Fire it in the background so bootRuntime can proceed.
-      void mod.start_rust_provider(channel);
+      mod.start_rust_provider(channel).catch((err) => {
+        log.error("Rust provider failed", { error: String(err) });
+      });
       log.info("Rust provider started (background)", { channel });
     })();
   }

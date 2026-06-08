@@ -62,7 +62,7 @@ public class InMemoryTransportTests
     {
         var (a, _) = InMemoryTransport.Pair();
         await a.CloseAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
             a.SendAsync(new Dictionary<string, object?> { ["x"] = 1 })
         );
     }

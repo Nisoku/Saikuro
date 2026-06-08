@@ -1,5 +1,6 @@
 """Python adapter commands."""
 
+import argparse
 import os
 import subprocess
 import sys
@@ -36,18 +37,19 @@ def lint() -> int:
 
 
 def main() -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
-    if cmd == "fmt_check":
+    parser = argparse.ArgumentParser(description="Python adapter commands")
+    parser.add_argument("command", nargs="?", default="check",
+                        choices=["check", "fmt_check", "lint"] + list(CMDS))
+    args = parser.parse_args()
+    if args.command == "fmt_check":
         sys.exit(fmt_check())
-    if cmd == "lint":
+    if args.command == "lint":
         sys.exit(lint())
-    if cmd == "check":
+    if args.command == "check":
         failed = any([fmt_check() != 0, lint() != 0, run(CMDS["test"], cwd=PYTHON_DIR) != 0])
         sys.exit(1 if failed else 0)
-    if cmd in CMDS:
-        sys.exit(run(CMDS[cmd], cwd=PYTHON_DIR))
-    print(f"Usage: {sys.argv[0]} <check|fmt_check|lint|{'|'.join(CMDS)}>")
-    sys.exit(1)
+    if args.command in CMDS:
+        sys.exit(run(CMDS[args.command], cwd=PYTHON_DIR))
 
 
 if __name__ == "__main__":

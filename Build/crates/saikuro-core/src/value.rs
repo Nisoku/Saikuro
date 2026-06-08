@@ -281,7 +281,6 @@ mod tests {
 
         let bytes1 = rmp_serde::to_vec_named(&schema).expect("schema to msgpack");
         let value: Value = rmp_serde::from_slice(&bytes1).expect("msgpack to Value");
-        eprintln!("value: {value:?}");
         let bytes2 = rmp_serde::to_vec_named(&value).expect("Value to msgpack");
         let schema2: Schema = rmp_serde::from_slice(&bytes2).expect("msgpack to Schema");
 
