@@ -1,0 +1,41 @@
+{
+  "mainAssemblyName": "InsightLab.dll",
+  "resources": {
+    "hash": "sha256-I43HmD65lDFSjwyKWI5fjhkDUGvsO3bivyo07ywC2Us=",
+    "jsModuleNative": {
+      "dotnet.native.js": "sha256-ZtsnkCPuzWNTIGQdYnqTt9aNAtDrq8Sg1FdSmbm4xB0="
+    },
+    "jsModuleRuntime": {
+      "dotnet.runtime.js": "sha256-8TPKoZjPkxn9U2bhn70tBfGFmfwnOXj2CAKmQl5+oJ4="
+    },
+    "wasmNative": {
+      "dotnet.native.wasm": "sha256-Pme7FXyKhCPEWqpCdJWvC97H1GqgjAD2WUtKUwFM28U="
+    },
+    "wasmSymbols": {
+      "dotnet.native.js.symbols": "sha256-I44GgOwI1rJjkMbOABJT4TUW2MAi+PzSsc1Hea3wz9M="
+    },
+    "assembly": {
+      "InsightLab.wasm": "sha256-LvHr6vkplmuNeJwOi2ld6ghYK0UAfSSa8V6Eq2OblWw=",
+      "MessagePack.wasm": "sha256-fpdq7xigb4XU8RUVTm1848CyMxLoRVgb6SPwRK8yXKI=",
+      "Microsoft.Extensions.Logging.Abstractions.wasm": "sha256-34y5+aMv39a+RVPH5qBV2y9k5PGFpk5V3i72ZMnu2Xs=",
+      "Saikuro.wasm": "sha256-BD0CRi1fEMa7xKjEf+F1nU1dPfkSNKTlReQc27ZyOhg=",
+      "System.Collections.Concurrent.wasm": "sha256-6tSCa8KlviMT4qDJ1TPSt2XoSArITbEOXjuVuMl8aMM=",
+      "System.Collections.wasm": "sha256-DsA8bIWp/K/3mlVw47OjsrSKnu27avovDjqbBNhKX7c=",
+      "System.Console.wasm": "sha256-dJhuZjhqlO9UqXGSTHVegYWY+eYyFcV9Nj2Dp8XqBLA=",
+      "System.Linq.wasm": "sha256-pw0VltorUUulnfX6IgmKd+E5c+5J22hwzEb3/yXfNqw=",
+      "System.Memory.wasm": "sha256-vp5Hu9IZbeSyV2tBS0Ja5x4YziAuMWgo2tmjcc0gQ80=",
+      "System.Private.CoreLib.wasm": "sha256-1zgDK13Toiu6Pqe5t+XWsggg09fUmg3EXimMtiZpG1A=",
+      "System.Private.Uri.wasm": "sha256-dE2351NyvQp2zHhgmfLsOEvOucgguy6fKwuyUgp/c2M=",
+      "System.Runtime.InteropServices.JavaScript.wasm": "sha256-5a0Txfs4gzbf3G0RTitfM3tOlRETudg75mbWMdj8DoQ=",
+      "System.Text.Encodings.Web.wasm": "sha256-IPqGcUpJtAc7vGesjaGWdKXa46e2Xtm82q5wnzTp9BM=",
+      "System.Text.Json.wasm": "sha256-Z7IugOySPUsxgtRgycaVyqyZNuDuQnDhzDi+lX59HIc="
+    },
+    "vfs": {
+      "runtimeconfig.bin": {
+        "supportFiles/0_runtimeconfig.bin": "sha256-NJSWLTU8FtUVYOwFJIDDIz5onmZT6NLqsd88R4TDFDg="
+      }
+    }
+  },
+  "debugLevel": 0,
+  "globalizationMode": "invariant"
+}

@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polyglot Insight Lab</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Material Symbols -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="./assets/index-CGjEsdXp.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DFbhdlDD.css">
+  </head>
+
+  <body class="app">
+    <!-- Top App Bar -->
+    <header class="top-bar">
+      <div class="top-bar__brand">
+        <h1 class="top-bar__title">Polyglot Analyzer</h1>
+      </div>
+      <div class="top-bar__actions"></div>
+    </header>
+
+    <div class="app-layout">
+      <!-- Side Navigation -->
+      <aside class="sidebar">
+        <div class="sidebar__header">
+          <h2>System Analysis</h2>
+        </div>
+        <nav class="sidebar__nav" id="sidebar-nav">
+          <a href="#" class="nav-item is-active" data-tab="dashboard">
+            <span
+              class="material-symbols-outlined"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >dashboard</span
+            >
+            <span>Dashboard</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="pipeline">
+            <span class="material-symbols-outlined">account_tree</span>
+            <span>Pipeline</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="ngrams">
+            <span class="material-symbols-outlined">reorder</span>
+            <span>N-Grams</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="logs">
+            <span class="material-symbols-outlined">message</span>
+            <span>Logs</span>
+          </a>
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main">
+        <div class="main__inner">
+          <!-- ============================================================ -->
+          <!-- DASHBOARD VIEW                                                -->
+          <!-- ============================================================ -->
+          <div class="view is-active" data-view="dashboard">
+            <div class="dashboard-grid">
+              <section class="col col--input">
+                <div class="card">
+                  <label class="field-label" for="input-text"
+                    >Analysis Input</label
+                  >
+                  <textarea
+                    id="input-text"
+                    class="code-input"
+                    spellcheck="false"
+                    placeholder="Enter code or text for polyglot analysis..."
+                  ></textarea>
+                  <div class="field">
+                    <label class="field-label" for="preset"
+                      >Preset Selector</label
+                    >
+                    <select id="preset" class="select-input"></select>
+                  </div>
+                  <button id="run-btn" class="run-button">
+                    <span class="run-button__label">Run Insight Pipeline</span>
+                    <span class="run-button__spinner" aria-hidden="true">
+                      <span class="material-symbols-outlined">sync</span>
+                    </span>
+                  </button>
+                </div>
+
+                <div class="lang-nodes">
+                  <div class="lang-node lang-node--dark">
+                    <div class="lang-node__header">
+                      <span class="lang-node__label">Rust Node</span>
+                      <span class="material-symbols-outlined">terminal</span>
+                    </div>
+                    <pre
+                      class="lang-node__code"
+                    >fn main() {<br/>  println!("Analyzing...");<br/>}</pre>
+                  </div>
+                  <div class="lang-node lang-node--light">
+                    <div class="lang-node__header">
+                      <span class="lang-node__label">TypeScript Node</span>
+                      <span class="material-symbols-outlined">javascript</span>
+                    </div>
+                    <pre
+                      class="lang-node__code lang-node__code--accent"
+                    >type Result = {<br/>  score: number;<br/>  valid: boolean;<br/>};</pre>
+                  </div>
+                </div>
+              </section>
+
+              <section class="col col--results">
+                <div class="card card--health">
+                  <div class="health__text">
+                    <h2 class="card__title">Pipeline Health</h2>
+                    <p class="card__subtitle">
+                      Real-time telemetry and transport status
+                    </p>
+                  </div>
+                  <div class="health__badges">
+                    <span class="status-pill status-pill--runtime">
+                      <span class="status-dot status-dot--pulse"></span>
+                      Runtime: <span data-result="performance.runtime">-</span>
+                    </span>
+                    <span class="status-pill status-pill--neutral">
+                      <span class="status-dot"></span>
+                      Transport: WASMHost
+                    </span>
+                    <span class="status-pill status-pill--ready">
+                      <span class="status-dot status-dot--ready"></span>
+                      <span data-result="performance.status">Ready</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="flow__header">
+                    <span class="card__title">Execution Flow</span>
+                    <span class="flow__total"
+                      >Total:
+                      <span data-result="performance.total">-</span></span
+                    >
+                  </div>
+                  <div class="flow__track" id="flow-track">
+                    <div
+                      class="flow__segment flow__segment--c"
+                      data-stage="C"
+                      style="width: 15%"
+                    >
+                      C
+                    </div>
+                    <div
+                      class="flow__segment flow__segment--cpp"
+                      data-stage="C++"
+                      style="width: 25%"
+                    >
+                      C++
+                    </div>
+                    <div
+                      class="flow__segment flow__segment--rust"
+                      data-stage="Rust"
+                      style="width: 20%"
+                    >
+                      Rust
+                    </div>
+                    <div
+                      class="flow__segment flow__segment--csharp"
+                      data-stage="C#"
+                      style="width: 10%"
+                    >
+                      C#
+                    </div>
+                    <div
+                      class="flow__segment flow__segment--py"
+                      data-stage="Python"
+                      style="width: 18%"
+                    >
+                      Py
+                    </div>
+                  </div>
+                  <div class="flow__labels">
+                    <span>0ms</span>
+                    <span>Execution Progress</span>
+                    <span data-result="performance.total">-</span>
+                  </div>
+                </div>
+
+                <div class="bento">
+                  <article class="card bento__card">
+                    <header class="card__header">
+                      <span class="lang-badge lang-badge--c">C</span>
+                      <h3 class="card__title">Character Stats</h3>
+                    </header>
+                    <div class="stat-list">
+                      <div class="stat-row">
+                        <span class="stat-row__label">Bytes Total</span>
+                        <span class="stat-row__value" data-result="stats.bytes"
+                          >-</span
+                        >
+                      </div>
+                      <div class="stat-row">
+                        <span class="stat-row__label">ASCII Range</span>
+                        <span
+                          class="stat-row__value"
+                          data-result="stats.asciiPct"
+                          >-</span
+                        >
+                      </div>
+                      <div class="stat-row">
+                        <span class="stat-row__label">Total Chars</span>
+                        <span class="stat-row__value" data-result="stats.chars"
+                          >-</span
+                        >
+                      </div>
+                      <div class="stat-row stat-row--last">
+                        <span class="stat-row__label">Null Terminated</span>
+                        <span
+                          class="stat-row__value"
+                          data-result="stats.nullTerminated"
+                          >-</span
+                        >
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="card bento__card">
+                    <header class="card__header">
+                      <span class="lang-badge lang-badge--cpp">C++</span>
+                      <h3 class="card__title">N-Gram Frequency</h3>
+                    </header>
+                    <div class="tag-cloud" id="ngrams-cloud">
+                      <span class="tag">Awaiting analysis</span>
+                    </div>
+                  </article>
+
+                  <article class="card bento__card">
+                    <header class="card__header">
+                      <span class="lang-badge lang-badge--rust">R</span>
+                      <h3 class="card__title">Sentiment Analysis</h3>
+                    </header>
+                    <div class="gauge">
+                      <div class="gauge__svg">
+                        <svg viewBox="0 0 36 36" aria-hidden="true">
+                          <path
+                            class="gauge__track"
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke-width="4"
+                          />
+                          <path
+                            class="gauge__fill"
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke-width="4"
+                            stroke-linecap="round"
+                            stroke-dasharray="0, 100"
+                          />
+                        </svg>
+                        <span class="gauge__value" data-result="sentiment.score"
+                          >0%</span
+                        >
+                      </div>
+                      <div class="gauge__meta">
+                        <p class="gauge__label" data-result="sentiment.label">
+                          Awaiting analysis
+                        </p>
+                        <p class="gauge__hint">
+                          Confidence:
+                          <span data-result="sentiment.confidence">-</span>
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="card bento__card bento__card--accent">
+                    <header class="card__header">
+                      <span class="lang-badge lang-badge--csharp">#</span>
+                      <h3 class="card__title">NLP Summary</h3>
+                    </header>
+                    <p class="summary" data-result="summary.text">
+                      Run the pipeline to see an NLP-analyzed summary of the
+                      input.
+                    </p>
+                    <div class="bento__glow" aria-hidden="true"></div>
+                  </article>
+
+                  <article class="card bento__card bento__card--wide">
+                    <header class="card__header">
+                      <span class="lang-badge lang-badge--py">Py</span>
+                      <h3 class="card__title">Data Distribution</h3>
+                    </header>
+                    <div class="bars" id="viz-bars">
+                      <div class="bars__track">
+                        <div class="bar" style="height: 40%"></div>
+                        <div class="bar" style="height: 65%"></div>
+                        <div class="bar" style="height: 90%"></div>
+                        <div class="bar" style="height: 30%"></div>
+                        <div class="bar" style="height: 55%"></div>
+                      </div>
+                      <div class="bars__labels">
+                        <span>Segment A</span>
+                        <span>Segment B</span>
+                        <span>Segment C</span>
+                        <span>Segment D</span>
+                        <span>Segment E</span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- PIPELINE VIEW                                                 -->
+          <!-- ============================================================ -->
+          <div class="view" data-view="pipeline">
+            <div class="view__header">
+              <h2 class="view__title">Polyglot Pipeline</h2>
+              <p class="view__subtitle">
+                Six language runtimes orchestrated as a single Saikuro pipeline.
+              </p>
+            </div>
+
+            <div class="card card--health">
+              <div class="health__text">
+                <h3 class="card__title">Schema Registry</h3>
+                <p class="card__subtitle">6 namespaces · 12 functions</p>
+              </div>
+              <div class="health__badges">
+                <span class="status-pill status-pill--ready">
+                  <span class="status-dot status-dot--ready"></span>
+                  Registered
+                </span>
+              </div>
+            </div>
+
+            <div class="provider-grid" id="provider-grid">
+              <article class="provider-card" data-provider="C">
+                <div class="provider-card__head">
+                  <span class="lang-badge lang-badge--c">C</span>
+                  <span
+                    class="status-pill status-pill--ready"
+                    data-provider-status
+                  >
+                    <span class="status-dot status-dot--ready"></span> Idle
+                  </span>
+                </div>
+                <h3 class="provider-card__title">C (WASM)</h3>
+                <p class="provider-card__role">Byte-level character stats</p>
+                <div class="provider-card__meta">
+                  <span>Target: <code>c.stats</code></span>
+                  <span>Last: <strong data-provider-duration>-</strong></span>
+                </div>
+                <code class="provider-card__source"
+                  >Demo/wasm/c/insight_c.c</code
+                >
+              </article>
+
+              <article class="provider-card" data-provider="C++">
+                <div class="provider-card__head">
+                  <span class="lang-badge lang-badge--cpp">C++</span>
+                  <span
+                    class="status-pill status-pill--ready"
+                    data-provider-status
+                  >
+                    <span class="status-dot status-dot--ready"></span> Idle
+                  </span>
+                </div>
+                <h3 class="provider-card__title">C++ (WASM)</h3>
+                <p class="provider-card__role">
+                  Tokenization + n-gram frequency
+                </p>
+                <div class="provider-card__meta">
+                  <span>Target: <code>cpp.ngrams</code></span>
+                  <span>Last: <strong data-provider-duration>-</strong></span>
+                </div>
+                <code class="provider-card__source"
+                  >Demo/wasm/cpp/insight_cpp.cpp</code
+                >
+              </article>
+
+              <article class="provider-card" data-provider="Rust">
+                <div class="provider-card__head">
+                  <span class="lang-badge lang-badge--rust">R</span>
+                  <span
+                    class="status-pill status-pill--ready"
+                    data-provider-status
+                  >
+                    <span class="status-dot status-dot--ready"></span> Idle
+                  </span>
+                </div>
+                <h3 class="provider-card__title">Rust (WASM)</h3>
+                <p class="provider-card__role">Sentiment scoring and tags</p>
+                <div class="provider-card__meta">
+                  <span>Target: <code>rust.sentiment</code></span>
+                  <span>Last: <strong data-provider-duration>-</strong></span>
+                </div>
+                <code class="provider-card__source"
+                  >Demo/wasm/rust/src/lib.rs</code
+                >
+              </article>
+
+              <article class="provider-card" data-provider="C#">
+                <div class="provider-card__head">
+                  <span class="lang-badge lang-badge--csharp">#</span>
+                  <span
+                    class="status-pill status-pill--ready"
+                    data-provider-status
+                  >
+                    <span class="status-dot status-dot--ready"></span> Idle
+                  </span>
+                </div>
+                <h3 class="provider-card__title">C# (WASM)</h3>
+                <p class="provider-card__role">Business logic summary</p>
+                <div class="provider-card__meta">
+                  <span>Target: <code>csharp.summary</code></span>
+                  <span>Last: <strong data-provider-duration>-</strong></span>
+                </div>
+                <code class="provider-card__source"
+                  >Demo/wasm/csharp/InsightLab/Summarizer.cs</code
+                >
+              </article>
+
+              <article class="provider-card" data-provider="Python">
+                <div class="provider-card__head">
+                  <span class="lang-badge lang-badge--py">Py</span>
+                  <span
+                    class="status-pill status-pill--ready"
+                    data-provider-status
+                  >
+                    <span class="status-dot status-dot--ready"></span> Idle
+                  </span>
+                </div>
+                <h3 class="provider-card__title">Python (Pyodide)</h3>
+                <p class="provider-card__role">Visualization preparation</p>
+                <div class="provider-card__meta">
+                  <span>Target: <code>python.viz</code></span>
+                  <span>Last: <strong data-provider-duration>-</strong></span>
+                </div>
+                <code class="provider-card__source"
+                  >Demo/wasm/python/insight.py</code
+                >
+              </article>
+            </div>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- N-GRAMS VIEW                                                  -->
+          <!-- ============================================================ -->
+          <div class="view" data-view="ngrams">
+            <div class="view__header">
+              <h2 class="view__title">N-Gram Analysis</h2>
+              <p class="view__subtitle">
+                Frequency distribution of bigrams and trigrams from the C++
+                tokenizer.
+              </p>
+            </div>
+            <div class="card">
+              <h3 class="card__title">Top Bigrams</h3>
+              <div
+                class="tag-cloud tag-cloud--large"
+                id="ngrams-detail-bigrams"
+              >
+                <span class="tag">Awaiting analysis</span>
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card__title">Top Trigrams</h3>
+              <div
+                class="tag-cloud tag-cloud--large"
+                id="ngrams-detail-trigrams"
+              >
+                <span class="tag">Awaiting analysis</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================ -->
+          <!-- LOGS VIEW                                                     -->
+          <!-- ============================================================ -->
+          <div class="view" data-view="logs">
+            <div class="view__header">
+              <h2 class="view__title">Message Logs</h2>
+              <p class="view__subtitle">
+                All transport-level call and response envelopes.
+              </p>
+            </div>
+            <div class="card">
+              <div id="message-list" class="log-viewer"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Log Inspector Footer -->
+    <footer class="log-terminal">
+      <div class="log-terminal__inner">
+        <div class="log-terminal__brand">
+          <span class="material-symbols-outlined">terminal</span>
+          <span class="log-terminal__label">LOGS:</span>
+        </div>
+        <div class="log-terminal__items" id="log-rail">
+          <span class="log-rail__placeholder">No messages yet.</span>
+        </div>
+        <div class="log-terminal__status">
+          <span class="status-dot status-dot--ready"></span>
+          <span id="status-text">System Ready.</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Mobile Bottom Nav -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <a href="#" class="bottom-nav__item is-active" data-tab="dashboard">
+        <span
+          class="material-symbols-outlined"
+          style="font-variation-settings: &quot;FILL&quot; 1"
+          >dashboard</span
+        >
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="bottom-nav__item" data-tab="pipeline">
+        <span class="material-symbols-outlined">account_tree</span>
+        <span>Pipeline</span>
+      </a>
+      <a href="#" class="bottom-nav__item" data-tab="logs">
+        <span class="material-symbols-outlined">message</span>
+        <span>Logs</span>
+      </a>
+    </nav>
+
+  </body>
+</html>

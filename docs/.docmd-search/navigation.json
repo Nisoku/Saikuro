@@ -1,0 +1,204 @@
+{
+  "tree": [
+    {
+      "title": "Adapters",
+      "path": "adapters",
+      "children": [
+        {
+          "title": "C",
+          "path": "adapters/c",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/c/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/c/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/c/index.md"
+            }
+          ]
+        },
+        {
+          "title": "Cpp",
+          "path": "adapters/cpp",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/cpp/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/cpp/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/cpp/index.md"
+            }
+          ]
+        },
+        {
+          "title": "Csharp",
+          "path": "adapters/csharp",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/csharp/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/csharp/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/csharp/index.md"
+            }
+          ]
+        },
+        {
+          "title": "Index",
+          "path": "adapters/index.md"
+        },
+        {
+          "title": "Python",
+          "path": "adapters/python",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/python/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/python/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/python/index.md"
+            }
+          ]
+        },
+        {
+          "title": "Rust",
+          "path": "adapters/rust",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/rust/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/rust/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/rust/index.md"
+            }
+          ]
+        },
+        {
+          "title": "Typescript",
+          "path": "adapters/typescript",
+          "children": [
+            {
+              "title": "Api Reference",
+              "path": "adapters/typescript/api-reference.md"
+            },
+            {
+              "title": "Examples",
+              "path": "adapters/typescript/examples.md"
+            },
+            {
+              "title": "Index",
+              "path": "adapters/typescript/index.md"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Api",
+      "path": "api",
+      "children": [
+        {
+          "title": "Cli",
+          "path": "api/cli.md"
+        },
+        {
+          "title": "Index",
+          "path": "api/index.md"
+        }
+      ]
+    },
+    {
+      "title": "Getting Started",
+      "path": "getting-started",
+      "children": [
+        {
+          "title": "Concepts",
+          "path": "getting-started/concepts.md"
+        },
+        {
+          "title": "Installation",
+          "path": "getting-started/installation.md"
+        },
+        {
+          "title": "Quickstart",
+          "path": "getting-started/quickstart.md"
+        }
+      ]
+    },
+    {
+      "title": "Guide",
+      "path": "guide",
+      "children": [
+        {
+          "title": "Codegen",
+          "path": "guide/codegen.md"
+        },
+        {
+          "title": "Commands",
+          "path": "guide/commands.md"
+        },
+        {
+          "title": "Errors",
+          "path": "guide/errors.md"
+        },
+        {
+          "title": "Examples",
+          "path": "guide/examples.md"
+        },
+        {
+          "title": "Invocations",
+          "path": "guide/invocations.md"
+        },
+        {
+          "title": "Logging",
+          "path": "guide/logging.md"
+        },
+        {
+          "title": "Schema",
+          "path": "guide/schema.md"
+        },
+        {
+          "title": "Storage",
+          "path": "guide/storage.md"
+        },
+        {
+          "title": "Transports",
+          "path": "guide/transports.md"
+        },
+        {
+          "title": "Wasm",
+          "path": "guide/wasm.md"
+        }
+      ]
+    },
+    {
+      "title": "Index",
+      "path": "index.md"
+    }
+  ]
+}
