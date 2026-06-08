@@ -1,0 +1,15 @@
+{
+  "name": "saikuro-cpp-insight",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "saikuro_cpp_insight_bg.wasm",
+    "saikuro_cpp_insight.js",
+    "saikuro_cpp_insight.d.ts"
+  ],
+  "main": "saikuro_cpp_insight.js",
+  "types": "saikuro_cpp_insight.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

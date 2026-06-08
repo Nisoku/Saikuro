@@ -1,0 +1,15 @@
+{
+  "name": "saikuro_web_runtime",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "saikuro_web_runtime_bg.wasm",
+    "saikuro_web_runtime.js",
+    "saikuro_web_runtime.d.ts"
+  ],
+  "main": "saikuro_web_runtime.js",
+  "types": "saikuro_web_runtime.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

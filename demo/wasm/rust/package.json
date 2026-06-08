@@ -1,0 +1,15 @@
+{
+  "name": "saikuro_rust_insight",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "saikuro_rust_insight_bg.wasm",
+    "saikuro_rust_insight.js",
+    "saikuro_rust_insight.d.ts"
+  ],
+  "main": "saikuro_rust_insight.js",
+  "types": "saikuro_rust_insight.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "saikuro-c-insight",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "saikuro_c_insight_bg.wasm",
+    "saikuro_c_insight.js",
+    "saikuro_c_insight.d.ts"
+  ],
+  "main": "saikuro_c_insight.js",
+  "types": "saikuro_c_insight.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
