@@ -20,6 +20,23 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+*.pid
+*.sock
+
+# Cache
+cache/
+
+# Logs
+*.log
+
+# Hook markers
+.dirty
+
 node_modules/
 dist/
 bin/
@@ -28,7 +45,12 @@ obj/
 __pycache__/
 .ruff_cache/
 site/
-build/
+Build/adapters/cpp/build/
 .venv/
 # TODO: setup proper .vscode so we can keep this
 .vscode/ 
+.DS_Store
+build_cpp/
+
+Demo/public/wasm/*
+Demo/src/wasm/*

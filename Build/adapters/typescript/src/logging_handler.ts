@@ -24,7 +24,7 @@
  */
 
 import type { Transport } from "./transport";
-import { PROTOCOL_VERSION } from "./envelope";
+import { makeLogEnvelope } from "./envelope";
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
@@ -60,12 +60,19 @@ function toSaikuroLevel(level: string): LogLevel {
  * @param transport - An open transport connected to the Saikuro runtime.
  * @returns A function that can be called with (level, name, message, fields).
  */
-export function createLoggingHandler(transport: Transport) {
+export function createLoggingHandler(
+  transport: Transport,
+): (
+  level: string,
+  name: string,
+  msg: string,
+  fields?: Record<string, unknown>,
+) => void {
   return function log(
     level: string,
     name: string,
     msg: string,
-    fields?: Record<string, unknown>
+    fields?: Record<string, unknown>,
   ): void {
     const ts = new Date().toISOString();
     const saikuroLevel = toSaikuroLevel(level);
@@ -81,19 +88,8 @@ export function createLoggingHandler(transport: Transport) {
       logRecord.fields = fields;
     }
 
-    const envelope: Record<string, unknown> = {
-      version: PROTOCOL_VERSION,
-      type: "log",
-      id: `log-${ts}`,
-      target: "$log",
-      args: [logRecord],
-    };
-
     // Fire-and-forget; swallow errors to prevent infinite recursion.
-    transport
-      .send(envelope)
-      .then(() => {})
-      .catch(() => {});
+    transport.send(makeLogEnvelope(logRecord, ts)).catch(() => {});
   };
 }
 

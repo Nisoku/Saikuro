@@ -273,9 +273,13 @@ public class ProviderDispatchStreamTests
         Assert.Equal(42L, responses[0]["result"]);
         // Error frame.
         Assert.False((bool)responses[1]["ok"]!);
-        var errMap = (Dictionary<string, object?>)responses[1]["error"]!;
-        Assert.Contains("mid-stream failure", (string)errMap["message"]!);
-        // Abort sentinel.
+        var err = (Dictionary<string, object?>)responses[1]["error"]!;
+        Assert.Equal("ProviderError", err["code"]);
+#pragma warning disable xUnit2013 // Do not use equality check to compare collections
+        Assert.Contains("mid-stream failure", (string)err["message"]!);
+#pragma warning restore xUnit2013
+        // Abort frame.
+        Assert.False((bool)responses[2]["ok"]!);
         Assert.Equal("abort", responses[2]["stream_control"]);
     }
 

@@ -1,239 +1,211 @@
 ---
 title: "Transports"
-description: "In-memory, Unix sockets, TCP, and WebSocket transport options"
+description: "In-memory, Unix sockets, TCP, WebSocket, and WasmHost transport options"
 ---
 
-The transport is the connection between an adapter and the Saikuro runtime. Saikuro picks one automatically based on where things are running, but you can override it when you need to.
+The transport connects adapters to the Saikuro runtime. All transports carry the same MessagePack-encoded envelopes; only the underlying mechanism differs.
 
-## Automatic Selection
+## Address Format
 
-Saikuro selects the most efficient transport by default:
+All adapters use a unified address string to select and configure transports:
 
-| Situation | Transport |
-| --------- | --------- |
-| Provider and runtime in the same process | In-memory |
-| Same machine, different processes | Unix socket (Linux/macOS) or named pipe (Windows) |
-| Different machines | TCP or WebSocket |
+| Format                                 | Transport        | Platform       |
+|----------------------------------------|------------------|----------------|
+| `memory://` (or `memory://name`)       | InMemory         | All (testing)  |
+| `unix:///path/to/socket`               | Unix socket      | Linux, macOS   |
+| `tcp://host:port`                      | TCP              | All native     |
+| `ws://host/path`                       | WebSocket        | All            |
+| `wss://host/path`                      | WebSocket TLS    | All            |
+| `wasm-host://channel` (or `wasm-host`) | BroadcastChannel | WASM (browser) |
 
-You don't have to configure anything for this to work. Start the runtime, start your providers and callers, and Saikuro figures out the right transport.
-
-## In-Memory Transport
-
-For same-process usage: testing, embedded runtimes, and WASM environments where sockets aren't available.
+The factory functions (`makeTransport` / `make_transport`) parse these addresses automatically:
 
 ```typescript
-// TypeScript
-import { Provider, Client, InMemoryTransport } from 'saikuro';
+// TypeScript - factory picks the right transport
+import { makeTransport } from "@nisoku/saikuro";
 
-const [providerTransport, clientTransport] = InMemoryTransport.pair();
-
-const provider = new Provider({ namespace: 'math', transport: providerTransport });
-provider.register('add', (a: number, b: number) => a + b);
-await provider.serve();
-
-const client = new Client({ transport: clientTransport });
-await client.connect();
-
-const result = await client.call('math.add', [1, 2]);
-// result === 3
+const transport = makeTransport("unix:///tmp/saikuro.sock");
 ```
 
 ```python
 # Python
-from saikuro import Provider, Client, InMemoryTransport
+from saikuro import make_transport
 
-provider_transport, client_transport = InMemoryTransport.pair()
-
-provider = Provider(namespace='math', transport=provider_transport)
-
-@provider.register('add')
-def add(a: int, b: int) -> int:
-    return a + b
-
-await provider.serve()
-
-client = Client(transport=client_transport)
-await client.connect()
-
-result = await client.call('math.add', [1, 2])
+transport = make_transport("unix:///tmp/saikuro.sock")
 ```
 
 ```csharp
-// C#
-var (providerTransport, clientTransport) = InMemoryTransport.Pair();
-
-var provider = new Provider("math", providerTransport);
-provider.Register<int, int, int>("add", (a, b) => a + b);
-await provider.ServeAsync();
-
-var client = new Client(clientTransport);
-await client.ConnectAsync();
-
-var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 });
+// C# - TransportFactory parses address strings
+var transport = TransportFactory.Create("unix:///tmp/saikuro.sock");
 ```
 
-In-memory transport is the default for tests. It gives you the full Saikuro behavior with no network overhead.
+## InMemory Transport
 
-::: callout info
-In-memory transport is the only transport available in WASM environments. The C# adapter has `#if WASM` guards that limit the available transports accordingly.
-:::
+For same-process usage: testing, embedded runtimes, and WASM environments.
 
-## Unix Socket / Named Pipe
-
-For same-machine cross-process communication. This is the default when the runtime and adapter are in different processes on the same host.
-
-The runtime binds to a well-known socket path. Adapters connect to it automatically:
+Both sides of the transport are created as a pair:
 
 ```typescript
-// TypeScript, explicit socket path
-const client = new Client({
-  transport: 'unix',
-  socketPath: '/tmp/saikuro.sock'
-});
+import { InMemoryTransport } from "@nisoku/saikuro";
+
+const [providerTransport, clientTransport] = InMemoryTransport.pair();
+
+const provider = new SaikuroProvider("math");
+// provider.serveOn(providerTransport); ...
+
+const client = await SaikuroClient.openOn(clientTransport);
 ```
 
 ```python
-# Python, explicit socket path
-client = Client(transport='unix', socket_path='/tmp/saikuro.sock')
+from saikuro import InMemoryTransport
+
+provider_transport, client_transport = InMemoryTransport.pair()
 ```
 
-On Windows, named pipes are used instead:
+InMemory transport is the default for tests. It gives you full Saikuro behavior with zero network overhead.
 
-```csharp
-// C#, named pipe (Windows)
-var client = new Client(new NamedPipeTransport("saikuro"));
+## Unix Socket
+
+For same-machine cross-process communication.
+
+```typescript
+const client = await SaikuroClient.connect("unix:///tmp/saikuro.sock");
+```
+
+```python
+async with SaikuroClient.connect("unix:///tmp/saikuro.sock") as client:
+    ...
+```
+
+```rust
+let client = Client::connect("unix:///tmp/saikuro.sock").await?;
+```
+
+## TCP Transport
+
+For cross-machine communication.
+
+```typescript
+const client = await SaikuroClient.connect("tcp://10.0.0.5:7700");
+```
+
+```python
+async with SaikuroClient.connect("tcp://10.0.0.5:7700") as client:
+    ...
 ```
 
 ## WebSocket Transport
 
-For browser clients or any situation where you're crossing a network boundary and need WebSocket-compatible transport.
+For browser clients or when you need HTTP compatibility.
 
 ```typescript
-// TypeScript, browser or Node.js WebSocket client
-const client = new Client({
-  transport: 'websocket',
-  url: 'ws://localhost:7700'
-});
-
-await client.connect();
-const result = await client.call('math.add', [1, 2]);
-```
-
-The runtime exposes a WebSocket endpoint. Configure it at startup:
-
-```bash
-saikuro-runtime --ws-port 7700
-```
-
-WebSocket transport works in browsers natively. The TypeScript adapter is plain JavaScript/TypeScript with no WASM compilation needed.
-
-## TCP Transport
-
-For direct TCP connections between machines. Lower overhead than WebSocket when you don't need HTTP compatibility.
-
-```typescript
-// TypeScript
-const client = new Client({
-  transport: 'tcp',
-  host: '10.0.0.5',
-  port: 7700
-});
+// Browser or Node.js
+const client = await SaikuroClient.connect("ws://localhost:7700");
 ```
 
 ```python
-# Python
-client = Client(transport='tcp', host='10.0.0.5', port=7700)
+async with SaikuroClient.connect("ws://localhost:7700") as client:
+    ...
 ```
 
-Start the runtime with TCP enabled:
+TLS is supported via the `wss://` scheme:
 
-```bash
-saikuro-runtime --tcp-port 7700
+```typescript
+const client = await SaikuroClient.connect("wss://example.com/saikuro");
+```
+
+## WasmHost Transport
+
+For same-origin browser WASM communication using the BroadcastChannel API. Both the runtime and adapters run in the browser, and the transport bridges them via message passing.
+
+```typescript
+// Browser WASM context
+import { WasmHostTransport } from "@nisoku/saikuro";
+
+const transport = new WasmHostTransport("saikuro");
+```
+
+The address string form is `wasm-host://channel-name`:
+
+```typescript
+const client = await SaikuroClient.connect("wasm-host://saikuro");
+```
+
+See the [WASM Guide](./wasm) for full details on WASM integration.
+
+## In C and C++
+
+Transport configuration is passed via the runtime handle at initialization:
+
+```c
+SaikuroRuntimeConfig config = {
+    .address = "unix:///tmp/saikuro.sock",
+    .transport_kind = SAIKURO_TRANSPORT_UNIX
+};
+SaikuroHandle* handle = saikuro_init(&config);
 ```
 
 ## Transport Requirements
 
-All transports must satisfy these properties for Saikuro to work correctly:
+All transports must provide:
 
-- **Ordered delivery**: Messages arrive in the order they were sent
-- **Backpressure**: Senders slow down when the receiver falls behind
-- **Binary-safe**: The transport carries raw bytes without modification
+- **Ordered delivery**: messages arrive in the order sent
+- **Backpressure**: senders slow down when the receiver falls behind
+- **Binary-safe**: raw bytes without modification
 
-The in-memory, Unix socket, and TCP transports satisfy all three by default. WebSocket does too once framing is handled.
+InMemory, Unix, TCP, and WebSocket all satisfy these by default.
 
-## TLS
-
-For TCP and WebSocket transports, you can enable TLS:
-
-```bash
-saikuro-runtime --tcp-port 7700 --tls-cert ./cert.pem --tls-key ./key.pem
-```
-
-The adapters detect TLS from the URL scheme (`wss://`) or an explicit flag:
+## Testing with InMemory Transport
 
 ```typescript
-// TypeScript
-const client = new Client({
-  transport: 'websocket',
-  url: 'wss://example.com/saikuro'
-});
-```
+import { describe, it, expect } from "vitest";
+import { SaikuroProvider, SaikuroClient, InMemoryTransport } from "@nisoku/saikuro";
 
-```python
-# Python
-client = Client(transport='tcp', host='example.com', port=7700, tls=True)
-```
-
-## Testing with In-Memory Transport
-
-For unit and integration tests, use `InMemoryTransport.pair()` to wire up a provider and client directly without starting a runtime process. This is the recommended pattern for tests:
-
-```typescript
-// TypeScript test
-import { describe, it, expect } from 'vitest';
-import { Provider, Client, InMemoryTransport } from 'saikuro';
-
-describe('math provider', () => {
-  it('adds two numbers', async () => {
+describe("math provider", () => {
+  it("adds two numbers", async () => {
     const [pt, ct] = InMemoryTransport.pair();
 
-    const provider = new Provider({ namespace: 'math', transport: pt });
-    provider.register('add', (a: number, b: number) => a + b);
-    await provider.serve();
+    const provider = new SaikuroProvider("math");
+    provider.register("add", (a: number, b: number) => a + b);
+    await provider.serveOn(pt);
 
-    const client = new Client({ transport: ct });
-    await client.connect();
-
-    expect(await client.call('math.add', [1, 2])).toBe(3);
+    const client = await SaikuroClient.openOn(ct);
+    expect(await client.call("math.add", [1, 2])).toBe(3);
   });
 });
 ```
 
 ```python
-# Python test
 import pytest
-from saikuro import Provider, Client, InMemoryTransport
+from saikuro import SaikuroProvider, SaikuroClient, InMemoryTransport
 
 @pytest.mark.asyncio
 async def test_add():
-    provider_t, client_t = InMemoryTransport.pair()
+    pt, ct = InMemoryTransport.pair()
+    provider = SaikuroProvider("math")
 
-    provider = Provider(namespace='math', transport=provider_t)
-
-    @provider.register('add')
+    @provider.register("add")
     def add(a: int, b: int) -> int:
         return a + b
 
-    await provider.serve()
-
-    client = Client(transport=client_t)
-    await client.connect()
-
-    assert await client.call('math.add', [1, 2]) == 3
+    await provider.serve_on(pt)
+    async with SaikuroClient.open_on(ct) as client:
+        assert await client.call("math.add", [1, 2]) == 3
 ```
 
 ## Next Steps
 
-- [Language Adapters](../adapters/): Adapter-specific transport options and configuration
-- [Protocol Reference](../api/): How the wire format works at the byte level
-- [Examples](./examples): Real patterns with different transport configurations
+::: grids
+::: grid
+::: button "Storage" ./storage.md icon:database
+:::
+::: grid
+::: button "WASM Guide" ./wasm.md icon:globe
+:::
+::: grid
+::: button "Language Adapters" ../adapters/ icon:code
+:::
+::: grid
+::: button "Protocol Reference" ../api/ icon:box
+:::
+:::

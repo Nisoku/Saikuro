@@ -25,16 +25,41 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+
+      - name: Restore C# WASM workload
+        run: dotnet workload restore
+        working-directory: Demo/wasm/csharp/InsightLab
+
       - name: Build documentation
         working-directory: Docs
         run: |
           npm ci
           npm run build
 
+      - name: Setup all adapters
+        run: just setup
+
+      - name: Build demo
+        run: just web_demo build
+
       - name: Prepare deployment
         run: |
           mkdir -p deploy
+
+          # Demo files are in Demo/dist, so we copy them to deploy/demo
+          cp -r Demo/dist deploy/demo
+
+          # Docs are built to Docs/site, so we copy them to deploy/docs
           cp -r Docs/site deploy/docs
+
+          # Create an index.html that redirects to the docs (maybe will replace this with a proper homepage later)
           cat > deploy/index.html << 'EOF'
           <!DOCTYPE html>
           <html>

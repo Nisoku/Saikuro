@@ -283,7 +283,7 @@ class TestProviderAnnounceHandshake:
         p = SaikuroProvider("math")
         p.register_function("add", lambda a, b: a + b)
 
-        task = asyncio.create_task(p.serve_on_transport(provider_transport))
+        task = asyncio.create_task(p.serve_on(provider_transport))
 
         announce = await runtime_transport.recv()
         assert announce is not None

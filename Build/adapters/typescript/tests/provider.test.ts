@@ -447,4 +447,54 @@ describe("SaikuroProvider.schemaObject type descriptors", () => {
     });
     expect(fn?.returns).toEqual({ kind: "primitive", type: "f64" });
   });
+
+  //  auto schema detection via Function.toString
+
+  describe("auto schema detection", () => {
+    it("extracts params from arrow functions", () => {
+      const p = new SaikuroProvider("test");
+      p.register("add", (a: number, b: number) => a + b);
+      const fn = p.schemaObject().namespaces["test"]?.functions["add"];
+      expect(fn?.args).toHaveLength(2);
+      expect(fn?.args?.[0]?.name).toBe("a");
+      expect(fn?.args?.[1]?.name).toBe("b");
+      expect(fn?.returns).toEqual({ kind: "primitive", type: "any" });
+    });
+
+    it("extracts params from async functions", () => {
+      const p = new SaikuroProvider("test");
+      p.register("fetch", async (url: string) => "ok");
+      const fn = p.schemaObject().namespaces["test"]?.functions["fetch"];
+      expect(fn?.args).toHaveLength(1);
+      expect(fn?.args?.[0]?.name).toBe("url");
+    });
+
+    it("detects streams from generator handlers", () => {
+      const p = new SaikuroProvider("test");
+      p.register("count", async function* (n: number) {
+        yield n;
+      });
+      const fn = p.schemaObject().namespaces["test"]?.functions["count"];
+      expect(fn?.returns).toEqual({
+        kind: "stream",
+        item: { kind: "primitive", type: "any" },
+      });
+    });
+
+    it("handles single-param arrow functions", () => {
+      const p = new SaikuroProvider("test");
+      p.register("double", (x: number) => x * 2);
+      const fn = p.schemaObject().namespaces["test"]?.functions["double"];
+      expect(fn?.args).toHaveLength(1);
+      expect(fn?.args?.[0]?.name).toBe("x");
+    });
+
+    it("detects default parameter values", () => {
+      const p = new SaikuroProvider("test");
+      p.register("greet", (name = "world") => `hello ${name}`);
+      const fn = p.schemaObject().namespaces["test"]?.functions["greet"];
+      expect(fn?.args?.[0]?.default).toBe('"world"');
+      expect(fn?.args?.[0]?.optional).toBe(true);
+    });
+  });
 });

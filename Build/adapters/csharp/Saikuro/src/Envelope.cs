@@ -98,7 +98,7 @@ internal static class StreamControlExt
 
 // ResourceHandle
 
-    /// <summary>Opaque reference to large or external data.</summary>
+/// <summary>Opaque reference to large or external data.</summary>
 public sealed class ResourceHandle
 {
     public string Id { get; init; } = "";
@@ -109,20 +109,12 @@ public sealed class ResourceHandle
     /// <summary>Decode from a raw MessagePack map (as decoded by the transport layer).</summary>
     public static ResourceHandle? FromMap(Dictionary<string, object?> map)
     {
-        if (!map.TryGetValue("id", out var rawId) || rawId is not string id)
+        if (!map.TryGetValue(WireKey.Id, out var rawId) || rawId is not string id)
             return null;
 
-        string? mime = map.TryGetValue("mime_type", out var m) && m is string ms ? ms : null;
-        long? size = map.TryGetValue("size", out var s)
-            ? s switch
-            {
-                long l => l,
-                int i => (long)i,
-                ulong u => (long)u,
-                _ => (long?)null,
-            }
-            : null;
-        string? uri = map.TryGetValue("uri", out var u2) && u2 is string us ? us : null;
+        string? mime = map.TryGetValue(WireKey.MimeType, out var m) && m is string ms ? ms : null;
+        long? size = map.TryGetValue(WireKey.Size, out var s) ? Envelope.CoerceInt64(s) : null;
+        string? uri = map.TryGetValue(WireKey.Uri, out var u2) && u2 is string us ? us : null;
 
         return new ResourceHandle
         {
@@ -136,7 +128,7 @@ public sealed class ResourceHandle
 
 // Envelope (outbound)
 
-    /// <summary>Outbound invocation envelope. Serialised to/from a MessagePack map.</summary>
+/// <summary>Outbound invocation envelope. Serialised to/from a MessagePack map.</summary>
 public sealed record Envelope
 {
     public uint Version { get; init; } = Protocol.Version;
@@ -212,6 +204,68 @@ public sealed record Envelope
             Args = [schemaDict],
         };
 
+    // Helper methods
+
+    /// <summary>
+    /// Coerces a value to a UInt64, handling common numeric types.
+    /// </summary>
+    public static ulong? CoerceUInt64(object? value)
+    {
+        return value switch
+        {
+            ulong u => u,
+            long l => l >= 0 ? (ulong)l : null,
+            int i => i >= 0 ? (ulong)i : null,
+            uint u => u,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Coerces a value to a Int64, handling common numeric types.
+    /// </summary>
+    public static long? CoerceInt64(object? value)
+    {
+        return value switch
+        {
+            long l => l,
+            int i => i,
+            ulong u => u <= long.MaxValue ? (long)u : null,
+            uint u => u,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets a required string value from a dictionary, throwing if missing.
+    /// </summary>
+    public static string GetRequiredString(Dictionary<string, object?> dict, string key)
+    {
+        if (dict.TryGetValue(key, out var value))
+        {
+            if (value is string s) return s;
+            if (value is byte[] b && b.Length == 16)
+            {
+                return new Guid(
+                    b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3],
+                    (short)(b[4] << 8 | b[5]),
+                    (short)(b[6] << 8 | b[7]),
+                    b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+                ).ToString("D");
+            }
+        }
+        throw new MalformedEnvelopeException("MissingRequiredField", $"Missing required field: {key}", null);
+    }
+
+    /// <summary>
+    /// Gets a required boolean value from a dictionary, throwing if missing or invalid.
+    /// </summary>
+    public static bool GetRequiredBool(Dictionary<string, object?> dict, string key)
+    {
+        return dict.TryGetValue(key, out var value) && value is bool b ? b
+            : throw new MalformedEnvelopeException("MissingRequiredField", $"Missing or invalid boolean field: {key}", null);
+    }
+
     // Serialisation
 
     /// <summary>Serialise to the canonical MessagePack-ready dictionary.</summary>
@@ -219,52 +273,41 @@ public sealed record Envelope
     {
         var d = new Dictionary<string, object?>
         {
-            ["version"] = (int)Version,
-            ["type"] = Type.ToWire(),
-            ["id"] = Id,
-            ["target"] = Target,
-            ["args"] = Args,
+            [WireKey.Version] = (int)Version,
+            [WireKey.Type] = Type.ToWire(),
+            [WireKey.Id] = Id,
+            [WireKey.Target] = Target,
+            [WireKey.Args] = Args,
         };
         if (Meta is { Count: > 0 })
-            d["meta"] = Meta;
+            d[WireKey.Meta] = Meta;
         if (Capability is not null)
-            d["capability"] = Capability;
+            d[WireKey.Capability] = Capability;
         if (BatchItems is not null)
-            d["batch_items"] = BatchItems.Select(e => e.ToMsgpackDict()).ToList();
+            d[WireKey.BatchItems] = BatchItems.Select(e => e.ToMsgpackDict()).ToList();
         if (StreamControlValue.HasValue)
-            d["stream_control"] = StreamControlValue.Value.ToWire();
+            d[WireKey.StreamControl] = StreamControlValue.Value.ToWire();
         if (Seq.HasValue)
-            d["seq"] = (long)Seq.Value;
+            d[WireKey.Seq] = (long)Seq.Value;
         return d;
     }
 
     /// <summary>Deserialise from a raw MessagePack map.</summary>
     public static Envelope FromMsgpackDict(Dictionary<string, object?> d)
     {
-        var typeStr = (string)d["type"]!;
-        var sc =
-            d.TryGetValue("stream_control", out var scRaw) && scRaw is string scs
-                ? StreamControlExt.FromWire(scs)
-                : (StreamControl?)null;
-        var seq = d.TryGetValue("seq", out var seqRaw)
-            ? seqRaw switch
-            {
-                long l => (ulong)l,
-                int i => (ulong)i,
-                ulong u => u,
-                _ => (ulong?)null,
-            }
-            : null;
+        var typeStr = (string)d[WireKey.Type]!;
+        var sc = ParseStreamControl(d);
+        var seq = ParseSeq(d);
         var args =
-            d.TryGetValue("args", out var argsRaw) && argsRaw is IList<object?> al
+            d.TryGetValue(WireKey.Args, out var argsRaw) && argsRaw is IList<object?> al
                 ? (IReadOnlyList<object?>)al.ToList()
                 : (IReadOnlyList<object?>)[];
         var meta =
-            d.TryGetValue("meta", out var metaRaw) && metaRaw is Dictionary<string, object?> md
+            d.TryGetValue(WireKey.Meta, out var metaRaw) && metaRaw is Dictionary<string, object?> md
                 ? md
                 : null;
         List<Envelope>? items = null;
-        if (d.TryGetValue("batch_items", out var biRaw) && biRaw is System.Collections.IList biList)
+        if (d.TryGetValue(WireKey.BatchItems, out var biRaw) && biRaw is System.Collections.IList biList)
             items = biList
                 .Cast<object?>()
                 .OfType<Dictionary<string, object?>>()
@@ -273,15 +316,15 @@ public sealed record Envelope
 
         return new Envelope
         {
-            Version = d.TryGetValue("version", out var v)
+            Version = d.TryGetValue(WireKey.Version, out var v)
                 ? (uint)Convert.ToInt32(v)
                 : Protocol.Version,
             Type = InvocationTypeExt.FromWire(typeStr),
-            Id = (string)d["id"]!,
-            Target = (string)d["target"]!,
+            Id = Envelope.GetRequiredString(d, WireKey.Id),
+            Target = Envelope.GetRequiredString(d, WireKey.Target),
             Args = args,
             Meta = meta,
-            Capability = d.TryGetValue("capability", out var cap) ? cap as string : null,
+            Capability = d.TryGetValue(WireKey.Capability, out var cap) && cap is string cs ? cs : null,
             BatchItems = items,
             StreamControlValue = sc,
             Seq = seq,
@@ -290,17 +333,30 @@ public sealed record Envelope
 
     // Helpers
 
-    public string? Namespace => Target.LastIndexOf('.') is int i and >= 0 ? Target[..i] : null;
+    private int? LastDotIndex => Target.LastIndexOf('.') is int i and >= 0 ? i : null;
 
-    public string? FunctionName =>
-        Target.LastIndexOf('.') is int i and >= 0 ? Target[(i + 1)..] : null;
+    public string? Namespace => LastDotIndex is { } i ? Target[..i] : null;
+
+    public string? FunctionName => LastDotIndex is { } i ? Target[(i + 1)..] : null;
 
     private static string NewId() => Guid.NewGuid().ToString();
+
+    public static StreamControl? ParseStreamControl(Dictionary<string, object?> d)
+    {
+        return d.TryGetValue(WireKey.StreamControl, out var scRaw) && scRaw is string scs
+            ? StreamControlExt.FromWire(scs)
+            : null;
+    }
+
+    public static ulong? ParseSeq(Dictionary<string, object?> d)
+    {
+        return d.TryGetValue(WireKey.Seq, out var seqRaw) ? CoerceUInt64(seqRaw) : null;
+    }
 }
 
-// ResponseEnvelope (inbound) 
+// ResponseEnvelope (inbound)
 
-    /// <summary>Inbound response envelope.</summary>
+/// <summary>Inbound response envelope.</summary>
 public sealed class ResponseEnvelope
 {
     public string Id { get; init; } = "";
@@ -316,28 +372,17 @@ public sealed class ResponseEnvelope
     public static ResponseEnvelope FromMsgpackDict(Dictionary<string, object?> d)
     {
         ErrorPayload? err = null;
-        if (d.TryGetValue("error", out var errRaw) && errRaw is Dictionary<string, object?> em)
+        if (d.TryGetValue(WireKey.Error, out var errRaw) && errRaw is Dictionary<string, object?> em)
             err = ErrorPayload.FromMap(em);
 
-        var sc =
-            d.TryGetValue("stream_control", out var scRaw) && scRaw is string scs
-                ? StreamControlExt.FromWire(scs)
-                : (StreamControl?)null;
-        var seq = d.TryGetValue("seq", out var seqRaw)
-            ? seqRaw switch
-            {
-                long l => (ulong)l,
-                int i => (ulong)i,
-                ulong u => u,
-                _ => (ulong?)null,
-            }
-            : null;
+        var sc = Envelope.ParseStreamControl(d);
+        var seq = Envelope.ParseSeq(d);
 
         return new ResponseEnvelope
         {
-            Id = (string)d["id"]!,
-            Ok = (bool)d["ok"]!,
-            Result = d.TryGetValue("result", out var res) ? res : null,
+            Id = Envelope.GetRequiredString(d, WireKey.Id),
+            Ok = Envelope.GetRequiredBool(d, WireKey.Ok),
+            Result = d.TryGetValue(WireKey.Result, out var res) ? res : null,
             Error = err,
             Seq = seq,
             StreamControlValue = sc,
@@ -358,10 +403,10 @@ public sealed class ErrorPayload
     public static ErrorPayload FromMap(Dictionary<string, object?> d) =>
         new()
         {
-            Code = d.TryGetValue("code", out var c) && c is string cs ? cs : "Internal",
-            Message = d.TryGetValue("message", out var m) && m is string ms ? ms : "",
+            Code = d.TryGetValue(WireKey.Code, out var c) && c is string cs ? cs : "Internal",
+            Message = d.TryGetValue(WireKey.Message, out var m) && m is string ms ? ms : "",
             Details =
-                d.TryGetValue("details", out var det) && det is Dictionary<string, object?> dm
+                d.TryGetValue(WireKey.Details, out var det) && det is Dictionary<string, object?> dm
                     ? dm
                     : new Dictionary<string, object?>(),
         };

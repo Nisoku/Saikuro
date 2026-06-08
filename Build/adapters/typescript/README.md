@@ -1,8 +1,8 @@
-# saikuro TypeScript/JavaScript adapter
+# Saikuro TypeScript/JavaScript adapter
 
 TypeScript/JavaScript adapter for the [Saikuro](https://github.com/Nisoku/Saikuro)
-cross-language IPC fabric. Works in Node.js and (via WebSocket transport) in the
-browser.
+cross-language IPC fabric. Works in Node.js and in the browser through both
+WebSocket and `wasm-host://` transports.
 
 ## Installation
 
@@ -40,6 +40,26 @@ provider.register("add", async ([a, b]) => {
 
 await provider.serve("tcp://127.0.0.1:7700");
 ```
+
+### Browser transports
+
+The adapter exports both the raw BroadcastChannel transport classes and the
+WasmHost aliases used by browser-side demos and wasm runtimes:
+
+```typescript
+import {
+  WasmHostTransport,
+  WasmHostConnector,
+  WasmHostListener,
+} from "@nisoku/saikuro";
+
+const transport = new WasmHostTransport("saikuro-demo");
+await transport.connect();
+```
+
+Use `wasm-host` or `wasm-host://channel-name` when you want same-origin
+browser contexts, workers, or wasm guests to talk over BroadcastChannel rather
+than a network socket.
 
 ## Development
 

@@ -57,7 +57,10 @@ pub enum ValidationError {
         visibility: Visibility,
     },
 
-    #[error("batch envelope must contain at least one item")]
+    #[error("batch envelope has no items field")]
+    MissingBatch,
+
+    #[error("batch envelope has an empty items list")]
     EmptyBatch,
 
     #[error("batch item at index {index}: {source}")]
@@ -89,7 +92,7 @@ impl ValidationError {
             },
             Self::ArgumentArity { .. } | Self::ArgumentType { .. } => ErrorCode::InvalidArguments,
             Self::VisibilityDenied { .. } => ErrorCode::CapabilityDenied,
-            Self::EmptyBatch => ErrorCode::MalformedEnvelope,
+            Self::MissingBatch | Self::EmptyBatch => ErrorCode::MalformedEnvelope,
             Self::BatchItem { source, .. } => source.error_code(),
         }
     }
@@ -194,7 +197,7 @@ impl InvocationValidator {
         // Batch-specific: must have items, must not have a target.
         if envelope.invocation_type == InvocationType::Batch {
             match &envelope.batch_items {
-                None => return Err(ValidationError::EmptyBatch),
+                None => return Err(ValidationError::MissingBatch),
                 Some(items) if items.is_empty() => return Err(ValidationError::EmptyBatch),
                 _ => {}
             }
@@ -223,7 +226,9 @@ impl InvocationValidator {
     // Batch validation
 
     fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
-        let items = envelope.batch_items.as_ref().unwrap(); // checked in structural pass
+        let items = envelope.batch_items.as_ref().ok_or_else(|| {
+            ValidationError::MalformedEnvelope("batch envelope missing batch_items".into())
+        })?;
 
         // Validate each item; collect the first error with its index.
         for (index, item) in items.iter().enumerate() {
@@ -409,5 +414,25 @@ impl InvocationValidator {
                 received: value.type_name().to_owned(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use saikuro_core::envelope::{Envelope, InvocationType};
+
+    #[test]
+    fn batch_with_empty_items_returns_empty_batch_error() {
+        let registry = crate::registry::SchemaRegistry::new();
+        let validator = InvocationValidator::new(registry);
+
+        let mut batch = Envelope::call("", vec![]);
+        batch.invocation_type = InvocationType::Batch;
+        batch.target = String::new();
+        batch.batch_items = Some(vec![]);
+
+        let result = validator.validate(&batch);
+        assert!(matches!(result, Err(ValidationError::EmptyBatch)));
     }
 }

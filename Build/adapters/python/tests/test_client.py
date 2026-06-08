@@ -485,7 +485,7 @@ class TestClientBatch:
             b,
             {
                 "ok": lambda: "fine",
-                # "missing" is not registered → None result
+                # "missing" is not registered -> None result
             },
         )
 

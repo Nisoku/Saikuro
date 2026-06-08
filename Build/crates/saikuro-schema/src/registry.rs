@@ -272,8 +272,6 @@ pub enum RegistryError {
 
 /// Split a `"namespace.function"` target into its two components.
 fn split_target(target: &str) -> Result<(&str, &str), RegistryError> {
-    match target.rfind('.') {
-        Some(dot) => Ok((&target[..dot], &target[dot + 1..])),
-        None => Err(RegistryError::MalformedTarget(target.to_owned())),
-    }
+    saikuro_core::split_target(target)
+        .ok_or_else(|| RegistryError::MalformedTarget(target.to_owned()))
 }

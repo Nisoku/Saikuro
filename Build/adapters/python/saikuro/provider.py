@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from .envelope import Envelope, InvocationType, ResponseEnvelope, StreamControl
 from .error import SaikuroError
@@ -36,6 +36,12 @@ logger = logging.getLogger(__name__)
 # A handler is any callable (sync or async) that accepts positional args and
 # returns a value (or an async generator for streams).
 Handler = Callable[..., Any]
+
+
+class _TransportSink(Protocol):
+    """Minimal transport-like interface: only requires async send."""
+
+    async def send(self, obj: dict) -> None: ...
 
 
 class SaikuroProvider:
@@ -113,7 +119,7 @@ class SaikuroProvider:
     async def _dispatch(
         self,
         envelope: Envelope,
-        transport: BaseTransport,
+        transport: _TransportSink,
     ) -> None:
         """Handle one inbound invocation envelope."""
         if envelope.invocation_type == InvocationType.BATCH:
@@ -155,12 +161,14 @@ class SaikuroProvider:
         except Exception as exc:
             logger.exception("provider error in '%s'", envelope.target)
             if not is_cast:
-                await transport.send(_make_error(envelope.id, "ProviderError", str(exc)))
+                await transport.send(
+                    _make_error(envelope.id, "ProviderError", str(exc))
+                )
 
     async def _dispatch_batch(
         self,
         envelope: Envelope,
-        transport: BaseTransport,
+        transport: _TransportSink,
     ) -> None:
         """Dispatch a batch envelope: run each item and return results as a list.
 
@@ -218,12 +226,7 @@ class SaikuroProvider:
         seq = 0
         try:
             async for item in handler(*envelope.args):
-                response = {
-                    "id": envelope.id,
-                    "ok": True,
-                    "result": item,
-                    "seq": seq,
-                }
+                response = {**_make_ok(envelope.id, item), "seq": seq}
                 await transport.send(response)
                 seq += 1
             # End-of-stream sentinel
@@ -255,7 +258,7 @@ class SaikuroProvider:
         async with transport:
             await self._run_serve_loop(transport)
 
-    async def serve_on_transport(self, transport: BaseTransport) -> None:
+    async def serve_on(self, transport: BaseTransport) -> None:
         """Serve invocations on an already-connected transport."""
         async with transport:
             await self._run_serve_loop(transport)
@@ -318,14 +321,11 @@ class SaikuroProvider:
                 )
                 continue
             # Background dispatch; done-callback logs any unhandled exception.
-            task = asyncio.ensure_future(self._dispatch(envelope, transport))
+            task = asyncio.create_task(self._dispatch(envelope, transport))
             task.add_done_callback(_log_task_exception)
 
 
 #  Convenience decorator
-
-# Module-level default provider (optional convenience).
-_default_provider: Optional[SaikuroProvider] = None
 
 
 def register_function(
@@ -339,51 +339,46 @@ def register_function(
 
     `target` must be in ``"namespace.function"`` format.
     """
-    global _default_provider
+
+    providers = register_function._default_providers
 
     ns, _, name = target.rpartition(".")
     if not ns or not name:
         raise ValueError(f"target must be 'namespace.function', got: {target!r}")
 
-    if _default_provider is None or _default_provider.namespace != ns:
-        _default_provider = SaikuroProvider(ns)
+    if ns not in providers:
+        providers[ns] = SaikuroProvider(ns)
 
     if fn is not None:
-        _default_provider.register_function(name, fn, capabilities=capabilities)
+        providers[ns].register_function(name, fn, capabilities=capabilities)
         return fn
 
     # Used as a decorator without arguments.
     def decorator(f: Handler) -> Handler:
-        _default_provider.register_function(name, f, capabilities=capabilities)  # type: ignore[union-attr]
+        providers[ns].register_function(name, f, capabilities=capabilities)
         return f
 
     return decorator
 
 
+register_function._default_providers: dict[str, SaikuroProvider] = {}
+
+
 #  Helpers
 
 
-class _ResultSink(BaseTransport):
-    """A no-op transport that captures the result or error from a single dispatch call."""
+class _ResultSink:
+    """Captures the result or error from a single dispatch call. Composed, not inherited."""
 
     def __init__(self) -> None:
         self.result: Any = None
         self.error: Optional[dict] = None
-
-    async def connect(self) -> None:
-        pass
-
-    async def close(self) -> None:
-        pass
 
     async def send(self, obj: dict) -> None:
         if obj.get("ok"):
             self.result = obj.get("result")
         else:
             self.error = obj.get("error")
-
-    async def recv(self) -> Optional[dict]:
-        return None
 
 
 def _make_ok(inv_id: str, result: Any) -> dict:

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use anyhow::Context;
 use clap::Parser;
 use serde_json::{json, Value};
 use syn::{
@@ -179,24 +180,22 @@ fn self_type_name(ty: &Type) -> String {
 }
 
 fn insert_function(functions: &mut serde_json::Map<String, Value>, key: String, schema: Value) {
-    if !functions.contains_key(&key) {
-        functions.insert(key, schema);
-        return;
-    }
-
-    let mut n = 2usize;
-    loop {
-        let candidate = format!("{key}#{n}");
-        if !functions.contains_key(&candidate) {
-            eprintln!(
-                "warning: duplicate extracted function name '{}', stored as '{}'",
-                key, candidate
-            );
-            functions.insert(candidate, schema);
-            break;
+    if functions.contains_key(&key) {
+        let mut n = 2usize;
+        loop {
+            let candidate = format!("{key}#{n}");
+            if !functions.contains_key(&candidate) {
+                eprintln!(
+                    "warning: duplicate extracted function name '{}', stored as '{}'",
+                    key, candidate
+                );
+                functions.insert(candidate, schema);
+                return;
+            }
+            n += 1;
         }
-        n += 1;
     }
+    functions.insert(key, schema);
 }
 
 fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
@@ -257,30 +256,21 @@ fn extract_schema(source: &str, namespace: &str) -> Result<Value, String> {
     }))
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let source = match fs::read_to_string(&args.source) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("failed to read {}: {e}", args.source.display());
-            std::process::exit(1);
-        }
-    };
+    let source = fs::read_to_string(&args.source)
+        .with_context(|| format!("failed to read {}", args.source.display()))?;
 
-    let schema = match extract_schema(&source, &args.namespace) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(2);
-        }
-    };
+    let schema = extract_schema(&source, &args.namespace).map_err(anyhow::Error::msg)?;
 
     let out = if args.pretty {
-        serde_json::to_string_pretty(&schema).expect("serialize schema")
+        serde_json::to_string_pretty(&schema)
     } else {
-        serde_json::to_string(&schema).expect("serialize schema")
-    };
+        serde_json::to_string(&schema)
+    }
+    .context("failed to serialize schema")?;
 
     println!("{out}");
+    Ok(())
 }

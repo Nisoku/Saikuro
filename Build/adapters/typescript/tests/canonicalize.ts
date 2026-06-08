@@ -60,6 +60,22 @@ export const normalizeReturns = (c: any): any => {
   return c;
 };
 
+/** Normalize numeric types f64/i64 to a common representation for parity. */
+export const normalizeNumeric = (c: any): any => {
+  if (!c || typeof c !== "object") return c;
+  if (Array.isArray(c)) {
+    if (c[0] === "p" && (c[1] === "f64" || c[1] === "i64")) {
+      return ["p", "num"];
+    }
+    return c.map(normalizeNumeric);
+  }
+  const result: any = {};
+  for (const key of Object.keys(c)) {
+    result[key] = normalizeNumeric(c[key]);
+  }
+  return result;
+};
+
 export const tolerantNormalize = (a: any, b: any, c: any) => {
   const isAny = (r: any) => Array.isArray(r) && r[0] === "p" && r[1] === "any";
   const isStream = (r: any) => Array.isArray(r) && r[0] === "s";

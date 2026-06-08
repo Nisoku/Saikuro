@@ -5,13 +5,11 @@
 //! a simple 4-byte big-endian length prefix before every frame:
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio_util::codec::{Decoder, Encoder};
+use saikuro_exec::tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::{Result, TransportError};
 
-/// Maximum allowed frame size (16 MiB).  Frames larger than this are rejected
-/// to prevent memory exhaustion from malformed or malicious peers.
-pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
+pub use crate::MAX_FRAME_SIZE;
 
 /// Tokio codec that frames a byte stream into discrete length-prefixed messages.
 #[derive(Debug, Clone, Default)]
@@ -46,7 +44,11 @@ impl Decoder for LengthPrefixedCodec {
             }
         };
 
-        let frame_len = frame_len as usize;
+        let frame_len =
+            usize::try_from(frame_len).map_err(|_| TransportError::MessageTooLarge {
+                size: frame_len as usize,
+                limit: MAX_FRAME_SIZE,
+            })?;
 
         if frame_len > MAX_FRAME_SIZE {
             return Err(TransportError::MessageTooLarge {
@@ -82,7 +84,12 @@ impl Encoder<Bytes> for LengthPrefixedCodec {
         }
 
         dst.reserve(4 + len);
-        dst.put_u32(len as u32);
+        dst.put_u32(
+            u32::try_from(len).map_err(|_| TransportError::MessageTooLarge {
+                size: len,
+                limit: MAX_FRAME_SIZE,
+            })?,
+        );
         dst.put(item);
         Ok(())
     }

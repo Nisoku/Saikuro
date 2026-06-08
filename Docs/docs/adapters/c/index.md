@@ -1,72 +1,54 @@
 ---
 title: "C Adapter"
-description: "Stable C ABI for Saikuro"
+description: "Saikuro adapter for C"
 ---
 
-The C adapter provides a stable C ABI over the Rust adapter runtime.
+The C adapter provides a minimal FFI-friendly header. All arguments and results are JSON strings.
 
-## Build
-
-```bash
-cd Build
-cargo build -p saikuro-c
-```
-
-Output libraries are produced in Cargo target directories (for example `libsaikuro_c.a` and `libsaikuro_c.so` on Linux).
-
-## Header
-
-- `Build/adapters/c/include/saikuro.h`
-
-## API model
-
-- `saikuro_client_t`: connect, call, cast, batch, stream, channel, and resource invocation
-- `saikuro_stream_t`: read stream items as JSON
-- `saikuro_channel_t`: send/receive channel JSON frames
-- `saikuro_provider_t`: register C callbacks and serve a namespace
-
-## Capability parity
-
-| Primitive | C adapter support |
-| --------- | ----------------- |
-| `call` | Yes (`saikuro_client_call_json`) |
-| `cast` | Yes (`saikuro_client_cast_json`) |
-| `stream` | Yes (`saikuro_client_stream_json`) |
-| `channel` | Yes (`saikuro_client_channel_json`) |
-| `batch` | Yes (`saikuro_client_batch_json`) |
-| `resource` | Yes (`saikuro_client_resource_json`) |
-
-## Ownership and safety
-
-- Pointer-returning APIs return `NULL` on failure
-- Integer-returning APIs return non-zero on failure
-- Use `saikuro_last_error_message()` for diagnostics
-- Free adapter-owned returned strings with `saikuro_string_free()`
-- Provider callbacks must return heap-allocated JSON strings created with `saikuro_string_dup()`
-
-## Ownership-safe callback example
+## Installation
 
 ```c
-static char *sum_cb(void *ctx, const char *args_json) {
-	(void)ctx;
-	(void)args_json;
-	return saikuro_string_dup("42");
+#include "saikuro.h"
+// link libsaikuro_c.a
+```
+
+## Client
+
+```c
+#include "saikuro.h"
+#include <stdio.h>
+
+int main() {
+    saikuro_client_t client = saikuro_client_connect("unix:///tmp/saikuro.sock");
+
+    char* result = saikuro_client_call_json(client, "math.add", "[10, 32]");
+    printf("result: %s\n", result);
+    saikuro_string_free(result);
+
+    saikuro_client_close(client);
+    saikuro_client_free(client);
+    return 0;
 }
 ```
 
-The callback return value is owned by the adapter runtime after return. Do not return stack pointers or string literals.
+## Provider
 
-## Useful APIs
+```c
+#include "saikuro.h"
 
-- `saikuro_client_batch_json(...)`
-- `saikuro_client_stream_json(...)` + `saikuro_stream_next_json(...)`
-- `saikuro_client_channel_json(...)` + `saikuro_channel_send_json(...)`
-- `saikuro_client_resource_json(...)`
-- `saikuro_client_log(...)`
+char* add_handler(void* user_data, const char* args_json) {
+    return saikuro_string_dup("42");
+}
 
-## Next Steps
+int main() {
+    saikuro_provider_t provider = saikuro_provider_new("math");
+    saikuro_provider_register(provider, "add", add_handler, NULL);
+    saikuro_provider_serve(provider, "unix:///tmp/saikuro.sock");
+    saikuro_provider_free(provider);
+    return 0;
+}
+```
 
-- [C++ Adapter](../cpp/): RAII wrapper over the C ABI
-- [C API Reference](./api-reference): Stable ABI function and handle reference
-- [C examples](./examples): C ABI usage and ownership patterns
-- [Code Generation](../../guide/codegen): Generate C-compatible clients from schema
+## API Reference
+
+See the [C API Reference](./api-reference) for the full function list.

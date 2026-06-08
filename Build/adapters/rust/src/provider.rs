@@ -231,7 +231,7 @@ impl Provider {
         // is non-fatal: the provider enters the serve loop regardless so that
         // direct-transport test setups (no runtime) work without a 5-second
         // delay.  A real deployment failure is surfaced via the tracing warning.
-        match tokio::time::timeout(std::time::Duration::from_millis(500), transport.recv()).await {
+        match saikuro_exec::timeout(std::time::Duration::from_millis(500), transport.recv()).await {
             Ok(Ok(Some(ack_frame))) => match ResponseEnvelope::from_msgpack(&ack_frame) {
                 Ok(ack) if ack.ok => {
                     debug!(namespace = %self.namespace, "schema announce acknowledged");
@@ -257,11 +257,7 @@ impl Provider {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
 // Dispatch helpers
-// ---------------------------------------------------------------------------
-
 /// Dispatch a `Call` envelope, send the response (ok or error) to the runtime.
 async fn dispatch_call(
     envelope: Envelope,
@@ -410,11 +406,7 @@ async fn dispatch_batch(
     let response = ResponseEnvelope::ok(id, CoreValue::Array(results));
     send_response(transport, &response).await;
 }
-
-// ---------------------------------------------------------------------------
 // Wire helpers
-// ---------------------------------------------------------------------------
-
 /// Extract the local function name from a fully-qualified `"namespace.fn"` target.
 /// If there is no dot, returns the whole string.
 fn local_name(target: &str) -> &str {

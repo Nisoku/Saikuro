@@ -63,8 +63,15 @@ class SaikuroClient:
 
     @classmethod
     def from_transport(cls, transport: BaseTransport) -> "SaikuroClient":
-        """Construct a client from an already-instantiated transport."""
+        """Construct a client from an already-instantiated transport without connecting."""
         return cls(transport)
+
+    @classmethod
+    async def open_on(cls, transport: BaseTransport) -> "SaikuroClient":
+        """Connect an already-instantiated transport and return a ready client."""
+        client = cls(transport)
+        await client._connect()
+        return client
 
     #  Lifecycle
 
@@ -95,11 +102,7 @@ class SaikuroClient:
                 )
         self._pending_calls.clear()
 
-        # Close open streams and channels.
-        for stream in self._open_streams.values():
-            stream._close()
-        for channel in self._open_channels.values():
-            channel._close()
+        self._close_open_handles()
 
         logger.debug("saikuro client closed")
 
@@ -111,6 +114,37 @@ class SaikuroClient:
         await self.close()
 
     #  Invocation API
+
+    async def _send_and_wait(
+        self,
+        envelope: Envelope,
+        timeout: Optional[float] = None,
+    ) -> ResponseEnvelope:
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
+        self._pending_calls[envelope.id] = future
+
+        await self._transport.send(envelope.to_msgpack_dict())
+
+        try:
+            if timeout is not None:
+                return await asyncio.wait_for(future, timeout=timeout)
+            return await future
+        finally:
+            self._pending_calls.pop(envelope.id, None)
+
+    async def _send_and_check(
+        self,
+        envelope: Envelope,
+        timeout: Optional[float] = None,
+        error_message: str = "no error details",
+    ) -> ResponseEnvelope:
+        response = await self._send_and_wait(envelope, timeout)
+        if not response.ok:
+            raise SaikuroError.from_error_dict(
+                response.error or {"code": "Internal", "message": error_message}
+            )
+        return response
 
     async def call(
         self,
@@ -126,25 +160,7 @@ class SaikuroClient:
             asyncio.TimeoutError if `timeout` seconds elapse without a response.
         """
         envelope = Envelope.make_call(target, args, capability)
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[envelope.id] = future
-
-        await self._transport.send(envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error or {"code": "Internal", "message": "no error details"}
-            )
-
+        response = await self._send_and_check(envelope, timeout)
         return response.result
 
     async def cast(
@@ -192,31 +208,13 @@ class SaikuroClient:
             items.append(Envelope.make_call(target, args_list, cap))
 
         batch_envelope = Envelope.make_batch(items)
+        response = await self._send_and_check(
+            batch_envelope, timeout, "batch call failed"
+        )
 
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[batch_envelope.id] = future
-
-        await self._transport.send(batch_envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(batch_envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error or {"code": "Internal", "message": "batch call failed"}
-            )
-
-        # The result is an ordered array of per-item results (None for failures).
         raw = response.result
         if isinstance(raw, list):
             return raw
-        # Graceful fallback: runtime returned something unexpected.
         return [raw]
 
     async def resource(
@@ -245,25 +243,7 @@ class SaikuroClient:
             print(handle.id, handle.mime_type, handle.size, handle.uri)
         """
         envelope = Envelope.make_resource(target, args, capability)
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[ResponseEnvelope] = loop.create_future()
-        self._pending_calls[envelope.id] = future
-
-        await self._transport.send(envelope.to_msgpack_dict())
-
-        try:
-            if timeout is not None:
-                response = await asyncio.wait_for(future, timeout=timeout)
-            else:
-                response = await future
-        finally:
-            self._pending_calls.pop(envelope.id, None)
-
-        if not response.ok:
-            raise SaikuroError.from_error_dict(
-                response.error
-                or {"code": "Internal", "message": "resource call failed"}
-            )
+        response = await self._send_and_check(envelope, timeout, "resource call failed")
 
         if not isinstance(response.result, dict):
             raise ValueError(
@@ -375,15 +355,21 @@ class SaikuroClient:
             self._dispatch_response(response)
 
         # Connection is gone - fail everything still waiting.
+        self._connected = False
         for fut in self._pending_calls.values():
             if not fut.done():
                 fut.set_exception(
                     TransportError("ConnectionLost", "transport closed unexpectedly")
                 )
+        self._close_open_handles()
+
+    def _close_open_handles(self) -> None:
         for stream in self._open_streams.values():
             stream._close()
+        self._open_streams.clear()
         for channel in self._open_channels.values():
             channel._close()
+        self._open_channels.clear()
 
     def _dispatch_response(self, response: ResponseEnvelope) -> None:
         inv_id = response.id

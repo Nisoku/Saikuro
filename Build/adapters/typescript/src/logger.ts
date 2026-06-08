@@ -1,24 +1,19 @@
-/**
- * Minimal structured logger for the Saikuro TypeScript adapter.
- *
- * Emits newline-delimited JSON records to `process.stderr` (Node.js) or
- * `globalThis.console.error` (browser / WASM).  Each record has the shape:
- *
- *   { ts, level, name, msg, ...extra }
- *
- * This keeps logs machine-parseable and capturable by any log aggregator,
- * unlike bare `console.error` calls which produce unstructured strings.
- *
- * Usage:
- *   const log = getLogger("saikuro.transport");
- *   log.debug("connected");
- *   log.error("frame decode failed", { err: String(e) });
- *
- * To forward logs to the Saikuro runtime:
- *   import { setLogSink, createTransportSink } from "@nisoku/saikuro";
- *   setLogSink(createTransportSink(client));
- */
+import { createSatori } from "@nisoku/satori";
+import type { SatoriInstance } from "@nisoku/satori";
 
+// Global Satori instance
+const _satori: SatoriInstance = createSatori({
+  logLevel: "debug",
+  enableConsole: true,
+  enableCallsite: false,
+  enableEnvInfo: false,
+  enableStateSnapshot: false,
+  enableCausalLinks: false,
+  enableMetrics: false,
+  maxBufferSize: 2000,
+});
+
+// Type exports
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface LogRecord {
@@ -29,59 +24,64 @@ export interface LogRecord {
   [key: string]: unknown;
 }
 
-// Sink
+// Level filtering
+const LEVEL_ORDER: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
 
-/**
- * The default sink writes JSON to stderr.  Replace this at startup to route
- * log records to a custom destination (e.g. a Saikuro log-envelope transport).
- */
-let _sink: (record: LogRecord) => void = _defaultSink;
+let _minLevel: LogLevel = "debug";
 
-function _defaultSink(record: LogRecord): void {
-  const line = JSON.stringify(record);
-  // Node.js: process.stderr.write keeps output on stderr.
-  // Browser/WASM: fallback to console.error (the only reliable channel).
-  if (
-    typeof process !== "undefined" &&
-    typeof process.stderr?.write === "function"
-  ) {
-    process.stderr.write(line + "\n");
-  } else {
-    console.error(line);
+export function setLogLevel(level: LogLevel): void {
+  _minLevel = level;
+}
+
+// Sink support
+type SinkFn = (record: LogRecord) => void;
+
+let _sinkUnsub: (() => void) | null = null;
+
+export function setLogSink(sink: SinkFn): void {
+  if (_sinkUnsub) _sinkUnsub();
+  _sinkUnsub = _satori.bus.subscribe((entry) => {
+    const record: LogRecord = {
+      ts: new Date(entry.timestamp).toISOString(),
+      level: (entry.level === "debug" ||
+      entry.level === "info" ||
+      entry.level === "warn" ||
+      entry.level === "error"
+        ? entry.level
+        : "info") as LogLevel,
+      name: entry.scope,
+      msg: entry.message,
+      ...(entry.tags.length > 0 ? { tags: entry.tags } : {}),
+      ...(entry.state ? { state: entry.state } : {}),
+    };
+    sink(record);
+  });
+}
+
+export function resetLogSink(): void {
+  if (_sinkUnsub) {
+    _sinkUnsub();
+    _sinkUnsub = null;
   }
 }
 
-/** Replace the global log sink.  Affects all loggers. */
-export function setLogSink(sink: (record: LogRecord) => void): void {
-  _sink = sink;
-}
-
-/** Reset the log sink to the default (JSON to stderr). */
-export function resetLogSink(): void {
-  _sink = _defaultSink;
-}
-
 // Transport sink factory
-
-/**
- * Create a log sink that forwards structured log records to the Saikuro
- * runtime as `log`-type envelopes.
- *
- * The send is fire-and-forget; errors are silently swallowed to prevent
- * infinite logging recursion.
- *
- * Usage:
- *   import { setLogSink, createTransportSink } from "@nisoku/saikuro";
- *   setLogSink(createTransportSink(client.transport));
- */
 export interface TransportLike {
-  send(obj: Record<string, unknown>): Promise<void>;
+  send(obj: object): Promise<void>;
 }
 
 export function createTransportSink(
-  transport: TransportLike
+  transport: TransportLike,
 ): (record: LogRecord) => void {
   return (record: LogRecord): void => {
+    const extraEntries = Object.entries(record).filter(
+      ([k]) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg",
+    );
     const envelope: Record<string, unknown> = {
       version: 1,
       type: "log",
@@ -93,89 +93,50 @@ export function createTransportSink(
           level: record.level,
           name: record.name,
           msg: record.msg,
-          // Collect all extra fields under `fields`.
-          ...(Object.keys(record).filter(
-            (k) => k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
-          ).length > 0
-            ? {
-                fields: Object.fromEntries(
-                  Object.entries(record).filter(
-                    ([k]) =>
-                      k !== "ts" && k !== "level" && k !== "name" && k !== "msg"
-                  )
-                ),
-              }
+          ...(extraEntries.length > 0
+            ? { fields: Object.fromEntries(extraEntries) }
             : {}),
         },
       ],
     };
-
-    // Fire-and-forget; ignore errors to prevent infinite recursion.
-    transport.send(envelope).catch(() => {
-      /* intentionally swallowed */
-    });
+    transport.send(envelope).catch(() => {});
   };
 }
 
-// Level filtering
-
-const LEVEL_ORDER: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
-
-let _minLevel: LogLevel = "info";
-
-/** Set the minimum level at which records are emitted. */
-export function setLogLevel(level: LogLevel): void {
-  _minLevel = level;
-}
-
 // Logger
-
 export class Logger {
-  private readonly _name: string;
+  private readonly _satoriLogger: ReturnType<SatoriInstance["createLogger"]>;
 
-  constructor(name: string) {
-    this._name = name;
+  constructor(_name: string) {
+    this._satoriLogger = _satori.createLogger(_name);
   }
 
-  private _emit(
-    level: LogLevel,
-    msg: string,
-    extra?: Record<string, unknown>
-  ): void {
-    if (LEVEL_ORDER[level] < LEVEL_ORDER[_minLevel]) return;
-    const record: LogRecord = {
-      ts: new Date().toISOString(),
-      level,
-      name: this._name,
-      msg,
-      ...extra,
-    };
-    _sink(record);
+  private _shouldEmit(level: LogLevel): boolean {
+    return LEVEL_ORDER[level] >= LEVEL_ORDER[_minLevel];
   }
 
   debug(msg: string, extra?: Record<string, unknown>): void {
-    this._emit("debug", msg, extra);
+    if (!this._shouldEmit("debug")) return;
+    this._satoriLogger.debug(msg, extra ? { state: extra } : undefined);
   }
 
   info(msg: string, extra?: Record<string, unknown>): void {
-    this._emit("info", msg, extra);
+    if (!this._shouldEmit("info")) return;
+    this._satoriLogger.info(msg, extra ? { state: extra } : undefined);
   }
 
   warn(msg: string, extra?: Record<string, unknown>): void {
-    this._emit("warn", msg, extra);
+    if (!this._shouldEmit("warn")) return;
+    this._satoriLogger.warn(msg, extra ? { state: extra } : undefined);
   }
 
   error(msg: string, extra?: Record<string, unknown>): void {
-    this._emit("error", msg, extra);
+    if (!this._shouldEmit("error")) return;
+    this._satoriLogger.error(msg, extra ? { state: extra } : undefined);
   }
 }
 
-/** Create (or return a cached) named logger. */
+// Logger cache
 const _loggers = new Map<string, Logger>();
 
 export function getLogger(name: string): Logger {

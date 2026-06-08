@@ -9,7 +9,7 @@
 //! | Target is the same process                    | In-memory         |
 //! | Target is on the same machine (Unix)          | Unix socket       |
 //! | Target is on the same machine (non-Unix)      | TCP loopback      |
-//! | Target is remote, WASM context                | WebSocket         |
+//! | Target is remote, WASM context                | BroadcastChannel  |
 //! | Target is remote, native context              | TCP               |
 //!
 //! The user can override any of these choices by supplying an explicit
@@ -31,6 +31,9 @@ pub enum TransportKind {
     Tcp,
     /// WebSocket:  cross-machine and WASM-compatible.
     WebSocket,
+    /// BroadcastChannel host transport:  WASM in-browser communication.
+    #[cfg(target_arch = "wasm32")]
+    WasmHost,
 }
 
 /// User-supplied transport configuration.
@@ -59,7 +62,7 @@ pub struct TransportConfig {
 }
 
 fn default_max_message_size() -> usize {
-    16 * 1024 * 1024
+    crate::MAX_FRAME_SIZE
 }
 
 fn default_send_buffer() -> usize {
@@ -94,37 +97,36 @@ impl TransportSelector {
             return (TransportKind::Memory, None);
         }
 
-        // WASM: only WebSocket is available for remote targets.
+        // WASM: prefer BroadcastChannel host transport for in-realm communication.
         #[cfg(target_arch = "wasm32")]
         {
+            if addr == "wasm-host" || addr.starts_with("wasm-host://") {
+                return (TransportKind::WasmHost, Some(addr.to_owned()));
+            }
             let ws_url = if addr.starts_with("ws://") || addr.starts_with("wss://") {
                 addr.to_owned()
             } else {
                 format!("ws://{}", addr)
             };
-            return (TransportKind::WebSocket, Some(ws_url));
+            (TransportKind::WebSocket, Some(ws_url))
         }
 
-        // Unix socket: path-like address on a Unix host.
-        #[cfg(all(not(target_arch = "wasm32"), target_family = "unix"))]
-        if addr.starts_with('/') || addr.starts_with('.') {
-            return (TransportKind::Unix, Some(addr.to_owned()));
-        }
-
-        // WebSocket URL.
-        #[cfg(not(target_arch = "wasm32"))]
-        if addr.starts_with("ws://") || addr.starts_with("wss://") {
-            return (TransportKind::WebSocket, Some(addr.to_owned()));
-        }
-
-        // Everything else: TCP.
+        // Non-WASM: unix socket, websocket, or TCP.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            return (TransportKind::Tcp, Some(addr.to_owned()));
-        }
+            // Unix socket: path-like address on a Unix host.
+            #[cfg(target_family = "unix")]
+            if addr.starts_with('/') || addr.starts_with('.') {
+                return (TransportKind::Unix, Some(addr.to_owned()));
+            }
 
-        // Fallback for exhaustiveness on unusual targets.
-        #[allow(unreachable_code)]
-        (TransportKind::Memory, None)
+            // WebSocket URL.
+            if addr.starts_with("ws://") || addr.starts_with("wss://") {
+                return (TransportKind::WebSocket, Some(addr.to_owned()));
+            }
+
+            // TCP fallback.
+            (TransportKind::Tcp, Some(addr.to_owned()))
+        }
     }
 }

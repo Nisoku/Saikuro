@@ -1,51 +1,28 @@
 ---
 title: "Rust API Reference"
-description: "Reference for the Saikuro Rust adapter crate"
+description: "Full Rust adapter API reference"
 ---
 
-This page is the Rust adapter API reference. For shared protocol details, see [Core Protocol Reference](../../api/).
+See the [Rust adapter overview](./) for the complete API surface.
 
-## Main types
+## Client
 
-- `Client`
-- `ClientOptions`
-- `SaikuroStream`
-- `SaikuroChannel`
-- `Provider`
-- `Error`
-- `Result<T>`
+| Method    | Signature                                                     | Description                   |
+|-----------|---------------------------------------------------------------|-------------------------------|
+| `connect` | `(address: &str) -> Result<Client>`                           | Connect to runtime at address |
+| `open_on` | `(transport: InMemoryTransport) -> Result<Client>`            | Connect on InMemory transport |
+| `call`    | `<T: DeserializeOwned>(&mut self, target, args) -> Result<T>` | Request/response              |
+| `cast`    | `(&mut self, target, args) -> Result<()>`                     | Fire-and-forget               |
+| `stream`  | `(&mut self, target, args) -> Result<SaikuroStream>`          | Open a stream                 |
+| `channel` | `(&mut self, target, args) -> Result<SaikuroChannel>`         | Open a channel                |
+| `batch`   | `(&mut self, calls) -> Result<Vec<Value>>`                    | Batch multiple calls          |
+| `close`   | `(&mut self) -> Result<()>`                                   | Gracefully close              |
 
-## Client API
+## Provider
 
-| Symbol | Signature | Returns | Notes |
-| ------ | --------- | ------- | ----- |
-| `Client::connect` | `pub async fn connect(address: impl AsRef<str>)` | `Result<Client>` | Connect using address string. |
-| `Client::connect_with_options` | `pub async fn connect_with_options(address, options)` | `Result<Client>` | Connect with `ClientOptions`. |
-| `Client::close` | `pub async fn close(self)` | `Result<()>` | Graceful shutdown. |
-| `Client::call` | `pub async fn call(&self, target, args)` | `Result<Value>` | Request/response invocation. |
-| `Client::call_with_timeout` | `pub async fn call_with_timeout(&self, target, args, timeout)` | `Result<Value>` | Timed call variant. |
-| `Client::cast` | `pub async fn cast(&self, target, args)` | `Result<()>` | Fire-and-forget invocation. |
-| `Client::stream` | `pub async fn stream(&self, target, args)` | `Result<SaikuroStream>` | Server-to-client stream. |
-| `Client::batch` | `pub async fn batch(&self, calls)` | `Result<Vec<Value>>` | Ordered per-call results. |
-| `Client::channel` | `pub async fn channel(&self, target, args)` | `Result<SaikuroChannel>` | Bidirectional channel. |
-
-## Provider API
-
-| Symbol | Signature | Returns | Notes |
-| ------ | --------- | ------- | ----- |
-| `Provider::new` | `pub fn new(namespace: impl Into<String>)` | `Provider` | Namespace-scoped provider. |
-| `Provider::namespace` | `pub fn namespace(&self)` | `&str` | Namespace getter. |
-| `Provider::register` | `pub fn register(&mut self, name, handler)` | `()` | Register handler closure. |
-| `Provider::register_with_options` | `pub fn register_with_options(&mut self, name, handler, options)` | `()` | Register with schema metadata. |
-| `Provider::serve` | `pub async fn serve(self, address)` | `Result<()>` | Connect and serve loop. |
-| `Provider::serve_on` | `pub async fn serve_on(self, transport)` | `Result<()>` | Serve on existing transport. |
-
-## Error model
-
-Adapter errors map to protocol error codes while preserving Rust-friendly error handling.
-
-## Related
-
-- [Rust Adapter Overview](./)
-- [Rust Examples](./examples)
-- [Core Protocol Reference](../../api/)
+| Method     | Signature                                                 | Description                   |
+|------------|-----------------------------------------------------------|-------------------------------|
+| `new`      | `(namespace: &str) -> Provider`                           | Create provider for namespace |
+| `register` | `(&mut self, name, handler) -> RegisterHandle`            | Register a handler            |
+| `serve`    | `(&mut self, address: &str) -> Result<()>`                | Serve on address              |
+| `serve_on` | `(&mut self, transport: InMemoryTransport) -> Result<()>` | Serve on InMemory             |

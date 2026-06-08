@@ -1,52 +1,162 @@
 ---
 title: "TypeScript Adapter"
-description: "TypeScript and JavaScript adapter for Saikuro"
+description: "Saikuro adapter for TypeScript and JavaScript"
 ---
 
-The TypeScript adapter runs in Node.js and, with WebSocket transport, in browsers.
+The TypeScript adapter works in Node.js 18+, browsers, and Bun. It supports all six invocation primitives and every transport type.
 
-## Install
+## Installation
 
 ```bash
 npm install @nisoku/saikuro
 ```
 
-## Client
+## Client API
 
 ```typescript
-import { Client } from "@nisoku/saikuro";
+import { SaikuroClient } from "@nisoku/saikuro";
 
-const client = await Client.connect("tcp://127.0.0.1:7700");
+// Connect via address string
+const client = await SaikuroClient.connect("unix:///tmp/saikuro.sock");
+
+// Or from an existing transport
+const client = SaikuroClient.fromTransport(transport);
+await client.open();
+
+// Call a function
 const result = await client.call("math.add", [1, 2]);
-console.log(result);
+
+// Fire-and-forget
+await client.cast("log.write", [{ level: "info", message: "started" }]);
+
+// Stream
+const stream = await client.stream("events.subscribe", []);
+for await (const event of stream) {
+  console.log(event);
+}
+
+// Channel
+const chan = await client.channel("chat.session", [{ room: "general" }]);
+await chan.send({ text: "hello" });
+for await (const msg of chan) {
+  console.log(msg);
+}
+
+// Batch
+const [sum, product] = await client.batch([
+  { target: "math.add", args: [1, 2] },
+  { target: "math.multiply", args: [3, 4] },
+]);
+
+// Resource
+const handle = await client.resource("files.open", ["/data.csv"]);
+
+// Log
+await client.log("info", "myapp", "started", { version: "1.0" });
+
+// Close
+await client.close();
 ```
 
-## Provider
+### ClientOptions
 
 ```typescript
-import { Provider } from "@nisoku/saikuro";
+interface ClientOptions {
+  defaultTimeoutMs?: number; // 0 = no timeout (default)
+}
+```
 
-const provider = new Provider("math");
+## Provider API
 
-provider.register("add", async ([a, b]) => {
-  return Number(a) + Number(b);
+```typescript
+import { SaikuroProvider, t } from "@nisoku/saikuro";
+
+const provider = new SaikuroProvider("math");
+
+// Register a sync function
+provider.register("add", (a: number, b: number) => a + b);
+
+// Register with schema
+provider.register("add", (a: number, b: number) => a + b, {
+  args: [
+    { name: "a", type: t.i32() },
+    { name: "b", type: t.i32() },
+  ],
+  returns: t.i32(),
+  doc: "Add two integers.",
+  capabilities: [],
+  idempotent: true,
 });
 
-await provider.serve("tcp://127.0.0.1:7700");
+// Register a stream handler (async generator)
+provider.register("events", async function* (filter) {
+  while (true) {
+    yield await poll(filter);
+  }
+});
+
+// Decorator pattern
+class MyService {
+  @provider.decorator("greet")
+  async greet(name: string) {
+    return `Hello, ${name}`;
+  }
+}
+
+// Serve
+await provider.serve("unix:///tmp/saikuro.sock");
+// Or serve on an existing transport
+await provider.serveOn(transport);
 ```
 
-## Development
+### Type Descriptor Builders
 
-```bash
-npm ci
-npm run build
-npm test
-npm run typecheck
-npm run lint
+The `t` object provides type-safe builders:
+
+- `t.bool()`, `t.i32()`, `t.i64()`, `t.f32()`, `t.f64()`, `t.string()`, `t.bytes()`, `t.any()`, `t.unit()`
+- `t.list(item)`, `t.map(key, value)`, `t.optional(inner)`
+- `t.named(name)`, `t.stream(item)`, `t.channel(send, recv)`
+
+## Transport
+
+```typescript
+import { makeTransport, InMemoryTransport } from "@nisoku/saikuro";
+
+// Address-based
+const transport = makeTransport("unix:///tmp/saikuro.sock");
+
+// InMemory pair for testing
+const [pt, ct] = InMemoryTransport.pair();
 ```
 
-## Next Steps
+See [Transports](../../guide/transports) for the full address format reference.
 
-- [Code Generation](../../guide/codegen): Generate TypeScript stubs from schema
-- [TypeScript API Reference](./api-reference): Client and provider method reference
-- [TypeScript examples](./examples): TypeScript with Python and Rust integration
+## Export Surface
+
+```typescript
+// Core
+SaikuroClient, SaikuroProvider, SaikuroStream, SaikuroChannel
+
+// Transports
+InMemoryTransport, WebSocketTransport, NodeStreamTransport,
+WasmHostTransport, WasmHostConnector, WasmHostListener, makeTransport
+
+// Errors
+SaikuroError, FunctionNotFoundError, InvalidArgumentsError,
+CapabilityDeniedError, TransportError, SaikuroTimeoutError,
+ProviderError, NoProviderError, ProviderUnavailableError,
+ProtocolVersionError, MalformedEnvelopeError, MessageTooLargeError,
+BufferOverflowError, StreamClosedError, ChannelClosedError, OutOfOrderError
+
+// Types
+Handler, StreamHandler, AnyHandler, FunctionSchema, ArgDescriptor,
+TypeDescriptor, ClientOptions, Transport, Envelope, ResponseEnvelope,
+ErrorPayload, ErrorCode, InvocationType, StreamControl, SaikuroSchema,
+ResourceHandle
+
+// Schema extraction
+// Import from "@nisoku/saikuro/schema-extractor"
+
+// Logging
+getLogger, setLogSink, setLogLevel, resetLogSink, createTransportSink
+```

@@ -10,14 +10,20 @@ keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 
 # Feature flags control which transport backends are compiled in.
 #
-#   native-transport:  Unix socket + TCP (requires std networking; disabled on wasm32)
-#   ws-transport:  WebSocket (works on both native and wasm32)
+#   native-transport:   Unix socket + TCP (requires std networking; disabled on wasm32)
+#   ws-transport:       WebSocket module (works on both native and wasm32)
+#   native-ws:          WebSocket + tokio-tungstenite on native (non-wasm32 only)
+#   wasm-host-transport: BroadcastChannel transport (wasm32 only)
 #
 # The in-memory transport is always compiled; it has zero OS dependencies.
 [features]
 default = ["native-transport"]
-native-transport = []
-ws-transport = ["dep:tokio-tungstenite", "dep:tungstenite"]
+native-transport = ["saikuro-exec/tokio-runtime"]
+ws-transport = []
+wasm-runtime = ["saikuro-exec/wasm-runtime"]
+
+# native-ws is only available on non-wasm32 (where tokio-tungstenite exists)
+native-ws = ["ws-transport", "saikuro-exec/tokio-runtime", "tokio-tungstenite", "tungstenite"]
 
 [dependencies]
 saikuro-core = { workspace = true }
@@ -30,17 +36,30 @@ futures     = { workspace = true }
 pin-project-lite = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
-tokio-stream = { workspace = true }
+saikuro-exec = { workspace = true, default-features = false }
 
-# tokio: on native we want the full suite; on wasm32 only sync + io features
-# compile. We depend on it unconditionally and cfg-gate the native-only APIs.
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-
-# WebSocket support:  optional
-tokio-tungstenite = { version = "0.24", optional = true }
+# WebSocket support on native (tokio-tungstenite uses mio which doesn't compile on wasm32)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"], optional = true }
 tungstenite       = { version = "0.24", optional = true }
 
+# WASM host transport + WASM WebSocket
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.4.2", features = ["wasm_js"] }
+send_wrapper = "0.6"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "BroadcastChannel",
+    "Crypto",
+    "MessageEvent",
+    "WebSocket",
+    "CloseEvent",
+    "ErrorEvent",
+    "Event",
+    "BinaryType",
+] }
+
 [dev-dependencies]
-tokio-test = { workspace = true }
 tracing-subscriber = { workspace = true }

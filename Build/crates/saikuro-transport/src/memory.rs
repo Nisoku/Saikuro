@@ -6,7 +6,7 @@
 //! `Bytes` objects with zero copying.
 use async_trait::async_trait;
 use bytes::Bytes;
-use tokio::sync::mpsc;
+use saikuro_exec::mpsc;
 use tracing::trace;
 
 use crate::{
@@ -14,11 +14,7 @@ use crate::{
     traits::{Transport, TransportReceiver, TransportSender},
 };
 
-/// Default channel capacity for in-memory transports.
-///
-/// This bounds memory usage and provides backpressure: if the receiver is
-/// slow the sender's `send` call will yield until space frees up.
-const DEFAULT_CHANNEL_CAPACITY: usize = 256;
+use crate::DEFAULT_CHANNEL_CAPACITY;
 
 /// An in-memory transport backed by a pair of MPSC channels.
 ///

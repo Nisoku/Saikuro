@@ -16,12 +16,17 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 name = "saikuro-c-schema"
 path = "src/cli/saikuro_c_schema.rs"
 
+[features]
+default = ["saikuro/default"]
+wasm = ["saikuro/wasm", "saikuro-exec/wasm-runtime"]
+
 [dependencies]
-saikuro = { workspace = true, default-features = true }
+saikuro = { workspace = true, default-features = false }
+anyhow = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
-tokio = { workspace = true }
+saikuro-exec = { workspace = true, default-features = false }
 clap = { version = "4.5", features = ["derive"] }
 regex = "1.11"
 

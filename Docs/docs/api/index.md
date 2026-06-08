@@ -1,273 +1,128 @@
 ---
-title: "Core Protocol & Runtime Reference"
+title: "Protocol & Runtime Reference"
 description: "Shared wire format and runtime behavior for all adapters"
 ---
 
 Everything Saikuro sends over the wire is a MessagePack-encoded envelope. This page documents the full shape of every message type.
 
-This is the shared core reference only (protocol/runtime behavior that applies across all adapters). Adapter-specific client/provider APIs now live under the Adapters section.
-
 ## Encoding
 
-All envelopes use [MessagePack](https://msgpack.org/). MessagePack is a compact binary format, similar to JSON but smaller and faster to parse. You don't need to handle encoding yourself; the adapters do it for you. This reference is for anyone implementing a new adapter or debugging raw traffic.
+All envelopes use [MessagePack](https://msgpack.org/). You do not need to handle encoding yourself; the adapters do it for you. This reference is for implementing a new adapter or debugging raw traffic.
 
 ## Invocation Envelope
 
-Sent by the caller to initiate any invocation.
+Sent by the caller to initiate any invocation. Fields:
 
 ```json
 {
   "version": 1,
-  "type": "call" | "cast" | "stream" | "channel" | "batch",
+  "type": "call" | "cast" | "stream" | "channel" | "batch" | "resource" | "log" | "announce",
   "id": "<uuid>",
   "target": "namespace.function",
   "args": [...],
   "meta": { ... },
-  "cap": "<capability-token>"
+  "capability": "<token>",
+  "batch_items": [ ... ],
+  "stream_control": "end" | "pause" | "resume" | "abort",
+  "seq": 0
 }
 ```
 
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `version` | integer | yes | Protocol version. Must be `1` in v1. |
-| `type` | string | yes | Invocation primitive. One of: `call`, `cast`, `stream`, `channel`, `batch`. |
-| `id` | string | yes | Globally unique ID for this invocation. UUID v4 recommended. |
-| `target` | string | yes | Fully-qualified function name: `namespace.function`. Not used for `batch` (see below). |
-| `args` | array | yes | Positional arguments. Empty array `[]` if the function takes no arguments. |
-| `meta` | object | no | Optional key-value metadata (trace IDs, request context, etc). |
-| `cap` | string | no | Capability token. Required if the function declares capabilities. |
+| Field            | Type          | Required | Description                                                                                              |
+|------------------|---------------|----------|----------------------------------------------------------------------------------------------------------|
+| `version`        | integer       | yes      | Protocol version. Must be `1`.                                                                           |
+| `type`           | string        | yes      | Invocation type. One of: `call`, `cast`, `stream`, `channel`, `batch`, `resource`, `log`, `announce`.    |
+| `id`             | string (uuid) | yes      | Globally unique invocation ID. 16-byte UUID.                                                             |
+| `target`         | string        | yes      | Fully-qualified function name: `namespace.function`. Omitted for `batch` (items have their own targets). |
+| `args`           | array         | yes      | Positional arguments. Empty array `[]` if none.                                                          |
+| `meta`           | object        | no       | Optional key-value metadata (trace IDs, request context).                                                |
+| `capability`     | string        | no       | Capability token. Required if the function declares capabilities.                                        |
+| `batch_items`    | array         | no       | For `batch` type: array of individual call envelopes.                                                    |
+| `stream_control` | string        | no       | Backpressure/lifecycle signal for stream/channel.                                                        |
+| `seq`            | integer       | no       | Sequence number for stream/channel frames.                                                               |
 
-### Example: Call
+### Invocation Types
 
-```json
-{
-  "version": 1,
-  "type": "call",
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "target": "math.add",
-  "args": [1, 2]
-}
-```
-
-### Example: Cast
-
-```json
-{
-  "version": 1,
-  "type": "cast",
-  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "target": "log.write",
-  "args": [{ "level": "info", "message": "started" }]
-}
-```
-
-No response is sent for `cast`.
+| Type       | Behavior                          | Response Expected            |
+|------------|-----------------------------------|------------------------------|
+| `call`     | Request/response                  | Yes - single response        |
+| `cast`     | Fire-and-forget                   | No                           |
+| `stream`   | Server-to-client ordered sequence | Yes - stream of items + end  |
+| `channel`  | Bidirectional with backpressure   | Yes - per-direction messages |
+| `batch`    | Multiple independent calls        | Yes - ordered results array  |
+| `resource` | Opaque handle to external data    | Yes - ResourceHandle         |
+| `log`      | Structured log record             | No (runtime sink)            |
+| `announce` | Schema announcement (dev mode)    | Yes - announce_ack           |
 
 ## Response Envelope
-
-Sent by the runtime back to the caller for `call` invocations.
 
 ```json
 {
   "id": "<uuid>",
   "ok": true | false,
   "result": <value>,
-  "error": <error-object>
+  "error": { "code": "...", "message": "...", "details": { ... } },
+  "seq": 0,
+  "stream_control": "end" | "pause" | "resume" | "abort"
 }
 ```
 
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `id` | string | yes | The ID from the original invocation envelope. Used to correlate responses. |
-| `ok` | boolean | yes | `true` if the call succeeded, `false` if it failed. |
-| `result` | any | if ok=true | The return value. May be `null` for `void` functions. |
-| `error` | object | if ok=false | Error details. See Error Envelope below. |
+| Field            | Type    | Required    | Description                         |
+|------------------|---------|-------------|-------------------------------------|
+| `id`             | string  | yes         | ID from original invocation         |
+| `ok`             | boolean | yes         | `true` if succeeded                 |
+| `result`         | any     | if ok=true  | Return value                        |
+| `error`          | object  | if ok=false | Error details                       |
+| `seq`            | integer | no          | Stream/channel sequence number      |
+| `stream_control` | string  | no          | Lifecycle signal for stream/channel |
 
-### Example: Success
+## StreamControl
 
-```json
-{
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "ok": true,
-  "result": 3
-}
-```
+Used in both directions for stream and channel management:
 
-### Example: Failure
+| Value    | Direction         | Meaning                               |
+|----------|-------------------|---------------------------------------|
+| `end`    | Provider → Caller | No more items; stream half-closed     |
+| `pause`  | Receiver → Sender | Buffer full; sender must pause        |
+| `resume` | Receiver → Sender | Buffer ready; sender may continue     |
+| `abort`  | Either            | Unrecoverable error; both sides close |
 
-```json
-{
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "ok": false,
-  "error": {
-    "code": "InvalidArgs",
-    "message": "expected i32, got string",
-    "details": { "arg": 0, "expected": "i32", "got": "string" }
-  }
-}
-```
+## Error Codes
 
-## Stream Frames
+| Code                   | When it happens                                        |
+|------------------------|--------------------------------------------------------|
+| `NamespaceNotFound`    | The requested namespace is not registered              |
+| `FunctionNotFound`     | The requested function does not exist in its namespace |
+| `InvalidArguments`     | Arguments failed type/shape validation                 |
+| `IncompatibleVersion`  | Envelope protocol version is incompatible              |
+| `MalformedEnvelope`    | A required field was missing from an envelope          |
+| `NoProvider`           | No provider registered for the target namespace        |
+| `ProviderUnavailable`  | Provider is temporarily unavailable                    |
+| `BatchRoutingConflict` | Batch item resolved to a different namespace           |
+| `CapabilityDenied`     | Caller lacks a required capability                     |
+| `CapabilityInvalid`    | Capability token is invalid or expired                 |
+| `ConnectionLost`       | Transport connection was lost                          |
+| `MessageTooLarge`      | Message exceeded the size limit                        |
+| `Timeout`              | Call exceeded its timeout                              |
+| `BufferOverflow`       | Receive buffer overflowed                              |
+| `ProviderError`        | Provider handler returned an error                     |
+| `ProviderPanic`        | Provider panicked while handling invocation            |
+| `StreamClosed`         | Stream was already closed                              |
+| `ChannelClosed`        | Channel was closed by the remote side                  |
+| `OutOfOrder`           | Out-of-order sequence number on ordered stream         |
+| `Internal`             | Unspecified internal error                             |
 
-For `stream` invocations, the provider sends a sequence of frames.
+## Announce Envelope
 
-### Stream Frame (data)
-
-```json
-{
-  "id": "<uuid>",
-  "seq": <integer>,
-  "data": <value>
-}
-```
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `id` | string | The ID from the original stream invocation. |
-| `seq` | integer | Sequence number, starting at 0. Monotonically increasing. |
-| `data` | any | The stream item value. |
-
-### Stream Frame (end)
-
-```json
-{
-  "id": "<uuid>",
-  "seq": <integer>,
-  "end": true
-}
-```
-
-Signals that the stream is finished. No more frames will follow for this ID.
-
-### Stream Frame (error)
-
-```json
-{
-  "id": "<uuid>",
-  "seq": <integer>,
-  "error": <error-object>
-}
-```
-
-Signals that the stream ended with an error. No more frames will follow for this ID.
-
-## Channel Frames
-
-Channels are bidirectional. Both sides can send frames.
-
-### Channel Frame (data)
-
-Same shape as stream frames, but flows in both directions:
-
-```json
-{
-  "id": "<uuid>",
-  "seq": <integer>,
-  "data": <value>
-}
-```
-
-### Channel Close
-
-Either side can close the channel:
-
-```json
-{
-  "id": "<uuid>",
-  "close": true
-}
-```
-
-When either side sends a close frame, the other side sees EOF on its incoming iterator. Both sides must send a close frame for the channel to be fully terminated.
-
-### Backpressure
-
-The runtime tracks per-channel buffer capacity. If a sender is faster than the receiver, the runtime will signal the sender to pause by not acknowledging frames until capacity is available. The adapters handle this transparently, so your `send()` call will yield until there's room.
-
-## Batch Envelope
-
-A batch groups multiple calls into one envelope.
+Providers send this to announce their schema in dev mode:
 
 ```json
 {
   "version": 1,
-  "type": "batch",
-  "id": "<uuid>",
-  "batch_items": [
-    {
-      "version": 1,
-      "type": "call",
-      "id": "<uuid>",
-      "target": "math.add",
-      "args": [1, 2]
-    },
-    {
-      "version": 1,
-      "type": "call",
-      "id": "<uuid>",
-      "target": "math.multiply",
-      "args": [3, 4]
-    }
-  ],
-  "cap": "<capability-token>"
-}
-```
-
-Each call in the batch has its own `id` and `target`. The top-level `id` is for the batch itself.
-
-### Batch Response
-
-```json
-{
-  "id": "<batch-uuid>",
-  "ok": true,
-  "results": [
-    { "id": "<call-uuid>", "ok": true, "result": 3 },
-    { "id": "<call-uuid>", "ok": true, "result": 12 }
-  ]
-}
-```
-
-Results are returned in the same order as the calls. If any individual call fails, its result entry has `ok: false` with an error. The batch itself reports `ok: false` if any call fails.
-
-## Error Envelope
-
-Used inside response, stream, and batch envelopes.
-
-```json
-{
-  "code": "NotFound" | "InvalidArgs" | "CapabilityDenied" | "ProviderError" | "RoutingError" | "TransportError" | "SchemaError" | "Timeout",
-  "message": "human-readable description",
-  "details": { ... }
-}
-```
-
-### Error Codes
-
-| Code | When it happens |
-| ---- | --------------- |
-| `NotFound` | The target namespace or function does not exist |
-| `InvalidArgs` | Arguments don't match the declared schema |
-| `CapabilityDenied` | Caller doesn't have a required capability |
-| `ProviderError` | The provider threw an exception during execution |
-| `RoutingError` | The runtime couldn't route to a provider (no provider registered for the namespace) |
-| `TransportError` | The transport connection failed or was lost |
-| `SchemaError` | Schema validation failed (invalid schema structure) |
-| `Timeout` | The call exceeded its timeout |
-
-## Announce Envelope
-
-Providers send this to announce their schema in dev mode.
-
-```json
-{
   "type": "announce",
-  "namespace": "math",
-  "schema": {
-    "version": 1,
-    "namespaces": { ... },
-    "types": { ... }
-  }
+  "id": "<uuid>",
+  "target": "$saikuro.announce",
+  "args": [{ "namespace": "math", "functions": { ... }, "types": { ... } }]
 }
 ```
 
@@ -275,38 +130,58 @@ The runtime acknowledges with:
 
 ```json
 {
-  "type": "announce_ack",
-  "namespace": "math",
+  "id": "<uuid>",
   "ok": true
 }
 ```
 
-If the announced schema conflicts with one already registered, `ok` is `false` with a `SchemaError`.
+## Log Envelope
 
-## Message Ordering Guarantees
+```json
+{
+  "version": 1,
+  "type": "log",
+  "id": "<uuid>",
+  "target": "$log",
+  "args": [{ "ts": "2025-01-01T00:00:00Z", "level": "info", "name": "myapp", "msg": "started", "fields": { "version": "1.0" } }]
+}
+```
 
-| Primitive | Ordering guarantee |
-| --------- | ------------------ |
-| `call` | Strict request/response. One response per call, correlated by ID. |
-| `cast` | No response. Delivery is best-effort, ordered per connection. |
-| `stream` | Ordered by `seq`. Frames arrive in the order they were sent. |
-| `channel` | Ordered per direction. Caller-to-provider and provider-to-caller are each independently ordered. |
-| `batch` | Results returned in call order regardless of internal execution order. |
+Log envelopes are never routed to a provider. The runtime extracts the record and passes it to the configured log sink. Fire-and-forget; no response.
+
+## Message Ordering
+
+| Primitive | Guarantee                                                         |
+|-----------|-------------------------------------------------------------------|
+| `call`    | Strict request/response. One response per call, correlated by ID. |
+| `cast`    | No response. Best-effort delivery, ordered per connection.        |
+| `stream`  | Ordered by `seq`. Frames arrive in send order.                    |
+| `channel` | Ordered per-direction. Each direction independently ordered.      |
+| `batch`   | Results returned in call order.                                   |
+
+## Max Frame Size
+
+Frames larger than 16 MiB are rejected to prevent memory exhaustion.
 
 ## Protocol Version
 
-The `version` field in invocation envelopes is `1` for all current messages. Future versions will be additive: new optional fields may be added, existing fields will not be removed or renamed within a version.
+The `version` field is `1` for all current messages. Future versions will be additive: new optional fields may be added; existing fields will not be removed or renamed within a version.
 
-If you send a version the runtime doesn't recognize, the runtime rejects the envelope with a `SchemaError`.
+If you send a version the runtime does not recognize, the envelope is rejected with a `SchemaError`.
 
 ## Implementing a New Adapter
 
-If you're writing a Saikuro adapter for a language not listed here:
+1. Use any compliant MessagePack library.
+2. Implement `InMemoryTransport` first for testing without a network.
+3. Implement `makeTransport`/`make_transport` address parsing.
+4. Implement the envelope types matching the spec above.
+5. Implement the receive loop that dispatches responses by ID.
 
-1. Use a MessagePack library for your language. Any compliant implementation works.
-2. Implement `InMemoryTransport` first; it lets you test the full protocol without a network.
-3. Follow the ordering rules above exactly. Getting sequence numbers wrong on streams causes subtle bugs.
-4. The announce handshake must register the listener before sending the announce envelope, or the ack can be missed on fast transports.
-5. For channel close, complete the send-side writer (not the receive-side) to signal EOF to the peer.
+See the existing adapter implementations for reference:
 
-The TypeScript, Python, and C# adapters are the reference implementations. When in doubt, read those.
+- [TypeScript](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/typescript)
+- [Python](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/python)
+- [Rust](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/rust)
+- [C#](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/csharp)
+- [C](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/c)
+- [C++](https://github.com/Nisoku/Saikuro/tree/wasm-stuff/Build/adapters/cpp)

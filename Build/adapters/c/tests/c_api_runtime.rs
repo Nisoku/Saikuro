@@ -1,4 +1,3 @@
-use std::ffi::{CStr, CString};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,8 +6,7 @@ use std::time::Duration;
 
 use saikuro_c::{
     saikuro_client_batch_json, saikuro_client_call_json, saikuro_client_cast_json,
-    saikuro_client_close, saikuro_client_connect, saikuro_client_free, saikuro_last_error_message,
-    saikuro_string_free,
+    saikuro_client_close, saikuro_client_connect, saikuro_client_free,
 };
 use saikuro_core::{
     capability::CapabilitySet,
@@ -21,22 +19,7 @@ use saikuro_runtime::runtime::SaikuroRuntime;
 use saikuro_transport::tcp::TcpTransportListener;
 use saikuro_transport::traits::TransportListener;
 
-fn c(text: &str) -> CString {
-    CString::new(text).expect("CString should be created")
-}
-
-fn take_c_string(ptr: *mut std::ffi::c_char) -> String {
-    if ptr.is_null() {
-        return String::new();
-    }
-    let text = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().to_string();
-    unsafe { saikuro_string_free(ptr) };
-    text
-}
-
-fn take_last_error() -> String {
-    take_c_string(saikuro_last_error_message())
-}
+mod common;
 
 fn make_schema(namespace: &str, function: &str, n_args: usize) -> Schema {
     use saikuro_core::schema::ArgumentDescriptor;
@@ -93,7 +76,7 @@ impl RuntimeHarness {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let worker = thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
+            let rt = saikuro_exec::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("create test runtime");
@@ -137,7 +120,7 @@ impl RuntimeHarness {
                 let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
                 let mut peer_counter: u64 = 0;
                 loop {
-                    tokio::select! {
+                    saikuro_exec::select! {
                         result = listener.accept() => {
                             match result {
                                 Ok(Some(transport)) => {
@@ -152,7 +135,7 @@ impl RuntimeHarness {
                                 Err(_) => break,
                             }
                         }
-                        _ = tokio::time::sleep(Duration::from_millis(25)) => {
+                        _ = saikuro_exec::sleep(Duration::from_millis(25)) => {
                             if stop_flag_bg.load(Ordering::Relaxed) {
                                 break;
                             }
@@ -187,38 +170,56 @@ impl Drop for RuntimeHarness {
 fn c_client_call_cast_batch_roundtrip_with_runtime() {
     let runtime = RuntimeHarness::start();
 
-    let address = c(&runtime.address);
+    let address = common::c(&runtime.address);
     let handle = saikuro_client_connect(address.as_ptr());
     assert!(
         !handle.is_null(),
         "connect should succeed: {}",
-        take_last_error()
+        common::take_error()
     );
 
-    let call_result =
-        saikuro_client_call_json(handle, c("math.add").as_ptr(), c("[2, 40]").as_ptr());
-    assert!(!call_result.is_null(), "call failed: {}", take_last_error());
-    let call_json = take_c_string(call_result);
+    let call_result = saikuro_client_call_json(
+        handle,
+        common::c("math.add").as_ptr(),
+        common::c("[2, 40]").as_ptr(),
+    );
+    assert!(
+        !call_result.is_null(),
+        "call failed: {}",
+        common::take_error()
+    );
+    let call_json = common::take_c_string(call_result);
     assert_eq!(call_json, "42");
 
-    let cast_rc = saikuro_client_cast_json(handle, c("math.add").as_ptr(), c("[5, 6]").as_ptr());
-    assert_eq!(cast_rc, 0, "cast should succeed: {}", take_last_error());
+    let cast_rc = saikuro_client_cast_json(
+        handle,
+        common::c("math.add").as_ptr(),
+        common::c("[5, 6]").as_ptr(),
+    );
+    assert_eq!(cast_rc, 0, "cast should succeed: {}", common::take_error());
 
-    let batch_calls = c(r#"[
+    let batch_calls = common::c(
+        r#"[
             {"target": "math.add", "args": [1, 2]},
             {"target": "math.add", "args": [3, 4]}
-        ]"#);
+        ]"#,
+    );
     let batch_result = saikuro_client_batch_json(handle, batch_calls.as_ptr());
     assert!(
         !batch_result.is_null(),
         "batch failed: {}",
-        take_last_error()
+        common::take_error()
     );
-    let batch_json = take_c_string(batch_result);
+    let batch_json = common::take_c_string(batch_result);
     assert_eq!(batch_json, "[3,7]");
 
     let close_rc = saikuro_client_close(handle);
-    assert_eq!(close_rc, 0, "close should succeed: {}", take_last_error());
+    assert_eq!(
+        close_rc,
+        0,
+        "close should succeed: {}",
+        common::take_error()
+    );
     saikuro_client_free(handle);
 }
 
@@ -226,20 +227,29 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
 fn c_client_reports_transport_error_when_namespace_missing() {
     let runtime = RuntimeHarness::start();
 
-    let address = c(&runtime.address);
+    let address = common::c(&runtime.address);
     let handle = saikuro_client_connect(address.as_ptr());
     assert!(!handle.is_null());
 
-    let missing = saikuro_client_call_json(handle, c("missing.add").as_ptr(), c("[1, 1]").as_ptr());
+    let missing = saikuro_client_call_json(
+        handle,
+        common::c("missing.add").as_ptr(),
+        common::c("[1, 1]").as_ptr(),
+    );
     assert!(missing.is_null(), "unknown namespace call should fail");
 
-    let message = take_last_error();
+    let message = common::take_error();
     assert!(
         message.contains("call failed") || message.contains("NoProvider"),
         "unexpected error message: {message}"
     );
 
     let close_rc = saikuro_client_close(handle);
-    assert_eq!(close_rc, 0, "close should succeed: {}", take_last_error());
+    assert_eq!(
+        close_rc,
+        0,
+        "close should succeed: {}",
+        common::take_error()
+    );
     saikuro_client_free(handle);
 }

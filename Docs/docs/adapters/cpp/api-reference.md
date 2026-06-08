@@ -1,60 +1,57 @@
 ---
 title: "C++ API Reference"
-description: "Reference for the Saikuro C++ wrapper API"
+description: "Full C++ adapter API reference"
 ---
 
-This page is the C++ adapter API reference. For shared protocol details, see [Core Protocol Reference](../../api/).
+The C++ adapter wraps the C API with RAII types in the `saikuro` namespace. All types are move-only.
 
-## Main classes
+## `saikuro::Client`
 
-- `saikuro::Client`
-- `saikuro::Client::Stream`
-- `saikuro::Client::Channel`
-- `saikuro::Provider`
-- `saikuro::Error`
+| Method                                                         | Description           |
+|----------------------------------------------------------------|-----------------------|
+| `Client(const std::string& address)`                           | Connect to a runtime  |
+| `std::string call_json(target, args_json)`                     | Request/response call |
+| `std::string call_json_timeout(target, args_json, timeout_ms)` | Call with timeout     |
+| `void cast_json(target, args_json)`                            | Fire-and-forget       |
+| `std::string batch_json(calls_json)`                           | Batch calls           |
+| `Stream stream_json(target, args_json)`                        | Open a stream         |
+| `Channel channel_json(target, args_json)`                      | Open a channel        |
+| `std::string resource_json(target, args_json)`                 | Resource invocation   |
+| `void log(level, name, msg, fields_json)`                      | Forward a log record  |
 
-## Client wrapper API
+## `saikuro::Client::Stream`
 
-| Symbol | Signature | Returns | Notes |
-| ------ | --------- | ------- | ----- |
-| `Client` | `explicit Client(const std::string& address)` | `Client` | Connect on construction. |
-| `Client::call_json` | `std::string call_json(const std::string& target, const std::string& args_json) const` | `std::string` | Throws `saikuro::Error` on failure. |
-| `Client::call_json_timeout` | `std::string call_json_timeout(const std::string& target, const std::string& args_json, int timeout_ms) const` | `std::string` | Timed call variant. |
-| `Client::cast_json` | `void cast_json(const std::string& target, const std::string& args_json) const` | `void` | Fire-and-forget invocation. |
-| `Client::batch_json` | `std::string batch_json(const std::string& calls_json) const` | `std::string` | Batch invocation result JSON. |
-| `Client::stream_json` | `Stream stream_json(const std::string& target, const std::string& args_json) const` | `Stream` | Opens server-to-client stream. |
-| `Client::channel_json` | `Channel channel_json(const std::string& target, const std::string& args_json) const` | `Channel` | Opens bidirectional channel. |
-| `Client::resource_json` | `std::string resource_json(const std::string& target, const std::string& args_json) const` | `std::string` | Resource invocation result JSON. |
-| `Client::log` | `void log(const std::string& level, const std::string& name, const std::string& msg, const std::string& fields_json="{}") const` | `void` | Structured runtime log forwarding. |
+| Method                             | Description                                 |
+|------------------------------------|---------------------------------------------|
+| `bool next_json(std::string& out)` | Read next item; returns `false` when closed |
 
-## Stream and channel wrappers
+## `saikuro::Client::Channel`
 
-| Symbol | Signature | Returns | Notes |
-| ------ | --------- | ------- | ----- |
-| `Client::Stream::next_json` | `bool next_json(std::string& out_item_json)` | `bool` | `false` when stream is done. |
-| `Client::Channel::send_json` | `void send_json(const std::string& item_json)` | `void` | Send one channel item. |
-| `Client::Channel::next_json` | `bool next_json(std::string& out_item_json)` | `bool` | `false` when channel is done. |
-| `Client::Channel::close` | `void close()` | `void` | Graceful channel close. |
-| `Client::Channel::abort` | `void abort()` | `void` | Abort channel. |
+| Method                                    | Description                                 |
+|-------------------------------------------|---------------------------------------------|
+| `void send_json(const std::string& item)` | Send an item                                |
+| `void close()`                            | Close the channel                           |
+| `void abort()`                            | Abort the channel                           |
+| `bool next_json(std::string& out)`        | Read next item; returns `false` when closed |
 
-## Provider wrapper API
+## `saikuro::Provider`
 
-| Symbol | Signature | Returns | Notes |
-| ------ | --------- | ------- | ----- |
-| `Provider` | `explicit Provider(const std::string& namespace_name)` | `Provider` | Creates namespace provider wrapper. |
-| `Provider::register_handler` | `void register_handler(const std::string& name, RawHandler callback, void* user_data)` | `void` | Registers C callback bridge. |
-| `Provider::serve` | `void serve(const std::string& address)` | `void` | Blocking serve loop. |
+| Method                                                                             | Description          |
+|------------------------------------------------------------------------------------|----------------------|
+| `Provider(const std::string& namespace_name)`                                      | Create a provider    |
+| `void register_handler(name, callback, user_data)`                                 | Register a handler   |
+| `void register_handler_with_schema(name, callback, user_data, nargs, return_type)` | Register with schema |
+| `void serve(const std::string& address)`                                           | Connect and serve    |
 
-## Error model
+## Error Handling
 
-Adapter failures map to `saikuro::Error` with code/message semantics aligned to the core protocol.
+Exceptions carry a descriptive message:
 
-## Header location
-
-- `Build/adapters/cpp/include/saikuro/saikuro.hpp`
-
-## Related
-
-- [C++ Adapter Overview](./)
-- [C++ Examples](./examples)
-- [Core Protocol Reference](../../api/)
+```cpp
+try {
+    saikuro::Client client("tcp://127.0.0.1:7700");
+    auto result = client.call_json("math.add", "[1, 2]");
+} catch (const saikuro::Error& e) {
+    fprintf(stderr, "Saikuro error: %s\n", e.what());
+}
+```

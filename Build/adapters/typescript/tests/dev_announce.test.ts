@@ -27,12 +27,9 @@ describe("SaikuroProvider dev-mode announce", () => {
     });
 
     // Give the async announce a moment to run
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 80));
 
     expect(seen).toBeTruthy();
-    // Debug: print the announced schema when tests run locally
-    // eslint-disable-next-line no-console
-    console.log("ANNOUNCE:", JSON.stringify(seen.args?.[0]));
     const ns = (seen.args?.[0]?.namespaces ?? {})["testns"];
     expect(ns).toBeTruthy();
     expect(ns.functions).toHaveProperty("add");

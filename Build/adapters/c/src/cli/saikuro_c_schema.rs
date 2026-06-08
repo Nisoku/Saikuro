@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
+use anyhow::Context;
 use clap::Parser;
 use regex::Regex;
 use serde_json::{json, Value};
@@ -78,10 +80,13 @@ fn parse_arg(arg: &str) -> Option<(String, Value, bool)> {
 }
 
 fn extract_schema(source: &str, namespace: &str) -> Value {
-    let proto = Regex::new(
-        r"^\s*([A-Za-z_][A-Za-z0-9_\s\*]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;",
-    )
-    .expect("compile regex");
+    static PROTO: OnceLock<Regex> = OnceLock::new();
+    let proto = PROTO.get_or_init(|| {
+        Regex::new(
+            r"^\s*([A-Za-z_][A-Za-z0-9_\s\*]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*;",
+        )
+        .expect("compile regex")
+    });
 
     let mut functions = serde_json::Map::new();
 
@@ -133,23 +138,20 @@ fn extract_schema(source: &str, namespace: &str) -> Value {
     })
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let source = match fs::read_to_string(&args.header) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("failed to read {}: {e}", args.header.display());
-            std::process::exit(1);
-        }
-    };
+    let source = fs::read_to_string(&args.header)
+        .with_context(|| format!("failed to read {}", args.header.display()))?;
 
     let schema = extract_schema(&source, &args.namespace);
     let out = if args.pretty {
-        serde_json::to_string_pretty(&schema).expect("serialize schema")
+        serde_json::to_string_pretty(&schema)
     } else {
-        serde_json::to_string(&schema).expect("serialize schema")
-    };
+        serde_json::to_string(&schema)
+    }
+    .context("failed to serialize schema")?;
 
     println!("{out}");
+    Ok(())
 }

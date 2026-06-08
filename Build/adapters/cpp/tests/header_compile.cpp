@@ -2,24 +2,19 @@
 
 #include <saikuro/saikuro.hpp>
 
-static_assert(!std::is_copy_constructible_v<saikuro::Client>);
-static_assert(std::is_move_constructible_v<saikuro::Client>);
-static_assert(!std::is_copy_constructible_v<saikuro::Client::Stream>);
-static_assert(std::is_move_constructible_v<saikuro::Client::Stream>);
-static_assert(!std::is_copy_constructible_v<saikuro::Client::Channel>);
-static_assert(std::is_move_constructible_v<saikuro::Client::Channel>);
-static_assert(!std::is_copy_constructible_v<saikuro::Provider>);
-static_assert(std::is_move_constructible_v<saikuro::Provider>);
+#define CHECK_TYPE_TRAITS(Type)                                                \
+  static_assert(!std::is_copy_constructible<Type>::value,                      \
+                #Type " should not be copy constructible");                    \
+  static_assert(std::is_move_constructible<Type>::value,                       \
+                #Type " should be move constructible");                        \
+  static_assert(!std::is_copy_assignable<Type>::value,                         \
+                #Type " should not be copy assignable");                       \
+  static_assert(std::is_move_assignable<Type>::value,                          \
+                #Type " should be move assignable")
 
-static_assert(!std::is_copy_assignable_v<saikuro::Client>);
-static_assert(std::is_move_assignable_v<saikuro::Client>);
-static_assert(!std::is_copy_assignable_v<saikuro::Client::Stream>);
-static_assert(std::is_move_assignable_v<saikuro::Client::Stream>);
-static_assert(!std::is_copy_assignable_v<saikuro::Client::Channel>);
-static_assert(std::is_move_assignable_v<saikuro::Client::Channel>);
-static_assert(!std::is_copy_assignable_v<saikuro::Provider>);
-static_assert(std::is_move_assignable_v<saikuro::Provider>);
+CHECK_TYPE_TRAITS(saikuro::Client);
+CHECK_TYPE_TRAITS(saikuro::Client::Stream);
+CHECK_TYPE_TRAITS(saikuro::Client::Channel);
+CHECK_TYPE_TRAITS(saikuro::Provider);
 
-int main() {
-    return 0;
-}
+int main() { return 0; }

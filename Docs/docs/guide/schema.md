@@ -3,42 +3,25 @@ title: "Schema"
 description: "Declare your functions, types, capabilities, and namespaces"
 ---
 
-The schema is Saikuro's source of truth for what exists in the system. The runtime uses it to validate calls, enforce capabilities, and route correctly. Your adapters use it to generate or check bindings.
+The schema is the source of truth for everything callable in a Saikuro system. The runtime uses it to validate calls, enforce capabilities, and route correctly. The codegen tool uses it to emit typed client stubs.
 
 ## Schema Structure
 
-Schemas are JSON. Here's a complete example:
+Schemas are JSON (or MessagePack). Here is a complete example:
 
 ```json
 {
   "version": 1,
   "namespaces": {
     "math": {
-      "doc": "Basic arithmetic operations.",
       "functions": {
         "add": {
-          "args": ["i32", "i32"],
-          "returns": "i32",
+          "args": [{ "name": "a", "type": { "kind": "primitive", "type": "i64" }, "optional": false }],
+          "returns": { "kind": "primitive", "type": "i64" },
           "visibility": "public",
+          "capabilities": [],
           "idempotent": true,
           "doc": "Add two integers."
-        },
-        "divide": {
-          "args": ["f64", "f64"],
-          "returns": "f64",
-          "visibility": "public",
-          "capabilities": ["math.divide"],
-          "doc": "Divide two numbers. Returns an error if the divisor is zero."
-        }
-      }
-    },
-    "admin": {
-      "functions": {
-        "reset_counters": {
-          "args": [],
-          "returns": "void",
-          "visibility": "internal",
-          "capabilities": ["admin.write"]
         }
       }
     }
@@ -47,15 +30,7 @@ Schemas are JSON. Here's a complete example:
     "User": {
       "fields": {
         "id": "string",
-        "name": "string",
-        "role": "string"
-      }
-    },
-    "PageResult": {
-      "fields": {
-        "items": "list<User>",
-        "total": "i32",
-        "page": "i32"
+        "name": "string"
       }
     }
   }
@@ -66,181 +41,119 @@ Schemas are JSON. Here's a complete example:
 
 Functions live inside namespaces. Each namespace is owned by exactly one provider.
 
+```text
+math.add
+auth.validate_token
+images.resize
+```
+
+## Type Descriptors
+
+The `type` field in arguments and return values uses Saikuro's type descriptor system:
+
+| Example                                                   | Meaning                    |
+|-----------------------------------------------------------|----------------------------|
+| `{ "kind": "primitive", "type": "i32" }`                  | 32-bit signed integer      |
+| `{ "kind": "primitive", "type": "string" }`               | UTF-8 string               |
+| `{ "kind": "list", "item": { ... } }`                     | List of items              |
+| `{ "kind": "map", "key": { ... }, "value": { ... } }`     | Key-value map              |
+| `{ "kind": "optional", "inner": { ... } }`                | Nullable value             |
+| `{ "kind": "named", "name": "User" }`                     | Reference to a custom type |
+| `{ "kind": "stream", "item": { ... } }`                   | Stream of items            |
+| `{ "kind": "channel", "send": { ... }, "recv": { ... } }` | Bidirectional channel      |
+
+**Primitive types** `bool`, `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`, `string`, `bytes`, `any`, `unit`.
+
+## TypeScript Provider Type Builder
+
+The TypeScript adapter provides a `t` builder for constructing type descriptors at registration:
+
+```typescript
+import { SaikuroProvider, t } from "@nisoku/saikuro";
+
+const provider = new SaikuroProvider("math");
+
+provider.register("add", (a: number, b: number) => a + b, {
+  args: [
+    { name: "a", type: t.i32() },
+    { name: "b", type: t.i32() },
+  ],
+  returns: t.i32(),
+  doc: "Add two integers.",
+  idempotent: true,
+});
+```
+
+Available builders:
+
+- `t.bool()`, `t.i32()`, `t.i64()`, `t.f32()`, `t.f64()`, `t.string()`, `t.bytes()`, `t.any()`, `t.unit()`
+- `t.list(item)`, `t.map(key, value)`, `t.options(inner)`, `t.named(name)`
+- `t.stream(item)`, `t.channel(send, recv)`
+
+## Capabilities
+
+Functions can require capability tokens:
+
 ```json
-"namespaces": {
-  "math": { ... },
-  "auth": { ... },
-  "images": { ... }
+"delete_user": {
+  "capabilities": ["admin.write"]
 }
 ```
 
-The namespace name is the first part of every function address: `math.add`, `auth.validate`, `images.resize`.
+Callers present their token on connect. If a capability is missing, the call is rejected before it reaches the provider.
 
-## Functions
-
-Each function declaration has:
-
-```json
-"add": {
-  "args": ["i32", "i32"],
-  "returns": "i32",
-  "visibility": "public",
-  "capabilities": ["math.basic"],
-  "idempotent": false,
-  "doc": "Add two integers and return their sum."
-}
-```
-
-`args` and `returns` use Saikuro's built-in type names or references to types defined in the `types` section.
-
-`capabilities` is optional. Omit it for functions that any caller can invoke.
-
-`idempotent` is optional (defaults to `false`). Mark a function `true` when calling it twice with the same arguments always produces the same result and has no observable side effects. The runtime exposes this in the schema so callers can make smarter retry and caching decisions, but it does not enforce it.
-
-`doc` is optional. A plain-text description of the function. The codegen tool uses this to emit doc comments in generated client code; it has no effect at runtime.
-
-## Built-in Types
-
-| Type | Description |
-| ---- | ----------- |
-| `bool` | Boolean |
-| `i8`, `i16`, `i32`, `i64` | Signed integers |
-| `u8`, `u16`, `u32`, `u64` | Unsigned integers |
-| `f32`, `f64` | Floats |
-| `string` | UTF-8 string |
-| `bytes` | Raw bytes |
-| `void` | No return value |
-| `list<T>` | Ordered list of T |
-| `map<K, V>` | Key-value map |
-| `option<T>` | Optional T (may be null) |
-
-For structured data, define your own types in the `types` section and reference them by name.
-
-## Custom Types
-
-```json
-"types": {
-  "User": {
-    "fields": {
-      "id": "string",
-      "name": "string",
-      "created_at": "i64"
-    }
-  }
-}
-```
-
-Then reference them in function signatures:
-
-```json
-"get_user": {
-  "args": ["string"],
-  "returns": "User"
-}
-```
-
-Types can reference other types:
-
-```json
-"types": {
-  "Address": {
-    "fields": {
-      "street": "string",
-      "city": "string"
-    }
-  },
-  "User": {
-    "fields": {
-      "id": "string",
-      "address": "Address"
-    }
-  }
-}
-```
+In dev mode you can configure the runtime to skip capability enforcement.
 
 ## Visibility
 
 Three levels:
 
-| Level | Who can call it |
-| ----- | --------------- |
-| `public` | Any caller, any machine |
-| `internal` | Callers on the same machine only |
-| `private` | Same process only |
+| Level      | Who can call                |
+|------------|-----------------------------|
+| `public`   | Any caller, any machine     |
+| `internal` | Callers on the same machine |
+| `private`  | Same process only           |
 
-The runtime enforces these at the transport layer. `private` functions are never exposed over the network regardless of configuration.
+Private functions are never exposed beyond the process boundary.
 
-## Capabilities
+## Schema Announcement (Dev Mode)
 
-Capabilities are strings. A function can require zero or more:
-
-```json
-"delete_everything": {
-  "capabilities": ["admin.write", "nuclear.launch"]
-}
-```
-
-A caller must present a token that grants all required capabilities. If any capability is missing, the call is rejected before it reaches the provider.
-
-In dev mode you can configure the runtime to skip capability enforcement so you can iterate faster. Don't do that in production.
-
-## Schema Versioning
-
-Schemas have a `version` field:
-
-```json
-{
-  "version": 1,
-  ...
-}
-```
-
-In v1, the version must be `1`. Future versions will add fields, not remove or rename them.
-
-If you change a function's argument types or return type, that's a breaking change. Increment the schema version and update your callers. The runtime will reject calls that don't match the active schema.
-
-## Dev Mode vs. Production
-
-### Dev Mode (Discovery)
-
-Providers announce their schema when they start:
+In development, providers announce their schema automatically when they call `serve()`:
 
 ```typescript
-const provider = new Provider({ namespace: 'math', dev: true });
-
-provider.register('add', (a: number, b: number) => a + b);
-
-await provider.serve();
 // Schema is announced automatically
+await provider.serve("unix:///tmp/saikuro.sock");
 ```
 
-The runtime accepts and stores the schema. Callers can immediately call `math.add` without knowing about the schema in advance.
+The runtime stores the schema and shares it with all connected callers. No codegen step needed during development.
 
-### Production Mode
+You can also extract a schema statically using your adapter's CLI tool:
 
-You generate a static schema file, commit it to your repo, and pass it to the runtime at startup:
+```bash
+npx saikuro-schema my-namespace provider.ts   # TypeScript
+saikuro-schema --namespace my-namespace provider.py  # Python
+```
+
+## Schema Announcement (Production)
+
+In production, pass a frozen schema to the runtime:
 
 ```bash
 saikuro-runtime --schema ./schema.json
 ```
 
-Dynamic announcement is disabled. Any provider that tries to announce a schema not matching the loaded one gets rejected.
-
-To extract the schema from a TypeScript provider:
-
-```bash
-npx saikuro extract --provider provider.ts --out schema.json
-```
-
-From Python:
-
-```bash
-python -m saikuro extract --provider provider.py --out schema.json
-```
+Dynamic announcement is disabled. Providers that announce a mismatched schema are rejected.
 
 ## Next Steps
 
-- [Code Generation](./codegen): Generate typed client stubs from a frozen schema
-- [Transports](./transports): How the protocol moves between processes
-- [Language Adapters](../adapters/): Schema usage in TypeScript, Python, C#, Rust, C, and C++
-- [Protocol Reference](../api/): The full wire format including schema envelope
+::: grids
+::: grid
+::: button "Code Generation" ./codegen.md icon:cpu
+:::
+::: grid
+::: button "Transports" ./transports.md icon:radio
+:::
+::: grid
+::: button "Language Adapters" ../adapters/ icon:code
+:::
+:::

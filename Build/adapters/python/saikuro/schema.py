@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 import types
+import typing
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, get_type_hints
@@ -68,12 +69,6 @@ def _annotation_to_type_str(annotation: Any) -> str:
     origin = getattr(annotation, "__origin__", None)
     args = getattr(annotation, "__args__", ())
 
-    # Optional[X] == Union[X, None]
-    if origin is type(None):
-        return "unit"
-
-    import typing
-
     # Handle PEP 604 union types (X | Y) which are `types.UnionType` on Python 3.10+
     if isinstance(annotation, types.UnionType) or origin is typing.Union:
         # Optional[X] has args (X, NoneType)
@@ -97,8 +92,8 @@ def _annotation_to_type_str(annotation: Any) -> str:
     return "any"
 
 
-# Convert a type string (or already-shaped descriptor) to a structural descriptor
-def _type_str_to_desc(tstr: Any):
+def _type_str_to_desc(tstr: str) -> dict:
+    """Convert a type string (or already-shaped descriptor) to a structural descriptor."""
     prims = (
         "bool",
         "i8",
@@ -133,7 +128,7 @@ def _type_str_to_desc(tstr: Any):
             "key": {"kind": "primitive", "type": "string"},
             "value": _type_str_to_desc(val),
         }
-    if isinstance(tstr, str) and tstr.startswith("stream<") and tstr.endswith(">"):
+    if tstr.startswith("stream<") and tstr.endswith(">"):
         inner = tstr[len("stream<") : -1]
         return {"kind": "stream", "item": _type_str_to_desc(inner)}
     if tstr in prims:
@@ -148,6 +143,7 @@ class SchemaBuilder:
     """Accumulates function definitions and emits a schema announcement dict."""
 
     def __init__(self, namespace: str) -> None:
+        """Initialize builder for the given namespace."""
         self._namespace = namespace
         self._functions: Dict[str, FunctionDef] = {}
 
@@ -161,7 +157,7 @@ class SchemaBuilder:
         """Introspect `fn` and add it to the schema."""
         try:
             hints = get_type_hints(fn)
-        except Exception as exc:
+        except (NameError, AttributeError) as exc:
             # `get_type_hints` can fail for built-in functions or functions
             # with forward references that can't be resolved.  Log the
             # failure so it's visible and fall back to un-typed args.

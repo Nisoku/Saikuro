@@ -9,6 +9,7 @@ writing Rust services that connect to a Saikuro runtime.
 ```toml
 [dependencies]
 saikuro = "0.1"
+saikuro-exec = "0.1"
 ```
 
 Feature flags (all enabled by default):
@@ -26,17 +27,18 @@ Feature flags (all enabled by default):
 ```rust
 use saikuro::{Provider, Result};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut provider = Provider::new("math");
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async {
+        let mut provider = Provider::new("math");
 
-    provider.register("add", |args: Vec<serde_json::Value>| async move {
-        let a = args[0].as_i64().unwrap_or(0);
-        let b = args[1].as_i64().unwrap_or(0);
-        Ok(serde_json::json!(a + b))
-    });
+        provider.register("add", |args: Vec<serde_json::Value>| async move {
+            let a = args[0].as_i64().unwrap_or(0);
+            let b = args[1].as_i64().unwrap_or(0);
+            Ok(serde_json::json!(a + b))
+        });
 
-    provider.serve("tcp://127.0.0.1:7700").await
+        provider.serve("tcp://127.0.0.1:7700").await
+    })
 }
 ```
 
@@ -45,17 +47,18 @@ async fn main() -> Result<()> {
 ```rust
 use saikuro::{Client, Result};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let client = Client::connect("tcp://127.0.0.1:7700").await?;
+fn main() -> Result<()> {
+    saikuro_exec::block_on(async {
+        let client = Client::connect("tcp://127.0.0.1:7700").await?;
 
-    let result = client.call("math.add", vec![
-        serde_json::json!(1),
-        serde_json::json!(2),
-    ]).await?;
+        let result = client.call("math.add", vec![
+            serde_json::json!(1),
+            serde_json::json!(2),
+        ]).await?;
 
-    println!("{result}");
-    Ok(())
+        println!("{result}");
+        Ok(())
+    })
 }
 ```
 

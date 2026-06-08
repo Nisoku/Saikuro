@@ -17,27 +17,28 @@ use crate::value::Value;
 //  Log level
 
 /// Severity level of a log record, ordered from least to most severe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum LogLevel {
     Trace,
     Debug,
     Info,
     Warn,
     Error,
-}
-
-impl std::fmt::Display for LogLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::Trace => "trace",
-            Self::Debug => "debug",
-            Self::Info => "info",
-            Self::Warn => "warn",
-            Self::Error => "error",
-        };
-        f.write_str(s)
-    }
 }
 
 //  Log record
@@ -89,6 +90,43 @@ impl LogRecord {
     }
 }
 
+/// Helper: extract a `Value::String` from a map by key.
+fn take_string(map: &mut BTreeMap<String, Value>, key: &str) -> Option<String> {
+    match map.remove(key) {
+        Some(Value::String(s)) => Some(s),
+        _ => None,
+    }
+}
+
+impl TryFrom<Value> for LogRecord {
+    type Error = &'static str;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Map(mut map) => {
+                let ts = take_string(&mut map, "ts").unwrap_or_default();
+                let level = map
+                    .remove("level")
+                    .and_then(|v| match v {
+                        Value::String(s) => LogLevel::try_from(s.as_str()).ok(),
+                        _ => None,
+                    })
+                    .unwrap_or(LogLevel::Info);
+                let name = take_string(&mut map, "name").unwrap_or_default();
+                let msg = take_string(&mut map, "msg").unwrap_or_default();
+                Ok(LogRecord {
+                    ts,
+                    level,
+                    name,
+                    msg,
+                    fields: map,
+                })
+            }
+            _ => Err("expected a Map"),
+        }
+    }
+}
+
 impl std::fmt::Display for LogRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -113,8 +151,8 @@ pub type LogSink = Box<dyn Fn(LogRecord) + Send + Sync + 'static>;
 /// writes it to stderr.  Used when no richer sink is configured.
 pub fn stderr_log_sink() -> LogSink {
     Box::new(|record: LogRecord| {
-        // Minimal JSON serialisation without pulling in serde_json :  just emit
-        // the Display representation which is always human-readable.
-        eprintln!("[saikuro] {record}");
+        if let Ok(json) = serde_json::to_string(&record) {
+            eprintln!("{}", json);
+        }
     })
 }

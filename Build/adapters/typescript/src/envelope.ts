@@ -30,7 +30,7 @@ export type StreamControl = "end" | "pause" | "resume" | "abort";
 export interface Envelope {
   readonly version: number;
   readonly type: InvocationType;
-  readonly id: string;
+  readonly id: Uint8Array;
   readonly target: string;
   readonly args: readonly unknown[];
   readonly meta?: Readonly<Record<string, unknown>>;
@@ -42,7 +42,7 @@ export interface Envelope {
 
 /** Inbound response envelope. */
 export interface ResponseEnvelope {
-  readonly id: string;
+  readonly id: Uint8Array;
   readonly ok: boolean;
   readonly result?: unknown;
   readonly error?: ErrorPayload;
@@ -228,6 +228,24 @@ export function makeBatchEnvelope(items: readonly Envelope[]): Envelope {
 }
 
 /**
+ * Build the schema object (the body of an announce envelope) for a given
+ * namespace and its functions.
+ *
+ * Both `SaikuroProvider.schemaObject()` and `SchemaExtractor.buildSchema()`
+ * construct the same outer envelope shape.
+ */
+export function makeSchemaObject(
+  namespace: string,
+  functions: Readonly<Record<string, FunctionSchema>>,
+): SaikuroSchema {
+  return {
+    version: 1,
+    namespaces: { [namespace]: { functions } },
+    types: {},
+  };
+}
+
+/**
  * Construct a schema-announcement envelope.
  *
  * `schema` is a plain-object representation of the Saikuro Schema that will be
@@ -244,23 +262,54 @@ export function makeAnnounceEnvelope(schema: SaikuroSchema): Envelope {
   };
 }
 
-// UUID v4
+/**
+ * Build a log envelope for forwarding a structured log record to the runtime.
+ *
+ * @param logRecord  The log record payload (ts, level, name, msg, optional fields).
+ * @param ts         Timestamp string used for the envelope id.
+ */
+export function makeLogEnvelope(
+  logRecord: Record<string, unknown>,
+  ts: string,
+): Record<string, unknown> {
+  return {
+    version: PROTOCOL_VERSION,
+    type: "log",
+    id: `log-${ts}`,
+    target: "$log",
+    args: [logRecord],
+  };
+}
 
-function generateId(): string {
-  // Prefer the Web Crypto API (available in browsers, Node.js ≥ 19, and WASM
-  // environments) for cryptographically-random UUIDs.
+/** Hex-encode a Uint8Array for use as a Map key. */
+export function idToKey(id: Uint8Array): string {
+  return Array.from(id)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ID generation
+
+function generateId(): Uint8Array {
+  const buf = new Uint8Array(16);
   if (
     typeof globalThis.crypto !== "undefined" &&
-    typeof globalThis.crypto.randomUUID === "function"
+    typeof globalThis.crypto.getRandomValues === "function"
   ) {
-    return globalThis.crypto.randomUUID();
+    globalThis.crypto.getRandomValues(buf);
+    return buf;
   }
-  // Fallback for older Node.js: simple random UUID v4.
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  // Fallback: Math.random (browser / Node.js without Web Crypto).
+  //
+  // Math.random is NOT cryptographically secure, but it is acceptable
+  // here because these IDs are only used for correlation/tracing, not
+  // for security or unguessability. If cryptographic randomness is
+  // ever required, replace this with crypto.getRandomValues or
+  // crypto.randomFillSync.
+  for (let i = 0; i < 16; i++) {
+    buf[i] = (Math.random() * 256) | 0;
+  }
+  return buf;
 }
 
 export { generateId };

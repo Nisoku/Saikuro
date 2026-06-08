@@ -179,7 +179,7 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
     let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("runtime");
@@ -188,7 +188,7 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             let socket = SocketAddr::from(([127, 0, 0, 1], 0));
             let runtime = SaikuroRuntime::builder().build();
             let handle = runtime.handle();
-            let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
+            let (done_tx, done_rx) = saikuro_exec::oneshot::channel::<()>();
             let done_tx = Arc::new(Mutex::new(Some(done_tx)));
             let call_count = Arc::new(AtomicUsize::new(0));
 
@@ -291,18 +291,17 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
                 .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
 
-            let transport = tokio::time::timeout(Duration::from_secs(60), listener.accept())
+            let transport = saikuro_exec::timeout(Duration::from_secs(60), listener.accept())
                 .await
                 .expect("timed out waiting for cpp client connection")
                 .expect("accept")
                 .expect("transport");
             handle.accept_transport(transport, "cpp-client".to_owned(), CapabilitySet::default());
-            assert!(
-                tokio::time::timeout(Duration::from_secs(5), done_rx)
-                    .await
-                    .is_ok(),
-                "timed out waiting for cpp client to issue call"
-            );
+            match saikuro_exec::timeout(Duration::from_secs(5), done_rx).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => panic!("oneshot was canceled before completion"),
+                Err(_) => panic!("timed out waiting for cpp client to issue call"),
+            }
         });
     });
 
@@ -317,7 +316,7 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
     let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("runtime");
@@ -329,7 +328,7 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport =
-                match tokio::time::timeout(Duration::from_secs(60), listener.accept()).await {
+                match saikuro_exec::timeout(Duration::from_secs(60), listener.accept()).await {
                     Ok(Ok(Some(transport))) => transport,
                     Ok(Ok(None)) => return false,
                     Ok(Err(_)) => return false,
@@ -337,7 +336,7 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 };
             let (mut tx, mut rx) = transport.split();
 
-            let frame = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+            let frame = match saikuro_exec::timeout(Duration::from_secs(5), rx.recv()).await {
                 Ok(Ok(Some(frame))) => frame,
                 _ => return false,
             };
@@ -356,7 +355,7 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 .await
                 .expect("send call");
 
-            let response = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+            let response = match saikuro_exec::timeout(Duration::from_secs(5), rx.recv()).await {
                 Ok(Ok(Some(response))) => response,
                 _ => return false,
             };
@@ -375,8 +374,6 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
 
 #[test]
 fn cpp_wrapper_client_integrates_with_runtime() {
-    let (address, runtime_thread) = spawn_runtime_for_cpp_client();
-
     let exe = temp_probe_path("cpp_client_runtime_test");
 
     let source = r#"
@@ -400,7 +397,12 @@ int main(int argc, char** argv) {
 }
 "#;
 
+    // Build saikuro-c library FIRST (blocks on Once for ~78s on cold cache)
+    // before spawning the runtime thread, so the runtime's accept timeout
+    // doesn't expire during the build.
     compile_cpp(source, &exe);
+
+    let (address, runtime_thread) = spawn_runtime_for_cpp_client();
     run_cpp(&exe, &[&address]);
 
     let src_path = exe.with_extension("cpp");
@@ -412,8 +414,6 @@ int main(int argc, char** argv) {
 
 #[test]
 fn cpp_wrapper_provider_announce_and_dispatch_with_runtime() {
-    let (address, scripted_runtime) = spawn_scripted_runtime_for_cpp_provider();
-
     let exe = temp_probe_path("cpp_provider_runtime_test");
 
     let source = r#"
@@ -442,7 +442,12 @@ int main(int argc, char** argv) {
 }
 "#;
 
+    // Build saikuro-c library FIRST (blocks on Once for ~78s on cold cache)
+    // before spawning the runtime thread, so the runtime's accept timeout
+    // doesn't expire during the build.
     compile_cpp(source, &exe);
+
+    let (address, scripted_runtime) = spawn_scripted_runtime_for_cpp_provider();
     run_cpp(&exe, &[&address]);
 
     let src_path = exe.with_extension("cpp");

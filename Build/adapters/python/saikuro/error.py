@@ -57,7 +57,7 @@ class SaikuroError(Exception):
         return klass(code=code, message=message, details=details)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(code={self.code!r}, message={self.message!r})"
+        return f"{type(self).__name__}(code={self.code!r}, message={self.message!r}, details={self.details!r})"
 
 
 class FunctionNotFoundError(SaikuroError):
