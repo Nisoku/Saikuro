@@ -20,6 +20,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install just
+        uses: taiki-e/install-action@just
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
