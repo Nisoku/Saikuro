@@ -26,12 +26,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
@@ -39,6 +52,15 @@ jobs:
       - name: Restore C# WASM workload
         run: dotnet workload restore
         working-directory: Demo/wasm/csharp/InsightLab
+
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
 
       - name: Build documentation
         working-directory: Docs
@@ -48,6 +70,10 @@ jobs:
 
       - name: Setup all adapters
         run: just setup
+
+      - name: Install demo dependencies
+        run: npm ci
+        working-directory: Demo
 
       - name: Build demo
         run: just web_demo build
