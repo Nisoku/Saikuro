@@ -8,8 +8,9 @@ export async function startRustProvider(channel: string): Promise<void> {
   if (!bootPromise) {
     bootPromise = (async () => {
       log.info("loading Rust WASM", { channel });
-      const mod =
-        await import("../../../public/wasm/rust/saikuro_rust_insight.js");
+      const mod = await import(
+        new URL("wasm/rust/saikuro_rust_insight.js", document.baseURI).href,
+      );
       log.info("Rust WASM module loaded, initializing");
       await mod.default();
       log.info("Rust WASM initialized, starting provider", { channel });
