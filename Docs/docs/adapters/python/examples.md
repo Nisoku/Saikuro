@@ -1,48 +1,78 @@
 ---
-title: "Python Adapter Examples"
-description: "Python-centered cross-language patterns"
+title: "Python Examples"
+description: "Python adapter usage patterns"
 ---
 
-## Python Provider, TypeScript Caller
-
-Python hosts inference; TypeScript API consumes it.
+## Full Provider
 
 ```python
-from saikuro import Provider
+import asyncio
+from saikuro import SaikuroProvider
 
-provider = Provider(namespace="model")
+provider = SaikuroProvider("math")
 
-@provider.register("predict")
-async def predict(features):
-    score = model.predict(features)
-    return {"score": float(score), "label": classify(score)}
+@provider.register("add")
+def add(a: int, b: int) -> int:
+    return a + b
 
-await provider.serve()
+@provider.register("multiply")
+def multiply(a: int, b: int) -> int:
+    return a * b
+
+@provider.register("fibonacci")
+async def fibonacci(n: int):
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+
+asyncio.run(provider.serve("unix:///tmp/saikuro.sock"))
 ```
 
-```typescript
-import { Client } from "@nisoku/saikuro";
-
-const client = new Client();
-await client.connect();
-const result = await client.call("model.predict", [features]);
-return res.json(result);
-```
-
-## Chat room channels
-
-Python handles room state while browser clients join via WebSocket channels.
+## Full Client
 
 ```python
-@provider.register_channel("join")
-async def join_room(args, chan):
-    room = args[0]["roomId"]
-    async for msg in chan.incoming():
-        await broadcast(room, msg)
+import asyncio
+from saikuro import SaikuroClient
+
+async def main():
+    async with SaikuroClient.connect("unix:///tmp/saikuro.sock") as client:
+        # Call
+        result = await client.call("math.add", [1, 2])
+        print(f"add: {result}")
+
+        # Stream
+        async for n in await client.stream("math.fibonacci", [10]):
+            print(f"fib: {n}")
+
+        # Batch
+        results = await client.batch([
+            ("math.add", [3, 4]),
+            ("math.multiply", [5, 6]),
+        ])
+        print(f"batch: {results}")
+
+asyncio.run(main())
 ```
 
-## Next Steps
+## Testing with InMemory
 
-- [Python Adapter](./)
-- [TypeScript examples](../typescript/examples)
-- [Transports](../../guide/transports)
+```python
+import pytest
+from saikuro import SaikuroProvider, SaikuroClient, InMemoryTransport
+
+@pytest.mark.asyncio
+async def test_math_provider():
+    pt, ct = InMemoryTransport.pair()
+
+    provider = SaikuroProvider("math")
+
+    @provider.register("add")
+    def add(a: int, b: int) -> int:
+        return a + b
+
+    await provider.serve_on(pt)
+
+    async with SaikuroClient.open_on(ct) as client:
+        assert await client.call("math.add", [1, 2]) == 3
+```

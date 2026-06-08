@@ -1,51 +1,79 @@
 ---
-title: "TypeScript Adapter Examples"
-description: "TypeScript-centered cross-language patterns"
+title: "TypeScript Examples"
+description: "TypeScript adapter usage patterns"
 ---
 
-## TypeScript Provider, Python Caller
-
-TypeScript exposes user operations. Python performs periodic cleanup.
+## Provider with Schema
 
 ```typescript
-import { Provider } from "@nisoku/saikuro";
+import { SaikuroProvider, t } from "@nisoku/saikuro";
 
-const provider = new Provider({ namespace: "users" });
-provider.register("list", async (options: { page: number; limit: number }) => {
-  return db.users.paginate(options);
+const provider = new SaikuroProvider("math");
+
+provider.register("add", (a: number, b: number) => a + b, {
+  args: [{ name: "a", type: t.i32() }, { name: "b", type: t.i32() }],
+  returns: t.i32(),
+  doc: "Add two integers.",
 });
-provider.register("deactivate", async (id: string) => {
-  await db.users.update(id, { active: false });
-  return { ok: true };
+
+provider.register("divide", (a: number, b: number) => {
+  if (b === 0) throw new Error("division by zero");
+  return a / b;
+}, {
+  args: [{ name: "a", type: t.f64() }, { name: "b", type: t.f64() }],
+  returns: t.f64(),
+  capabilities: ["math.divide"],
 });
-await provider.serve();
+
+await provider.serve("unix:///tmp/saikuro.sock");
 ```
 
-```python
-from saikuro import Client
-
-client = Client()
-await client.connect()
-result = await client.call("users.list", [{"page": 0, "limit": 100}])
-for user in result["items"]:
-    if should_deactivate(user):
-        await client.call("users.deactivate", [user["id"]])
-```
-
-## Batch UI hydration
-
-Use one `batch` for first paint data:
+## Stream Provider
 
 ```typescript
-const [user, prefs, notifications] = await client.batch([
-  { target: "users.getById", args: ["u1"] },
-  { target: "prefs.getForUser", args: ["u1"] },
-  { target: "notifications.getUnread", args: ["u1"] },
-]);
+provider.register("events.subscribe", async function* (topic: string) {
+  const sub = await subscribeToTopic(topic);
+  try {
+    for await (const event of sub) {
+      yield event;
+    }
+  } finally {
+    await sub.unsubscribe();
+  }
+});
 ```
 
-## Next Steps
+## Client with Timeout
 
-- [TypeScript Adapter](./)
-- [Python examples](../python/examples)
-- [Invocation Primitives](../../guide/invocations)
+```typescript
+const client = await SaikuroClient.connect("tcp://10.0.0.5:7700", {
+  defaultTimeoutMs: 5000,
+});
+
+try {
+  const result = await client.call("math.add", [1, 2], { timeoutMs: 1000 });
+} catch (err) {
+  if (err instanceof SaikuroTimeoutError) {
+    console.error("call timed out");
+  }
+}
+```
+
+## Testing with InMemory
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { SaikuroProvider, SaikuroClient, InMemoryTransport } from "@nisoku/saikuro";
+
+describe("math", () => {
+  it("adds", async () => {
+    const [pt, ct] = InMemoryTransport.pair();
+    const provider = new SaikuroProvider("math");
+    provider.register("add", (a: number, b: number) => a + b);
+    await provider.serveOn(pt);
+
+    const client = await SaikuroClient.openOn(ct);
+    expect(await client.call("math.add", [1, 2])).toBe(3);
+  });
+});
+```

@@ -1,53 +1,113 @@
 ---
 title: "C# Adapter"
-description: "Saikuro adapter for .NET"
+description: "Saikuro adapter for .NET and Blazor WASM"
 ---
 
-The C# adapter targets `net8.0`, `netstandard2.0`, and `netstandard2.1`.
+The C# adapter supports .NET 8+ with full async/await and Blazor WASM via BroadcastChannel transport.
 
-## Install
+## Installation
 
 ```bash
 dotnet add package Saikuro
 ```
 
-## Basic usage
+## Client API
 
 ```csharp
 using Saikuro;
 
-await using var client = await Client.ConnectAsync("tcp://127.0.0.1:7700");
-var result = await client.CallAsync("math.add", new object[] { 1, 2 });
-Console.WriteLine(result);
+// Connect via address string
+var client = new Client();
+await client.ConnectAsync("unix:///tmp/saikuro.sock");
+
+// Call
+var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 });
+
+// Cast
+await client.CastAsync("log.write", new object[] { new { level = "info", message = "started" } });
+
+// Stream
+await foreach (var item in client.StreamAsync<Event>("events.subscribe", Array.Empty<object>()))
+{
+    Console.WriteLine(item);
+}
+
+// Channel
+var channel = await client.ChannelAsync<Message, Ack>("chat.session", new object[] { new { room = "general" } });
+await channel.SendAsync(new Message { Text = "hello" });
+await foreach (var msg in channel)
+{
+    Console.WriteLine(msg);
+}
+
+// Batch
+var results = await client.BatchAsync(new[] {
+    ("math.add", new object[] { 1, 2 }),
+    ("math.multiply", new object[] { 3, 4 }),
+});
+
+// Resource
+var handle = await client.ResourceAsync("files.open", new object[] { "/data.csv" });
+
+await client.CloseAsync();
 ```
 
-## Provider pattern
+## Provider API
 
 ```csharp
 using Saikuro;
 
 var provider = new Provider("math");
-provider.Register("add", async args =>
-{
-    var a = Convert.ToInt64(args[0]);
-    var b = Convert.ToInt64(args[1]);
-    return (object)(a + b);
-});
-await provider.ServeAsync("tcp://127.0.0.1:7700");
+
+provider.Register<int, int, int>("add", (a, b) => a + b);
+provider.Register<float, float, float>("divide", (a, b) => {
+    if (b == 0) throw new DivideByZeroException();
+    return a / b;
+}, new FunctionOptions { Capabilities = new[] { "math.divide" } });
+
+await provider.ServeAsync("unix:///tmp/saikuro.sock");
 ```
 
-## WASM and Blazor
+## Blazor WASM
 
-In browser/WASM targets, use `WebSocketTransport` or `InMemoryTransport`. TCP and Unix socket transports require a native target.
+In Blazor WASM, use the broadcast channel transport to communicate with the runtime:
 
-## Schema extractor
+```csharp
+using Saikuro.Transport;
 
-A reflection-based extractor tool is included in:
+// The WasmHost transport uses BroadcastChannel internally
+var transport = TransportFactory.Create("wasm-host://saikuro");
+var client = new Client(transport);
+await client.ConnectAsync();
+```
 
-- `Build/adapters/csharp/tools/extractor`
+## InMemory Testing
 
-## Next Steps
+```csharp
+var (providerTransport, clientTransport) = InMemoryTransport.Pair();
 
-- [Transports](../../guide/transports): Transport options and behavior
-- [C# API Reference](./api-reference): .NET adapter method reference
-- [C# examples](./examples): Cross-language integration patterns
+var provider = new Provider("math", providerTransport);
+provider.Register<int, int, int>("add", (a, b) => a + b);
+await provider.ServeAsync();
+
+var client = new Client(clientTransport);
+await client.ConnectAsync();
+
+var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 });
+// result == 3
+```
+
+## Export Surface
+
+```csharp
+// Core
+Client, Provider
+
+// Transports
+InMemoryTransport, TransportFactory
+UnixSocketTransport, TcpTransport, WebSocketTransport
+WasmHostTransport
+
+// Extractor
+SchemaExtractor
+```

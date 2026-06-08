@@ -1,41 +1,95 @@
 ---
-title: "C++ Adapter Examples"
-description: "C++ RAII usage patterns over the C ABI"
+title: "C++ Examples"
+description: "C++ adapter usage patterns"
 ---
 
-## RAII client call
+## Math Provider
 
 ```cpp
-#include <saikuro/saikuro.hpp>
+#include "saikuro/saikuro.hpp"
+#include <iostream>
+
+char* add_handler(void* user_data, const char* args_json) {
+    return saikuro_string_dup("42");
+}
+
+int main() {
+    saikuro::Provider provider("math");
+    provider.register_handler("add", add_handler, nullptr);
+    provider.serve("unix:///tmp/saikuro.sock");
+    return 0;
+}
+```
+
+## Client
+
+```cpp
+#include "saikuro/saikuro.hpp"
 #include <iostream>
 
 int main() {
-    saikuro::Client client("tcp://127.0.0.1:7700");
-    const auto result = client.call_json("math.add", "[10, 32]");
-    std::cout << result << "\n";
+    saikuro::Client client("unix:///tmp/saikuro.sock");
+
+    std::string result = client.call_json("math.add", "[10, 32]");
+    std::cout << "10 + 32 = " << result << std::endl;
+
+    return 0;
 }
 ```
 
-## Batch and stream usage
+## Stream
 
 ```cpp
-const auto results = client.batch_json(R"([
-  {"target":"math.add","args":[1,2]},
-  {"target":"math.add","args":[3,4]}
-])");
+#include "saikuro/saikuro.hpp"
+#include <iostream>
 
-auto stream = client.stream_json("events.subscribe", R"(["error"])" );
-while (auto item = stream.next_json()) {
-    std::cout << *item << "\n";
+int main() {
+    saikuro::Client client("unix:///tmp/saikuro.sock");
+
+    auto stream = client.stream_json("events.tick", "[5]");
+    std::string item;
+    while (stream.next_json(item)) {
+        std::cout << "tick: " << item << std::endl;
+    }
+
+    return 0;
 }
 ```
 
-## Ownership boundary
+## Channel
 
-Use the C++ wrapper whenever possible; it centralizes C string allocation/free behavior and prevents manual lifetime bugs.
+```cpp
+#include "saikuro/saikuro.hpp"
+#include <iostream>
 
-## Next Steps
+int main() {
+    saikuro::Client client("unix:///tmp/saikuro.sock");
 
-- [C++ Adapter](./)
-- [C Adapter](../c/)
-- [Schema](../../guide/schema)
+    auto channel = client.channel_json("chat.room", "[\"lobby\"]");
+    channel.send_json("\"hello\"");
+
+    std::string reply;
+    channel.next_json(reply);
+    std::cout << "reply: " << reply << std::endl;
+
+    channel.close();
+    return 0;
+}
+```
+
+## Batch
+
+```cpp
+#include "saikuro/saikuro.hpp"
+#include <iostream>
+
+int main() {
+    saikuro::Client client("unix:///tmp/saikuro.sock");
+
+    std::string results = client.batch_json(
+        "[[\"math.add\", [1, 2]], [\"math.multiply\", [3, 4]]]");
+    std::cout << "batch: " << results << std::endl;
+
+    return 0;
+}
+```

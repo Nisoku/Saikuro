@@ -1,41 +1,36 @@
 ---
-title: "C# Adapter Examples"
-description: "C#-centered cross-language patterns"
+title: "C# Examples"
+description: "C# adapter usage patterns"
 ---
 
-## Internal admin service with capabilities
-
-Use C# for internal workflows and enforce capability-gated operations.
+## Streaming Provider
 
 ```csharp
-var provider = new Provider("admin");
-provider.Register("purge_queue", async args =>
+var provider = new Provider("events");
+
+// Use IAsyncEnumerable for streaming
+provider.RegisterStream("subscribe", async (string topic) =>
 {
-    var queueName = (string)args[0];
-    return await PurgeAsync(queueName);
+    await using var subscriber = await SubscribeAsync(topic);
+    await foreach (var evt in subscriber)
+    {
+        yield return evt;
+    }
 });
-await provider.ServeAsync("tcp://127.0.0.1:7700");
+
+await provider.ServeAsync("unix:///tmp/saikuro.sock");
 ```
 
-Caller with capability token:
+## Client with Logging
 
 ```csharp
-var client = new Client(new ClientOptions { CapabilityToken = token });
-await client.ConnectAsync();
-var purged = await client.CallAsync("admin.purge_queue", new object[] { "dead-letter" });
+var client = new Client();
+await client.ConnectAsync("tcp://10.0.0.5:7700");
+
+// Structured logging
+await client.LogAsync("info", "myapp", "started", new { version = "1.0" });
+
+// With timeout
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 }, cts.Token);
 ```
-
-## WASM/browser client
-
-In Blazor WASM, use WebSocket transport.
-
-```csharp
-var client = new Client(new WebSocketTransport("ws://localhost:7700"));
-await client.ConnectAsync();
-```
-
-## Next Steps
-
-- [C# Adapter](./)
-- [Transports](../../guide/transports)
-- [Examples hub](../../guide/examples)

@@ -1,28 +1,35 @@
 ---
 title: "Examples"
-description: "Legacy route for examples"
+description: "Cross-language patterns and real-world usage"
 ---
 
-This route is kept for compatibility. Examples are now organized under adapter pages.
+Examples are now organized under each adapter's page.
 
 ## Language-Scoped Examples
 
-- [TypeScript Examples](../adapters/typescript/examples)
-- [Python Examples](../adapters/python/examples)
-- [Rust Examples](../adapters/rust/examples)
-- [C# Examples](../adapters/csharp/examples)
-- [C Examples](../adapters/c/examples)
-- [C++ Examples](../adapters/cpp/examples)
+- [TypeScript Examples](../adapters/typescript/examples.md)
+- [Python Examples](../adapters/python/examples.md)
+- [Rust Examples](../adapters/rust/examples.md)
+- [C# Examples](../adapters/csharp/examples.md)
+- [C Examples](../adapters/c/examples.md)
+- [C++ Examples](../adapters/cpp/examples.md)
 
-## Cross-Language Scenario Index
+## Cross-Language Scenarios
 
-- TypeScript provider consumed by Python worker: [TypeScript Examples](../adapters/typescript/examples)
-- Python inference service consumed by TypeScript API: [Python Examples](../adapters/python/examples)
-- Rust event producer consumed by TypeScript and Python: [Rust Examples](../adapters/rust/examples)
-- C/C++ ABI-centric integration examples: [C Examples](../adapters/c/examples), [C++ Examples](../adapters/cpp/examples)
+| Scenario         | Provider                                         | Caller                                           |
+|------------------|--------------------------------------------------|--------------------------------------------------|
+| Math service     | [TypeScript](../adapters/typescript/examples.md) | [Python](../adapters/python/examples.md)         |
+| Image processing | [Rust](../adapters/rust/examples.md)             | [TypeScript](../adapters/typescript/examples.md) |
+| Event stream     | [Python](../adapters/python/examples.md)         | [TypeScript](../adapters/typescript/examples.md) |
+| File I/O         | [C](../adapters/c/examples.md)                   | [Python](../adapters/python/examples.md)         |
 
 ## Next Steps
 
-- [Adapters](../adapters/): Overview and capability matrix
-- [Invocation Primitives](./invocations): Semantics for call/cast/stream/channel/batch/resource
-- [Transports](./transports): Deployment and transport tradeoffs
+::: grids
+::: grid
+::: button "Invocation Primitives" ./invocations.md icon:zap
+:::
+::: grid
+::: button "Adapters" ../adapters/ icon:code
+:::
+:::

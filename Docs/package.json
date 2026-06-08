@@ -1,6 +1,7 @@
 {
   "name": "saikuro-docs",
   "version": "1.0.0",
+  "type": "module", 
   "private": true,
   "scripts": {
     "dev": "docmd dev",
@@ -8,6 +9,9 @@
     "preview": "npx serve site"
   },
   "dependencies": {
-    "@mgks/docmd": "^0.3.11"
+    "@docmd/core": "^0.8.6",
+    "@huggingface/transformers": "^4.2.0",
+    "docmd-search": "^0.1.0-alpha.0",
+    "onnxruntime-node": "^1.26.0"
   }
 }

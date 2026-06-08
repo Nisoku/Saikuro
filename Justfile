@@ -50,7 +50,7 @@ wasm-python:
 wasm-rust:
     @cd {{scripts}} && python3 web_demo.py build-rust
 
-wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python
+wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python wasm-rust-runtime wasm-rust-provider
 
 # Meta commands
 setup:

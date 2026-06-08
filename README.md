@@ -29,29 +29,28 @@ or in-memory).
 ### Rust provider
 
 ```rust
-use saikuro::{Provider, Result};
+use saikuro::{Provider, Result, Value};
 
-fn main() -> Result<()> {
-    saikuro_exec::block_on(async {
-        let mut provider = Provider::new("math");
+#[tokio::main]
+async fn main() -> Result<()> {
+    let mut provider = Provider::new("math");
 
-        provider.register("add", |args: Vec<serde_json::Value>| async move {
-            let a = args[0].as_i64().unwrap_or(0);
-            let b = args[1].as_i64().unwrap_or(0);
-            Ok(serde_json::json!(a + b))
-        });
+    provider.register("add", |args: Vec<Value>| async move {
+        let a = args[0].as_i64().unwrap_or(0);
+        let b = args[1].as_i64().unwrap_or(0);
+        Ok(serde_json::json!(a + b))
+    });
 
-        provider.serve("tcp://127.0.0.1:7700").await
-    })
+    provider.serve("tcp://127.0.0.1:7700").await
 }
 ```
 
 ### TypeScript client
 
 ```typescript
-import { Client } from "@nisoku/saikuro";
+import { SaikuroClient } from "@nisoku/saikuro";
 
-const client = await Client.connect("tcp://127.0.0.1:7700");
+const client = await SaikuroClient.connect("tcp://127.0.0.1:7700");
 const result = await client.call("math.add", [1, 2]);
 console.log(result); // 3
 ```
@@ -59,12 +58,12 @@ console.log(result); // 3
 ### Python client
 
 ```python
-from saikuro import Client
+from saikuro import SaikuroClient
 
 async def main():
-    client = await Client.connect("tcp://127.0.0.1:7700")
-    result = await client.call("math.add", [1, 2])
-    print(result)  # 3
+    async with SaikuroClient.connect("tcp://127.0.0.1:7700") as client:
+        result = await client.call("math.add", [1, 2])
+        print(result)  # 3
 ```
 
 ---
@@ -77,17 +76,23 @@ Build/
   crates/             # Internal library crates
     saikuro-core/       Protocol types, envelope, error
     saikuro-schema/     Schema registry & validation
-    saikuro-transport/  Transport backends
-    saikuro-router/     Invocation router
+    saikuro-transport/  Transport backends (TCP, Unix, WebSocket, InMemory, WasmHost)
+    saikuro-router/     Invocation router & provider registry
     saikuro-runtime/    Embeddable runtime (includes standalone server binary)
-    saikuro-codegen/    Binding code-generator
+    saikuro-exec/       Execution backends (Tokio, WASM, Embassy)
+    saikuro-storage/    Storage backends (InMemory, SQLite, Sled, IndexedDB, OPFS, …)
+    saikuro-codegen/    Binding code-generator for all 6 languages
   tests/              # Rust integration tests
   adapters/
     rust/             Rust adapter (saikuro crate)
     typescript/       TypeScript/JS adapter
     python/           Python adapter
     csharp/           C# adapter
+    c/                C FFI adapter
+    cpp/              C++ RAII adapter
+Demo/                 Browser WASM demo (Rust, C, C++, Python, C# providers)
 Docs/                 Documentation site
+Examples/             Standalone example projects
 ```
 
 ---

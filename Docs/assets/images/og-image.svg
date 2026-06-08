@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0a0a"/>
+      <stop offset="40%" stop-color="#2a1515"/>
+      <stop offset="100%" stop-color="#1a0a0a"/>
+    </linearGradient>
+    <linearGradient id="rubyPrimary" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff5252"/>
+      <stop offset="50%" stop-color="#d32f2f"/>
+      <stop offset="100%" stop-color="#b30000"/>
+    </linearGradient>
+    <linearGradient id="rubyAccent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ce93d8"/>
+      <stop offset="100%" stop-color="#7b1fa2"/>
+    </linearGradient>
+    <linearGradient id="gemTop" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ff5252" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#b30000" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="gemLeft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff5252" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#8e0000" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="gemRight" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff7b7b" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#b30000" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="gemShine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="gemShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#b30000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="600" fill="url(#bg)"/>
+  <circle cx="240" cy="300" r="220" fill="#ff5252" opacity="0.04"/>
+  <circle cx="240" cy="300" r="140" fill="#ff5252" opacity="0.06"/>
+  <circle cx="1000" cy="200" r="180" fill="#ce93d8" opacity="0.03"/>
+  <circle cx="900" cy="450" r="120" fill="#ff5252" opacity="0.03"/>
+  <g transform="translate(220, 300)" filter="url(#gemShadow)">
+    <polygon points="0,-100 86,-50 86,50 0,100 -86,50 -86,-50" fill="url(#gemTop)" stroke="#ff5252" stroke-width="0.5"/>
+    <polygon points="0,-100 -86,-50 -86,50 0,0" fill="url(#gemLeft)"/>
+    <polygon points="0,-100 86,-50 86,50 0,0" fill="url(#gemRight)"/>
+    <polygon points="-86,50 0,100 -43,25" fill="#6b0000" opacity="0.4"/>
+    <polygon points="86,50 0,100 43,25" fill="#8e0000" opacity="0.3"/>
+    <polygon points="0,-90 50,-40 50,0 0,-20" fill="url(#gemShine)"/>
+    <line x1="0" y1="-100" x2="0" y2="100" stroke="#ff7b7b" stroke-width="0.3" opacity="0.3"/>
+    <line x1="-86" y1="-50" x2="86" y2="50" stroke="#ff7b7b" stroke-width="0.3" opacity="0.3"/>
+    <line x1="86" y1="-50" x2="-86" y2="50" stroke="#ff7b7b" stroke-width="0.3" opacity="0.3"/>
+  </g>
+  <g opacity="0.3">
+    <polygon points="80,170 90,165 100,170 100,180 90,185 80,180" fill="url(#rubyPrimary)"/>
+    <polygon points="360,420 370,415 380,420 380,430 370,435 360,430" fill="url(#rubyAccent)"/>
+    <polygon points="100,440 108,436 116,440 116,448 108,452 100,448" fill="url(#rubyPrimary)"/>
+    <polygon points="340,160 348,156 356,160 356,168 348,172 340,168" fill="url(#rubyAccent)"/>
+  </g>
+  <g fill="#ff5252" opacity="0.15">
+    <rect x="380" y="235" width="4" height="4" transform="rotate(45 382 237)"/>
+    <rect x="380" y="365" width="3" height="3" transform="rotate(45 381 366)"/>
+    <rect x="420" y="280" width="2" height="2" transform="rotate(45 421 281)"/>
+    <rect x="420" y="320" width="2" height="2" transform="rotate(45 421 321)"/>
+    <rect x="440" y="295" width="3" height="3" transform="rotate(45 441 296)"/>
+    <rect x="440" y="305" width="3" height="3" transform="rotate(45 441 306)"/>
+  </g>
+  <text x="600" y="250" font-family="'Playfair Display', Georgia, serif" font-size="96" font-weight="700" text-anchor="middle" fill="url(#rubyPrimary)" filter="url(#glow)" letter-spacing="2">
+    Saikuro
+  </text>
+  <rect x="400" y="270" width="400" height="3" rx="1.5" fill="url(#rubyPrimary)" opacity="0.6"/>
+  <text x="600" y="320" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="silver" letter-spacing="6">
+    POLYGLOT WASM RUNTIME
+  </text>
+  <g transform="translate(600, 380)">
+    <rect x="-215" y="-14" width="76" height="28" rx="14" fill="#ff5252" fill-opacity="0.1" stroke="#ff5252" stroke-width="1"/>
+    <text x="-177" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#ff5252">Rust</text>
+    <rect x="-133" y="-14" width="56" height="28" rx="14" fill="#ce93d8" fill-opacity="0.1" stroke="#ce93d8" stroke-width="1"/>
+    <text x="-105" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#ce93d8">C</text>
+    <rect x="-71" y="-14" width="66" height="28" rx="14" fill="#e57373" fill-opacity="0.1" stroke="#e57373" stroke-width="1"/>
+    <text x="-38" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#e57373">C++</text>
+    <rect x="1" y="-14" width="56" height="28" rx="14" fill="#ba68c8" fill-opacity="0.1" stroke="#ba68c8" stroke-width="1"/>
+    <text x="29" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#ba68c8">C#</text>
+    <rect x="63" y="-14" width="82" height="28" rx="14" fill="#ff8a80" fill-opacity="0.1" stroke="#ff8a80" stroke-width="1"/>
+    <text x="104" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#ff8a80">Python</text>
+    <rect x="151" y="-14" width="64" height="28" rx="14" fill="#f48fb1" fill-opacity="0.1" stroke="#f48fb1" stroke-width="1"/>
+    <text x="183" y="5" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#f48fb1">JS/TS</text>
+  </g>
+  <text x="600" y="450" font-family="'Source Sans Pro', system-ui, sans-serif" font-size="15" font-weight="300" text-anchor="middle" fill="#a0a0a0" letter-spacing="2">
+    one runtime to bind them
+  </text>
+  <g fill="#ff5252" opacity="0.08">
+    <circle cx="100" cy="100" r="2"/>
+    <circle cx="1100" cy="100" r="1.5"/>
+    <circle cx="1050" cy="500" r="2.5"/>
+    <circle cx="150" cy="520" r="1.5"/>
+    <circle cx="1150" cy="350" r="2"/>
+    <circle cx="50" cy="400" r="1"/>
+    <circle cx="950" cy="150" r="1.5"/>
+    <circle cx="750" cy="520" r="1"/>
+    <circle cx="500" cy="530" r="2"/>
+    <circle cx="300" cy="550" r="1.5"/>
+  </g>
+  <g stroke="#ff5252" stroke-width="0.5" opacity="0.06">
+    <path d="M 400 500 Q 600 540 800 500" fill="none"/>
+    <path d="M 450 520 Q 600 550 750 520" fill="none"/>
+  </g>
+</svg>
