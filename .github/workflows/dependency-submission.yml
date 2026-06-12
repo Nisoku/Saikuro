@@ -22,5 +22,5 @@ jobs:
       - name: Install WASM Tools Workload
         run: dotnet workload install wasm-tools
 
-      - name: Run Dependency Submission
-        uses: microsoft/nuget-dependency-submission-action@v1
+      - name: Run Component Detection & Dependency Submission
+        uses: advanced-security/component-detection-dependency-submission-action@v0.1.1
