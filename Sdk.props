@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Automatically restores required workloads during the dotnet restore phase -->
+    <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
+  </PropertyGroup>
+</Project>
