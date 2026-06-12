@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/Build"
+      - "/adapters/rust"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directories:
+      - "/Demo"
+      - "/Docs"
+      - "/adapters/typescript"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/adapters/python"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "nuget"
+    directory: "/adapters/csharp"
+    schedule:
+      interval: "weekly"
