@@ -1,0 +1,26 @@
+name: "Dependency Submission"
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+jobs:
+  submit-nuget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install WASM Tools Workload
+        run: dotnet workload install wasm-tools
+
+      - name: Run Dependency Submission
+        uses: microsoft/nuget-dependency-submission-action@v1
