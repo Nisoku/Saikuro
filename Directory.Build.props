@@ -1,6 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <!-- Automatically installs missing workloads for all subprojects during restore -->
-    <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
-  </PropertyGroup>
-</Project>

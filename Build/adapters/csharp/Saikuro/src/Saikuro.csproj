@@ -9,6 +9,7 @@
     <RootNamespace>Saikuro</RootNamespace>
     <AssemblyName>Saikuro</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
 
     <!-- NuGet metadata -->
     <PackageId>Saikuro</PackageId>
