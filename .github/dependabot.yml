@@ -21,6 +21,8 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "nuget"
-    directory: "/adapters/csharp"
+    directories:
+      - "/Build/adapters/csharp"
+      - "/Demo/wasm/csharp"
     schedule:
       interval: "weekly"
