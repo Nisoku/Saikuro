@@ -25,10 +25,3 @@ updates:
       - "/Demo/wasm/python"
     schedule:
       interval: "weekly"
-
-  - package-ecosystem: "nuget"
-    directories:
-      - "/Build/adapters/csharp"
-      - "/Demo/wasm/csharp"
-    schedule:
-      interval: "weekly"
