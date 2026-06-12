@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <!-- Automatically restores required workloads during the dotnet restore phase -->
+    <!-- Automatically installs missing workloads for all subprojects during restore -->
     <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
   </PropertyGroup>
 </Project>
