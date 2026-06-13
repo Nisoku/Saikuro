@@ -22,5 +22,8 @@ jobs:
       - name: Install WASM Tools Workload
         run: dotnet workload install wasm-tools
 
+      - name: Run Core NuGet Scanner
+        uses: github/submit-nuget@v1
+
       - name: Run Component Detection & Dependency Submission
         uses: advanced-security/component-detection-dependency-submission-action@v0.1.1
