@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
+    <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
