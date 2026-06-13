@@ -46,6 +46,6 @@ clap        = { version = "4.5", features = ["derive", "env"] }
 
 # WebSocket server-side (optional, depends on ws-transport feature)
 tokio-tungstenite = { version = "0.24", optional = true }
-tungstenite       = { version = "0.24", optional = true }
+tungstenite       = { version = "0.29", optional = true }
 
 [dev-dependencies]
