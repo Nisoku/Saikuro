@@ -7,6 +7,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
+    <EnableSdkWorkloadRestore>true</EnableSdkWorkloadRestore>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 

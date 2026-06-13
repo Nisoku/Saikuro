@@ -4,6 +4,10 @@ updates:
     directories:
       - "/Build"
       - "/adapters/rust"
+      - "/Demo/wasm/rust"
+      - "/Demo/wasm/c"
+      - "/Demo/wasm/cpp"
+      - "/Demo/wasm/runtime"
     schedule:
       interval: "weekly"
 
@@ -16,11 +20,15 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/adapters/python"
+    directories: 
+      - "/adapters/python"
+      - "/Demo/wasm/python"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "nuget"
-    directory: "/adapters/csharp"
+    directories:
+      - "/Build/adapters/csharp"
+      - "/Demo/wasm/csharp"
     schedule:
       interval: "weekly"
