@@ -36,10 +36,10 @@ export interface InitOutput {
     readonly saikuro_stream_next_json: (a: number, b: number, c: number) => number;
     readonly saikuro_string_free: (a: number) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h29db406d58a36a18: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h46246655e432b707: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h46246655e432b707_2: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__hf1020f4116a67107: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h46246655e432b707_4: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h644322345950b98c: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h644322345950b98c_2: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hba0dd3643d46bc2e: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h644322345950b98c_4: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen__convert__closures_____invoke__hc3fc4ed0293d2be8: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
