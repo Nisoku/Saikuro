@@ -210,7 +210,7 @@ def build_csharp_wasm() -> bool:
 
 
 def build_python_wheel() -> bool:
-    """Build the saikuro Python wheel with uv and deploy to public directory."""
+    """Build the saikuro Python wheel (uv) and a pure-Python msgpack wheel (pip)."""
     python_dir = BUILD_ROOT / "adapters" / "python"
     dist_dir = PUBLIC_WASM / "python"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -218,6 +218,24 @@ def build_python_wheel() -> bool:
     import tempfile
     import glob as glob_module
     with tempfile.TemporaryDirectory() as tmp:
+        # Build pure-Python msgpack wheel for Pyodide (msgpack on PyPI only ships
+        # platform wheels with C extensions, which micropip cannot install).
+        logger.info("Building msgpack pure-Python wheel")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "wheel", "--no-deps",
+             "--no-binary", "msgpack", "--wheel-dir", tmp, "msgpack==1.2.1"],
+            capture_output=True, text=True,
+            env={**os.environ, "MSGPACK_PUREPYTHON": "1"},
+        )
+        if result.returncode != 0:
+            logger.error("msgpack wheel build failed:\n%s", result.stderr)
+            return False
+        for w in glob_module.glob(os.path.join(tmp, "msgpack-*.whl")):
+            dst = dist_dir / os.path.basename(w)
+            shutil.copy2(w, dst)
+            logger.info("Copied msgpack wheel: %s", dst.name)
+
+        # Build saikuro wheel
         result = subprocess.run(
             ["uv", "build", "--wheel", "--out-dir", tmp],
             cwd=python_dir,
@@ -227,12 +245,15 @@ def build_python_wheel() -> bool:
             logger.error("uv build failed:\n%s", result.stderr)
             return False
 
-        wheels = glob_module.glob(os.path.join(tmp, "*.whl"))
-        if not wheels:
-            logger.error("no wheel produced by uv build")
+        saikuro_wheels = [
+            w for w in glob_module.glob(os.path.join(tmp, "*.whl"))
+            if "saikuro" in os.path.basename(w)
+        ]
+        if not saikuro_wheels:
+            logger.error("no saikuro wheel produced by uv build")
             return False
 
-        wheel_src = wheels[0]
+        wheel_src = saikuro_wheels[0]
         wheel_dst = dist_dir / os.path.basename(wheel_src)
         shutil.copy2(wheel_src, wheel_dst)
         logger.info("Built Python wheel: %s (%d bytes)", wheel_dst, wheel_dst.stat().st_size)

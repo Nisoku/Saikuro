@@ -20,9 +20,17 @@ export async function startPythonProvider(channel: string): Promise<void> {
       });
       log.info("Pyodide runtime ready");
 
-      log.info("installing saikuro package");
+      log.info("installing packages");
       await pyodide.loadPackage("micropip");
       const micropip = pyodide.pyimport("micropip");
+
+      // Install pure-Python msgpack wheel first (msgpack on PyPI has no py3-none-any.whl)
+      const msgpackWheelUrl = new URL(
+        "wasm/python/msgpack-1.2.1-py3-none-any.whl",
+        document.baseURI,
+      ).href;
+      await micropip.install(msgpackWheelUrl);
+
       const wheelUrl = new URL(
         "wasm/python/saikuro-0.1.0-py3-none-any.whl",
         document.baseURI,
