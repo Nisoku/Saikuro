@@ -7,7 +7,7 @@ path: /adapters/
 updated: 2026-06-27
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T13:25:19.825Z"
+  generated_at: "2026-06-27T14:04:05.289Z"
 ---
 ---
 title: "Language Adapters"

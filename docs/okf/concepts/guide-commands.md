@@ -7,7 +7,7 @@ path: /guide/commands/
 updated: 2026-06-27
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T13:25:19.835Z"
+  generated_at: "2026-06-27T14:04:05.296Z"
 ---
 ---
 title: "Commands"

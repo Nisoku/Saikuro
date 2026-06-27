@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "InsightLab.dll",
   "resources": {
-    "hash": "sha256-CMh5lWjJw7xcS2ujCgLl1iLdOqeT8ZSWwHi6+Nmjc10=",
+    "hash": "sha256-ENDHbrRwF+sqOaQEt7DmJluPcI1DVwiZZ8RckX++jaw=",
     "jsModuleNative": {
       "dotnet.native.js": "sha256-Uq8EtLlvO3/h/QpDFFOKrfnrGvR2D6o7XiEXv2ySASE="
     },
@@ -15,10 +15,10 @@
       "dotnet.native.js.symbols": "sha256-I44GgOwI1rJjkMbOABJT4TUW2MAi+PzSsc1Hea3wz9M="
     },
     "assembly": {
-      "InsightLab.wasm": "sha256-0Lrh4vMYYmhtrzdKHqrcKatVKgOCREwWIwRpHwtZQlg=",
+      "InsightLab.wasm": "sha256-kLwuZ+wUFC0+rPFjHPUVcgCxAupRBwpIIDyCPWMmmTY=",
       "MessagePack.wasm": "sha256-MnjGZFfJigubO5gKYgDF9qjJpZKXVUm5HzSYX4KHvwM=",
       "Microsoft.Extensions.Logging.Abstractions.wasm": "sha256-34y5+aMv39a+RVPH5qBV2y9k5PGFpk5V3i72ZMnu2Xs=",
-      "Saikuro.wasm": "sha256-1PNZfvFNk6ZLwFIJSAgILVJL0Sb3X6u1js+TASrzk5c=",
+      "Saikuro.wasm": "sha256-gAaQLGMXqKhnqT3M1JdyAq9ichUapW37fwnx6IoxSUk=",
       "System.Collections.Concurrent.wasm": "sha256-IxaE1wMfa6YL2EU8Peo6vJqWZLYyNezYbnjDheaL8Mk=",
       "System.Collections.wasm": "sha256-yuvdm5/VC8W0i2fznST1jbzAhtftoJlsPsoOM81hroQ=",
       "System.Console.wasm": "sha256-l6N2bcKNv2WAJPzcMi+v4rlqsy6XGYLYXNRPCSgop2Y=",
