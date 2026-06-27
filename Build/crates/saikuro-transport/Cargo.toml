@@ -40,7 +40,7 @@ saikuro-exec = { workspace = true, default-features = false }
 
 # WebSocket support on native (tokio-tungstenite uses mio which doesn't compile on wasm32)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"], optional = true }
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect"], optional = true }
 tungstenite       = { version = "0.29", optional = true }
 
 # WASM host transport + WASM WebSocket
