@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       Storage : Saikuro
     </title>
     
-    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Platform-agnostic storage backends for key-value and file operations">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -1949,7 +1987,7 @@
 <h2 id="storage-traits" class="docmd-heading"><a href="#storage-traits" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Storage Traits</h2>
 <h3 id="storage-traits-keyvaluebackend" class="docmd-heading"><a href="#storage-traits-keyvaluebackend" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>KeyValueBackend</h3>
 <p>The core key-value interface with namespace support:</p>
-<pre class="hljs"><code><span class="hljs-comment">#[async_trait]</span>
+<pre class="hljs"><code class="language-rust"><span class="hljs-comment">#[async_trait]</span>
 <span class="hljs-keyword">pub</span> <span class="hljs-keyword">trait</span> KeyValueBackend {
     <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">exists</span>(<span class="hljs-punctuation">&amp;</span>self, <span class="hljs-keyword">namespace</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str, key<span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str) <span class="hljs-punctuation">-&gt;</span> Result<span class="hljs-punctuation">&lt;</span><span class="hljs-keyword">bool</span><span class="hljs-punctuation">&gt;</span>;
     <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">get</span>(<span class="hljs-punctuation">&amp;</span>self, <span class="hljs-keyword">namespace</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str, key<span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str) <span class="hljs-punctuation">-&gt;</span> Result<span class="hljs-punctuation">&lt;</span>Option<span class="hljs-punctuation">&lt;</span>Bytes<span class="hljs-punctuation">&gt;&gt;</span>;
@@ -1964,7 +2002,7 @@
 </code></pre>
 <h3 id="storage-traits-filebackend" class="docmd-heading"><a href="#storage-traits-filebackend" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>FileBackend</h3>
 <p>Hierarchical file-like operations:</p>
-<pre class="hljs"><code><span class="hljs-comment">#[async_trait]</span>
+<pre class="hljs"><code class="language-rust"><span class="hljs-comment">#[async_trait]</span>
 <span class="hljs-keyword">pub</span> <span class="hljs-keyword">trait</span> FileBackend {
     <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_file</span>(<span class="hljs-punctuation">&amp;</span>self, path<span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str) <span class="hljs-punctuation">-&gt;</span> Result<span class="hljs-punctuation">&lt;</span>Bytes<span class="hljs-punctuation">&gt;</span>;
     <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">write_file</span>(<span class="hljs-punctuation">&amp;</span>self, path<span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&amp;</span>str, content<span class="hljs-punctuation">:</span> Bytes) <span class="hljs-punctuation">-&gt;</span> Result<span class="hljs-punctuation">&lt;</span>()<span class="hljs-punctuation">&gt;</span>;
@@ -1978,7 +2016,7 @@
 </code></pre>
 <h3 id="storage-traits-keyvaluebackendext" class="docmd-heading"><a href="#storage-traits-keyvaluebackendext" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>KeyValueBackendExt</h3>
 <p>Extension methods for JSON and MessagePack serialization:</p>
-<pre class="hljs"><code><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>KeyValueBackendExt;
+<pre class="hljs"><code class="language-rust"><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>KeyValueBackendExt;
 
 <span class="hljs-comment">// Automatic JSON round-trip</span>
 <span class="hljs-keyword">let</span> user<span class="hljs-punctuation">:</span> Option<span class="hljs-punctuation">&lt;</span>User<span class="hljs-punctuation">&gt;</span> <span class="hljs-punctuation">=</span> storage.<span class="hljs-title function_">get_json</span>(<span class="hljs-string">&quot;users&quot;</span>, <span class="hljs-string">&quot;alice&quot;</span>).<span class="hljs-keyword">await</span><span class="hljs-punctuation">?</span>;
@@ -2056,7 +2094,7 @@ storage.<span class="hljs-title function_">put_msgpack</span>(<span class="hljs-
 </tbody>
 </table>
 </div><h2 id="usage" class="docmd-heading"><a href="#usage" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Usage</h2>
-<pre class="hljs"><code><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>{InMemoryStorage, KeyValueBackend, KeyValueBackendExt};
+<pre class="hljs"><code class="language-rust"><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>{InMemoryStorage, KeyValueBackend, KeyValueBackendExt};
 <span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>config<span class="hljs-punctuation">::</span>StorageConfig;
 
 <span class="hljs-keyword">let</span> storage <span class="hljs-punctuation">=</span> InMemoryStorage<span class="hljs-punctuation">::</span><span class="hljs-title function_">with_config</span>(StorageConfig<span class="hljs-punctuation">::</span><span class="hljs-keyword">default</span>());
@@ -2072,7 +2110,7 @@ storage.<span class="hljs-title function_">put_json</span>(<span class="hljs-str
 <span class="hljs-keyword">let</span> settings<span class="hljs-punctuation">:</span> Option<span class="hljs-punctuation">&lt;</span>Settings<span class="hljs-punctuation">&gt;</span> <span class="hljs-punctuation">=</span> storage.<span class="hljs-title function_">get_json</span>(<span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;settings&quot;</span>).<span class="hljs-keyword">await</span><span class="hljs-punctuation">?</span>;
 </code></pre>
 <h2 id="configuration" class="docmd-heading"><a href="#configuration" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Configuration</h2>
-<pre class="hljs"><code><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>config<span class="hljs-punctuation">::</span>{StorageConfig, BackendKind, PersistenceMode, CleanupPolicy};
+<pre class="hljs"><code class="language-rust"><span class="hljs-keyword">use</span> saikuro_storage<span class="hljs-punctuation">::</span>config<span class="hljs-punctuation">::</span>{StorageConfig, BackendKind, PersistenceMode, CleanupPolicy};
 
 <span class="hljs-keyword">let</span> config <span class="hljs-punctuation">=</span> StorageConfig<span class="hljs-punctuation">::</span><span class="hljs-keyword">default</span>()
     .<span class="hljs-title function_">with_namespace_prefix</span>(<span class="hljs-string">&quot;myapp&quot;</span>)
@@ -2259,29 +2297,29 @@ Rust Adapter</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2374,14 +2412,13 @@ Rust Adapter</a></div>
         </div>
       </div>
       
-      <script src="../../assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="../../assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="../../assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="../../assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="../../assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="../../assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="../../assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="../../assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="../../assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2455,6 +2492,8 @@ Rust Adapter</a></div>
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>

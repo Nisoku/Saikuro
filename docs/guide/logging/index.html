@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       Logging : Saikuro
     </title>
     
-    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Structured logging through the Saikuro runtime">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -2025,27 +2063,27 @@
 </table>
 </div><h2 id="adapter-api" class="docmd-heading"><a href="#adapter-api" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Adapter API</h2>
 <p>All six adapters provide a <code>log()</code> method on the client:</p>
-<pre class="hljs"><code><span class="hljs-comment">// TypeScript</span>
+<pre class="hljs"><code class="language-typescript"><span class="hljs-comment">// TypeScript</span>
 <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, { version<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span> });
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment"># Python</span>
+<pre class="hljs"><code class="language-python"><span class="hljs-comment"># Python</span>
 <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, {<span class="hljs-string">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span>})
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// Rust</span>
+<pre class="hljs"><code class="language-rust"><span class="hljs-comment">// Rust</span>
 client.<span class="hljs-title function_">log</span>(LogLevel<span class="hljs-punctuation">::</span>Info, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, <span class="hljs-title function_">Some</span>(<span class="hljs-punctuation">&amp;</span>json<span class="hljs-punctuation">!</span>({<span class="hljs-string">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span>}))).<span class="hljs-keyword">await</span><span class="hljs-punctuation">?</span>;
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// C#</span>
+<pre class="hljs"><code class="language-csharp"><span class="hljs-comment">// C#</span>
 <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">LogAsync</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, <span class="hljs-keyword">new</span> { version <span class="hljs-punctuation">=</span> <span class="hljs-string">&quot;1.0&quot;</span> });
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// C</span>
+<pre class="hljs"><code class="language-c"><span class="hljs-comment">// C</span>
 <span class="hljs-title function_">saikuro_client_log</span>(client, <span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, <span class="hljs-string">&quot;{\&quot;version\&quot;: \&quot;1.0\&quot;}&quot;</span>);
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// C++</span>
+<pre class="hljs"><code class="language-cpp"><span class="hljs-comment">// C++</span>
 client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;myapp&quot;</span>, <span class="hljs-string">&quot;started&quot;</span>, <span class="hljs-string">&quot;{\&quot;version\&quot;: \&quot;1.0\&quot;}&quot;</span>);
 </code></pre>
 <h3 id="adapter-api-automatic-log-forwarding-typescript" class="docmd-heading"><a href="#adapter-api-automatic-log-forwarding-typescript" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Automatic Log Forwarding (TypeScript)</h3>
 <p>The TypeScript adapter provides helpers to forward all log calls from your logger to the Saikuro runtime:</p>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { createLoggingHandler, wrapLogger } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro/logging_handler&quot;</span>;
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { createLoggingHandler, wrapLogger } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro/logging_handler&quot;</span>;
 <span class="hljs-keyword">import</span> { SaikuroClient } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-keyword">const</span> client <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> SaikuroClient.<span class="hljs-title function_">connect</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>);
@@ -2059,7 +2097,7 @@ client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&
 wrapped.<span class="hljs-title function_">info</span>(<span class="hljs-string">&quot;hello&quot;</span>); <span class="hljs-comment">// forwards to Saikuro AND prints to console</span>
 </code></pre>
 <p>You can also forward all internal adapter logs to the runtime:</p>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { setLogSink, createTransportSink } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { setLogSink, createTransportSink } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-keyword">const</span> client <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> SaikuroClient.<span class="hljs-title function_">connect</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>);
 <span class="hljs-title function_">setLogSink</span>(<span class="hljs-title function_">createTransportSink</span>(client));
@@ -2067,16 +2105,16 @@ wrapped.<span class="hljs-title function_">info</span>(<span class="hljs-string"
 <h2 id="runtime-configuration" class="docmd-heading"><a href="#runtime-configuration" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Runtime Configuration</h2>
 <h3 id="runtime-configuration-log-level" class="docmd-heading"><a href="#runtime-configuration-log-level" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Log Level</h3>
 <p>Control the minimum log level via the <code>SAIKURO_LOG</code> environment variable or the <code>--log-level</code> flag:</p>
-<pre class="hljs"><code>SAIKURO_LOG<span class="hljs-punctuation">=</span>debug saikuro<span class="hljs-punctuation">-</span>runtime
+<pre class="hljs"><code class="language-bash">SAIKURO_LOG<span class="hljs-punctuation">=</span>debug saikuro<span class="hljs-punctuation">-</span>runtime
 saikuro<span class="hljs-punctuation">-</span>runtime <span class="hljs-punctuation">--</span>log<span class="hljs-punctuation">-</span>level debug
 </code></pre>
 <h3 id="runtime-configuration-json-output" class="docmd-heading"><a href="#runtime-configuration-json-output" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>JSON Output</h3>
 <p>For log aggregation tools, emit logs as newline-delimited JSON:</p>
-<pre class="hljs"><code>saikuro<span class="hljs-punctuation">-</span>runtime <span class="hljs-punctuation">--</span>json<span class="hljs-punctuation">-</span>logs
+<pre class="hljs"><code class="language-bash">saikuro<span class="hljs-punctuation">-</span>runtime <span class="hljs-punctuation">--</span>json<span class="hljs-punctuation">-</span>logs
 </code></pre>
 <h3 id="runtime-configuration-custom-log-sink" class="docmd-heading"><a href="#runtime-configuration-custom-log-sink" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Custom Log Sink</h3>
 <p>The runtime uses a <code>tracing</code>-backed log sink by default. Rust applications can provide a custom sink:</p>
-<pre class="hljs"><code><span class="hljs-keyword">use</span> saikuro_router<span class="hljs-punctuation">::</span>tracing_log_sink;
+<pre class="hljs"><code class="language-rust"><span class="hljs-keyword">use</span> saikuro_router<span class="hljs-punctuation">::</span>tracing_log_sink;
 <span class="hljs-keyword">use</span> saikuro_core<span class="hljs-punctuation">::</span>log<span class="hljs-punctuation">::</span>{LogRecord, LogSink};
 
 <span class="hljs-keyword">let</span> sink<span class="hljs-punctuation">:</span> LogSink <span class="hljs-punctuation">=</span> Box<span class="hljs-punctuation">::</span><span class="hljs-keyword">new</span>(<span class="hljs-punctuation">|</span>record<span class="hljs-punctuation">:</span> LogRecord<span class="hljs-punctuation">|</span> {
@@ -2085,7 +2123,7 @@ saikuro<span class="hljs-punctuation">-</span>runtime <span class="hljs-punctuat
 </code></pre>
 <h2 id="log-envelope" class="docmd-heading"><a href="#log-envelope" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Log Envelope</h2>
 <p>Log records are transmitted as standard Saikuro envelopes:</p>
-<pre class="hljs"><code>{
+<pre class="hljs"><code class="language-json">{
   <span class="hljs-string">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span>,
   <span class="hljs-string">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;log&quot;</span>,
   <span class="hljs-string">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;log-2026-01-01T00:00:00.000Z&quot;</span>,
@@ -2275,29 +2313,29 @@ Transports</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2390,14 +2428,14 @@ Transports</a></div>
         </div>
       </div>
       
-      <script src="../../assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="../../assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="../../assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="../../assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="../../assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="../../assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="../../assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="../../assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="../../assets/js/init-mermaid.js?v=mqwdoz3u" type="module"></script>
+<script src="../../assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2471,6 +2509,8 @@ Transports</a></div>
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>

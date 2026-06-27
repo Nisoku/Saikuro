@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       TypeScript Adapter : Saikuro
     </title>
     
-    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Saikuro adapter for TypeScript and JavaScript">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -1947,10 +1985,10 @@
                 
                 <p>The TypeScript adapter works in Node.js 18+, browsers, and Bun. It supports all six invocation primitives and every transport type.</p>
 <h2 id="installation" class="docmd-heading"><a href="#installation" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Installation</h2>
-<pre class="hljs"><code><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
+<pre class="hljs"><code class="language-bash"><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
 </code></pre>
 <h2 id="client-api" class="docmd-heading"><a href="#client-api" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Client API</h2>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { SaikuroClient } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { SaikuroClient } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-comment">// Connect via address string</span>
 <span class="hljs-keyword">const</span> client <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> SaikuroClient.<span class="hljs-title function_">connect</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>);
@@ -1994,12 +2032,12 @@
 <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">close</span>();
 </code></pre>
 <h3 id="client-api-clientoptions" class="docmd-heading"><a href="#client-api-clientoptions" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>ClientOptions</h3>
-<pre class="hljs"><code><span class="hljs-keyword">interface</span> ClientOptions {
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">interface</span> ClientOptions {
   defaultTimeoutMs<span class="hljs-punctuation">?:</span> number; <span class="hljs-comment">// 0 = no timeout (default)</span>
 }
 </code></pre>
 <h2 id="provider-api" class="docmd-heading"><a href="#provider-api" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Provider API</h2>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { SaikuroProvider, t } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { SaikuroProvider, t } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-keyword">const</span> provider <span class="hljs-punctuation">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title function_">SaikuroProvider</span>(<span class="hljs-string">&quot;math&quot;</span>);
 
@@ -2046,7 +2084,7 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 <li><code>t.named(name)</code>, <code>t.stream(item)</code>, <code>t.channel(send, recv)</code></li>
 </ul>
 <h2 id="transport" class="docmd-heading"><a href="#transport" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Transport</h2>
-<pre class="hljs"><code><span class="hljs-keyword">import</span> { makeTransport, InMemoryTransport } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { makeTransport, InMemoryTransport } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-comment">// Address-based</span>
 <span class="hljs-keyword">const</span> transport <span class="hljs-punctuation">=</span> <span class="hljs-title function_">makeTransport</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>);
@@ -2056,7 +2094,7 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 </code></pre>
 <p>See <a href="../../guide/transports/">Transports</a> for the full address format reference.</p>
 <h2 id="export-surface" class="docmd-heading"><a href="#export-surface" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Export Surface</h2>
-<pre class="hljs"><code><span class="hljs-comment">// Core</span>
+<pre class="hljs"><code class="language-typescript"><span class="hljs-comment">// Core</span>
 SaikuroClient, SaikuroProvider, SaikuroStream, SaikuroChannel
 
 <span class="hljs-comment">// Transports</span>
@@ -2196,29 +2234,29 @@ getLogger, setLogSink, setLogLevel, resetLogSink, createTransportSink
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2311,14 +2349,13 @@ getLogger, setLogSink, setLogLevel, resetLogSink, createTransportSink
         </div>
       </div>
       
-      <script src="../../assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="../../assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="../../assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="../../assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="../../assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="../../assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="../../assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="../../assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="../../assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2392,6 +2429,8 @@ getLogger, setLogSink, setLogLevel, resetLogSink, createTransportSink
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>

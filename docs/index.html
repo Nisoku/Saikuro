@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       Saikuro
     </title>
     
-    <link rel="stylesheet" href="./assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="./assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="./assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="./assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="./assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="./assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Cross-language invocation fabric for seamless multi-runtime integration">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="./assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="./assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="./assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="./assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="./assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="./assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -1961,11 +1999,9 @@ Quick Start</a><a href="<https://github.com/Nisoku/Saikuro>/" class="docmd-butto
 </svg>
 GitHub</a></div>
 <div class="hero-side">
-<div class="docmd-container card"><div class="card-title">Why Saikuro?</div><div class="card-content">
-<p>Normal multi-language setups mean HTTP boilerplate, JSON that drifts out of sync, and a week debugging silent failures.</p>
+<div class="docmd-container card"><div class="card-title">Why Saikuro?</div><div class="card-content"><p>Normal multi-language setups mean HTTP boilerplate, JSON that drifts out of sync, and a week debugging silent failures.</p>
 <p><strong>Saikuro replaces all of it.</strong> One protocol, thin adapters, zero hand-written bindings. Define functions once, call them from any language.</p>
-</div></div>
-</div>
+</div></div></div>
 </div>
 <h2 id="features" class="docmd-heading"><a href="#features" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Features</h2>
 <div class="docmd-container grids">
@@ -1989,10 +2025,8 @@ GitHub</a></div>
   <path d="M7.753 16.239a6 6 0 0 1 0-8.478" />
   <circle cx="12" cy="12" r="2" />
 </svg>
-Transport Agnostic Protocol</div><div class="card-content">
-<p>Same wire format whether you are talking in-process, over a Unix socket, or across a WebSocket. Pick the transport that fits; the protocol does not care.</p>
-</div></div>
-</div>
+Transport Agnostic Protocol</div><div class="card-content"><p>Same wire format whether you are talking in-process, over a Unix socket, or across a WebSocket. Pick the transport that fits; the protocol does not care.</p>
+</div></div></div>
 <div class="docmd-container grid-item">
 <div class="docmd-container card"><div class="card-title">
 <svg class="lucide-icon icon-file-text card-icon-heading" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -2013,10 +2047,8 @@ Transport Agnostic Protocol</div><div class="card-content">
   <path d="M16 13H8" />
   <path d="M16 17H8" />
 </svg>
-Strict Schema Model</div><div class="card-content">
-<p>Functions, types, capabilities, and namespaces are all declared in a schema the runtime enforces. No more “I thought it accepted a string” surprises.</p>
-</div></div>
-</div>
+Strict Schema Model</div><div class="card-content"><p>Functions, types, capabilities, and namespaces are all declared in a schema the runtime enforces. No more “I thought it accepted a string” surprises.</p>
+</div></div></div>
 <div class="docmd-container grid-item">
 <div class="docmd-container card"><div class="card-title">
 <svg class="lucide-icon icon-zap card-icon-heading" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -2033,10 +2065,8 @@ Strict Schema Model</div><div class="card-content">
 >
   <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
 </svg>
-Six Invocation Primitives</div><div class="card-content">
-<p>Call, cast, stream, channel, batch, and resource. Use the right primitive for the job instead of shoehorning everything into request/response.</p>
-</div></div>
-</div>
+Six Invocation Primitives</div><div class="card-content"><p>Call, cast, stream, channel, batch, and resource. Use the right primitive for the job instead of shoehorning everything into request/response.</p>
+</div></div></div>
 <div class="docmd-container grid-item">
 <div class="docmd-container card"><div class="card-title">
 <svg class="lucide-icon icon-code card-icon-heading" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -2054,10 +2084,8 @@ Six Invocation Primitives</div><div class="card-content">
   <path d="m16 18 6-6-6-6" />
   <path d="m8 6-6 6 6 6" />
 </svg>
-Language Adapters</div><div class="card-content">
-<p>Thin clients for TypeScript, Python, C#, Rust, C, and C++. Consistent API surface across every language. Adding a new language means writing a transport and a schema mapper.</p>
-</div></div>
-</div>
+Language Adapters</div><div class="card-content"><p>Thin clients for TypeScript, Python, C#, Rust, C, and C++. Consistent API surface across every language. Adding a new language means writing a transport and a schema mapper.</p>
+</div></div></div>
 <div class="docmd-container grid-item">
 <div class="docmd-container card"><div class="card-title">
 <svg class="lucide-icon icon-search card-icon-heading" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -2075,10 +2103,8 @@ Language Adapters</div><div class="card-content">
   <path d="m21 21-4.34-4.34" />
   <circle cx="11" cy="11" r="8" />
 </svg>
-Dev Mode Discovery</div><div class="card-content">
-<p>Providers announce their schema automatically during development. No codegen step until you freeze things for production.</p>
-</div></div>
-</div>
+Dev Mode Discovery</div><div class="card-content"><p>Providers announce their schema automatically during development. No codegen step until you freeze things for production.</p>
+</div></div></div>
 <div class="docmd-container grid-item">
 <div class="docmd-container card"><div class="card-title">
 <svg class="lucide-icon icon-globe card-icon-heading" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
@@ -2097,21 +2123,19 @@ Dev Mode Discovery</div><div class="card-content">
   <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
   <path d="M2 12h20" />
 </svg>
-WASM Native</div><div class="card-content">
-<p>Run the runtime and providers entirely in the browser via WASM. WasmHost transport uses BroadcastChannel for same-origin adapter communication. Storage backends for IndexedDB, OPFS, and Web Storage.</p>
-</div></div>
-</div>
+WASM Native</div><div class="card-content"><p>Run the runtime and providers entirely in the browser via WASM. WasmHost transport uses BroadcastChannel for same-origin adapter communication. Storage backends for IndexedDB, OPFS, and Web Storage.</p>
+</div></div></div>
 </div>
 <h2 id="quick-example" class="docmd-heading"><a href="#quick-example" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Quick Example</h2>
 <p><strong>TypeScript provider, Python caller. No IDL, no stub generator, no HTTP server.</strong></p>
 <div class="docmd-tabs">
-<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript Provider</span></div><div class="docmd-tabs-nav-item "><span>Python Caller</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code><span class="hljs-keyword">import</span> { SaikuroProvider } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript Provider</span></div><div class="docmd-tabs-nav-item "><span>Python Caller</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { SaikuroProvider } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-keyword">const</span> provider <span class="hljs-punctuation">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title function_">SaikuroProvider</span>(<span class="hljs-string">&quot;math&quot;</span>);
 provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;add&quot;</span>, (a<span class="hljs-punctuation">:</span> number, b<span class="hljs-punctuation">:</span> number) <span class="hljs-punctuation">=&gt;</span> a <span class="hljs-punctuation">+</span> b);
 <span class="hljs-keyword">await</span> provider.<span class="hljs-title function_">serve</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>);
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code><span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> SaikuroClient
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-python"><span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> SaikuroClient
 
 <span class="hljs-keyword">async</span> <span class="hljs-keyword">with</span> SaikuroClient.<span class="hljs-title function_">connect</span>(<span class="hljs-string">&quot;unix:///tmp/saikuro.sock&quot;</span>) <span class="hljs-keyword">as</span> client<span class="hljs-punctuation">:</span>
     result <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">call</span>(<span class="hljs-string">&quot;math.add&quot;</span>, [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>])
@@ -2119,13 +2143,13 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 </code></pre>
 </div></div></div><h2 id="installation" class="docmd-heading"><a href="#installation" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Installation</h2>
 <div class="docmd-tabs">
-<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div><div class="docmd-tabs-nav-item "><span>C#</span></div><div class="docmd-tabs-nav-item "><span>Rust</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
+<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div><div class="docmd-tabs-nav-item "><span>C#</span></div><div class="docmd-tabs-nav-item "><span>Rust</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code class="language-bash"><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>pip install saikuro
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-bash">pip install saikuro
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>dotnet add package Saikuro
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-bash">dotnet add package Saikuro
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>[dependencies]
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-toml">[dependencies]
 saikuro <span class="hljs-punctuation">=</span> <span class="hljs-string">&quot;0.1&quot;</span>
 </code></pre>
 </div></div></div><h2 id="next-steps" class="docmd-heading"><a href="#next-steps" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Next Steps</h2>
@@ -2284,29 +2308,29 @@ Protocol Reference</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2399,14 +2423,13 @@ Protocol Reference</a></div>
         </div>
       </div>
       
-      <script src="./assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="./assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="./assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="./assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="./assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="./assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="./assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="./assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="./assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="./assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="./assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2480,6 +2503,8 @@ Protocol Reference</a></div>
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>

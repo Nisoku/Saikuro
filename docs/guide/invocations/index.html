@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       Invocation Primitives : Saikuro
     </title>
     
-    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="The six ways to communicate across language boundaries with Saikuro">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -1948,37 +1986,37 @@
                 <p>Saikuro gives you six primitives. They cover the full range of cross-language communication patterns, so do not force everything into request/response when a stream or channel is the right tool.</p>
 <h2 id="call" class="docmd-heading"><a href="#call" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Call</h2>
 <p>Request/response. The caller sends arguments and waits for a single return value. The most common primitive.</p>
-<pre class="hljs"><code><span class="hljs-comment">// TypeScript</span>
+<pre class="hljs"><code class="language-typescript"><span class="hljs-comment">// TypeScript</span>
 <span class="hljs-keyword">const</span> result <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">call</span>(<span class="hljs-string">&quot;math.add&quot;</span>, [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>]);
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment"># Python</span>
+<pre class="hljs"><code class="language-python"><span class="hljs-comment"># Python</span>
 result <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">call</span>(<span class="hljs-string">&quot;math.add&quot;</span>, [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>])
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// C#</span>
+<pre class="hljs"><code class="language-csharp"><span class="hljs-comment">// C#</span>
 <span class="hljs-keyword">var</span> result <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-attr">CallAsync</span><span class="hljs-punctuation">&lt;</span><span class="hljs-keyword">int</span><span class="hljs-punctuation">&gt;</span>(<span class="hljs-string">&quot;math.add&quot;</span>, <span class="hljs-keyword">new</span> object[] { <span class="hljs-number">1</span>, <span class="hljs-number">2</span> });
 </code></pre>
-<pre class="hljs"><code><span class="hljs-comment">// Rust</span>
+<pre class="hljs"><code class="language-rust"><span class="hljs-comment">// Rust</span>
 <span class="hljs-keyword">let</span> result<span class="hljs-punctuation">:</span> i32 <span class="hljs-punctuation">=</span> client.<span class="hljs-title function_">call</span>(<span class="hljs-string">&quot;math.add&quot;</span>, <span class="hljs-punctuation">&amp;</span>[<span class="hljs-number">1</span>.<span class="hljs-title function_">into</span>(), <span class="hljs-number">2</span>.<span class="hljs-title function_">into</span>()]).<span class="hljs-keyword">await</span><span class="hljs-punctuation">?</span>;
 </code></pre>
 <p>Use <code>call</code> when you need a response and the response is a single value. Supports optional <code>capability</code> and <code>timeout</code> parameters.</p>
 <h2 id="cast" class="docmd-heading"><a href="#cast" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Cast</h2>
 <p>Fire and forget. The caller sends a message and does not wait for a response. Best-effort delivery.</p>
-<pre class="hljs"><code><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">cast</span>(<span class="hljs-string">&quot;log.write&quot;</span>, [{ level<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;info&quot;</span>, message<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;started&quot;</span> }]);
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">cast</span>(<span class="hljs-string">&quot;log.write&quot;</span>, [{ level<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;info&quot;</span>, message<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;started&quot;</span> }]);
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">cast</span>(<span class="hljs-string">&quot;log.write&quot;</span>, [{<span class="hljs-string">&quot;level&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;message&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;started&quot;</span>}])
+<pre class="hljs"><code class="language-python"><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">cast</span>(<span class="hljs-string">&quot;log.write&quot;</span>, [{<span class="hljs-string">&quot;level&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;message&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;started&quot;</span>}])
 </code></pre>
 <p>Use <code>cast</code> for notifications, audit events, log writes, and anything where you do not need to know if it succeeded. Faster than <code>call</code> because no response is sent.</p>
 <h2 id="stream" class="docmd-heading"><a href="#stream" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Stream</h2>
 <p>One-way sequence of messages from provider to caller. The caller iterates over values as they arrive.</p>
-<pre class="hljs"><code><span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> event <span class="hljs-keyword">of</span> client.<span class="hljs-title function_">stream</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>, [])) {
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> event <span class="hljs-keyword">of</span> client.<span class="hljs-title function_">stream</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>, [])) {
   console.<span class="hljs-title function_">log</span>(event);
 }
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">async</span> <span class="hljs-keyword">for</span> event <span class="hljs-keyword">in</span> client.<span class="hljs-title function_">stream</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>, [])<span class="hljs-punctuation">:</span>
+<pre class="hljs"><code class="language-python"><span class="hljs-keyword">async</span> <span class="hljs-keyword">for</span> event <span class="hljs-keyword">in</span> client.<span class="hljs-title function_">stream</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>, [])<span class="hljs-punctuation">:</span>
     <span class="hljs-title function_">print</span>(event)
 </code></pre>
 <p>Provider side (TypeScript):</p>
-<pre class="hljs"><code><span class="hljs-comment">// An async generator function becomes a stream provider</span>
+<pre class="hljs"><code class="language-typescript"><span class="hljs-comment">// An async generator function becomes a stream provider</span>
 provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>, <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span><span class="hljs-punctuation">*</span> (filter) {
   <span class="hljs-keyword">while</span> (<span class="hljs-keyword">true</span>) {
     <span class="hljs-keyword">const</span> event <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> <span class="hljs-title function_">waitForNextEvent</span>(filter);
@@ -1987,7 +2025,7 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 });
 </code></pre>
 <p>Provider side (Python):</p>
-<pre class="hljs"><code>@provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>)
+<pre class="hljs"><code class="language-python">@provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;events.subscribe&quot;</span>)
 <span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">subscribe</span>(filter)<span class="hljs-punctuation">:</span>
     <span class="hljs-keyword">while</span> <span class="hljs-keyword">True</span><span class="hljs-punctuation">:</span>
         event <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> <span class="hljs-title function_">wait_for_next_event</span>(filter)
@@ -1996,7 +2034,7 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 <p>Use <code>stream</code> for subscriptions, paginated results, log tailing, and progress reporting. Streams are ordered: messages arrive in the order the provider sent them.</p>
 <h2 id="channel" class="docmd-heading"><a href="#channel" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Channel</h2>
 <p>Bidirectional stream with backpressure. Both sides can send and receive. The runtime applies flow control so neither side overwhelms the other.</p>
-<pre class="hljs"><code><span class="hljs-keyword">const</span> <span class="hljs-keyword">chan</span> <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">channel</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, [{ room<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;general&quot;</span> }]);
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">const</span> <span class="hljs-keyword">chan</span> <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">channel</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, [{ room<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;general&quot;</span> }]);
 
 <span class="hljs-keyword">chan</span>.<span class="hljs-title function_">send</span>({ <span class="hljs-keyword">type</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;message&quot;</span>, text<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;hello&quot;</span> });
 
@@ -2006,13 +2044,13 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 
 <span class="hljs-keyword">await</span> <span class="hljs-keyword">chan</span>.<span class="hljs-title function_">close</span>();
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">async</span> <span class="hljs-keyword">with</span> client.<span class="hljs-title function_">channel</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, [{<span class="hljs-string">&quot;room&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;general&quot;</span>}]) <span class="hljs-keyword">as</span> <span class="hljs-keyword">chan</span><span class="hljs-punctuation">:</span>
+<pre class="hljs"><code class="language-python"><span class="hljs-keyword">async</span> <span class="hljs-keyword">with</span> client.<span class="hljs-title function_">channel</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, [{<span class="hljs-string">&quot;room&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;general&quot;</span>}]) <span class="hljs-keyword">as</span> <span class="hljs-keyword">chan</span><span class="hljs-punctuation">:</span>
     <span class="hljs-keyword">await</span> <span class="hljs-keyword">chan</span>.<span class="hljs-title function_">send</span>({<span class="hljs-string">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;message&quot;</span>, <span class="hljs-string">&quot;text&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;hello&quot;</span>})
     <span class="hljs-keyword">async</span> <span class="hljs-keyword">for</span> msg <span class="hljs-keyword">in</span> <span class="hljs-keyword">chan</span><span class="hljs-punctuation">:</span>
         <span class="hljs-title function_">print</span>(msg[<span class="hljs-string">&quot;text&quot;</span>])
 </code></pre>
 <p>Provider side:</p>
-<pre class="hljs"><code>provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, <span class="hljs-keyword">async</span> (args, <span class="hljs-keyword">chan</span>) <span class="hljs-punctuation">=&gt;</span> {
+<pre class="hljs"><code class="language-typescript">provider.<span class="hljs-title function_">register</span>(<span class="hljs-string">&quot;chat.session&quot;</span>, <span class="hljs-keyword">async</span> (args, <span class="hljs-keyword">chan</span>) <span class="hljs-punctuation">=&gt;</span> {
   <span class="hljs-keyword">const</span> { room } <span class="hljs-punctuation">=</span> args[<span class="hljs-number">0</span>];
   <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> msg <span class="hljs-keyword">of</span> <span class="hljs-keyword">chan</span>) {
     <span class="hljs-keyword">await</span> <span class="hljs-title function_">broadcastToRoom</span>(room, msg);
@@ -2026,12 +2064,12 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 </div></div>
 <h2 id="batch" class="docmd-heading"><a href="#batch" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Batch</h2>
 <p>Multiple calls in one envelope. Minimizes round trips when you have several independent calls.</p>
-<pre class="hljs"><code><span class="hljs-keyword">const</span> [sum, product] <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">batch</span>([
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">const</span> [sum, product] <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">batch</span>([
   { target<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;math.add&quot;</span>, args<span class="hljs-punctuation">:</span> [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>] },
   { target<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;math.multiply&quot;</span>, args<span class="hljs-punctuation">:</span> [<span class="hljs-number">3</span>, <span class="hljs-number">4</span>] },
 ]);
 </code></pre>
-<pre class="hljs"><code>results <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">batch</span>([
+<pre class="hljs"><code class="language-python">results <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">batch</span>([
     (<span class="hljs-string">&quot;math.add&quot;</span>, [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>]),
     (<span class="hljs-string">&quot;math.multiply&quot;</span>, [<span class="hljs-number">3</span>, <span class="hljs-number">4</span>]),
 ])
@@ -2039,10 +2077,10 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 <p>Batch calls can span namespaces. Each call is routed independently. Results come back in the same order as requests.</p>
 <h2 id="resource" class="docmd-heading"><a href="#resource" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Resource</h2>
 <p>An opaque handle to large or external data. Instead of sending a 50 MB file inline, send a resource reference and let the provider fetch it through the runtime.</p>
-<pre class="hljs"><code><span class="hljs-keyword">const</span> handle <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">resource</span>(<span class="hljs-string">&quot;files.open&quot;</span>, [<span class="hljs-string">&quot;/data/report.csv&quot;</span>]);
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">const</span> handle <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">resource</span>(<span class="hljs-string">&quot;files.open&quot;</span>, [<span class="hljs-string">&quot;/data/report.csv&quot;</span>]);
 <span class="hljs-comment">// handle.id, handle.mime_type, handle.size, handle.uri</span>
 </code></pre>
-<pre class="hljs"><code>handle <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">resource</span>(<span class="hljs-string">&quot;files.open&quot;</span>, [<span class="hljs-string">&quot;/data/report.csv&quot;</span>])
+<pre class="hljs"><code class="language-python">handle <span class="hljs-punctuation">=</span> <span class="hljs-keyword">await</span> client.<span class="hljs-title function_">resource</span>(<span class="hljs-string">&quot;files.open&quot;</span>, [<span class="hljs-string">&quot;/data/report.csv&quot;</span>])
 </code></pre>
 <p>Use <code>resource</code> when payloads are too large to inline, you want to avoid copying data across function boundaries, or the data lives externally.</p>
 <h2 id="choosing-the-right-primitive" class="docmd-heading"><a href="#choosing-the-right-primitive" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Choosing the Right Primitive</h2>
@@ -2082,9 +2120,9 @@ provider.<span class="hljs-title function_">register</span>(<span class="hljs-st
 </table>
 </div><h2 id="log" class="docmd-heading"><a href="#log" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Log</h2>
 <p>Every adapter includes a <code>log()</code> method that forwards structured log records to the runtime’s log sink. Fire-and-forget, same as cast.</p>
-<pre class="hljs"><code><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;my-app&quot;</span>, <span class="hljs-string">&quot;server started&quot;</span>, { version<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span> });
+<pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;my-app&quot;</span>, <span class="hljs-string">&quot;server started&quot;</span>, { version<span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span> });
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;my-app&quot;</span>, <span class="hljs-string">&quot;server started&quot;</span>, {<span class="hljs-string">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span>})
+<pre class="hljs"><code class="language-python"><span class="hljs-keyword">await</span> client.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;info&quot;</span>, <span class="hljs-string">&quot;my-app&quot;</span>, <span class="hljs-string">&quot;server started&quot;</span>, {<span class="hljs-string">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.0&quot;</span>})
 </code></pre>
 <h2 id="next-steps" class="docmd-heading"><a href="#next-steps" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Next Steps</h2>
 <div class="docmd-container grids">
@@ -2301,29 +2339,29 @@ Examples</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2416,14 +2454,13 @@ Examples</a></div>
         </div>
       </div>
       
-      <script src="../../assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="../../assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="../../assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="../../assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="../../assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="../../assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="../../assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="../../assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="../../assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2497,6 +2534,8 @@ Examples</a></div>
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>

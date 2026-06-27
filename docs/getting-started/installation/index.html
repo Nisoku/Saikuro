@@ -10,7 +10,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="generator" content="docmd v0.5.x">
+    <meta name="generator" content="docmd v0.8.8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>/**
  * --------------------------------------------------------------------
@@ -29,9 +29,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -87,10 +105,10 @@
       Installation : Saikuro
     </title>
     
-    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdeyh2">
+    <link rel="stylesheet" href="../../assets/css/docmd-main.css?v=mqwdoz3u">
     
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdeyh2" id="hljs-light" >
-    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdeyh2" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-light.css?v=mqwdoz3u" id="hljs-light" >
+    <link rel="stylesheet" href="../../assets/css/docmd-highlight-dark.css?v=mqwdoz3u" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Install Saikuro adapters and the runtime">
@@ -105,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdeyh2" >
-<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdeyh2" >
+<link rel="stylesheet" href="../../assets/css/docmd-theme-ruby.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-git.css?v=mqwdoz3u" >
+<link rel="stylesheet" href="../../assets/css/docmd-openapi.css?v=mqwdoz3u" >
 
     
     <script>/**
@@ -127,9 +145,27 @@
 (function () {
   try {
     // 1. Determine Theme
+    //
+    // Resolve from three sources, in priority order:
+    //   1. localStorage explicit user choice (light / dark)
+    //   2. window.DOCMD_APPEARANCE  (current canonical name, set by EJS templates)
+    //   3. window.DOCMD_DEFAULT_MODE (legacy alias kept for pre-0.8.7 outputs)
+    //   4. 'light' as the final fallback
+    //
+    // Note: localStorage is only honoured when it holds an explicit
+    // 'light' or 'dark' value. A stored 'system' value (from a prior
+    // session where the user picked "follow system") must NOT win over
+    // a freshly resolved config value — the resolved value will itself
+    // be 'system' in that case and the OS preference check below takes
+    // over, so this is a no-op for the in-session behaviour but keeps
+    // any future storage migration simple.
     var localValue = localStorage.getItem('docmd-theme');
-    var configValue = window.DOCMD_DEFAULT_MODE || 'light';
-    var theme = localValue ? localValue : configValue;
+    var configValue = window.DOCMD_APPEARANCE
+      || window.DOCMD_DEFAULT_MODE
+      || 'light';
+    var theme = (localValue === 'light' || localValue === 'dark')
+      ? localValue
+      : configValue;
 
     if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1734,6 +1770,8 @@
         </div>
       </aside>
       
+      
+      
       <div class="main-content-wrapper">
         
         
@@ -1947,58 +1985,58 @@
                 
                 <h2 id="runtime" class="docmd-heading"><a href="#runtime" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Runtime</h2>
 <p>The Saikuro runtime is a Rust binary. Download a prebuilt binary from the <a href="https://github.com/Nisoku/Saikuro/releases">releases page</a> or build from source:</p>
-<pre class="hljs"><code><span class="hljs-keyword">git</span> clone https<span class="hljs-punctuation">://</span>github.<span class="hljs-attr">com</span><span class="hljs-punctuation">/</span>Nisoku<span class="hljs-punctuation">/</span>Saikuro.<span class="hljs-keyword">git</span>
+<pre class="hljs"><code class="language-bash"><span class="hljs-keyword">git</span> clone https<span class="hljs-punctuation">://</span>github.<span class="hljs-attr">com</span><span class="hljs-punctuation">/</span>Nisoku<span class="hljs-punctuation">/</span>Saikuro.<span class="hljs-keyword">git</span>
 <span class="hljs-keyword">cd</span> Saikuro
 <span class="hljs-keyword">cargo</span> build <span class="hljs-punctuation">--</span>release <span class="hljs-punctuation">-</span>p saikuro<span class="hljs-punctuation">-</span>runtime
 </code></pre>
 <p>For WASM targets, the runtime compiles to a WebAssembly module:</p>
-<pre class="hljs"><code>just wasm<span class="hljs-punctuation">-</span>rust<span class="hljs-punctuation">-</span>runtime
+<pre class="hljs"><code class="language-bash">just wasm<span class="hljs-punctuation">-</span>rust<span class="hljs-punctuation">-</span>runtime
 </code></pre>
 <h2 id="language-adapters" class="docmd-heading"><a href="#language-adapters" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Language Adapters</h2>
 <div class="docmd-tabs">
-<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div><div class="docmd-tabs-nav-item "><span>C#</span></div><div class="docmd-tabs-nav-item "><span>Rust</span></div><div class="docmd-tabs-nav-item "><span>C</span></div><div class="docmd-tabs-nav-item "><span>C++</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
+<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div><div class="docmd-tabs-nav-item "><span>C#</span></div><div class="docmd-tabs-nav-item "><span>Rust</span></div><div class="docmd-tabs-nav-item "><span>C</span></div><div class="docmd-tabs-nav-item "><span>C++</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code class="language-bash"><span class="hljs-keyword">npm</span> install @nisoku<span class="hljs-punctuation">/</span>saikuro
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">pnpm</span> add @nisoku<span class="hljs-punctuation">/</span>saikuro
+<pre class="hljs"><code class="language-bash"><span class="hljs-keyword">pnpm</span> add @nisoku<span class="hljs-punctuation">/</span>saikuro
 </code></pre>
-<pre class="hljs"><code><span class="hljs-keyword">yarn</span> add @nisoku<span class="hljs-punctuation">/</span>saikuro
+<pre class="hljs"><code class="language-bash"><span class="hljs-keyword">yarn</span> add @nisoku<span class="hljs-punctuation">/</span>saikuro
 </code></pre>
 <p>Works in Node.js 18+, browsers, and Bun.</p>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>pip install saikuro
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-bash">pip install saikuro
 </code></pre>
 <p>Requires Python 3.11+.</p>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>dotnet add package Saikuro
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-bash">dotnet add package Saikuro
 </code></pre>
 <p>Requires .NET 8+. Supports Blazor WASM via broadcast channel transport.</p>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code>[dependencies]
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-toml">[dependencies]
 saikuro <span class="hljs-punctuation">=</span> <span class="hljs-string">&quot;0.1&quot;</span>
 </code></pre>
 <p>Feature flags:</p>
-<pre class="hljs"><code>saikuro <span class="hljs-punctuation">=</span> { version <span class="hljs-punctuation">=</span> <span class="hljs-string">&quot;0.1&quot;</span>, features <span class="hljs-punctuation">=</span> [<span class="hljs-string">&quot;storage&quot;</span>, <span class="hljs-string">&quot;fs-storage&quot;</span>] }
+<pre class="hljs"><code class="language-toml">saikuro <span class="hljs-punctuation">=</span> { version <span class="hljs-punctuation">=</span> <span class="hljs-string">&quot;0.1&quot;</span>, features <span class="hljs-punctuation">=</span> [<span class="hljs-string">&quot;storage&quot;</span>, <span class="hljs-string">&quot;fs-storage&quot;</span>] }
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code><span class="hljs-comment">#include &quot;saikuro.h&quot;</span>
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-c"><span class="hljs-comment">#include &quot;saikuro.h&quot;</span>
 <span class="hljs-comment">// link libsaikuro_c.a</span>
 </code></pre>
 <p>The C API expects a MessagePack-compatible buffer. See the <a href="../../adapters/c/">C adapter docs</a> for the full API.</p>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code><span class="hljs-comment">#include &quot;saikuro/saikuro.hpp&quot;</span>
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-cpp"><span class="hljs-comment">#include &quot;saikuro/saikuro.hpp&quot;</span>
 <span class="hljs-comment">// link libsaikuro_cpp.a</span>
 </code></pre>
 <p>Wraps the C API with RAII types. See the <a href="../../adapters/cpp/">C++ adapter docs</a>.</p>
 </div></div></div><h2 id="wasm-for-the-browser" class="docmd-heading"><a href="#wasm-for-the-browser" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>WASM for the Browser</h2>
 <p>The TypeScript adapter works in the browser without any WASM compilation. For the runtime itself:</p>
-<pre class="hljs"><code>just wasm<span class="hljs-punctuation">-</span>all           <span class="hljs-comment"># build all provider WASM modules</span>
+<pre class="hljs"><code class="language-bash">just wasm<span class="hljs-punctuation">-</span>all           <span class="hljs-comment"># build all provider WASM modules</span>
 just wasm<span class="hljs-punctuation">-</span>rust<span class="hljs-punctuation">-</span>runtime  <span class="hljs-comment"># build the WASM runtime (not included in wasm-all)</span>
 just web_demo dev       <span class="hljs-comment"># build + start the dev server</span>
 </code></pre>
 <p>See <a href="../../guide/wasm/">WASM Guide</a> for browser integration details.</p>
 <h2 id="verify-installation" class="docmd-heading"><a href="#verify-installation" class="heading-anchor" aria-label="Permalink to this section"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link2-icon lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 1 1 0 10h-2m-7-5h8"/></svg></a>Verify Installation</h2>
 <div class="docmd-tabs">
-<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code><span class="hljs-keyword">import</span> { SaikuroClient, InMemoryTransport } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
+<div class="docmd-tabs-nav"><div class="docmd-tabs-nav-item active"><span>TypeScript</span></div><div class="docmd-tabs-nav-item "><span>Python</span></div></div><div class="docmd-tabs-content"><div class="docmd-tab-pane active"><pre class="hljs"><code class="language-typescript"><span class="hljs-keyword">import</span> { SaikuroClient, InMemoryTransport } <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@nisoku/saikuro&quot;</span>;
 
 <span class="hljs-comment">// InMemoryTransport lets you test without a runtime</span>
 <span class="hljs-keyword">const</span> [p, c] <span class="hljs-punctuation">=</span> InMemoryTransport.<span class="hljs-title function_">pair</span>();
 console.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;Saikuro types loaded&quot;</span>);
 </code></pre>
-</div><div class="docmd-tab-pane "><pre class="hljs"><code><span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> SaikuroClient, InMemoryTransport
+</div><div class="docmd-tab-pane "><pre class="hljs"><code class="language-python"><span class="hljs-keyword">from</span> saikuro <span class="hljs-keyword">import</span> SaikuroClient, InMemoryTransport
 
 p, c <span class="hljs-punctuation">=</span> InMemoryTransport.<span class="hljs-title function_">pair</span>()
 <span class="hljs-title function_">print</span>(<span class="hljs-string">&quot;Saikuro types loaded&quot;</span>)
@@ -2165,29 +2203,29 @@ WASM Guide</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1782565239000">
+                <span class="git-last-updated" data-timestamp="1782565706000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1782565239000"></span>
+                  <span class="git-time" data-timestamp="1782565706000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
                     <ul class="git-commit-list">
                       
                         <li class="git-commit-item">
-                          <div class="git-commit-avatar" title="NellowTCS">
+                          <div class="git-commit-avatar" title="dependabot[bot]">
                             
-                              <img src="https://www.gravatar.com/avatar/baecf29c7bedbb00a8d5bd5984799c55?d=mp&amp;s=64" alt="NellowTCS">
+                              <img src="https://www.gravatar.com/avatar/48ea49be76d0c68403a7f3df87e3487d?d=mp&amp;s=64" alt="dependabot[bot]">
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="add `just clean`">add `just clean`</div>
+                            <div class="git-commit-message" title="Bump @docmd/core from 0.8.6 to 0.8.8 in /Docs (#34)">Bump @docmd/core from 0.8.6 to 0.8.8 ...</div>
                             <div class="git-commit-meta">
-                              <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1782565239000"></span>
+                              <span class="git-commit-author">dependabot[bot]</span>
+                              <span class="git-commit-date" data-timestamp="1782565706000"></span>
                             </div>
                           </div>
                         </li>
@@ -2280,14 +2318,13 @@ WASM Guide</a></div>
         </div>
       </div>
       
-      <script src="../../assets/js/docmd-main.js?v=mqwdeyh2"></script>
+      <script src="../../assets/js/docmd-main.js?v=mqwdoz3u"></script>
       
-      <script src="../../assets/js/docmd-git.js?v=mqwdeyh2"></script>
-      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdeyh2" ></script>
+      <script src="../../assets/js/docmd-git.js?v=mqwdoz3u"></script>
+      <script src="../../assets/js/docmd-image-lightbox.js?v=mqwdoz3u" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="../../assets/js/docmd-search.js?v=mqwdeyh2" ></script>
-<script src="../../assets/js/init-mermaid.js?v=mqwdeyh2" type="module"></script>
-<script src="../../assets/js/docmd-git.js?v=mqwdeyh2" type="module"></script>
+<script src="../../assets/js/docmd-search.js?v=mqwdoz3u" ></script>
+<script src="../../assets/js/docmd-git.js?v=mqwdoz3u" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"
@@ -2361,6 +2398,8 @@ WASM Guide</a></div>
     </script>
 
 <script>window.__git_config={"repo":"https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs","branch":"main","editLink":true,"lastUpdated":true,"commitHistory":true,"maxCommits":5,"dateFormat":"relative"};window.__git_i18n={"lastUpdated":"Last updated","recentCommits":"Recent commits","viewCommitHistory":"View commit history","editOnGitHub":"Edit on GitHub","editOnGitLab":"Edit on GitLab","editOnBitbucket":"Edit on Bitbucket","editThisPage":"Edit this page","justNow":"just now","minutesAgo":"{n}m ago","hoursAgo":"{n}h ago","daysAgo":"{n}d ago"}</script>
+      
+      
       
   </body>
 </html>
