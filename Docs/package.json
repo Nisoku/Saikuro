@@ -12,6 +12,6 @@
     "@docmd/core": "^0.8.8",
     "@huggingface/transformers": "^4.2.0",
     "docmd-search": "^0.1.0",
-    "onnxruntime-node": "^1.26.0"
+    "onnxruntime-node": "^1.27.0"
   }
 }
