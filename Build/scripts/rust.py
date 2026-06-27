@@ -9,6 +9,7 @@ from shared.format import check
 
 CMDS = {
     "setup": ["rustup", "target", "add", "wasm32-unknown-unknown"],
+    "clean": ["cargo", "clean"],
     "wasm_check": ["cargo", "clippy", "--target", "wasm32-unknown-unknown", "-p", "saikuro-tests", "--", "-D", "warnings"],
     "test": ["cargo", "test", "--workspace"],
     "adapter_test": ["cargo", "test", "-p", "saikuro"],

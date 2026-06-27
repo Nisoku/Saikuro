@@ -36,10 +36,24 @@ def lint() -> int:
     return result.returncode
 
 
+def clean() -> int:
+    import shutil
+    shutil.rmtree(PYTHON_DIR / ".venv", ignore_errors=True)
+    shutil.rmtree(PYTHON_DIR / ".ruff_cache", ignore_errors=True)
+    shutil.rmtree(PYTHON_DIR / ".pytest_cache", ignore_errors=True)
+    for egg in PYTHON_DIR.glob("*.egg-info"):
+        shutil.rmtree(egg, ignore_errors=True)
+    for pycache in PYTHON_DIR.rglob("__pycache__"):
+        shutil.rmtree(pycache, ignore_errors=True)
+    for pyc in PYTHON_DIR.rglob("*.pyc"):
+        pyc.unlink(missing_ok=True)
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Python adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check", "lint"] + list(CMDS))
+                        choices=["check", "fmt_check", "lint", "clean"] + list(CMDS))
     args = parser.parse_args()
     if args.command == "fmt_check":
         sys.exit(fmt_check())
@@ -48,6 +62,8 @@ def main() -> None:
     if args.command == "check":
         failed = any([fmt_check() != 0, lint() != 0, run(CMDS["test"], cwd=PYTHON_DIR) != 0])
         sys.exit(1 if failed else 0)
+    if args.command == "clean":
+        sys.exit(clean())
     if args.command in CMDS:
         sys.exit(run(CMDS[args.command], cwd=PYTHON_DIR))
 
