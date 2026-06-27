@@ -9,6 +9,7 @@ from shared.format import check
 
 CMDS = {
     "setup": ["npm", "install"],
+    "clean": ["sh", "-c", "rm -rf node_modules dist *.tsbuildinfo"],
     "typecheck": ["npm", "run", "typecheck"],
     "build": ["npm", "run", "build"],
     "test": ["npm", "test"],

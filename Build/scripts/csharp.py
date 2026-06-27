@@ -10,6 +10,7 @@ from shared.dotnet import ensure_dotnet
 
 CMDS = {
     "setup": ["dotnet", "restore", str(CSHARP_SRC / "Saikuro.csproj")],
+    "clean": ["rm", "-rf", "src/bin", "src/obj", "tests/bin", "tests/obj"],
     "build": ["dotnet", "build", str(CSHARP_SRC / "Saikuro.csproj"), "-c", "Release"],
     "test": ["dotnet", "test", str(CSHARP_TEST / "Saikuro.Tests.csproj"), "-c", "Release"],
 }

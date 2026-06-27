@@ -84,5 +84,14 @@ check:
     cd {{scripts}} && python3 c.py check
     cd {{scripts}} && python3 cpp.py check
 
+clean:
+	cd {{scripts}} && python3 rust.py clean
+	cd {{scripts}} && python3 python.py clean
+	cd {{scripts}} && python3 typescript.py clean
+	cd {{scripts}} && python3 csharp.py clean
+	cd {{scripts}} && python3 c.py clean
+	cd {{scripts}} && python3 cpp.py clean
+	rm -rf Demo/public/wasm Demo/node_modules Demo/dist
+
 all: setup check
 

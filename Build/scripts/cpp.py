@@ -9,6 +9,7 @@ from shared.run import run
 from shared.format import check_clang, ensure_clang_format
 
 CMDS = {
+    "clean": ["rm", "-rf", "build"],
     "test": ["sh", "-c", "cmake --build build && ctest --test-dir build --output-on-failure"],
 }
 

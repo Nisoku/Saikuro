@@ -8,6 +8,7 @@ from shared.run import run
 from shared.format import check_clang, check
 
 CMDS = {
+    "clean": ["cargo", "clean", "-p", "saikuro-c"],
     "build": ["cargo", "build", "-p", "saikuro-c"],
     "test": ["cargo", "test", "-p", "saikuro-c"],
 }
