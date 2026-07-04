@@ -4,10 +4,10 @@ title: "CLI Reference"
 description: "Saikuro runtime command-line interface"
 source: "https://nisoku.org/Saikuro/api/cli/"
 path: /api/cli/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.294Z"
+  generated_at: "2026-07-04T10:28:43.640Z"
 ---
 ---
 title: "CLI Reference"

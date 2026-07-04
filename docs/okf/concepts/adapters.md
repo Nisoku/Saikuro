@@ -4,10 +4,10 @@ title: "Language Adapters"
 description: "Saikuro adapter APIs for TypeScript, Python, Rust, C#, C, and C++"
 source: "https://nisoku.org/Saikuro/adapters/"
 path: /adapters/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.289Z"
+  generated_at: "2026-07-04T10:28:43.634Z"
 ---
 ---
 title: "Language Adapters"

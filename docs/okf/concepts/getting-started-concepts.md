@@ -4,10 +4,10 @@ title: "Core Concepts"
 description: "How Saikuro works: runtime, adapters, schema, transports, and protocol"
 source: "https://nisoku.org/Saikuro/getting-started/concepts/"
 path: /getting-started/concepts/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.295Z"
+  generated_at: "2026-07-04T10:28:43.641Z"
 ---
 ---
 title: "Core Concepts"

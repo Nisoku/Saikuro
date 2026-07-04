@@ -4,10 +4,10 @@ title: "TypeScript API Reference"
 description: "Full TypeScript adapter API reference"
 source: "https://nisoku.org/Saikuro/adapters/typescript/api-reference/"
 path: /adapters/typescript/api-reference/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.292Z"
+  generated_at: "2026-07-04T10:28:43.638Z"
 ---
 ---
 title: "TypeScript API Reference"

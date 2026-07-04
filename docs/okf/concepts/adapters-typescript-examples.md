@@ -4,10 +4,10 @@ title: "TypeScript Examples"
 description: "TypeScript adapter usage patterns"
 source: "https://nisoku.org/Saikuro/adapters/typescript/examples/"
 path: /adapters/typescript/examples/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.293Z"
+  generated_at: "2026-07-04T10:28:43.639Z"
 ---
 ---
 title: "TypeScript Examples"

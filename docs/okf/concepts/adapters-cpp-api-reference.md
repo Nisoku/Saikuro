@@ -4,10 +4,10 @@ title: "C++ API Reference"
 description: "Full C++ adapter API reference"
 source: "https://nisoku.org/Saikuro/adapters/cpp/api-reference/"
 path: /adapters/cpp/api-reference/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.286Z"
+  generated_at: "2026-07-04T10:28:43.631Z"
 ---
 ---
 title: "C++ API Reference"

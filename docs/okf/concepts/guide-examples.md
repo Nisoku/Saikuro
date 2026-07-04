@@ -4,10 +4,10 @@ title: Examples
 description: "Cross-language patterns and real-world usage"
 source: "https://nisoku.org/Saikuro/guide/examples/"
 path: /guide/examples/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.297Z"
+  generated_at: "2026-07-04T10:28:43.644Z"
 ---
 ---
 title: "Examples"

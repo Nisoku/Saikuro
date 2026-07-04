@@ -4,10 +4,10 @@ title: "Code Generation"
 description: "Generate typed client bindings from a Saikuro schema"
 source: "https://nisoku.org/Saikuro/guide/codegen/"
 path: /guide/codegen/
-updated: 2026-06-27
+updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-06-27T14:04:05.296Z"
+  generated_at: "2026-07-04T10:28:43.642Z"
 ---
 ---
 title: "Code Generation"
