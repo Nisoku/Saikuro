@@ -7,7 +7,7 @@ path: /adapters/csharp/
 updated: 2026-07-04
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-04T10:28:43.634Z"
+  generated_at: "2026-07-04T10:35:33.798Z"
 ---
 ---
 title: "C# Adapter"

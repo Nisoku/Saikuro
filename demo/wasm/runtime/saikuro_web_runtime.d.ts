@@ -10,7 +10,7 @@ export interface InitOutput {
     readonly start_runtime: (a: number, b: number) => any;
     readonly wasm_bindgen__convert__closures_____invoke__hfd5825652474b0dd: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__h451c3d66947caeae: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h0f39afc9e51b9870: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h084e10c1b93041dd: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h88035bc6817b0979: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
