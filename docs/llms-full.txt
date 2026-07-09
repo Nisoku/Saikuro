@@ -3833,7 +3833,7 @@ Cross-language invocation fabric. Typed function calls, streams, and channels ac
 ::: tag "WASM Ready"
 
 ::: button "Quick Start" ./getting-started/quickstart.md icon:play
-::: button "GitHub" external:<https://github.com/Nisoku/Saikuro> icon:github
+::: button "GitHub" external:https://github.com/Nisoku/Saikuro icon:github
 
 == side
 

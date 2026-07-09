@@ -105,10 +105,10 @@
       Saikuro
     </title>
     
-    <link rel="stylesheet" href="./assets/css/docmd-main.css?v=mrdyv5cm">
+    <link rel="stylesheet" href="./assets/css/docmd-main.css?v=mrdz3mpf">
     
-    <link rel="stylesheet" href="./assets/css/docmd-highlight-light.css?v=mrdyv5cm" id="hljs-light" >
-    <link rel="stylesheet" href="./assets/css/docmd-highlight-dark.css?v=mrdyv5cm" id="hljs-dark" disabled>
+    <link rel="stylesheet" href="./assets/css/docmd-highlight-light.css?v=mrdz3mpf" id="hljs-light" >
+    <link rel="stylesheet" href="./assets/css/docmd-highlight-dark.css?v=mrdz3mpf" id="hljs-dark" disabled>
     
     
 <meta name="description" content="Cross-language invocation fabric for seamless multi-runtime integration">
@@ -123,9 +123,9 @@
 
 
 
-<link rel="stylesheet" href="./assets/css/docmd-theme-ruby.css?v=mrdyv5cm" >
-<link rel="stylesheet" href="./assets/css/docmd-git.css?v=mrdyv5cm" >
-<link rel="stylesheet" href="./assets/css/docmd-openapi.css?v=mrdyv5cm" >
+<link rel="stylesheet" href="./assets/css/docmd-theme-ruby.css?v=mrdz3mpf" >
+<link rel="stylesheet" href="./assets/css/docmd-git.css?v=mrdz3mpf" >
+<link rel="stylesheet" href="./assets/css/docmd-openapi.css?v=mrdz3mpf" >
 
     
     <script>/**
@@ -1894,7 +1894,7 @@
             <div class="content-layout">
               <div class="main-content">
                 <div class="docmd-breadcrumbs-row">
-                  <div id="docmd-raw-markdown" data-content="---%0Atitle%3A%20%22Saikuro%22%0Adescription%3A%20%22Cross-language%20invocation%20fabric%20for%20seamless%20multi-runtime%20integration%22%0A---%0A%0A%3A%3A%3A%20hero%20layout%3Asplit%20glow%3Atrue%0A%0A%23%20Saikuro%0A%0ACross-language%20invocation%20fabric.%20Typed%20function%20calls%2C%20streams%2C%20and%20channels%20across%20TypeScript%2C%20Python%2C%20C%23%2C%20Rust%2C%20C%2C%20and%20C%2B%2B.%0A%0A%3A%3A%3A%20tag%20%22Transport%20Agnostic%22%0A%3A%3A%3A%20tag%20%22Strict%20Schema%22%0A%3A%3A%3A%20tag%20%22Six%20Primitives%22%0A%3A%3A%3A%20tag%20%22WASM%20Ready%22%0A%0A%3A%3A%3A%20button%20%22Quick%20Start%22%20.%2Fgetting-started%2Fquickstart.md%20icon%3Aplay%0A%3A%3A%3A%20button%20%22GitHub%22%20external%3A%3Chttps%3A%2F%2Fgithub.com%2FNisoku%2FSaikuro%3E%20icon%3Agithub%0A%0A%3D%3D%20side%0A%0A%3A%3A%3A%20card%20%22Why%20Saikuro%3F%22%0ANormal%20multi-language%20setups%20mean%20HTTP%20boilerplate%2C%20JSON%20that%20drifts%20out%20of%20sync%2C%20and%20a%20week%20debugging%20silent%20failures.%0A%0A**Saikuro%20replaces%20all%20of%20it.**%20One%20protocol%2C%20thin%20adapters%2C%20zero%20hand-written%20bindings.%20Define%20functions%20once%2C%20call%20them%20from%20any%20language.%0A%3A%3A%3A%0A%0A%3A%3A%3A%0A%0A%23%23%20Features%0A%0A%3A%3A%3A%20grids%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Transport%20Agnostic%20Protocol%22%20icon%3Aradio%0ASame%20wire%20format%20whether%20you%20are%20talking%20in-process%2C%20over%20a%20Unix%20socket%2C%20or%20across%20a%20WebSocket.%20Pick%20the%20transport%20that%20fits%3B%20the%20protocol%20does%20not%20care.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Strict%20Schema%20Model%22%20icon%3Afile-text%0AFunctions%2C%20types%2C%20capabilities%2C%20and%20namespaces%20are%20all%20declared%20in%20a%20schema%20the%20runtime%20enforces.%20No%20more%20%22I%20thought%20it%20accepted%20a%20string%22%20surprises.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Six%20Invocation%20Primitives%22%20icon%3Azap%0ACall%2C%20cast%2C%20stream%2C%20channel%2C%20batch%2C%20and%20resource.%20Use%20the%20right%20primitive%20for%20the%20job%20instead%20of%20shoehorning%20everything%20into%20request%2Fresponse.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Language%20Adapters%22%20icon%3Acode%0AThin%20clients%20for%20TypeScript%2C%20Python%2C%20C%23%2C%20Rust%2C%20C%2C%20and%20C%2B%2B.%20Consistent%20API%20surface%20across%20every%20language.%20Adding%20a%20new%20language%20means%20writing%20a%20transport%20and%20a%20schema%20mapper.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Dev%20Mode%20Discovery%22%20icon%3Asearch%0AProviders%20announce%20their%20schema%20automatically%20during%20development.%20No%20codegen%20step%20until%20you%20freeze%20things%20for%20production.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22WASM%20Native%22%20icon%3Aglobe%0ARun%20the%20runtime%20and%20providers%20entirely%20in%20the%20browser%20via%20WASM.%20WasmHost%20transport%20uses%20BroadcastChannel%20for%20same-origin%20adapter%20communication.%20Storage%20backends%20for%20IndexedDB%2C%20OPFS%2C%20and%20Web%20Storage.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%0A%0A%23%23%20Quick%20Example%0A%0A**TypeScript%20provider%2C%20Python%20caller.%20No%20IDL%2C%20no%20stub%20generator%2C%20no%20HTTP%20server.**%0A%0A%3A%3A%3A%20tabs%0A%0A%3D%3D%20tab%20%22TypeScript%20Provider%22%0A%0A%60%60%60typescript%0Aimport%20%7B%20SaikuroProvider%20%7D%20from%20%22%40nisoku%2Fsaikuro%22%3B%0A%0Aconst%20provider%20%3D%20new%20SaikuroProvider(%22math%22)%3B%0Aprovider.register(%22add%22%2C%20(a%3A%20number%2C%20b%3A%20number)%20%3D%3E%20a%20%2B%20b)%3B%0Aawait%20provider.serve(%22unix%3A%2F%2F%2Ftmp%2Fsaikuro.sock%22)%3B%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Python%20Caller%22%0A%0A%60%60%60python%0Afrom%20saikuro%20import%20SaikuroClient%0A%0Aasync%20with%20SaikuroClient.connect(%22unix%3A%2F%2F%2Ftmp%2Fsaikuro.sock%22)%20as%20client%3A%0A%20%20%20%20result%20%3D%20await%20client.call(%22math.add%22%2C%20%5B1%2C%202%5D)%0A%20%20%20%20print(result)%20%20%23%203%0A%60%60%60%0A%0A%3A%3A%3A%0A%0A%23%23%20Installation%0A%0A%3A%3A%3A%20tabs%0A%0A%3D%3D%20tab%20%22TypeScript%22%0A%0A%60%60%60bash%0Anpm%20install%20%40nisoku%2Fsaikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Python%22%0A%0A%60%60%60bash%0Apip%20install%20saikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22C%23%22%0A%0A%60%60%60bash%0Adotnet%20add%20package%20Saikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Rust%22%0A%0A%60%60%60toml%0A%5Bdependencies%5D%0Asaikuro%20%3D%20%220.1%22%0A%60%60%60%0A%0A%3A%3A%3A%0A%0A%23%23%20Next%20Steps%0A%0A%3A%3A%3A%20grids%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Quick%20Start%22%20.%2Fgetting-started%2Fquickstart.md%20icon%3Aplay%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Installation%22%20.%2Fgetting-started%2Finstallation.md%20icon%3Adownload%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Core%20Concepts%22%20.%2Fgetting-started%2Fconcepts.md%20icon%3Abook%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Protocol%20Reference%22%20.%2Fapi%2F%20icon%3Acode%0A%3A%3A%3A%0A%3A%3A%3A%0A" style="display: none;"></div>
+                  <div id="docmd-raw-markdown" data-content="---%0Atitle%3A%20%22Saikuro%22%0Adescription%3A%20%22Cross-language%20invocation%20fabric%20for%20seamless%20multi-runtime%20integration%22%0A---%0A%0A%3A%3A%3A%20hero%20layout%3Asplit%20glow%3Atrue%0A%0A%23%20Saikuro%0A%0ACross-language%20invocation%20fabric.%20Typed%20function%20calls%2C%20streams%2C%20and%20channels%20across%20TypeScript%2C%20Python%2C%20C%23%2C%20Rust%2C%20C%2C%20and%20C%2B%2B.%0A%0A%3A%3A%3A%20tag%20%22Transport%20Agnostic%22%0A%3A%3A%3A%20tag%20%22Strict%20Schema%22%0A%3A%3A%3A%20tag%20%22Six%20Primitives%22%0A%3A%3A%3A%20tag%20%22WASM%20Ready%22%0A%0A%3A%3A%3A%20button%20%22Quick%20Start%22%20.%2Fgetting-started%2Fquickstart.md%20icon%3Aplay%0A%3A%3A%3A%20button%20%22GitHub%22%20external%3Ahttps%3A%2F%2Fgithub.com%2FNisoku%2FSaikuro%20icon%3Agithub%0A%0A%3D%3D%20side%0A%0A%3A%3A%3A%20card%20%22Why%20Saikuro%3F%22%0ANormal%20multi-language%20setups%20mean%20HTTP%20boilerplate%2C%20JSON%20that%20drifts%20out%20of%20sync%2C%20and%20a%20week%20debugging%20silent%20failures.%0A%0A**Saikuro%20replaces%20all%20of%20it.**%20One%20protocol%2C%20thin%20adapters%2C%20zero%20hand-written%20bindings.%20Define%20functions%20once%2C%20call%20them%20from%20any%20language.%0A%3A%3A%3A%0A%0A%3A%3A%3A%0A%0A%23%23%20Features%0A%0A%3A%3A%3A%20grids%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Transport%20Agnostic%20Protocol%22%20icon%3Aradio%0ASame%20wire%20format%20whether%20you%20are%20talking%20in-process%2C%20over%20a%20Unix%20socket%2C%20or%20across%20a%20WebSocket.%20Pick%20the%20transport%20that%20fits%3B%20the%20protocol%20does%20not%20care.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Strict%20Schema%20Model%22%20icon%3Afile-text%0AFunctions%2C%20types%2C%20capabilities%2C%20and%20namespaces%20are%20all%20declared%20in%20a%20schema%20the%20runtime%20enforces.%20No%20more%20%22I%20thought%20it%20accepted%20a%20string%22%20surprises.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Six%20Invocation%20Primitives%22%20icon%3Azap%0ACall%2C%20cast%2C%20stream%2C%20channel%2C%20batch%2C%20and%20resource.%20Use%20the%20right%20primitive%20for%20the%20job%20instead%20of%20shoehorning%20everything%20into%20request%2Fresponse.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Language%20Adapters%22%20icon%3Acode%0AThin%20clients%20for%20TypeScript%2C%20Python%2C%20C%23%2C%20Rust%2C%20C%2C%20and%20C%2B%2B.%20Consistent%20API%20surface%20across%20every%20language.%20Adding%20a%20new%20language%20means%20writing%20a%20transport%20and%20a%20schema%20mapper.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22Dev%20Mode%20Discovery%22%20icon%3Asearch%0AProviders%20announce%20their%20schema%20automatically%20during%20development.%20No%20codegen%20step%20until%20you%20freeze%20things%20for%20production.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20card%20%22WASM%20Native%22%20icon%3Aglobe%0ARun%20the%20runtime%20and%20providers%20entirely%20in%20the%20browser%20via%20WASM.%20WasmHost%20transport%20uses%20BroadcastChannel%20for%20same-origin%20adapter%20communication.%20Storage%20backends%20for%20IndexedDB%2C%20OPFS%2C%20and%20Web%20Storage.%0A%3A%3A%3A%0A%3A%3A%3A%0A%0A%3A%3A%3A%0A%0A%23%23%20Quick%20Example%0A%0A**TypeScript%20provider%2C%20Python%20caller.%20No%20IDL%2C%20no%20stub%20generator%2C%20no%20HTTP%20server.**%0A%0A%3A%3A%3A%20tabs%0A%0A%3D%3D%20tab%20%22TypeScript%20Provider%22%0A%0A%60%60%60typescript%0Aimport%20%7B%20SaikuroProvider%20%7D%20from%20%22%40nisoku%2Fsaikuro%22%3B%0A%0Aconst%20provider%20%3D%20new%20SaikuroProvider(%22math%22)%3B%0Aprovider.register(%22add%22%2C%20(a%3A%20number%2C%20b%3A%20number)%20%3D%3E%20a%20%2B%20b)%3B%0Aawait%20provider.serve(%22unix%3A%2F%2F%2Ftmp%2Fsaikuro.sock%22)%3B%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Python%20Caller%22%0A%0A%60%60%60python%0Afrom%20saikuro%20import%20SaikuroClient%0A%0Aasync%20with%20SaikuroClient.connect(%22unix%3A%2F%2F%2Ftmp%2Fsaikuro.sock%22)%20as%20client%3A%0A%20%20%20%20result%20%3D%20await%20client.call(%22math.add%22%2C%20%5B1%2C%202%5D)%0A%20%20%20%20print(result)%20%20%23%203%0A%60%60%60%0A%0A%3A%3A%3A%0A%0A%23%23%20Installation%0A%0A%3A%3A%3A%20tabs%0A%0A%3D%3D%20tab%20%22TypeScript%22%0A%0A%60%60%60bash%0Anpm%20install%20%40nisoku%2Fsaikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Python%22%0A%0A%60%60%60bash%0Apip%20install%20saikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22C%23%22%0A%0A%60%60%60bash%0Adotnet%20add%20package%20Saikuro%0A%60%60%60%0A%0A%3D%3D%20tab%20%22Rust%22%0A%0A%60%60%60toml%0A%5Bdependencies%5D%0Asaikuro%20%3D%20%220.1%22%0A%60%60%60%0A%0A%3A%3A%3A%0A%0A%23%23%20Next%20Steps%0A%0A%3A%3A%3A%20grids%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Quick%20Start%22%20.%2Fgetting-started%2Fquickstart.md%20icon%3Aplay%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Installation%22%20.%2Fgetting-started%2Finstallation.md%20icon%3Adownload%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Core%20Concepts%22%20.%2Fgetting-started%2Fconcepts.md%20icon%3Abook%0A%3A%3A%3A%0A%3A%3A%3A%20grid%0A%3A%3A%3A%20button%20%22Protocol%20Reference%22%20.%2Fapi%2F%20icon%3Acode%0A%3A%3A%3A%0A%3A%3A%3A%0A" style="display: none;"></div>
                   
                     <nav aria-label="breadcrumb" class="docmd-breadcrumbs">
                       <ol>
@@ -1981,7 +1981,7 @@
 >
   <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
 </svg>
-Quick Start</a><a href="<https://github.com/Nisoku/Saikuro>/" class="docmd-button" target="_blank" rel="noopener noreferrer">
+Quick Start</a><a href="https://github.com/Nisoku/Saikuro" class="docmd-button" target="_blank" rel="noopener noreferrer">
 <svg class="lucide-icon icon-github button-icon" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-github"
   xmlns="http://www.w3.org/2000/svg"
@@ -2308,13 +2308,13 @@ Protocol Reference</a></div>
             <div class="page-footer-actions">
               
               
-                <span class="git-last-updated" data-timestamp="1783629204000">
+                <span class="git-last-updated" data-timestamp="1783629233000">
                   <svg class="git-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span class="git-label">Last updated:</span>
-                  <span class="git-time" data-timestamp="1783629204000"></span>
+                  <span class="git-time" data-timestamp="1783629233000"></span>
                   
                   <div class="git-commit-tooltip" role="tooltip">
                     <div class="git-tooltip-title">Recent commits</div>
@@ -2327,10 +2327,10 @@ Protocol Reference</a></div>
                             
                           </div>
                           <div class="git-commit-details">
-                            <div class="git-commit-message" title="Update edit link base URL in docmd.config.js">Update edit link base URL in docmd.co...</div>
+                            <div class="git-commit-message" title="Fix GitHub button link formatting in index.md">Fix GitHub button link formatting in ...</div>
                             <div class="git-commit-meta">
                               <span class="git-commit-author">NellowTCS</span>
-                              <span class="git-commit-date" data-timestamp="1783629204000"></span>
+                              <span class="git-commit-date" data-timestamp="1783629233000"></span>
                             </div>
                           </div>
                         </li>
@@ -2423,13 +2423,13 @@ Protocol Reference</a></div>
         </div>
       </div>
       
-      <script src="./assets/js/docmd-main.js?v=mrdyv5cm"></script>
+      <script src="./assets/js/docmd-main.js?v=mrdz3mpf"></script>
       
-      <script src="./assets/js/docmd-git.js?v=mrdyv5cm"></script>
-      <script src="./assets/js/docmd-image-lightbox.js?v=mrdyv5cm" ></script>
+      <script src="./assets/js/docmd-git.js?v=mrdz3mpf"></script>
+      <script src="./assets/js/docmd-image-lightbox.js?v=mrdz3mpf" ></script>
 <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js" ></script>
-<script src="./assets/js/docmd-search.js?v=mrdyv5cm" ></script>
-<script src="./assets/js/docmd-git.js?v=mrdyv5cm" type="module"></script>
+<script src="./assets/js/docmd-search.js?v=mrdz3mpf" ></script>
+<script src="./assets/js/docmd-git.js?v=mrdz3mpf" type="module"></script>
 
   <!-- Search Modal (Injected by @docmd/plugin-search) -->
   <div id="docmd-search-modal" class="docmd-search-modal" style="display: none;" data-semantic="true" data-show-confidence="true" data-show-filters="true"

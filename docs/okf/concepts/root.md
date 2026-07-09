@@ -7,7 +7,7 @@ path: /
 updated: 2026-07-09
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:36:11.341Z"
+  generated_at: "2026-07-09T20:42:46.343Z"
 ---
 ---
 title: "Saikuro"
@@ -26,7 +26,7 @@ Cross-language invocation fabric. Typed function calls, streams, and channels ac
 ::: tag "WASM Ready"
 
 ::: button "Quick Start" ./getting-started/quickstart.md icon:play
-::: button "GitHub" external:<https://github.com/Nisoku/Saikuro> icon:github
+::: button "GitHub" external:https://github.com/Nisoku/Saikuro icon:github
 
 == side
 

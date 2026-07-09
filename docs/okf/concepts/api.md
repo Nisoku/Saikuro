@@ -7,7 +7,7 @@ path: /api/
 updated: 2026-07-09
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:36:11.334Z"
+  generated_at: "2026-07-09T20:42:46.336Z"
 ---
 ---
 title: "Protocol & Runtime Reference"
