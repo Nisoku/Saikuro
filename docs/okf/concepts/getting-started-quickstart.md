@@ -4,10 +4,10 @@ title: "Quick Start"
 description: "Get two languages talking with Saikuro in under 10 minutes"
 source: "https://nisoku.org/Saikuro/getting-started/quickstart/"
 path: /getting-started/quickstart/
-updated: 2026-07-04
+updated: 2026-07-09
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-04T10:35:33.807Z"
+  generated_at: "2026-07-09T20:36:11.336Z"
 ---
 ---
 title: "Quick Start"

@@ -4,10 +4,10 @@ title: "C# Examples"
 description: "C# adapter usage patterns"
 source: "https://nisoku.org/Saikuro/adapters/csharp/examples/"
 path: /adapters/csharp/examples/
-updated: 2026-07-04
+updated: 2026-07-09
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-04T10:35:33.798Z"
+  generated_at: "2026-07-09T20:36:11.328Z"
 ---
 ---
 title: "C# Examples"

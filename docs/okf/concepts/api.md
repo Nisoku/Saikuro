@@ -4,10 +4,10 @@ title: "Protocol & Runtime Reference"
 description: "Shared wire format and runtime behavior for all adapters"
 source: "https://nisoku.org/Saikuro/api/"
 path: /api/
-updated: 2026-07-04
+updated: 2026-07-09
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-04T10:35:33.805Z"
+  generated_at: "2026-07-09T20:36:11.334Z"
 ---
 ---
 title: "Protocol & Runtime Reference"
