@@ -170,7 +170,7 @@ export default {
   footer: "Built with [docmd](https://docmd.io). [View on GitHub](https://github.com/Nisoku/Saikuro).",
   editLink: {
     enabled: true,
-    baseUrl: "https://github.com/Nisoku/Saikuro/edit/wasm-stuff/Docs/docs",
+    baseUrl: "https://github.com/Nisoku/Saikuro/edit/main/",
     text: "Edit this page",
   },
 };
