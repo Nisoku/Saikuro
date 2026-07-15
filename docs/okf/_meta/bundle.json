@@ -1,12 +1,12 @@
 {
-  "okf_version": "0.8.9",
+  "okf_version": "0.8.10",
   "bundle": {
     "name": "saikuro",
     "title": "Saikuro",
     "description": "",
     "url": "https://nisoku.org/Saikuro",
     "generated_by": "@docmd/plugin-okf",
-    "generated_at": "2026-07-15T17:26:24.480Z",
+    "generated_at": "2026-07-15T17:35:44.054Z",
     "default_type": "concept"
   },
   "stats": {

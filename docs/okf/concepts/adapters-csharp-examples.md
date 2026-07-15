@@ -7,7 +7,7 @@ path: /adapters/csharp/examples/
 updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:26:24.464Z"
+  generated_at: "2026-07-15T17:35:44.040Z"
 ---
 ---
 title: "C# Examples"

@@ -7,7 +7,7 @@ path: /adapters/python/examples/
 updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:26:24.467Z"
+  generated_at: "2026-07-15T17:35:44.043Z"
 ---
 ---
 title: "Python Examples"
