@@ -4,10 +4,10 @@ title: "C# Adapter"
 description: "Saikuro adapter for .NET and Blazor WASM"
 source: "https://nisoku.org/Saikuro/adapters/csharp/"
 path: /adapters/csharp/
-updated: 2026-07-09
+updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:42:46.329Z"
+  generated_at: "2026-07-15T17:26:24.465Z"
 ---
 ---
 title: "C# Adapter"

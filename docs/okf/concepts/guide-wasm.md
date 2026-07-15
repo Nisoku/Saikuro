@@ -4,10 +4,10 @@ title: WASM
 description: "Run Saikuro entirely in the browser via WebAssembly"
 source: "https://nisoku.org/Saikuro/guide/wasm/"
 path: /guide/wasm/
-updated: 2026-07-09
+updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:42:46.343Z"
+  generated_at: "2026-07-15T17:26:24.479Z"
 ---
 ---
 title: "WASM"

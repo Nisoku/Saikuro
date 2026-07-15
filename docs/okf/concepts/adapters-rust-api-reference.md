@@ -4,10 +4,10 @@ title: "Rust API Reference"
 description: "Full Rust adapter API reference"
 source: "https://nisoku.org/Saikuro/adapters/rust/api-reference/"
 path: /adapters/rust/api-reference/
-updated: 2026-07-09
+updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:42:46.332Z"
+  generated_at: "2026-07-15T17:26:24.468Z"
 ---
 ---
 title: "Rust API Reference"

@@ -9,177 +9,177 @@
   "batchCount": 1,
   "files": {
     "adapters/c/api-reference.md": {
-      "mtime": 1783629603989.3928,
+      "mtime": 1784136212002.2153,
       "size": 4666,
       "batches": []
     },
     "adapters/c/examples.md": {
-      "mtime": 1783629603989.4863,
+      "mtime": 1784136212002.3174,
       "size": 2642,
       "batches": []
     },
     "adapters/c/index.md": {
-      "mtime": 1783629603989.4863,
+      "mtime": 1784136212002.3174,
       "size": 1120,
       "batches": []
     },
     "adapters/cpp/api-reference.md": {
-      "mtime": 1783629603989.4863,
+      "mtime": 1784136212002.3174,
       "size": 3042,
       "batches": []
     },
     "adapters/cpp/examples.md": {
-      "mtime": 1783629603989.6394,
+      "mtime": 1784136212002.5017,
       "size": 1769,
       "batches": []
     },
     "adapters/cpp/index.md": {
-      "mtime": 1783629603989.6394,
+      "mtime": 1784136212002.5017,
       "size": 917,
       "batches": []
     },
     "adapters/csharp/api-reference.md": {
-      "mtime": 1783629603989.6394,
+      "mtime": 1784136212002.5017,
       "size": 2283,
       "batches": []
     },
     "adapters/csharp/examples.md": {
-      "mtime": 1783629603989.7688,
+      "mtime": 1784136212002.6418,
       "size": 841,
       "batches": []
     },
     "adapters/csharp/index.md": {
-      "mtime": 1783629603989.7688,
+      "mtime": 1784136212002.6418,
       "size": 2615,
       "batches": []
     },
     "adapters/index.md": {
-      "mtime": 1783629603989.7688,
+      "mtime": 1784136212002.6418,
       "size": 4823,
       "batches": []
     },
     "adapters/python/api-reference.md": {
-      "mtime": 1783629603989.801,
+      "mtime": 1784136212002.6418,
       "size": 2549,
       "batches": []
     },
     "adapters/python/examples.md": {
-      "mtime": 1783629603989.801,
+      "mtime": 1784136212002.8423,
       "size": 1637,
       "batches": []
     },
     "adapters/python/index.md": {
-      "mtime": 1783629603989.801,
+      "mtime": 1784136212002.8423,
       "size": 2752,
       "batches": []
     },
     "adapters/rust/api-reference.md": {
-      "mtime": 1783629603989.801,
+      "mtime": 1784136212002.8423,
       "size": 1918,
       "batches": []
     },
     "adapters/rust/examples.md": {
-      "mtime": 1783629603990.1233,
+      "mtime": 1784136212002.9946,
       "size": 1359,
       "batches": []
     },
     "adapters/rust/index.md": {
-      "mtime": 1783629603990.1233,
+      "mtime": 1784136212002.9946,
       "size": 2369,
       "batches": []
     },
     "adapters/typescript/api-reference.md": {
-      "mtime": 1783629603990.1233,
+      "mtime": 1784136212002.9946,
       "size": 2982,
       "batches": []
     },
     "adapters/typescript/examples.md": {
-      "mtime": 1783629603990.2554,
+      "mtime": 1784136212003.1365,
       "size": 1870,
       "batches": []
     },
     "adapters/typescript/index.md": {
-      "mtime": 1783629603990.2554,
+      "mtime": 1784136212003.1365,
       "size": 4031,
       "batches": []
     },
     "api/cli.md": {
-      "mtime": 1783629603990.2554,
+      "mtime": 1784136212003.1365,
       "size": 3030,
       "batches": []
     },
     "api/index.md": {
-      "mtime": 1783629603990.407,
+      "mtime": 1784136212003.3022,
       "size": 9475,
       "batches": []
     },
     "getting-started/concepts.md": {
-      "mtime": 1783629603990.407,
+      "mtime": 1784136212003.3022,
       "size": 6790,
       "batches": []
     },
     "getting-started/installation.md": {
-      "mtime": 1783629603990.5623,
+      "mtime": 1784136212003.4907,
       "size": 2423,
       "batches": []
     },
     "getting-started/quickstart.md": {
-      "mtime": 1783629603990.5623,
+      "mtime": 1784136212003.4907,
       "size": 3418,
       "batches": []
     },
     "guide/codegen.md": {
-      "mtime": 1783629603990.5623,
+      "mtime": 1784136212003.4907,
       "size": 3875,
       "batches": []
     },
     "guide/commands.md": {
-      "mtime": 1783629603990.717,
+      "mtime": 1784136212003.6653,
       "size": 3715,
       "batches": []
     },
     "guide/errors.md": {
-      "mtime": 1783629603990.717,
+      "mtime": 1784136212003.6653,
       "size": 6037,
       "batches": []
     },
     "guide/examples.md": {
-      "mtime": 1783629603990.717,
+      "mtime": 1784136212003.6653,
       "size": 1397,
       "batches": []
     },
     "guide/invocations.md": {
-      "mtime": 1783629603990.717,
+      "mtime": 1784136212003.6653,
       "size": 5539,
       "batches": []
     },
     "guide/logging.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 4734,
       "batches": []
     },
     "guide/schema.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 4621,
       "batches": []
     },
     "guide/storage.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 4094,
       "batches": []
     },
     "guide/transports.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 5610,
       "batches": []
     },
     "guide/wasm.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 3408,
       "batches": []
     },
     "index.md": {
-      "mtime": 1783629603990.801,
+      "mtime": 1784136212003.6653,
       "size": 3355,
       "batches": []
     }

@@ -4,10 +4,10 @@ title: Commands
 description: "Saikuro development commands via the just runner"
 source: "https://nisoku.org/Saikuro/guide/commands/"
 path: /guide/commands/
-updated: 2026-07-09
+updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:42:46.339Z"
+  generated_at: "2026-07-15T17:26:24.475Z"
 ---
 ---
 title: "Commands"

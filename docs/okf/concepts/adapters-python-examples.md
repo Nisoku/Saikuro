@@ -4,10 +4,10 @@ title: "Python Examples"
 description: "Python adapter usage patterns"
 source: "https://nisoku.org/Saikuro/adapters/python/examples/"
 path: /adapters/python/examples/
-updated: 2026-07-09
+updated: 2026-07-15
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-09T20:42:46.331Z"
+  generated_at: "2026-07-15T17:26:24.467Z"
 ---
 ---
 title: "Python Examples"
