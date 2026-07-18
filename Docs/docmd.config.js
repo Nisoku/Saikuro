@@ -1,6 +1,6 @@
 export default {
   title: "Saikuro",
-  url: "https://nisoku.org/Saikuro",
+  url: "https://nisoku.org/Saikuro/docs",
   logo: { alt: "Saikuro", href: "./" },
   favicon: "",
   theme: {
