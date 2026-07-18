@@ -4,10 +4,10 @@ title: "C Examples"
 description: "C adapter usage patterns"
 source: "https://nisoku.org/Saikuro/adapters/c/examples/"
 path: /adapters/c/examples/
-updated: 2026-07-15
+updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:35:44.037Z"
+  generated_at: "2026-07-18T14:59:50.952Z"
 ---
 ---
 title: "C Examples"

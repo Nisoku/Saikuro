@@ -4,10 +4,10 @@ title: Saikuro
 description: "Cross-language invocation fabric for seamless multi-runtime integration"
 source: "https://nisoku.org/Saikuro/"
 path: /
-updated: 2026-07-15
+updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:35:44.054Z"
+  generated_at: "2026-07-18T14:59:50.966Z"
 ---
 ---
 title: "Saikuro"

@@ -4,10 +4,10 @@ title: "Python Adapter"
 description: "Saikuro adapter for Python 3.11+"
 source: "https://nisoku.org/Saikuro/adapters/python/"
 path: /adapters/python/
-updated: 2026-07-15
+updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:35:44.043Z"
+  generated_at: "2026-07-18T14:59:50.957Z"
 ---
 ---
 title: "Python Adapter"

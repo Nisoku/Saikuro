@@ -4,10 +4,10 @@ title: "TypeScript Adapter"
 description: "Saikuro adapter for TypeScript and JavaScript"
 source: "https://nisoku.org/Saikuro/adapters/typescript/"
 path: /adapters/typescript/
-updated: 2026-07-15
+updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-15T17:35:44.046Z"
+  generated_at: "2026-07-18T14:59:50.960Z"
 ---
 ---
 title: "TypeScript Adapter"
