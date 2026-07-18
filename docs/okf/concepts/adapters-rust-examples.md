@@ -2,12 +2,12 @@
 type: concept
 title: "Rust Examples"
 description: "Rust adapter usage patterns"
-source: "https://nisoku.org/Saikuro/adapters/rust/examples/"
+source: "https://nisoku.org/Saikuro/docs/adapters/rust/examples/"
 path: /adapters/rust/examples/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.958Z"
+  generated_at: "2026-07-18T15:11:09.463Z"
 ---
 ---
 title: "Rust Examples"

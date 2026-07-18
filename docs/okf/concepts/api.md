@@ -2,12 +2,12 @@
 type: api
 title: "Protocol & Runtime Reference"
 description: "Shared wire format and runtime behavior for all adapters"
-source: "https://nisoku.org/Saikuro/api/"
+source: "https://nisoku.org/Saikuro/docs/api/"
 path: /api/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.960Z"
+  generated_at: "2026-07-18T15:11:09.466Z"
 ---
 ---
 title: "Protocol & Runtime Reference"

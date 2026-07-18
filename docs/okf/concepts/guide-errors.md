@@ -2,12 +2,12 @@
 type: concept
 title: "Error Handling"
 description: "How Saikuro surfaces and handles errors across languages"
-source: "https://nisoku.org/Saikuro/guide/errors/"
+source: "https://nisoku.org/Saikuro/docs/guide/errors/"
 path: /guide/errors/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.963Z"
+  generated_at: "2026-07-18T15:11:09.470Z"
 ---
 ---
 title: "Error Handling"

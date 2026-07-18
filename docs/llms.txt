@@ -4,73 +4,73 @@
 
 ## Documentation Files
 
-- [C API Reference](https://nisoku.org/Saikuro/adapters/c/api-reference/)
+- [C API Reference](https://nisoku.org/Saikuro/docs/adapters/c/api-reference/)
   Full C adapter API reference
-- [C Examples](https://nisoku.org/Saikuro/adapters/c/examples/)
+- [C Examples](https://nisoku.org/Saikuro/docs/adapters/c/examples/)
   C adapter usage patterns
-- [C Adapter](https://nisoku.org/Saikuro/adapters/c/)
+- [C Adapter](https://nisoku.org/Saikuro/docs/adapters/c/)
   Saikuro adapter for C
-- [C++ API Reference](https://nisoku.org/Saikuro/adapters/cpp/api-reference/)
+- [C++ API Reference](https://nisoku.org/Saikuro/docs/adapters/cpp/api-reference/)
   Full C++ adapter API reference
-- [C++ Examples](https://nisoku.org/Saikuro/adapters/cpp/examples/)
+- [C++ Examples](https://nisoku.org/Saikuro/docs/adapters/cpp/examples/)
   C++ adapter usage patterns
-- [C++ Adapter](https://nisoku.org/Saikuro/adapters/cpp/)
+- [C++ Adapter](https://nisoku.org/Saikuro/docs/adapters/cpp/)
   Saikuro adapter for C++
-- [C# API Reference](https://nisoku.org/Saikuro/adapters/csharp/api-reference/)
+- [C# API Reference](https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/)
   Full C# adapter API reference
-- [C# Examples](https://nisoku.org/Saikuro/adapters/csharp/examples/)
+- [C# Examples](https://nisoku.org/Saikuro/docs/adapters/csharp/examples/)
   C# adapter usage patterns
-- [C# Adapter](https://nisoku.org/Saikuro/adapters/csharp/)
+- [C# Adapter](https://nisoku.org/Saikuro/docs/adapters/csharp/)
   Saikuro adapter for .NET and Blazor WASM
-- [Language Adapters](https://nisoku.org/Saikuro/adapters/)
+- [Language Adapters](https://nisoku.org/Saikuro/docs/adapters/)
   Saikuro adapter APIs for TypeScript, Python, Rust, C#, C, and C++
-- [Python API Reference](https://nisoku.org/Saikuro/adapters/python/api-reference/)
+- [Python API Reference](https://nisoku.org/Saikuro/docs/adapters/python/api-reference/)
   Full Python adapter API reference
-- [Python Examples](https://nisoku.org/Saikuro/adapters/python/examples/)
+- [Python Examples](https://nisoku.org/Saikuro/docs/adapters/python/examples/)
   Python adapter usage patterns
-- [Python Adapter](https://nisoku.org/Saikuro/adapters/python/)
+- [Python Adapter](https://nisoku.org/Saikuro/docs/adapters/python/)
   Saikuro adapter for Python 3.11+
-- [Rust API Reference](https://nisoku.org/Saikuro/adapters/rust/api-reference/)
+- [Rust API Reference](https://nisoku.org/Saikuro/docs/adapters/rust/api-reference/)
   Full Rust adapter API reference
-- [Rust Examples](https://nisoku.org/Saikuro/adapters/rust/examples/)
+- [Rust Examples](https://nisoku.org/Saikuro/docs/adapters/rust/examples/)
   Rust adapter usage patterns
-- [Rust Adapter](https://nisoku.org/Saikuro/adapters/rust/)
+- [Rust Adapter](https://nisoku.org/Saikuro/docs/adapters/rust/)
   Saikuro adapter for Rust
-- [TypeScript API Reference](https://nisoku.org/Saikuro/adapters/typescript/api-reference/)
+- [TypeScript API Reference](https://nisoku.org/Saikuro/docs/adapters/typescript/api-reference/)
   Full TypeScript adapter API reference
-- [TypeScript Examples](https://nisoku.org/Saikuro/adapters/typescript/examples/)
+- [TypeScript Examples](https://nisoku.org/Saikuro/docs/adapters/typescript/examples/)
   TypeScript adapter usage patterns
-- [TypeScript Adapter](https://nisoku.org/Saikuro/adapters/typescript/)
+- [TypeScript Adapter](https://nisoku.org/Saikuro/docs/adapters/typescript/)
   Saikuro adapter for TypeScript and JavaScript
-- [CLI Reference](https://nisoku.org/Saikuro/api/cli/)
+- [CLI Reference](https://nisoku.org/Saikuro/docs/api/cli/)
   Saikuro runtime command-line interface
-- [Protocol & Runtime Reference](https://nisoku.org/Saikuro/api/)
+- [Protocol & Runtime Reference](https://nisoku.org/Saikuro/docs/api/)
   Shared wire format and runtime behavior for all adapters
-- [Core Concepts](https://nisoku.org/Saikuro/getting-started/concepts/)
+- [Core Concepts](https://nisoku.org/Saikuro/docs/getting-started/concepts/)
   How Saikuro works: runtime, adapters, schema, transports, and protocol
-- [Installation](https://nisoku.org/Saikuro/getting-started/installation/)
+- [Installation](https://nisoku.org/Saikuro/docs/getting-started/installation/)
   Install Saikuro adapters and the runtime
-- [Quick Start](https://nisoku.org/Saikuro/getting-started/quickstart/)
+- [Quick Start](https://nisoku.org/Saikuro/docs/getting-started/quickstart/)
   Get two languages talking with Saikuro in under 10 minutes
-- [Code Generation](https://nisoku.org/Saikuro/guide/codegen/)
+- [Code Generation](https://nisoku.org/Saikuro/docs/guide/codegen/)
   Generate typed client bindings from a Saikuro schema
-- [Commands](https://nisoku.org/Saikuro/guide/commands/)
+- [Commands](https://nisoku.org/Saikuro/docs/guide/commands/)
   Saikuro development commands via the just runner
-- [Error Handling](https://nisoku.org/Saikuro/guide/errors/)
+- [Error Handling](https://nisoku.org/Saikuro/docs/guide/errors/)
   How Saikuro surfaces and handles errors across languages
-- [Examples](https://nisoku.org/Saikuro/guide/examples/)
+- [Examples](https://nisoku.org/Saikuro/docs/guide/examples/)
   Cross-language patterns and real-world usage
-- [Invocation Primitives](https://nisoku.org/Saikuro/guide/invocations/)
+- [Invocation Primitives](https://nisoku.org/Saikuro/docs/guide/invocations/)
   The six ways to communicate across language boundaries with Saikuro
-- [Logging](https://nisoku.org/Saikuro/guide/logging/)
+- [Logging](https://nisoku.org/Saikuro/docs/guide/logging/)
   Structured logging through the Saikuro runtime
-- [Schema](https://nisoku.org/Saikuro/guide/schema/)
+- [Schema](https://nisoku.org/Saikuro/docs/guide/schema/)
   Declare your functions, types, capabilities, and namespaces
-- [Storage](https://nisoku.org/Saikuro/guide/storage/)
+- [Storage](https://nisoku.org/Saikuro/docs/guide/storage/)
   Platform-agnostic storage backends for key-value and file operations
-- [Transports](https://nisoku.org/Saikuro/guide/transports/)
+- [Transports](https://nisoku.org/Saikuro/docs/guide/transports/)
   In-memory, Unix sockets, TCP, WebSocket, and WasmHost transport options
-- [WASM](https://nisoku.org/Saikuro/guide/wasm/)
+- [WASM](https://nisoku.org/Saikuro/docs/guide/wasm/)
   Run Saikuro entirely in the browser via WebAssembly
-- [Saikuro](https://nisoku.org/Saikuro/)
+- [Saikuro](https://nisoku.org/Saikuro/docs/)
   Cross-language invocation fabric for seamless multi-runtime integration

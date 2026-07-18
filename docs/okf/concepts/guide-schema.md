@@ -2,12 +2,12 @@
 type: concept
 title: Schema
 description: "Declare your functions, types, capabilities, and namespaces"
-source: "https://nisoku.org/Saikuro/guide/schema/"
+source: "https://nisoku.org/Saikuro/docs/guide/schema/"
 path: /guide/schema/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.965Z"
+  generated_at: "2026-07-18T15:11:09.472Z"
 ---
 ---
 title: "Schema"

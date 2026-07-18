@@ -2,12 +2,12 @@
 type: concept
 title: "Rust API Reference"
 description: "Full Rust adapter API reference"
-source: "https://nisoku.org/Saikuro/adapters/rust/api-reference/"
+source: "https://nisoku.org/Saikuro/docs/adapters/rust/api-reference/"
 path: /adapters/rust/api-reference/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.958Z"
+  generated_at: "2026-07-18T15:11:09.462Z"
 ---
 ---
 title: "Rust API Reference"

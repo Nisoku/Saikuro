@@ -2,12 +2,12 @@
 type: concept
 title: "C Adapter"
 description: "Saikuro adapter for C"
-source: "https://nisoku.org/Saikuro/adapters/c/"
+source: "https://nisoku.org/Saikuro/docs/adapters/c/"
 path: /adapters/c/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.953Z"
+  generated_at: "2026-07-18T15:11:09.454Z"
 ---
 ---
 title: "C Adapter"

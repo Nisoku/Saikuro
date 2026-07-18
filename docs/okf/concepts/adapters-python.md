@@ -2,12 +2,12 @@
 type: concept
 title: "Python Adapter"
 description: "Saikuro adapter for Python 3.11+"
-source: "https://nisoku.org/Saikuro/adapters/python/"
+source: "https://nisoku.org/Saikuro/docs/adapters/python/"
 path: /adapters/python/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.957Z"
+  generated_at: "2026-07-18T15:11:09.462Z"
 ---
 ---
 title: "Python Adapter"

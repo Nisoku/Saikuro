@@ -2,12 +2,12 @@
 type: concept
 title: Storage
 description: "Platform-agnostic storage backends for key-value and file operations"
-source: "https://nisoku.org/Saikuro/guide/storage/"
+source: "https://nisoku.org/Saikuro/docs/guide/storage/"
 path: /guide/storage/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.965Z"
+  generated_at: "2026-07-18T15:11:09.473Z"
 ---
 ---
 title: "Storage"

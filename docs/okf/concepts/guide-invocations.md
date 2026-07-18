@@ -2,12 +2,12 @@
 type: concept
 title: "Invocation Primitives"
 description: "The six ways to communicate across language boundaries with Saikuro"
-source: "https://nisoku.org/Saikuro/guide/invocations/"
+source: "https://nisoku.org/Saikuro/docs/guide/invocations/"
 path: /guide/invocations/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.964Z"
+  generated_at: "2026-07-18T15:11:09.471Z"
 ---
 ---
 title: "Invocation Primitives"

@@ -2,12 +2,12 @@
 type: concept
 title: "C# Examples"
 description: "C# adapter usage patterns"
-source: "https://nisoku.org/Saikuro/adapters/csharp/examples/"
+source: "https://nisoku.org/Saikuro/docs/adapters/csharp/examples/"
 path: /adapters/csharp/examples/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.955Z"
+  generated_at: "2026-07-18T15:11:09.458Z"
 ---
 ---
 title: "C# Examples"

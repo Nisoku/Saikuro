@@ -4,7 +4,7 @@
 
 ---
 
-## [C API Reference](https://nisoku.org/Saikuro/adapters/c/api-reference/)
+## [C API Reference](https://nisoku.org/Saikuro/docs/adapters/c/api-reference/)
 
 ---
 title: "C API Reference"
@@ -69,7 +69,7 @@ Error information is thread-local. Retrieve it with `saikuro_last_error_message(
 
 ---
 
-## [C Examples](https://nisoku.org/Saikuro/adapters/c/examples/)
+## [C Examples](https://nisoku.org/Saikuro/docs/adapters/c/examples/)
 
 ---
 title: "C Examples"
@@ -190,7 +190,7 @@ int main() {
 
 ---
 
-## [C Adapter](https://nisoku.org/Saikuro/adapters/c/)
+## [C Adapter](https://nisoku.org/Saikuro/docs/adapters/c/)
 
 ---
 title: "C Adapter"
@@ -250,7 +250,7 @@ See the [C API Reference](./api-reference) for the full function list.
 
 ---
 
-## [C++ API Reference](https://nisoku.org/Saikuro/adapters/cpp/api-reference/)
+## [C++ API Reference](https://nisoku.org/Saikuro/docs/adapters/cpp/api-reference/)
 
 ---
 title: "C++ API Reference"
@@ -313,7 +313,7 @@ try {
 
 ---
 
-## [C++ Examples](https://nisoku.org/Saikuro/adapters/cpp/examples/)
+## [C++ Examples](https://nisoku.org/Saikuro/docs/adapters/cpp/examples/)
 
 ---
 title: "C++ Examples"
@@ -414,7 +414,7 @@ int main() {
 
 ---
 
-## [C++ Adapter](https://nisoku.org/Saikuro/adapters/cpp/)
+## [C++ Adapter](https://nisoku.org/Saikuro/docs/adapters/cpp/)
 
 ---
 title: "C++ Adapter"
@@ -470,7 +470,7 @@ See the [C++ API Reference](./api-reference) for the full class reference.
 
 ---
 
-## [C# API Reference](https://nisoku.org/Saikuro/adapters/csharp/api-reference/)
+## [C# API Reference](https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/)
 
 ---
 title: "C# API Reference"
@@ -504,7 +504,7 @@ See the [C# adapter overview](./) for the complete API surface.
 
 ---
 
-## [C# Examples](https://nisoku.org/Saikuro/adapters/csharp/examples/)
+## [C# Examples](https://nisoku.org/Saikuro/docs/adapters/csharp/examples/)
 
 ---
 title: "C# Examples"
@@ -546,7 +546,7 @@ var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 }, cts.
 
 ---
 
-## [C# Adapter](https://nisoku.org/Saikuro/adapters/csharp/)
+## [C# Adapter](https://nisoku.org/Saikuro/docs/adapters/csharp/)
 
 ---
 title: "C# Adapter"
@@ -665,7 +665,7 @@ SchemaExtractor
 
 ---
 
-## [Language Adapters](https://nisoku.org/Saikuro/adapters/)
+## [Language Adapters](https://nisoku.org/Saikuro/docs/adapters/)
 
 ---
 title: "Language Adapters"
@@ -759,7 +759,7 @@ RAII wrapper over the C API. Header-only with template type mapping.
 
 ---
 
-## [Python API Reference](https://nisoku.org/Saikuro/adapters/python/api-reference/)
+## [Python API Reference](https://nisoku.org/Saikuro/docs/adapters/python/api-reference/)
 
 ---
 title: "Python API Reference"
@@ -798,7 +798,7 @@ See the [Python adapter overview](./) for the complete API surface.
 
 ---
 
-## [Python Examples](https://nisoku.org/Saikuro/adapters/python/examples/)
+## [Python Examples](https://nisoku.org/Saikuro/docs/adapters/python/examples/)
 
 ---
 title: "Python Examples"
@@ -882,7 +882,7 @@ async def test_math_provider():
 
 ---
 
-## [Python Adapter](https://nisoku.org/Saikuro/adapters/python/)
+## [Python Adapter](https://nisoku.org/Saikuro/docs/adapters/python/)
 
 ---
 title: "Python Adapter"
@@ -1008,7 +1008,7 @@ Envelope, InvocationType, ResourceHandle, LogLevel, LogRecord
 
 ---
 
-## [Rust API Reference](https://nisoku.org/Saikuro/adapters/rust/api-reference/)
+## [Rust API Reference](https://nisoku.org/Saikuro/docs/adapters/rust/api-reference/)
 
 ---
 title: "Rust API Reference"
@@ -1042,7 +1042,7 @@ See the [Rust adapter overview](./) for the complete API surface.
 
 ---
 
-## [Rust Examples](https://nisoku.org/Saikuro/adapters/rust/examples/)
+## [Rust Examples](https://nisoku.org/Saikuro/docs/adapters/rust/examples/)
 
 ---
 title: "Rust Examples"
@@ -1102,7 +1102,7 @@ async fn test_math() {
 
 ---
 
-## [Rust Adapter](https://nisoku.org/Saikuro/adapters/rust/)
+## [Rust Adapter](https://nisoku.org/Saikuro/docs/adapters/rust/)
 
 ---
 title: "Rust Adapter"
@@ -1222,7 +1222,7 @@ Error, Result
 
 ---
 
-## [TypeScript API Reference](https://nisoku.org/Saikuro/adapters/typescript/api-reference/)
+## [TypeScript API Reference](https://nisoku.org/Saikuro/docs/adapters/typescript/api-reference/)
 
 ---
 title: "TypeScript API Reference"
@@ -1263,7 +1263,7 @@ See the [TypeScript adapter overview](./) for the complete API surface.
 
 ---
 
-## [TypeScript Examples](https://nisoku.org/Saikuro/adapters/typescript/examples/)
+## [TypeScript Examples](https://nisoku.org/Saikuro/docs/adapters/typescript/examples/)
 
 ---
 title: "TypeScript Examples"
@@ -1348,7 +1348,7 @@ describe("math", () => {
 
 ---
 
-## [TypeScript Adapter](https://nisoku.org/Saikuro/adapters/typescript/)
+## [TypeScript Adapter](https://nisoku.org/Saikuro/docs/adapters/typescript/)
 
 ---
 title: "TypeScript Adapter"
@@ -1516,7 +1516,7 @@ getLogger, setLogSink, setLogLevel, resetLogSink, createTransportSink
 
 ---
 
-## [CLI Reference](https://nisoku.org/Saikuro/api/cli/)
+## [CLI Reference](https://nisoku.org/Saikuro/docs/api/cli/)
 
 ---
 title: "CLI Reference"
@@ -1610,7 +1610,7 @@ saikuro-schema --namespace <NAME> [--output <FILE>] <FILE>
 
 ---
 
-## [Protocol & Runtime Reference](https://nisoku.org/Saikuro/api/)
+## [Protocol & Runtime Reference](https://nisoku.org/Saikuro/docs/api/)
 
 ---
 title: "Protocol & Runtime Reference"
@@ -1803,7 +1803,7 @@ See the existing adapter implementations for reference:
 
 ---
 
-## [Core Concepts](https://nisoku.org/Saikuro/getting-started/concepts/)
+## [Core Concepts](https://nisoku.org/Saikuro/docs/getting-started/concepts/)
 
 ---
 title: "Core Concepts"
@@ -2024,7 +2024,7 @@ The middle six steps are invisible. From your perspective: you called a function
 
 ---
 
-## [Installation](https://nisoku.org/Saikuro/getting-started/installation/)
+## [Installation](https://nisoku.org/Saikuro/docs/getting-started/installation/)
 
 ---
 title: "Installation"
@@ -2170,7 +2170,7 @@ print("Saikuro types loaded")
 
 ---
 
-## [Quick Start](https://nisoku.org/Saikuro/getting-started/quickstart/)
+## [Quick Start](https://nisoku.org/Saikuro/docs/getting-started/quickstart/)
 
 ---
 title: "Quick Start"
@@ -2321,7 +2321,7 @@ All of that is invisible. From your code's perspective you just called a functio
 
 ---
 
-## [Code Generation](https://nisoku.org/Saikuro/guide/codegen/)
+## [Code Generation](https://nisoku.org/Saikuro/docs/guide/codegen/)
 
 ---
 title: "Code Generation"
@@ -2457,7 +2457,7 @@ saikuro-codegen --schema schema.json --lang typescript --out clients/typescript/
 
 ---
 
-## [Commands](https://nisoku.org/Saikuro/guide/commands/)
+## [Commands](https://nisoku.org/Saikuro/docs/guide/commands/)
 
 ---
 title: "Commands"
@@ -2553,7 +2553,7 @@ just web_demo dev          # build WASM + start dev server
 
 ---
 
-## [Error Handling](https://nisoku.org/Saikuro/guide/errors/)
+## [Error Handling](https://nisoku.org/Saikuro/docs/guide/errors/)
 
 ---
 title: "Error Handling"
@@ -2750,7 +2750,7 @@ var result = await client.CallAsync<int>("math.add", new object[] { 1, 2 }, cts.
 
 ---
 
-## [Examples](https://nisoku.org/Saikuro/guide/examples/)
+## [Examples](https://nisoku.org/Saikuro/docs/guide/examples/)
 
 ---
 title: "Examples"
@@ -2791,7 +2791,7 @@ Examples are now organized under each adapter's page.
 
 ---
 
-## [Invocation Primitives](https://nisoku.org/Saikuro/guide/invocations/)
+## [Invocation Primitives](https://nisoku.org/Saikuro/docs/guide/invocations/)
 
 ---
 title: "Invocation Primitives"
@@ -2998,7 +2998,7 @@ await client.log("info", "my-app", "server started", {"version": "1.0"})
 
 ---
 
-## [Logging](https://nisoku.org/Saikuro/guide/logging/)
+## [Logging](https://nisoku.org/Saikuro/docs/guide/logging/)
 
 ---
 title: "Logging"
@@ -3175,7 +3175,7 @@ Log envelopes fire-and-forget. The runtime never sends a response.
 
 ---
 
-## [Schema](https://nisoku.org/Saikuro/guide/schema/)
+## [Schema](https://nisoku.org/Saikuro/docs/guide/schema/)
 
 ---
 title: "Schema"
@@ -3340,7 +3340,7 @@ Dynamic announcement is disabled. Providers that announce a mismatched schema ar
 
 ---
 
-## [Storage](https://nisoku.org/Saikuro/guide/storage/)
+## [Storage](https://nisoku.org/Saikuro/docs/guide/storage/)
 
 ---
 title: "Storage"
@@ -3465,7 +3465,7 @@ let config = StorageConfig::default()
 
 ---
 
-## [Transports](https://nisoku.org/Saikuro/guide/transports/)
+## [Transports](https://nisoku.org/Saikuro/docs/guide/transports/)
 
 ---
 title: "Transports"
@@ -3682,7 +3682,7 @@ async def test_add():
 
 ---
 
-## [WASM](https://nisoku.org/Saikuro/guide/wasm/)
+## [WASM](https://nisoku.org/Saikuro/docs/guide/wasm/)
 
 ---
 title: "WASM"
@@ -3814,7 +3814,7 @@ just web_demo dev   # build + start dev server
 
 ---
 
-## [Saikuro](https://nisoku.org/Saikuro/)
+## [Saikuro](https://nisoku.org/Saikuro/docs/)
 
 ---
 title: "Saikuro"

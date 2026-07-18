@@ -2,12 +2,12 @@
 type: concept
 title: "C# API Reference"
 description: "Full C# adapter API reference"
-source: "https://nisoku.org/Saikuro/adapters/csharp/api-reference/"
+source: "https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/"
 path: /adapters/csharp/api-reference/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.955Z"
+  generated_at: "2026-07-18T15:11:09.457Z"
 ---
 ---
 title: "C# API Reference"

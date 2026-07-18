@@ -2,12 +2,12 @@
 type: concept
 title: "Rust Adapter"
 description: "Saikuro adapter for Rust"
-source: "https://nisoku.org/Saikuro/adapters/rust/"
+source: "https://nisoku.org/Saikuro/docs/adapters/rust/"
 path: /adapters/rust/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.959Z"
+  generated_at: "2026-07-18T15:11:09.463Z"
 ---
 ---
 title: "Rust Adapter"

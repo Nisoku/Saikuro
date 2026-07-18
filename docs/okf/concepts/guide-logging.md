@@ -2,12 +2,12 @@
 type: concept
 title: Logging
 description: "Structured logging through the Saikuro runtime"
-source: "https://nisoku.org/Saikuro/guide/logging/"
+source: "https://nisoku.org/Saikuro/docs/guide/logging/"
 path: /guide/logging/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.964Z"
+  generated_at: "2026-07-18T15:11:09.472Z"
 ---
 ---
 title: "Logging"

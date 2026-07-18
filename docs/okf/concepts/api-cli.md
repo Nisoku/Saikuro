@@ -2,12 +2,12 @@
 type: api
 title: "CLI Reference"
 description: "Saikuro runtime command-line interface"
-source: "https://nisoku.org/Saikuro/api/cli/"
+source: "https://nisoku.org/Saikuro/docs/api/cli/"
 path: /api/cli/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.960Z"
+  generated_at: "2026-07-18T15:11:09.466Z"
 ---
 ---
 title: "CLI Reference"

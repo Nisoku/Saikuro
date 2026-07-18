@@ -2,12 +2,12 @@
 type: concept
 title: "Python API Reference"
 description: "Full Python adapter API reference"
-source: "https://nisoku.org/Saikuro/adapters/python/api-reference/"
+source: "https://nisoku.org/Saikuro/docs/adapters/python/api-reference/"
 path: /adapters/python/api-reference/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.956Z"
+  generated_at: "2026-07-18T15:11:09.461Z"
 ---
 ---
 title: "Python API Reference"

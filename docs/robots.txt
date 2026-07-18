@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://nisoku.org/Saikuro/sitemap.xml
+Sitemap: https://nisoku.org/Saikuro/docs/sitemap.xml

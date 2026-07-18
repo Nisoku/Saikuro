@@ -4,211 +4,211 @@
   "pages": [
     {
       "title": "C API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/c/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/c/api-reference/",
       "description": "Full C adapter API reference",
       "priority": "medium"
     },
     {
       "title": "C Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/c/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/c/examples/",
       "description": "C adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "C Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/c/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/c/",
       "description": "Saikuro adapter for C",
       "priority": "medium"
     },
     {
       "title": "C++ API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/cpp/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/cpp/api-reference/",
       "description": "Full C++ adapter API reference",
       "priority": "medium"
     },
     {
       "title": "C++ Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/cpp/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/cpp/examples/",
       "description": "C++ adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "C++ Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/cpp/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/cpp/",
       "description": "Saikuro adapter for C++",
       "priority": "medium"
     },
     {
       "title": "C# API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/csharp/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/",
       "description": "Full C# adapter API reference",
       "priority": "medium"
     },
     {
       "title": "C# Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/csharp/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/csharp/examples/",
       "description": "C# adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "C# Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/csharp/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/csharp/",
       "description": "Saikuro adapter for .NET and Blazor WASM",
       "priority": "medium"
     },
     {
       "title": "Language Adapters",
-      "url": "https://nisoku.org/Saikuro/adapters/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/",
       "description": "Saikuro adapter APIs for TypeScript, Python, Rust, C#, C, and C++",
       "priority": "medium"
     },
     {
       "title": "Python API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/python/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/python/api-reference/",
       "description": "Full Python adapter API reference",
       "priority": "medium"
     },
     {
       "title": "Python Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/python/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/python/examples/",
       "description": "Python adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "Python Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/python/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/python/",
       "description": "Saikuro adapter for Python 3.11+",
       "priority": "medium"
     },
     {
       "title": "Rust API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/rust/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/rust/api-reference/",
       "description": "Full Rust adapter API reference",
       "priority": "medium"
     },
     {
       "title": "Rust Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/rust/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/rust/examples/",
       "description": "Rust adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "Rust Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/rust/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/rust/",
       "description": "Saikuro adapter for Rust",
       "priority": "medium"
     },
     {
       "title": "TypeScript API Reference",
-      "url": "https://nisoku.org/Saikuro/adapters/typescript/api-reference/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/typescript/api-reference/",
       "description": "Full TypeScript adapter API reference",
       "priority": "medium"
     },
     {
       "title": "TypeScript Examples",
-      "url": "https://nisoku.org/Saikuro/adapters/typescript/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/typescript/examples/",
       "description": "TypeScript adapter usage patterns",
       "priority": "medium"
     },
     {
       "title": "TypeScript Adapter",
-      "url": "https://nisoku.org/Saikuro/adapters/typescript/",
+      "url": "https://nisoku.org/Saikuro/docs/adapters/typescript/",
       "description": "Saikuro adapter for TypeScript and JavaScript",
       "priority": "medium"
     },
     {
       "title": "CLI Reference",
-      "url": "https://nisoku.org/Saikuro/api/cli/",
+      "url": "https://nisoku.org/Saikuro/docs/api/cli/",
       "description": "Saikuro runtime command-line interface",
       "priority": "medium"
     },
     {
       "title": "Protocol & Runtime Reference",
-      "url": "https://nisoku.org/Saikuro/api/",
+      "url": "https://nisoku.org/Saikuro/docs/api/",
       "description": "Shared wire format and runtime behavior for all adapters",
       "priority": "medium"
     },
     {
       "title": "Core Concepts",
-      "url": "https://nisoku.org/Saikuro/getting-started/concepts/",
+      "url": "https://nisoku.org/Saikuro/docs/getting-started/concepts/",
       "description": "How Saikuro works: runtime, adapters, schema, transports, and protocol",
       "priority": "medium"
     },
     {
       "title": "Installation",
-      "url": "https://nisoku.org/Saikuro/getting-started/installation/",
+      "url": "https://nisoku.org/Saikuro/docs/getting-started/installation/",
       "description": "Install Saikuro adapters and the runtime",
       "priority": "medium"
     },
     {
       "title": "Quick Start",
-      "url": "https://nisoku.org/Saikuro/getting-started/quickstart/",
+      "url": "https://nisoku.org/Saikuro/docs/getting-started/quickstart/",
       "description": "Get two languages talking with Saikuro in under 10 minutes",
       "priority": "medium"
     },
     {
       "title": "Code Generation",
-      "url": "https://nisoku.org/Saikuro/guide/codegen/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/codegen/",
       "description": "Generate typed client bindings from a Saikuro schema",
       "priority": "medium"
     },
     {
       "title": "Commands",
-      "url": "https://nisoku.org/Saikuro/guide/commands/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/commands/",
       "description": "Saikuro development commands via the just runner",
       "priority": "medium"
     },
     {
       "title": "Error Handling",
-      "url": "https://nisoku.org/Saikuro/guide/errors/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/errors/",
       "description": "How Saikuro surfaces and handles errors across languages",
       "priority": "medium"
     },
     {
       "title": "Examples",
-      "url": "https://nisoku.org/Saikuro/guide/examples/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/examples/",
       "description": "Cross-language patterns and real-world usage",
       "priority": "medium"
     },
     {
       "title": "Invocation Primitives",
-      "url": "https://nisoku.org/Saikuro/guide/invocations/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/invocations/",
       "description": "The six ways to communicate across language boundaries with Saikuro",
       "priority": "medium"
     },
     {
       "title": "Logging",
-      "url": "https://nisoku.org/Saikuro/guide/logging/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/logging/",
       "description": "Structured logging through the Saikuro runtime",
       "priority": "medium"
     },
     {
       "title": "Schema",
-      "url": "https://nisoku.org/Saikuro/guide/schema/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/schema/",
       "description": "Declare your functions, types, capabilities, and namespaces",
       "priority": "medium"
     },
     {
       "title": "Storage",
-      "url": "https://nisoku.org/Saikuro/guide/storage/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/storage/",
       "description": "Platform-agnostic storage backends for key-value and file operations",
       "priority": "medium"
     },
     {
       "title": "Transports",
-      "url": "https://nisoku.org/Saikuro/guide/transports/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/transports/",
       "description": "In-memory, Unix sockets, TCP, WebSocket, and WasmHost transport options",
       "priority": "medium"
     },
     {
       "title": "WASM",
-      "url": "https://nisoku.org/Saikuro/guide/wasm/",
+      "url": "https://nisoku.org/Saikuro/docs/guide/wasm/",
       "description": "Run Saikuro entirely in the browser via WebAssembly",
       "priority": "medium"
     },
     {
       "title": "Saikuro",
-      "url": "https://nisoku.org/Saikuro/",
+      "url": "https://nisoku.org/Saikuro/docs/",
       "description": "Cross-language invocation fabric for seamless multi-runtime integration",
       "priority": "high"
     }

@@ -2,12 +2,12 @@
 type: concept
 title: "TypeScript Examples"
 description: "TypeScript adapter usage patterns"
-source: "https://nisoku.org/Saikuro/adapters/typescript/examples/"
+source: "https://nisoku.org/Saikuro/docs/adapters/typescript/examples/"
 path: /adapters/typescript/examples/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.959Z"
+  generated_at: "2026-07-18T15:11:09.465Z"
 ---
 ---
 title: "TypeScript Examples"

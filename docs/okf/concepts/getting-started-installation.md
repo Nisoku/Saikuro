@@ -2,12 +2,12 @@
 type: concept
 title: Installation
 description: "Install Saikuro adapters and the runtime"
-source: "https://nisoku.org/Saikuro/getting-started/installation/"
+source: "https://nisoku.org/Saikuro/docs/getting-started/installation/"
 path: /getting-started/installation/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.961Z"
+  generated_at: "2026-07-18T15:11:09.467Z"
 ---
 ---
 title: "Installation"

@@ -2,12 +2,12 @@
 type: concept
 title: "C API Reference"
 description: "Full C adapter API reference"
-source: "https://nisoku.org/Saikuro/adapters/c/api-reference/"
+source: "https://nisoku.org/Saikuro/docs/adapters/c/api-reference/"
 path: /adapters/c/api-reference/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.952Z"
+  generated_at: "2026-07-18T15:11:09.453Z"
 ---
 ---
 title: "C API Reference"

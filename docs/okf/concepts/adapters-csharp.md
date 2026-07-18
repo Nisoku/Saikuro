@@ -2,12 +2,12 @@
 type: concept
 title: "C# Adapter"
 description: "Saikuro adapter for .NET and Blazor WASM"
-source: "https://nisoku.org/Saikuro/adapters/csharp/"
+source: "https://nisoku.org/Saikuro/docs/adapters/csharp/"
 path: /adapters/csharp/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.956Z"
+  generated_at: "2026-07-18T15:11:09.459Z"
 ---
 ---
 title: "C# Adapter"

@@ -2,12 +2,12 @@
 type: concept
 title: Commands
 description: "Saikuro development commands via the just runner"
-source: "https://nisoku.org/Saikuro/guide/commands/"
+source: "https://nisoku.org/Saikuro/docs/guide/commands/"
 path: /guide/commands/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.962Z"
+  generated_at: "2026-07-18T15:11:09.469Z"
 ---
 ---
 title: "Commands"

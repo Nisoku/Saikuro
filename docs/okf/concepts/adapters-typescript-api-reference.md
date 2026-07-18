@@ -2,12 +2,12 @@
 type: concept
 title: "TypeScript API Reference"
 description: "Full TypeScript adapter API reference"
-source: "https://nisoku.org/Saikuro/adapters/typescript/api-reference/"
+source: "https://nisoku.org/Saikuro/docs/adapters/typescript/api-reference/"
 path: /adapters/typescript/api-reference/
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.959Z"
+  generated_at: "2026-07-18T15:11:09.464Z"
 ---
 ---
 title: "TypeScript API Reference"

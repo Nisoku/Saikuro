@@ -2,12 +2,12 @@
 type: concept
 title: Saikuro
 description: "Cross-language invocation fabric for seamless multi-runtime integration"
-source: "https://nisoku.org/Saikuro/"
+source: "https://nisoku.org/Saikuro/docs/"
 path: /
 updated: 2026-07-18
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T14:59:50.966Z"
+  generated_at: "2026-07-18T15:11:09.475Z"
 ---
 ---
 title: "Saikuro"
