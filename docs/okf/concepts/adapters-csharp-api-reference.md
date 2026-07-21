@@ -7,7 +7,7 @@ path: /adapters/csharp/api-reference/
 updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-21T10:09:20.014Z"
+  generated_at: "2026-07-21T10:15:41.724Z"
 ---
 ---
 title: "C# API Reference"

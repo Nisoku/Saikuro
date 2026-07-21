@@ -7,7 +7,7 @@ path: /adapters/typescript/examples/
 updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-21T10:09:20.018Z"
+  generated_at: "2026-07-21T10:15:41.729Z"
 ---
 ---
 title: "TypeScript Examples"

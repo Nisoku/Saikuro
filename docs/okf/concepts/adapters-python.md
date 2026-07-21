@@ -7,7 +7,7 @@ path: /adapters/python/
 updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-21T10:09:20.016Z"
+  generated_at: "2026-07-21T10:15:41.727Z"
 ---
 ---
 title: "Python Adapter"
