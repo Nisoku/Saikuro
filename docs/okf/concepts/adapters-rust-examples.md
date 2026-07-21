@@ -4,10 +4,10 @@ title: "Rust Examples"
 description: "Rust adapter usage patterns"
 source: "https://nisoku.org/Saikuro/docs/adapters/rust/examples/"
 path: /adapters/rust/examples/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.463Z"
+  generated_at: "2026-07-21T10:09:20.017Z"
 ---
 ---
 title: "Rust Examples"

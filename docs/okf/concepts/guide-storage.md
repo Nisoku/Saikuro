@@ -4,10 +4,10 @@ title: Storage
 description: "Platform-agnostic storage backends for key-value and file operations"
 source: "https://nisoku.org/Saikuro/docs/guide/storage/"
 path: /guide/storage/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.473Z"
+  generated_at: "2026-07-21T10:09:20.023Z"
 ---
 ---
 title: "Storage"

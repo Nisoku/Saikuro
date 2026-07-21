@@ -4,10 +4,10 @@ title: "C Adapter"
 description: "Saikuro adapter for C"
 source: "https://nisoku.org/Saikuro/docs/adapters/c/"
 path: /adapters/c/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.454Z"
+  generated_at: "2026-07-21T10:09:20.012Z"
 ---
 ---
 title: "C Adapter"

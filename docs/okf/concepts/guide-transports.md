@@ -4,10 +4,10 @@ title: Transports
 description: "In-memory, Unix sockets, TCP, WebSocket, and WasmHost transport options"
 source: "https://nisoku.org/Saikuro/docs/guide/transports/"
 path: /guide/transports/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.474Z"
+  generated_at: "2026-07-21T10:09:20.024Z"
 ---
 ---
 title: "Transports"

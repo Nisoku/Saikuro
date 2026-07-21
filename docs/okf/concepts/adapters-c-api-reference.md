@@ -4,10 +4,10 @@ title: "C API Reference"
 description: "Full C adapter API reference"
 source: "https://nisoku.org/Saikuro/docs/adapters/c/api-reference/"
 path: /adapters/c/api-reference/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.453Z"
+  generated_at: "2026-07-21T10:09:20.010Z"
 ---
 ---
 title: "C API Reference"

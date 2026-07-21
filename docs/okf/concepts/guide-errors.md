@@ -4,10 +4,10 @@ title: "Error Handling"
 description: "How Saikuro surfaces and handles errors across languages"
 source: "https://nisoku.org/Saikuro/docs/guide/errors/"
 path: /guide/errors/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.470Z"
+  generated_at: "2026-07-21T10:09:20.021Z"
 ---
 ---
 title: "Error Handling"

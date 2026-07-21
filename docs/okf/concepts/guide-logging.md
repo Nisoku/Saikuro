@@ -4,10 +4,10 @@ title: Logging
 description: "Structured logging through the Saikuro runtime"
 source: "https://nisoku.org/Saikuro/docs/guide/logging/"
 path: /guide/logging/
-updated: 2026-07-18
+updated: 2026-07-21
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-18T15:11:09.472Z"
+  generated_at: "2026-07-21T10:09:20.023Z"
 ---
 ---
 title: "Logging"
