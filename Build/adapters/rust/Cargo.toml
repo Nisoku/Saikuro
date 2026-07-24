@@ -46,4 +46,4 @@ thiserror   = "2.0"
 dashmap     = "6.2.1"
 uuid        = { workspace = true }
 clap        = { version = "4.5", features = ["derive"] }
-syn         = { version = "2.0", features = ["full"] }
+syn         = { version = "3.0", features = ["full"] }
