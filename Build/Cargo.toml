@@ -8,6 +8,7 @@ members = [
     "crates/saikuro-router",
     "crates/saikuro-runtime",
     "crates/saikuro-exec",
+    "crates/saikuro-random",
     "crates/saikuro-codegen",
     "adapters/c",
     "adapters/rust",
@@ -34,8 +35,21 @@ futures = "0.3"
 async-trait = "0.1"
 pin-project-lite = "0.2"
 
-# UUID
-uuid = { version = "1.23.2", features = ["v4", "serde", "js"] }
+# UUID: default-features off so the crate stays no_std
+uuid = { version = "1.23.2", default-features = false }
+
+# Randomness: saikuro-random selects the backend via its own features
+getrandom = { version = "0.3.1", default-features = false }
+
+# Deterministic DRBG backend for saikuro-random
+# Kept no_std (no default features).
+chacha20 = { version = "0.9", default-features = false }
+
+# Atomics that work on MCU targets without native 64-bit (or any) atomics
+# (riscv32imc, thumbv6m). `fallback` provides the 64-bit ops on 32-bit-CAS
+# targets (riscv32imac); `critical-section` covers targets with no atomics at
+# all. Native instructions are still used where available.
+portable-atomic = { version = "1", default-features = false, features = ["fallback", "critical-section"] }
 
 # Duration / utility serde helpers
 serde_with = "3.0"
@@ -68,4 +82,5 @@ saikuro-router    = { path = "crates/saikuro-router", default-features = false }
 saikuro-runtime   = { path = "crates/saikuro-runtime", default-features = false }
 saikuro-codegen   = { path = "crates/saikuro-codegen" }
 saikuro-exec      = { path = "crates/saikuro-exec", default-features = false }
+saikuro-random    = { path = "crates/saikuro-random" }
 saikuro           = { path = "adapters/rust", default-features = false }

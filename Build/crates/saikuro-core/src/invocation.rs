@@ -72,7 +72,9 @@ impl InvocationId {
     /// Generate a fresh, globally-unique invocation identifier.
     #[inline]
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        // Entropy failure is a platform-level fault: without it no invocation
+        // id can ever be minted, so aborting is the only sane response.
+        Self(saikuro_random::uuid_v4().expect("entropy backend unavailable"))
     }
 
     /// Construct from an existing UUID.

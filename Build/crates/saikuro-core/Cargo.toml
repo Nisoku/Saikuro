@@ -16,6 +16,7 @@ rmp-serde = { workspace = true }
 rmpv = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
+saikuro-random = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 serde_with = { workspace = true }

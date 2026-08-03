@@ -17,7 +17,7 @@ required-features = ["native-transport"]
 default = ["native-transport"]
 native-transport = ["saikuro-transport/native-transport", "saikuro-exec/tokio-runtime"]
 ws-transport = ["saikuro-transport/ws-transport", "dep:tokio-tungstenite", "dep:tungstenite"]
-wasm-runtime = ["saikuro-exec/wasm-runtime"]
+wasm-runtime = ["saikuro-exec/wasm-runtime", "saikuro-random/wasm"]
 
 [dependencies]
 saikuro-core      = { workspace = true }
@@ -25,6 +25,7 @@ saikuro-schema    = { workspace = true }
 saikuro-transport = { workspace = true }
 saikuro-router    = { workspace = true }
 saikuro-exec      = { workspace = true, default-features = false }
+saikuro-random    = { workspace = true }
 
 serde       = { workspace = true }
 serde_json  = { workspace = true }
@@ -37,7 +38,6 @@ tracing     = { workspace = true }
 tracing-subscriber = { workspace = true }
 dashmap     = { workspace = true }
 parking_lot = { workspace = true }
-uuid        = { workspace = true }
 serde_with  = { workspace = true }
 
 # CLI and error handling for binary

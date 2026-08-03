@@ -33,6 +33,9 @@ saikuro-runtime   = { workspace = true, features = ["native-transport"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 saikuro-transport = { workspace = true, features = ["wasm-runtime"] }
 saikuro-runtime   = { workspace = true, default-features = false }
+# WASM has no OS entropy; saikuro-core draws randomness via saikuro-random,
+# so the whole graph must use the wasm_js backend on this target.
+saikuro-random    = { workspace = true, features = ["wasm"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
 wasm-bindgen-futures = "0.4"

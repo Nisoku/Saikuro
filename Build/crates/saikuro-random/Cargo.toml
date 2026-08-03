@@ -1,0 +1,28 @@
+[package]
+name = "saikuro-random"
+description = "Randomness and entropy facade for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "random", "rng"]
+
+# The active randomness source is selected by exactly one of the `os`, `wasm`,
+# or `custom` features (plus the `drbg` deterministic override)
+[features]
+default = ["os"]
+os = ["dep:getrandom", "getrandom/std", "std"]
+wasm = ["dep:getrandom", "getrandom/wasm_js", "std"]
+custom = ["dep:getrandom"]
+drbg = ["dep:chacha20", "dep:portable-atomic"]
+std = []
+
+[dependencies]
+getrandom = { workspace = true, optional = true }
+chacha20 = { workspace = true, optional = true }
+portable-atomic = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+chacha20 = { workspace = true }

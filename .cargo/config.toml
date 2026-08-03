@@ -4,8 +4,38 @@
 # Run with:  cargo test -p saikuro-tests --target wasm32-unknown-unknown
 # Or:        wasm-pack test --headless --chrome Build/tests
 
+# getrandom 0.3 selects its backend at compile time via the
+# `getrandom_backend` cfg.
+#
+# - wasm32-unknown-unknown has no OS entropy source, so every build for that
+#   target pins the `wasm_js` backend; the matching cargo feature is enabled
+#   by saikuro-random's `wasm` feature (wired through adapters/rust,
+#   saikuro-runtime, and saikuro-tests' wasm32 deps).
+# - bare-metal MCU targets have no OS and no practical wasm host, so they use
+#   the `custom` backend. The final binary must define `__getrandom_v03_custom`
+#   (a no-op here would link a broken RNG, so `fill` fails loudly instead). The
+#   matching cargo feature is enabled via saikuro-random's `custom` feature.
+#
+# Host targets leave the cfg unset and getrandom uses its per-target default
+# (the OS backends).
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
+
+# Bare-metal targets (verification + intended chips):
+#   riscv32imc-unknown-none-elf        ESP32-C3
+#   thumbv6m-none-eabi                 RP2040
+#   thumbv8m.main-none-eabihf          RP2350
+[target.aarch64-unknown-none]
+rustflags = ["--cfg", "getrandom_backend=\"custom\""]
+[target.riscv32imac-unknown-none-elf]
+rustflags = ["--cfg", "getrandom_backend=\"custom\""]
+[target.riscv32imc-unknown-none-elf]
+rustflags = ["--cfg", "getrandom_backend=\"custom\""]
+[target.thumbv6m-none-eabi]
+rustflags = ["--cfg", "getrandom_backend=\"custom\""]
+[target.thumbv8m.main-none-eabihf]
+rustflags = ["--cfg", "getrandom_backend=\"custom\""]
 
 # [build]
 # rustflags = ["--cfg=web_sys_unstable_apis"]

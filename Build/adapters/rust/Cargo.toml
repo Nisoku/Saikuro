@@ -19,7 +19,7 @@ default = ["tcp", "unix", "ws", "storage", "saikuro-exec/tokio-runtime"]
 tcp  = ["saikuro-transport/native-transport"]
 unix = ["saikuro-transport/native-transport"]
 ws   = ["saikuro-transport/native-ws"]
-wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport"]
+wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport", "saikuro-random/wasm"]
 
 # Storage backends: platform-agnostic factory in storage module
 storage         = ["saikuro-storage/native-storage"]
@@ -32,6 +32,7 @@ wasm-storage    = ["saikuro-storage/wasm-storage"]
 saikuro-core      = { path = "../../crates/saikuro-core" }
 saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false }
 saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
+saikuro-random    = { path = "../../crates/saikuro-random" }
 
 anyhow      = { workspace = true }
 serde       = { version = "1.0", features = ["derive"] }
@@ -44,6 +45,5 @@ async-trait = "0.1"
 tracing     = "0.1"
 thiserror   = "2.0"
 dashmap     = "6.2.1"
-uuid        = { workspace = true }
 clap        = { version = "4.5", features = ["derive"] }
 syn         = { version = "2.0", features = ["full"] }
