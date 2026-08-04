@@ -11,9 +11,9 @@
 //! and MCU targets.  The guards are only ever held for short map mutations;
 //! they are never held across an `await`.
 //!
-//! Lock poisoning is deliberately ignored: a panic while one of these guards
-//! is held is a bug that should surface immediately, not be silently recovered
-//! from.
+//! Lock poisoning is not recovered from: a panic while one of these guards is
+//! held poisons the lock, and the next acquisition panics too, so the bug
+//! surfaces immediately instead of being silently recovered from.
 
 use core::fmt;
 use core::ops::{Deref, DerefMut};
@@ -67,18 +67,21 @@ trait MutexAccess<T: ?Sized> {
 #[cfg(feature = "std")]
 impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
     fn read_guard(&self) -> imp::RwLockReadGuard<'_, T> {
-        self.read().unwrap_or_else(|poison| poison.into_inner())
+        self.read()
+            .expect("RwLock poisoned by a panicking guard holder")
     }
 
     fn write_guard(&self) -> imp::RwLockWriteGuard<'_, T> {
-        self.write().unwrap_or_else(|poison| poison.into_inner())
+        self.write()
+            .expect("RwLock poisoned by a panicking guard holder")
     }
 }
 
 #[cfg(feature = "std")]
 impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
     fn lock_guard(&self) -> imp::MutexGuard<'_, T> {
-        self.lock().unwrap_or_else(|poison| poison.into_inner())
+        self.lock()
+            .expect("Mutex poisoned by a panicking guard holder")
     }
 }
 

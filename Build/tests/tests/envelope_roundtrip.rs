@@ -85,6 +85,26 @@ fn envelope_with_meta_roundtrip() {
 }
 
 #[test]
+fn envelope_meta_serializes_canonically_regardless_of_insertion_order() {
+    let id = InvocationId::new();
+    let mut a = Envelope::call("trace.op", vec![]);
+    a.id = id;
+    a.meta.insert("z".into(), Value::Int(1)).ok();
+    a.meta.insert("a".into(), Value::Int(2)).ok();
+    a.meta.insert("m".into(), Value::Int(3)).ok();
+
+    let mut b = Envelope::call("trace.op", vec![]);
+    b.id = id;
+    b.meta.insert("m".into(), Value::Int(3)).ok();
+    b.meta.insert("a".into(), Value::Int(2)).ok();
+    b.meta.insert("z".into(), Value::Int(1)).ok();
+
+    let (ba, bb) = (a.to_msgpack().unwrap(), b.to_msgpack().unwrap());
+    assert_eq!(ba, bb, "insertion order must not affect wire bytes");
+    assert!(ba.windows(6).any(|w| w == b"\xa1a\x02\xa1m\x03"));
+}
+
+#[test]
 fn batch_envelope_roundtrip() {
     let item1 = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]);
     let item2 = Envelope::call("math.mul", vec![Value::Int(3), Value::Int(4)]);

@@ -6,7 +6,10 @@
 //! the types here are the canonical in-memory representation.
 
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
-use serde::{Deserialize, Serialize};
+use serde::{
+    ser::{SerializeMap, Serializer},
+    Deserialize, Serialize,
+};
 
 use crate::{
     capability::CapabilityToken, invocation::InvocationId, value::Value, PROTOCOL_VERSION,
@@ -17,6 +20,25 @@ pub const ENVELOPE_META_CAPACITY: usize = 16;
 
 /// Fixed-capacity map of metadata entries on an [`Envelope`].
 pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
+
+/// Serialize the metadata map with keys sorted, so equivalent metadata always
+/// produces identical bytes regardless of the caller's insertion order.
+///
+/// `MetaMap` is an insertion-ordered `FnvIndexMap`, so serde would otherwise
+/// emit keys in insertion order and two semantically-equal envelopes could
+/// differ on the wire.
+fn serialize_meta<S>(meta: &MetaMap, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut pairs: Vec<(&str, &Value)> = meta.iter().map(|(k, v)| (k.as_str(), v)).collect();
+    pairs.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    let mut map = serializer.serialize_map(Some(pairs.len()))?;
+    for (key, value) in pairs {
+        map.serialize_entry(key, value)?;
+    }
+    map.end()
+}
 
 /// The type of an outgoing invocation.
 ///
@@ -96,7 +118,11 @@ pub struct Envelope {
     pub args: Vec<Value>,
 
     /// Optional key/value metadata bag (trace IDs, deadlines, …).
-    #[serde(default, skip_serializing_if = "MetaMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "MetaMap::is_empty",
+        serialize_with = "serialize_meta"
+    )]
     pub meta: MetaMap,
 
     /// Capability token presented by the caller.  Required when the target

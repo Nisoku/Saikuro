@@ -120,15 +120,21 @@ impl Provider for ProviderHandle {
 
 /// Thread-safe registry mapping namespace names to provider handles.
 ///
-/// The two maps are guarded by separate [`RwLock`]s.  `register` and
-/// `deregister` never hold both locks simultaneously (each map operation uses
-/// a single-statement guard), so there is no lock-order inversion.
+/// Both indexes live behind a single [`RwLock`] so `register` and `deregister`
+/// keep them consistent atomically.  A namespace taken over by a new provider
+/// is removed from the old provider's record, and deregistration never removes
+/// a namespace that a later provider now owns.
 #[derive(Clone, Default)]
 pub struct ProviderRegistry {
+    inner: Arc<RwLock<RegistryState>>,
+}
+
+#[derive(Default)]
+struct RegistryState {
     /// namespace -> provider handle
-    by_namespace: Arc<RwLock<BTreeMap<String, ProviderHandle>>>,
+    by_namespace: BTreeMap<String, ProviderHandle>,
     /// provider_id -> list of namespaces (for cleanup on disconnect)
-    by_provider: Arc<RwLock<BTreeMap<String, Vec<String>>>>,
+    by_provider: BTreeMap<String, Vec<String>>,
 }
 
 impl ProviderRegistry {
@@ -138,34 +144,49 @@ impl ProviderRegistry {
 
     /// Register a provider handle for the given namespaces.
     ///
-    /// If a namespace already has a provider, the old one is replaced and a
-    /// warning is emitted.
+    /// If a namespace already has a provider, the old one is replaced.  The
+    /// namespace is then removed from the old provider's record so a later
+    /// deregistration of the old provider cannot reclaim the new provider's
+    /// namespace.
     pub fn register(&self, handle: ProviderHandle) {
         let provider_id = handle.id().to_owned();
         let namespaces = handle.namespaces().to_vec();
 
-        {
-            let mut ns_guard = self.by_namespace.write();
-            for ns in &namespaces {
-                if ns_guard.contains_key(ns.as_str()) {
+        let mut state = self.inner.write();
+        for ns in &namespaces {
+            match state.by_namespace.insert(ns.clone(), handle.clone()) {
+                Some(old) => {
                     warn!(namespace = %ns, provider = %provider_id, "replacing existing namespace provider");
-                } else {
-                    debug!(namespace = %ns, provider = %provider_id, "registering provider for namespace");
+                    if old.id() != provider_id {
+                        if let Some(old_ns_list) = state.by_provider.get_mut(old.id()) {
+                            old_ns_list.retain(|n| n != ns);
+                        }
+                    }
                 }
-                ns_guard.insert(ns.clone(), handle.clone());
+                None => {
+                    debug!(namespace = %ns, provider = %provider_id, "registering provider for namespace")
+                }
             }
         }
-
-        self.by_provider.write().insert(provider_id, namespaces);
+        state.by_provider.insert(provider_id, namespaces);
     }
 
     /// Remove all namespace registrations for the given provider ID.
+    ///
+    /// A namespace is removed from the lookup index only while it still points
+    /// at this provider; a namespace a newer provider took over is left alone.
     pub fn deregister(&self, provider_id: &str) {
-        // Take the provider record first; the namespace removals each use a
-        // fresh guard so the two locks are never nested.
-        if let Some(namespaces) = self.by_provider.write().remove(provider_id) {
+        let mut state = self.inner.write();
+        if let Some(namespaces) = state.by_provider.remove(provider_id) {
             for ns in namespaces {
-                self.by_namespace.write().remove(&ns);
+                if state
+                    .by_namespace
+                    .get(&ns)
+                    .map(|h| h.id() == provider_id)
+                    .unwrap_or(false)
+                {
+                    state.by_namespace.remove(&ns);
+                }
                 debug!(namespace = %ns, provider = %provider_id, "deregistered namespace provider");
             }
         }
@@ -173,13 +194,14 @@ impl ProviderRegistry {
 
     /// Look up the provider for a namespace.
     pub fn get(&self, namespace: &str) -> Option<ProviderHandle> {
-        self.by_namespace.read().get(namespace).cloned()
+        self.inner.read().by_namespace.get(namespace).cloned()
     }
 
     /// Return `true` if a live provider exists for the namespace.
     pub fn has_live_provider(&self, namespace: &str) -> bool {
-        self.by_namespace
+        self.inner
             .read()
+            .by_namespace
             .get(namespace)
             .map(|h| h.is_alive())
             .unwrap_or(false)

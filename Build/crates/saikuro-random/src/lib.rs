@@ -16,6 +16,19 @@ extern crate std;
 
 use core::mem::MaybeUninit;
 
+// `drbg` is the deterministic override for MCU targets without an OS entropy
+// source.  Combining it with a platform backend would compile getrandom for
+// nothing and let the drbg implementation win silently, so reject the
+// combination at build time and force `--no-default-features --features drbg`.
+#[cfg(all(
+    feature = "drbg",
+    any(feature = "os", feature = "wasm", feature = "custom")
+))]
+compile_error!(
+    "saikuro-random: `drbg` conflicts with the `os`, `wasm`, or `custom` backend; \
+     build with `--no-default-features --features drbg`"
+);
+
 #[cfg(feature = "drbg")]
 mod drbg;
 
