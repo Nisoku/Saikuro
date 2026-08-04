@@ -13,6 +13,8 @@
 //! 6. For `Log`: extracts a [`LogRecord`] from `args[0]` and forwards it to
 //!    the configured log sink without routing to any provider.
 
+use alloc::{borrow::ToOwned, boxed::Box, string::ToString, sync::Arc, vec::Vec};
+use core::time::Duration;
 use saikuro_core::{
     envelope::{Envelope, InvocationType, StreamControl},
     error::{ErrorDetail, SaikuroError},
@@ -21,7 +23,6 @@ use saikuro_core::{
     ResponseEnvelope,
 };
 use saikuro_exec::{mpsc, oneshot, timeout};
-use std::{sync::Arc, time::Duration};
 use tracing::{debug, instrument, warn};
 
 use crate::{

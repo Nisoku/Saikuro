@@ -1,5 +1,6 @@
 //! Router error type.
 
+use alloc::string::String;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -32,4 +33,4 @@ pub enum RouterError {
     SendError(String),
 }
 
-pub type Result<T> = std::result::Result<T, RouterError>;
+pub type Result<T> = core::result::Result<T, RouterError>;

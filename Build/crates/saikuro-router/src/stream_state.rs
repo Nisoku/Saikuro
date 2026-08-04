@@ -5,14 +5,13 @@
 //! same invocation ID are correlated back to that entry for sequence checking
 //! and backpressure enforcement.
 
-use dashmap::DashMap;
+use alloc::{collections::BTreeMap, sync::Arc};
+use core::sync::atomic::Ordering;
+use portable_atomic::{AtomicBool, AtomicU64};
 use saikuro_core::invocation::InvocationId;
+use saikuro_core::sync::RwLock;
 use saikuro_core::ResponseEnvelope;
 use saikuro_exec::mpsc;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc,
-};
 
 /// Extension trait for atomic sequence-number advancement.
 ///
@@ -130,18 +129,24 @@ impl ChannelState {
 // Store
 
 /// Thread-safe store for all open stream and channel states.
+///
+/// Each map has its own [`RwLock`]; every access is a single-statement guard
+/// so no two locks are ever held simultaneously.  `InvocationId` is
+/// `Ord`, so `BTreeMap` keys keep iteration deterministic.
 #[derive(Clone, Default)]
 pub struct StreamStateStore {
-    streams: Arc<DashMap<InvocationId, Arc<StreamState>>>,
+    streams: Arc<RwLock<BTreeMap<InvocationId, Arc<StreamState>>>>,
     /// Receivers for stream item channels.  Stored here so the channel stays
     /// live (i.e. `item_tx.send()` does not fail with "channel closed") until
     /// a caller explicitly takes and consumes the receiver.
-    stream_receivers: Arc<DashMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>,
-    channels: Arc<DashMap<InvocationId, Arc<ChannelState>>>,
+    stream_receivers: Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
+    channels: Arc<RwLock<BTreeMap<InvocationId, Arc<ChannelState>>>>,
     /// Receivers for channel inbound messages.
-    channel_inbound_receivers: Arc<DashMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>,
+    channel_inbound_receivers:
+        Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
     /// Receivers for channel outbound messages.
-    channel_outbound_receivers: Arc<DashMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>,
+    channel_outbound_receivers:
+        Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
 }
 
 impl StreamStateStore {
@@ -161,17 +166,17 @@ impl StreamStateStore {
         state: Arc<StreamState>,
         receiver: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.streams.insert(id, state);
-        self.stream_receivers.insert(id, receiver);
+        self.streams.write().insert(id, state);
+        self.stream_receivers.write().insert(id, receiver);
     }
 
     pub fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.get(id).map(|r| r.clone())
+        self.streams.read().get(id).cloned()
     }
 
     pub fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.stream_receivers.remove(id);
-        self.streams.remove(id).map(|(_, v)| v)
+        self.stream_receivers.write().remove(id);
+        self.streams.write().remove(id)
     }
 
     /// Take the receiver half of the stream item channel.
@@ -183,7 +188,7 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.stream_receivers.remove(id).map(|(_, v)| v)
+        self.stream_receivers.write().remove(id)
     }
 
     // Channel
@@ -195,19 +200,23 @@ impl StreamStateStore {
         inbound_rx: mpsc::Receiver<ResponseEnvelope>,
         outbound_rx: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.channels.insert(id, state);
-        self.channel_inbound_receivers.insert(id, inbound_rx);
-        self.channel_outbound_receivers.insert(id, outbound_rx);
+        self.channels.write().insert(id, state);
+        self.channel_inbound_receivers
+            .write()
+            .insert(id, inbound_rx);
+        self.channel_outbound_receivers
+            .write()
+            .insert(id, outbound_rx);
     }
 
     pub fn get_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
-        self.channels.get(id).map(|r| r.clone())
+        self.channels.read().get(id).cloned()
     }
 
     pub fn remove_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
-        self.channel_inbound_receivers.remove(id);
-        self.channel_outbound_receivers.remove(id);
-        self.channels.remove(id).map(|(_, v)| v)
+        self.channel_inbound_receivers.write().remove(id);
+        self.channel_outbound_receivers.write().remove(id);
+        self.channels.write().remove(id)
     }
 
     /// Take the inbound receiver (client -> provider) for a channel.
@@ -215,7 +224,7 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.channel_inbound_receivers.remove(id).map(|(_, v)| v)
+        self.channel_inbound_receivers.write().remove(id)
     }
 
     /// Take the outbound receiver (provider -> client) for a channel.
@@ -223,6 +232,6 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.channel_outbound_receivers.remove(id).map(|(_, v)| v)
+        self.channel_outbound_receivers.write().remove(id)
     }
 }

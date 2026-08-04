@@ -83,6 +83,11 @@ anyhow = "1.0"
 dashmap = "6.1"
 parking_lot = "0.12"
 
+# Spinlocks backing the saikuro-core::sync facade on no_std (MCU) builds.
+# `portable-atomic` makes them work on targets without native atomics
+# (thumbv6m); native instructions are still used where available.
+spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex", "rwlock", "portable-atomic"] }
+
 # Time: chrono is wasm-safe when 'wasmbind' feature is enabled
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 

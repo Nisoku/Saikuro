@@ -8,19 +8,24 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "router", "rpc"]
 
-[dependencies]
-saikuro-core   = { workspace = true }
-saikuro-schema = { workspace = true }
+[features]
+default = ["std"]
+std = ["saikuro-core/std", "saikuro-exec/tokio-runtime"]
+embassy = ["saikuro-exec/embassy-runtime"]
 
-serde       = { workspace = true }
-bytes       = { workspace = true }
-rmp-serde   = { workspace = true }
+[dependencies]
+saikuro-core   = { path = "../saikuro-core", default-features = false }
+saikuro-schema = { workspace = true }
+saikuro-exec   = { workspace = true, default-features = false }
+
 async-trait = { workspace = true }
-futures     = { workspace = true }
 thiserror   = { workspace = true }
-tracing     = { workspace = true }
-dashmap     = { workspace = true }
-saikuro-exec = { workspace = true, default-features = false }
+# Atomics for sequence tracking that also work on MCU targets without native
+# 64-bit CAS (thumbv7m); native instructions are used where available.
+portable-atomic = { workspace = true }
+# tracing is declared directly so the `std` feature stays off on MCU; the
+# `attributes` feature is required by `#[instrument]` on `dispatch`.
+tracing = { version = "0.1", default-features = false, features = ["attributes"] }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

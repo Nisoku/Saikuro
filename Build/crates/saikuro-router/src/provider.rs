@@ -8,11 +8,12 @@
 //! Each handle wraps a MPSC sender so the router can dispatch work
 //! without blocking.
 
+use alloc::{
+    borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec,
+};
 use async_trait::async_trait;
-use dashmap::DashMap;
-use saikuro_core::{envelope::Envelope, ResponseEnvelope};
+use saikuro_core::{envelope::Envelope, sync::RwLock, ResponseEnvelope};
 use saikuro_exec::{mpsc, oneshot};
-use std::sync::Arc;
 use tracing::{debug, warn};
 
 use crate::error::{Result, RouterError};
@@ -118,12 +119,16 @@ impl Provider for ProviderHandle {
 // ProviderRegistry
 
 /// Thread-safe registry mapping namespace names to provider handles.
+///
+/// The two maps are guarded by separate [`RwLock`]s.  `register` and
+/// `deregister` never hold both locks simultaneously (each map operation uses
+/// a single-statement guard), so there is no lock-order inversion.
 #[derive(Clone, Default)]
 pub struct ProviderRegistry {
     /// namespace -> provider handle
-    by_namespace: Arc<DashMap<String, ProviderHandle>>,
+    by_namespace: Arc<RwLock<BTreeMap<String, ProviderHandle>>>,
     /// provider_id -> list of namespaces (for cleanup on disconnect)
-    by_provider: Arc<DashMap<String, Vec<String>>>,
+    by_provider: Arc<RwLock<BTreeMap<String, Vec<String>>>>,
 }
 
 impl ProviderRegistry {
@@ -139,23 +144,28 @@ impl ProviderRegistry {
         let provider_id = handle.id().to_owned();
         let namespaces = handle.namespaces().to_vec();
 
-        for ns in &namespaces {
-            if self.by_namespace.contains_key(ns.as_str()) {
-                warn!(namespace = %ns, provider = %provider_id, "replacing existing namespace provider");
-            } else {
-                debug!(namespace = %ns, provider = %provider_id, "registering provider for namespace");
+        {
+            let mut ns_guard = self.by_namespace.write();
+            for ns in &namespaces {
+                if ns_guard.contains_key(ns.as_str()) {
+                    warn!(namespace = %ns, provider = %provider_id, "replacing existing namespace provider");
+                } else {
+                    debug!(namespace = %ns, provider = %provider_id, "registering provider for namespace");
+                }
+                ns_guard.insert(ns.clone(), handle.clone());
             }
-            self.by_namespace.insert(ns.clone(), handle.clone());
         }
 
-        self.by_provider.insert(provider_id, namespaces);
+        self.by_provider.write().insert(provider_id, namespaces);
     }
 
     /// Remove all namespace registrations for the given provider ID.
     pub fn deregister(&self, provider_id: &str) {
-        if let Some((_, namespaces)) = self.by_provider.remove(provider_id) {
+        // Take the provider record first; the namespace removals each use a
+        // fresh guard so the two locks are never nested.
+        if let Some(namespaces) = self.by_provider.write().remove(provider_id) {
             for ns in namespaces {
-                self.by_namespace.remove(&ns);
+                self.by_namespace.write().remove(&ns);
                 debug!(namespace = %ns, provider = %provider_id, "deregistered namespace provider");
             }
         }
@@ -163,12 +173,13 @@ impl ProviderRegistry {
 
     /// Look up the provider for a namespace.
     pub fn get(&self, namespace: &str) -> Option<ProviderHandle> {
-        self.by_namespace.get(namespace).map(|r| r.clone())
+        self.by_namespace.read().get(namespace).cloned()
     }
 
     /// Return `true` if a live provider exists for the namespace.
     pub fn has_live_provider(&self, namespace: &str) -> bool {
         self.by_namespace
+            .read()
             .get(namespace)
             .map(|h| h.is_alive())
             .unwrap_or(false)

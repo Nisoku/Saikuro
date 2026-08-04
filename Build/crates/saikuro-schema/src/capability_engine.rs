@@ -14,6 +14,7 @@
 //! [`Visibility::Internal`] visibility are treated as inaccessible:  only
 //! `Public` functions are reachable by sandboxed peers.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::{
     capability::{CapabilitySet, CapabilityToken},
     schema::{FunctionSchema, Visibility},

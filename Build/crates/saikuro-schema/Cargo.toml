@@ -8,11 +8,12 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "schema", "validation"]
 
+# This crate is always `no_std` + `alloc` 
 [dependencies]
-saikuro-core = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+saikuro-core = { path = "../saikuro-core", default-features = false }
+
+# thiserror is already default-features-off at the workspace level.
 thiserror = { workspace = true }
-dashmap = { workspace = true }
-parking_lot = { workspace = true }
-tracing = { workspace = true }
+# tracing is declared directly so the `std` feature stays off; only the
+# event macros are used (no `#[instrument]`).
+tracing = { version = "0.1", default-features = false }

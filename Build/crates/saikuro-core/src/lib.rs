@@ -25,6 +25,7 @@ pub mod invocation;
 pub mod log;
 pub mod resource;
 pub mod schema;
+pub mod sync;
 pub mod value;
 
 pub use capability::{CapabilitySet, CapabilityToken};

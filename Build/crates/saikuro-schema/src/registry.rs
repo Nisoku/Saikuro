@@ -8,11 +8,16 @@
 //! In **development mode** providers announce their schemas at connection time
 //! and the registry merges them in.  In **production mode** schemas are loaded
 //! from a frozen file at startup and providers cannot alter them.
+//!
+//! All state lives in a single `RwLock` from `saikuro-core::sync` so that the
+//! mode check and the mutations it guards are atomic (a registered namespace
+//! can never be half-applied against a changing mode).  The lock is held only
+//! for short map operations and never across an `await`.  Keys are ordered
+//! `BTreeMap`s for deterministic iteration on both host and MCU targets.
 
-use dashmap::DashMap;
-use parking_lot::RwLock;
-use saikuro_core::schema::{FunctionSchema, NamespaceSchema, Schema};
-use std::sync::Arc;
+use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
+use saikuro_core::schema::{FunctionSchema, NamespaceSchema, Schema, TypeDefinition};
+use saikuro_core::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::validator::ValidationError;
@@ -43,19 +48,14 @@ pub struct NamespaceRegistration {
 
 //  Registry
 
-/// The live schema registry.
-///
-/// All lookups are lock-free reads via `DashMap`.  Writes (registrations,
-/// merges) are infrequent and go through a coarser `RwLock` that guards the
-/// mode and global schema snapshot.
-#[derive(Clone)]
-pub struct SchemaRegistry {
+/// All registry state, guarded as a unit by [`SchemaRegistry`]'s lock.
+struct Schemata {
     /// Per-namespace schemas and their owning provider ID.
-    namespaces: Arc<DashMap<String, NamespaceEntry>>,
+    namespaces: BTreeMap<String, NamespaceEntry>,
     /// Shared type library merged from all registered schemas.
-    types: Arc<DashMap<String, saikuro_core::schema::TypeDefinition>>,
+    types: BTreeMap<String, TypeDefinition>,
     /// Mode controlling whether dynamic updates are allowed.
-    mode: Arc<RwLock<RegistryMode>>,
+    mode: RegistryMode,
 }
 
 #[derive(Debug, Clone)]
@@ -64,23 +64,38 @@ struct NamespaceEntry {
     provider_id: String,
 }
 
+/// The live schema registry.
+///
+/// Reads are shared-lock `BTreeMap` lookups; writes (registrations, merges)
+/// go through the exclusive lock and are infrequent.
+#[derive(Clone)]
+pub struct SchemaRegistry {
+    inner: Arc<RwLock<Schemata>>,
+}
+
 impl SchemaRegistry {
     /// Create a new registry in development mode.
     pub fn new() -> Self {
         Self {
-            namespaces: Arc::new(DashMap::new()),
-            types: Arc::new(DashMap::new()),
-            mode: Arc::new(RwLock::new(RegistryMode::Development)),
+            inner: Arc::new(RwLock::new(Schemata {
+                namespaces: BTreeMap::new(),
+                types: BTreeMap::new(),
+                mode: RegistryMode::Development,
+            })),
         }
     }
 
     /// Create a registry pre-loaded from a full [`Schema`] document and
     /// immediately frozen into production mode.
     pub fn from_frozen_schema(schema: Schema) -> Self {
-        let registry = Self::new();
+        let mut schemata = Schemata {
+            namespaces: BTreeMap::new(),
+            types: BTreeMap::new(),
+            mode: RegistryMode::Production,
+        };
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
-            registry.namespaces.insert(
-                ns_name.clone(),
+            schemata.namespaces.insert(
+                ns_name,
                 NamespaceEntry {
                     schema: ns_schema,
                     provider_id: "frozen".to_owned(),
@@ -88,32 +103,34 @@ impl SchemaRegistry {
             );
         }
         for (type_name, type_def) in (*schema.types).into_iter() {
-            registry.types.insert(type_name, type_def);
+            schemata.types.insert(type_name, type_def);
         }
-        *registry.mode.write() = RegistryMode::Production;
         info!(
             "schema registry frozen with {} namespace(s)",
-            registry.namespaces.len()
+            schemata.namespaces.len()
         );
-        registry
+        Self {
+            inner: Arc::new(RwLock::new(schemata)),
+        }
     }
 
     /// Register (or replace) a namespace.
     ///
     /// In production mode this returns an error rather than mutating state.
     pub fn register(&self, registration: NamespaceRegistration) -> Result<(), RegistryError> {
-        if *self.mode.read() == RegistryMode::Production {
+        let mut schemata = self.inner.write();
+        if schemata.mode == RegistryMode::Production {
             return Err(RegistryError::FrozenSchema(registration.namespace));
         }
 
         let ns = registration.namespace.clone();
-        if self.namespaces.contains_key(&ns) {
+        if schemata.namespaces.contains_key(&ns) {
             warn!(namespace = %ns, "overwriting existing namespace schema");
         } else {
             debug!(namespace = %ns, provider = %registration.provider_id, "registering namespace");
         }
 
-        self.namespaces.insert(
+        schemata.namespaces.insert(
             ns,
             NamespaceEntry {
                 schema: registration.schema,
@@ -133,16 +150,36 @@ impl SchemaRegistry {
         provider_id: impl Into<String>,
     ) -> Result<(), RegistryError> {
         let provider_id = provider_id.into();
+
+        // The whole merge happens under one write guard so a concurrent
+        // `freeze()` cannot interleave between the type and namespace phases.
+        let mut schemata = self.inner.write();
+
+        // In production mode only namespace registration is forbidden; an empty
+        // namespace list is therefore a no-op merge (types alone are permitted).
+        if schemata.mode == RegistryMode::Production && !schema.namespaces.is_empty() {
+            let ns = schema.namespaces.keys().next().cloned().unwrap_or_default();
+            return Err(RegistryError::FrozenSchema(ns));
+        }
+
         // Merge types first (functions may reference them).
         for (name, typedef) in (*schema.types).into_iter() {
-            self.types.insert(name, typedef);
+            schemata.types.insert(name, typedef);
         }
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
-            self.register(NamespaceRegistration {
-                namespace: ns_name,
-                schema: ns_schema,
-                provider_id: provider_id.clone(),
-            })?;
+            let ns = ns_name.clone();
+            if schemata.namespaces.contains_key(&ns) {
+                warn!(namespace = %ns, "overwriting existing namespace schema");
+            } else {
+                debug!(namespace = %ns, provider = %provider_id, "registering namespace");
+            }
+            schemata.namespaces.insert(
+                ns,
+                NamespaceEntry {
+                    schema: ns_schema,
+                    provider_id: provider_id.clone(),
+                },
+            );
         }
         Ok(())
     }
@@ -151,7 +188,8 @@ impl SchemaRegistry {
     ///
     /// Called when a provider disconnects.
     pub fn deregister_provider(&self, provider_id: &str) {
-        self.namespaces.retain(|_ns, entry| {
+        let mut schemata = self.inner.write();
+        schemata.namespaces.retain(|_ns, entry| {
             let keep = entry.provider_id != provider_id;
             if !keep {
                 debug!(provider = %provider_id, "deregistered namespace on disconnect");
@@ -166,7 +204,8 @@ impl SchemaRegistry {
     pub fn lookup_function(&self, target: &str) -> Result<FunctionRef, RegistryError> {
         let (ns_name, fn_name) = split_target(target)?;
 
-        let entry = self
+        let schemata = self.inner.read();
+        let entry = schemata
             .namespaces
             .get(ns_name)
             .ok_or_else(|| RegistryError::NamespaceNotFound(ns_name.to_owned()))?;
@@ -188,48 +227,48 @@ impl SchemaRegistry {
 
     /// Return the provider ID for the given namespace.
     pub fn provider_for_namespace(&self, namespace: &str) -> Option<String> {
-        self.namespaces
+        self.inner
+            .read()
+            .namespaces
             .get(namespace)
             .map(|e| e.provider_id.clone())
     }
 
     /// Return `true` if the given namespace is registered.
     pub fn has_namespace(&self, namespace: &str) -> bool {
-        self.namespaces.contains_key(namespace)
+        self.inner.read().namespaces.contains_key(namespace)
     }
 
-    /// Return all registered namespace names.
+    /// Return all registered namespace names (in key order).
     pub fn namespace_names(&self) -> Vec<String> {
-        self.namespaces.iter().map(|e| e.key().clone()).collect()
+        self.inner.read().namespaces.keys().cloned().collect()
     }
 
     /// Export a snapshot of the full schema at this instant.
     pub fn snapshot(&self) -> Schema {
         let mut schema = Schema::new();
-        for entry in self.namespaces.iter() {
+        let schemata = self.inner.read();
+        for (name, entry) in schemata.namespaces.iter() {
             schema
                 .namespaces
-                .insert(entry.key().clone(), entry.value().schema.clone())
+                .insert(name.clone(), entry.schema.clone())
                 .ok();
         }
-        for entry in self.types.iter() {
-            schema
-                .types
-                .insert(entry.key().clone(), entry.value().clone())
-                .ok();
+        for (name, type_def) in schemata.types.iter() {
+            schema.types.insert(name.clone(), type_def.clone()).ok();
         }
         schema
     }
 
     /// Freeze the registry, preventing any further schema changes.
     pub fn freeze(&self) {
-        *self.mode.write() = RegistryMode::Production;
+        self.inner.write().mode = RegistryMode::Production;
         info!("schema registry frozen");
     }
 
     /// Return the current operating mode.
     pub fn mode(&self) -> RegistryMode {
-        *self.mode.read()
+        self.inner.read().mode
     }
 }
 

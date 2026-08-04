@@ -15,6 +15,11 @@
 //! All errors are returned as typed [`ValidationError`] values so the
 //! runtime can produce the right [`ErrorCode`] on the wire.
 
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    string::{String, ToString},
+};
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
     error::ErrorCode,

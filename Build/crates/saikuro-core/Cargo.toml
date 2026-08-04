@@ -11,22 +11,32 @@ keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 # The crate is always `no_std` + `alloc`. The default `std` feature adds the
 # std-only conveniences (msgpack codec helpers, `std::io::Error` variant) and
 # selects the OS entropy backend; `custom` selects the caller-provided getrandom
-# backend for bare-metal targets (see saikuro-random).
+# backend and `drbg` the deterministic chacha20 DRBG for bare-metal targets
+# (see saikuro-random).  `std` is mutually exclusive with `custom`/`drbg`.
 [features]
 default = ["std"]
 std = ["dep:rmp-serde", "saikuro-random/os"]
 custom = ["saikuro-random/custom"]
+drbg = ["saikuro-random/drbg"]
 
 [dependencies]
-serde = { workspace = true }
+# serde/serde_bytes/strum are declared directly (not workspace-inherited) so we
+# can force `default-features = false`; the workspace entries keep `std` for the
+# host-only crates.  Feature unification re-enables `std` on host builds.
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 # serde_json is used for schema tooling and the stderr log sink; `alloc`
-# keeps it no_std-compatible.
+# keeps it no_std-compatible (workspace entry already disables `std`).
 serde_json = { workspace = true, default-features = false, features = ["alloc"] }
-serde_bytes = { workspace = true }
+# msgpack `bin` wire-type support for the `Bytes` value variant.
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"] }
 uuid = { workspace = true }
 saikuro-random = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
-strum = { workspace = true }
+# strum derive macros only; `std` stays off so core remains no_std.
+strum = { version = "0.28", default-features = false, features = ["derive"] }
 heapless = { workspace = true }
+# Blocking locks for the no_std sync facade (`crate::sync`); unused on `std`
+# builds where `std::sync` is selected instead.
+spin = { workspace = true }
 # msgpack helpers on Envelope/ResponseEnvelope; rmp-serde is std-only.
 rmp-serde = { workspace = true, optional = true }

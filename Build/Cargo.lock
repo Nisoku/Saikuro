@@ -1433,6 +1433,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "spin",
  "strum",
  "thiserror 2.0.18",
  "uuid",
@@ -1467,14 +1468,10 @@ name = "saikuro-router"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bytes",
- "dashmap",
- "futures",
- "rmp-serde",
+ "portable-atomic",
  "saikuro-core",
  "saikuro-exec",
  "saikuro-schema",
- "serde",
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
@@ -1512,11 +1509,7 @@ dependencies = [
 name = "saikuro-schema"
 version = "0.1.0"
 dependencies = [
- "dashmap",
- "parking_lot 0.12.5",
  "saikuro-core",
- "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -1809,6 +1802,15 @@ checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
  "windows-sys",
+]
+
+[[package]]
+name = "spin"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8abadc99fd9c7bbb7d0ca2b31d72a067d0c0dcd7aad25ab8cac71ba91417694b"
+dependencies = [
+ "portable-atomic",
 ]
 
 [[package]]
