@@ -113,7 +113,7 @@ impl Provider {
     // Schema
 
     /// Build the schema announcement for this provider.
-    fn build_schema(&self) -> Schema {
+    fn build_schema(&self) -> Result<Schema> {
         let mut ns_schema = NamespaceSchema::new();
         for (name, entry) in &self.handlers {
             if let Some(schema) = &entry.schema {
@@ -203,7 +203,15 @@ impl Provider {
     // Announce
 
     async fn announce(&self, transport: &mut dyn AdapterTransport) {
-        let schema = self.build_schema();
+        // A capacity overflow here means the announcement would be silently
+        // truncated; fail the announce instead of publishing a partial schema.
+        let schema = match self.build_schema() {
+            Ok(schema) => schema,
+            Err(e) => {
+                warn!(error = %e, "failed to build schema announcement");
+                return;
+            }
+        };
         let schema_value = match serde_json::to_value(&schema) {
             Ok(v) => json_to_core(v),
             Err(e) => {

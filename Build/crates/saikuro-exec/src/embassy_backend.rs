@@ -42,23 +42,28 @@ use embassy_sync::channel::Channel as EmbChannel;
 use embassy_sync::channel::TrySendError as EmbTrySendError;
 use embassy_sync::waitqueue::MultiWakerRegistration;
 use embassy_time::{Duration as EmbDuration, Timer};
+use futures::future::{Fuse, FutureExt};
 
 // Sleep / Timeout / Yield
 
+/// Convert a `std::time::Duration` to the embassy representation.
+///
+/// Preserves microsecond resolution (embassy timers tick at microseconds) and
+/// saturates at the `u64` microsecond range instead of wrapping via an
+/// `as` cast.
+fn emb_duration(dur: Duration) -> EmbDuration {
+    EmbDuration::from_micros(dur.as_micros().min(u64::MAX as u128) as u64)
+}
+
 pub async fn sleep(dur: Duration) {
-    Timer::after(EmbDuration::from_millis(dur.as_millis() as u64)).await;
+    Timer::after(emb_duration(dur)).await;
 }
 
 pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
 where
     F: Future<Output = T>,
 {
-    match embassy_futures::select::select(
-        fut,
-        Timer::after(EmbDuration::from_millis(dur.as_millis() as u64)),
-    )
-    .await
-    {
+    match embassy_futures::select::select(fut, Timer::after(emb_duration(dur))).await {
         embassy_futures::select::Either::First(res) => Ok(res),
         embassy_futures::select::Either::Second(_) => Err(()),
     }
@@ -66,6 +71,16 @@ where
 
 pub async fn yield_now() {
     embassy_futures::yield_now().await;
+}
+
+/// Fuse a future for use in `saikuro_exec::select!` branches.
+///
+/// `futures::select_biased!` requires every branch to implement
+/// `FusedFuture`; fusing each branch at the facade boundary lets call sites
+/// pass plain futures such as `listener.accept()` or `forward_rx.recv()`.
+#[doc(hidden)]
+pub fn fuse_select<F: Future>(fut: F) -> Fuse<F> {
+    FutureExt::fuse(fut)
 }
 
 // Spawn / Block-on
@@ -226,6 +241,9 @@ pub mod mpsc {
     }
 
     struct ChannelState {
+        /// Requested capacity.  The backing `EmbChannel` is fixed at
+        /// `CHANNEL_CAPACITY`; this bound is enforced on enqueue.
+        capacity: usize,
         senders: usize,
         receivers: usize,
         senders_waiting: MultiWakerRegistration<MAX_WAITING_SENDERS>,
@@ -233,8 +251,9 @@ pub mod mpsc {
     }
 
     impl ChannelState {
-        const fn new() -> Self {
+        const fn new(capacity: usize) -> Self {
             ChannelState {
+                capacity,
                 senders: 0,
                 receivers: 0,
                 senders_waiting: MultiWakerRegistration::new(),
@@ -277,20 +296,52 @@ pub mod mpsc {
         }
     }
 
+    /// Outcome of an atomic enqueue attempt against the channel state.
+    enum EnqueueOutcome<T> {
+        Sent,
+        Full(T),
+        Disconnected(T),
+    }
+
     impl<T> Sender<T> {
         /// Returns true once the receiver has been dropped.
         pub fn is_closed(&self) -> bool {
             self.inner.state.lock(|s| s.borrow().receivers == 0)
         }
 
+        /// Enqueue `value` under the channel-state lock, enforcing the
+        /// requested capacity.  Holding the state lock makes the length check
+        /// and the push atomic against other senders.
+        fn enqueue(&self, value: T) -> EnqueueOutcome<T> {
+            self.inner.state.lock(|s| {
+                let state = s.borrow_mut();
+                if state.receivers == 0 {
+                    return EnqueueOutcome::Disconnected(value);
+                }
+                if self.inner.channel.len() >= state.capacity {
+                    return EnqueueOutcome::Full(value);
+                }
+                match self.inner.channel.try_send(value) {
+                    Ok(()) => EnqueueOutcome::Sent,
+                    Err(EmbTrySendError::Full(value)) => EnqueueOutcome::Full(value),
+                }
+            })
+        }
+
+        /// Whether the queue is below its requested capacity right now.
+        fn has_capacity(&self) -> bool {
+            self.inner.state.lock(|s| {
+                let state = s.borrow();
+                self.inner.channel.len() < state.capacity
+            })
+        }
+
         /// Attempt to enqueue `value` without waiting.
         pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
-            if self.is_closed() {
-                return Err(TrySendError::Disconnected(value));
-            }
-            match self.inner.channel.try_send(value) {
-                Ok(()) => Ok(()),
-                Err(EmbTrySendError::Full(value)) => Err(TrySendError::Full(value)),
+            match self.enqueue(value) {
+                EnqueueOutcome::Sent => Ok(()),
+                EnqueueOutcome::Full(value) => Err(TrySendError::Full(value)),
+                EnqueueOutcome::Disconnected(value) => Err(TrySendError::Disconnected(value)),
             }
         }
 
@@ -314,22 +365,26 @@ pub mod mpsc {
                     let message = pending
                         .take()
                         .expect("mpsc send message is restored on the Full path");
-                    match self.inner.channel.try_send(message) {
-                        Ok(()) => return Poll::Ready(Ok(())),
-                        Err(EmbTrySendError::Full(message)) => {
+                    match self.enqueue(message) {
+                        EnqueueOutcome::Sent => return Poll::Ready(Ok(())),
+                        EnqueueOutcome::Disconnected(message) => {
+                            return Poll::Ready(Err(SendError(message)))
+                        }
+                        EnqueueOutcome::Full(message) => {
                             pending = Some(message);
                             self.inner
                                 .state
                                 .lock(|s| s.borrow_mut().senders_waiting.register(cx.waker()));
                             // Re-check after registering so a wake that fired
-                            // between try_send and register is not missed.
+                            // between the enqueue attempt and the register is
+                            // not missed.
                             if self.is_closed() {
                                 let message = pending
                                     .take()
                                     .expect("mpsc send message is restored on the Full path");
                                 return Poll::Ready(Err(SendError(message)));
                             }
-                            if !self.inner.channel.is_full() {
+                            if self.has_capacity() {
                                 continue;
                             }
                             return Poll::Pending;
@@ -427,7 +482,7 @@ pub mod mpsc {
              embassy capacity {CHANNEL_CAPACITY}"
         );
         let inner = Arc::new(ChannelInner {
-            state: CriticalSectionMutex::new(RefCell::new(ChannelState::new())),
+            state: CriticalSectionMutex::new(RefCell::new(ChannelState::new(capacity))),
             channel: EmbChannel::new(),
         });
         inner.state.lock(|s| {
@@ -546,7 +601,13 @@ pub mod oneshot {
             self.get_mut().inner.state.lock(|s| {
                 let mut data = s.borrow_mut();
                 match core::mem::replace(&mut data.channel, State::Empty) {
-                    State::Ready(value) => Poll::Ready(Ok(value)),
+                    State::Ready(value) => {
+                        // Terminate the channel so a re-poll (for example by a
+                        // select! that re-checks a completed branch) observes
+                        // the closure instead of parking a fresh waker forever.
+                        data.channel = State::Closed;
+                        Poll::Ready(Ok(value))
+                    }
                     State::Closed => Poll::Ready(Err(RecvError)),
                     State::Empty => {
                         data.channel = State::Waiting(cx.waker().clone());
@@ -589,13 +650,55 @@ pub mod sync {
     use super::*;
 
     /// Async mutual-exclusion lock.
-    pub use embassy_sync::mutex::Mutex;
+    ///
+    /// Single-parameter facade matching the tokio and wasm backends.  The raw
+    /// embassy mutex is bound to `CriticalSectionRawMutex`, like [`RwLock`].
+    pub struct Mutex<T> {
+        inner: embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>,
+    }
+
+    impl<T> Mutex<T> {
+        pub const fn new(value: T) -> Self {
+            Mutex {
+                inner: embassy_sync::mutex::Mutex::new(value),
+            }
+        }
+
+        /// Acquire the lock, waiting until it is released by any holder.
+        pub async fn lock(&self) -> MutexGuard<'_, T> {
+            MutexGuard {
+                inner: self.inner.lock().await,
+            }
+        }
+    }
+
+    /// Guard returned by [`Mutex::lock`].  Derefs to the guarded value.
+    pub struct MutexGuard<'a, T> {
+        inner: embassy_sync::mutex::MutexGuard<'a, CriticalSectionRawMutex, T>,
+    }
+
+    impl<T> core::ops::Deref for MutexGuard<'_, T> {
+        type Target = T;
+        fn deref(&self) -> &T {
+            &self.inner
+        }
+    }
+
+    impl<T> core::ops::DerefMut for MutexGuard<'_, T> {
+        fn deref_mut(&mut self) -> &mut T {
+            &mut self.inner
+        }
+    }
 
     /// Read/write lock.
     ///
     /// Backed by a single async `embassy_sync::mutex::Mutex`.  Readers are
-    /// serialized with writers rather than running concurrently; this is a safe
-    /// subset of the tokio semantics.  Guards deref to the guarded value.
+    /// serialized with writers rather than running concurrently, so only one
+    /// task holds the lock at a time regardless of kind.  A task must not hold
+    /// one read guard while awaiting another read guard on the same lock: the
+    /// second acquire would deadlock because the first guard is still held.
+    /// This differs from tokio's `RwLock`, where concurrent reads are allowed
+    /// and read guards are reentrant.  Guards deref to the guarded value.
     pub struct RwLock<T> {
         inner: embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>,
     }
@@ -686,22 +789,24 @@ pub mod sync {
         /// Wait until all `n` tasks have called `wait`.  Returns immediately for
         /// the task that releases the barrier.
         pub async fn wait(&self) {
-            let released = self.inner.state.lock(|s| {
+            // Capture the pre-arrival generation in the same critical section
+            // that increments `arrived` so a release completing between the
+            // arrival and the wait loop cannot be missed.
+            let pre_release_generation = self.inner.state.lock(|s| {
                 let mut state = s.borrow_mut();
                 state.arrived += 1;
                 if state.arrived == state.count {
                     state.arrived = 0;
                     state.generation += 1;
                     state.waiting.wake();
-                    true
+                    None
                 } else {
-                    false
+                    Some(state.generation)
                 }
             });
-            if released {
+            let Some(mut gen) = pre_release_generation else {
                 return;
-            }
-            let mut gen = self.inner.state.lock(|s| s.borrow().generation);
+            };
             poll_fn(move |cx| {
                 self.inner.state.lock(|s| {
                     let mut state = s.borrow_mut();
@@ -877,16 +982,17 @@ pub mod watch {
                 // Register before checking so a send that races with the
                 // registration is not missed.
                 state.waiting.register(cx.waker());
+                let version = state.version;
+                // Deliver a pending change before reporting closure: a value
+                // sent before the last sender dropped must still be observed.
+                if this.receiver.version != version {
+                    this.receiver.version = version;
+                    return Poll::Ready(Ok(()));
+                }
                 if state.senders == 0 {
                     return Poll::Ready(Err(RecvError));
                 }
-                let version = state.version;
-                if this.receiver.version != version {
-                    this.receiver.version = version;
-                    Poll::Ready(Ok(()))
-                } else {
-                    Poll::Pending
-                }
+                Poll::Pending
             })
         }
     }

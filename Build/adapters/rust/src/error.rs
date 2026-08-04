@@ -42,6 +42,10 @@ pub enum Error {
     /// The client or provider is not in the correct state for this operation.
     #[error("invalid state: {0}")]
     InvalidState(String),
+
+    /// The provider's schema exceeds the fixed capacity of the core schema maps.
+    #[error("schema capacity exceeded while building the announcement")]
+    SchemaCapacityExceeded,
 }
 
 impl Error {

@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use crate::error::{Error, Result};
 use saikuro_core::schema::{
     ArgumentDescriptor, FunctionSchema as CoreFunctionSchema,
     NamespaceSchema as CoreNamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
@@ -55,7 +56,10 @@ impl NamespaceSchema {
     }
 
     /// Convert to the core `NamespaceSchema` for announcement.
-    pub fn to_core(&self) -> CoreNamespaceSchema {
+    ///
+    /// Fails when the function count exceeds the core schema's fixed map
+    /// capacity, so a provider never announces a silently truncated namespace.
+    pub fn to_core(&self) -> Result<CoreNamespaceSchema> {
         let mut functions = saikuro_core::schema::FunctionMap::new();
         for (name, fs) in &self.functions {
             let args: Vec<ArgumentDescriptor> = fs
@@ -84,21 +88,32 @@ impl NamespaceSchema {
                 idempotent: fs.idempotent,
                 doc: fs.doc.clone(),
             };
-            functions.insert(name.clone(), core_fn).ok();
+            functions
+                .insert(name.clone(), core_fn)
+                .map_err(|_| Error::SchemaCapacityExceeded)?;
         }
 
-        CoreNamespaceSchema {
+        Ok(CoreNamespaceSchema {
             functions: Box::new(functions),
             doc: self.doc.clone(),
-        }
+        })
     }
 }
 
 /// Build a full [`Schema`] from the given namespaces.
-pub(crate) fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Schema {
+///
+/// Fails when the namespace count exceeds the core schema's fixed map
+/// capacity, so a provider never announces a silently truncated schema.
+///
+/// Internal helper exposed for the crate's integration tests.
+#[doc(hidden)]
+pub fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<Schema> {
     let mut schema = Schema::new();
     for (ns_name, ns) in namespaces {
-        schema.namespaces.insert(ns_name.clone(), ns.to_core()).ok();
+        schema
+            .namespaces
+            .insert(ns_name.clone(), ns.to_core()?)
+            .map_err(|_| Error::SchemaCapacityExceeded)?;
     }
-    schema
+    Ok(schema)
 }

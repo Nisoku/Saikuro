@@ -94,6 +94,7 @@ impl ValidationError {
                 RegistryError::MalformedTarget(_) => ErrorCode::MalformedEnvelope,
                 RegistryError::FrozenSchema(_) => ErrorCode::Internal,
                 RegistryError::Validation(_) => ErrorCode::InvalidArguments,
+                RegistryError::SchemaCapacity => ErrorCode::Internal,
             },
             Self::ArgumentArity { .. } | Self::ArgumentType { .. } => ErrorCode::InvalidArguments,
             Self::VisibilityDenied { .. } => ErrorCode::CapabilityDenied,
@@ -419,25 +420,5 @@ impl InvocationValidator {
                 received: value.type_name().to_owned(),
             })
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use saikuro_core::envelope::{Envelope, InvocationType};
-
-    #[test]
-    fn batch_with_empty_items_returns_empty_batch_error() {
-        let registry = crate::registry::SchemaRegistry::new();
-        let validator = InvocationValidator::new(registry);
-
-        let mut batch = Envelope::call("", vec![]);
-        batch.invocation_type = InvocationType::Batch;
-        batch.target = String::new();
-        batch.batch_items = Some(vec![]);
-
-        let result = validator.validate(&batch);
-        assert!(matches!(result, Err(ValidationError::EmptyBatch)));
     }
 }

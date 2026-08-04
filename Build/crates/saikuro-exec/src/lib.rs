@@ -64,15 +64,27 @@ macro_rules! select_impl {
     };
 }
 
-/// Embassy-compatible `select!` for two branches.
+/// Embassy-compatible `select!`.
 ///
-/// Each branch future must be fused (`.fuse()`) because `futures::select!`
-/// requires `FusedFuture`
+/// Delegates to `futures::select_biased!`, which requires every branch future
+/// to implement `FusedFuture`.  Each branch is fused at the facade boundary so
+/// call sites pass plain futures (`listener.accept()`, `forward_rx.recv()`,
+/// and friends).  `select_biased!` is used rather than `futures::select!`
+/// because the latter is gated behind the `std` feature and cannot resolve on
+/// `no_std` MCU targets.
 #[doc(hidden)]
 #[cfg(feature = "embassy-runtime")]
 #[macro_export]
 macro_rules! select_impl {
-    ($($tt:tt)*) => {
-        $crate::_futures::select! { $($tt)* }
+    (
+        $(
+            $pattern:pat = $fut:expr => $handler:block $(,)?
+        )+
+    ) => {
+        $crate::_futures::select_biased! {
+            $(
+                $pattern = $crate::fuse_select($fut) => $handler ,
+            )+
+        }
     };
 }

@@ -245,19 +245,27 @@ impl SchemaRegistry {
     }
 
     /// Export a snapshot of the full schema at this instant.
-    pub fn snapshot(&self) -> Schema {
+    ///
+    /// The registry stores its maps in unbounded `BTreeMap`s while the
+    /// exported [`Schema`] uses fixed-capacity heapless maps, so a registry
+    /// larger than the schema's capacity fails rather than truncating the
+    /// snapshot silently.
+    pub fn snapshot(&self) -> Result<Schema, RegistryError> {
         let mut schema = Schema::new();
         let schemata = self.inner.read();
         for (name, entry) in schemata.namespaces.iter() {
             schema
                 .namespaces
                 .insert(name.clone(), entry.schema.clone())
-                .ok();
+                .map_err(|_| RegistryError::SchemaCapacity)?;
         }
         for (name, type_def) in schemata.types.iter() {
-            schema.types.insert(name.clone(), type_def.clone()).ok();
+            schema
+                .types
+                .insert(name.clone(), type_def.clone())
+                .map_err(|_| RegistryError::SchemaCapacity)?;
         }
-        schema
+        Ok(schema)
     }
 
     /// Freeze the registry, preventing any further schema changes.
@@ -307,6 +315,9 @@ pub enum RegistryError {
 
     #[error("validation error: {0}")]
     Validation(#[from] ValidationError),
+
+    #[error("schema capacity exceeded while exporting snapshot")]
+    SchemaCapacity,
 }
 
 //  Helpers

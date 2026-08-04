@@ -11,7 +11,12 @@ repository.workspace = true
 default = ["tokio-runtime"]
 tokio-runtime = ["dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
 wasm-runtime = ["dep:tokio", "wasm-bindgen-futures", "fluvio-wasm-timer", "futures/std"]
-embassy-runtime = ["dep:embassy-sync", "dep:embassy-time", "dep:embassy-futures"]
+embassy-runtime = [
+    "dep:embassy-sync",
+    "dep:embassy-time",
+    "dep:embassy-futures",
+    "futures/async-await",
+]
 
 [dependencies]
 tokio      = { version = "1.52.3", default-features = false, features = ["macros"], optional = true }

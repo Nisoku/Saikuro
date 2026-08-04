@@ -225,7 +225,7 @@ where
                 // If sandbox mode is on and the announce succeeded, build the
                 // filtered schema to push back to the peer.
                 let sandbox_schema = if self.capability_engine.is_sandboxed() && response.ok {
-                    Some(self.build_filtered_schema())
+                    self.build_filtered_schema()
                 } else {
                     None
                 };
@@ -467,8 +467,14 @@ where
     ///
     /// Only namespaces and functions visible to `peer_capabilities` (and not
     /// `Internal` or `Private`) are included.
-    fn build_filtered_schema(&self) -> Schema {
-        let full = self.schema_registry.snapshot();
+    fn build_filtered_schema(&self) -> Option<Schema> {
+        let full = match self.schema_registry.snapshot() {
+            Ok(schema) => schema,
+            Err(e) => {
+                error!(peer = %self.peer_id, error = %e, "schema snapshot capacity exceeded");
+                return None;
+            }
+        };
         let mut filtered = Schema::new();
         // Copy types:  they are passive descriptors and always included.
         filtered.types = full.types.clone();
@@ -501,7 +507,7 @@ where
                 .ok();
         }
 
-        filtered
+        Some(filtered)
     }
 
     /// Encode `filtered_schema` as a `Value` and push it as an unsolicited

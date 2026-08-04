@@ -132,7 +132,7 @@ fn schema_build_basic() {
             },
         );
         // to_core should not panic
-        let _ = ns.to_core();
+        let _ = ns.to_core().expect("schema conversion failed");
     })
 }
 
@@ -148,7 +148,7 @@ fn schema_capabilities_convert() {
                 ..Default::default()
             },
         );
-        let core_ns = ns.to_core();
+        let core_ns = ns.to_core().expect("schema conversion failed");
         let fn_schema = core_ns.functions.get("op").expect("op function missing");
         let cap_strs: Vec<String> = fn_schema
             .capabilities

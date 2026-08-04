@@ -61,8 +61,8 @@ impl RuntimeHandle {
     }
 
     /// Export a snapshot of the current schema state.
-    pub fn schema_snapshot(&self) -> Schema {
-        self.schema_registry.snapshot()
+    pub fn schema_snapshot(&self) -> Result<Schema> {
+        self.schema_registry.snapshot().map_err(Into::into)
     }
 
     // Providers

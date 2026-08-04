@@ -20,16 +20,11 @@ custom = ["saikuro-random/custom"]
 drbg = ["saikuro-random/drbg"]
 
 [dependencies]
-serde = { version = "1.0", default-features = false, features = [
-    "derive",
-    "alloc",
-] }
+serde = { workspace = true }
 serde_json = { workspace = true, default-features = false, features = [
     "alloc",
 ] }
-serde_bytes = { version = "0.11", default-features = false, features = [
-    "alloc",
-] }
+serde_bytes = { workspace = true }
 uuid = { workspace = true }
 saikuro-random = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
