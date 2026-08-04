@@ -160,6 +160,9 @@ fn read_seed() -> ([u8; KEY_LEN], [u8; NONCE_LEN]) {
     let mut key = [0u8; KEY_LEN];
     let mut nonce = [0u8; NONCE_LEN];
     key.copy_from_slice(&seed[..KEY_LEN]);
+    // SEED is zero-initialized only because it is a static; seed_from_slice()
+    // writes external entropy into it before fill(), which is guarded by
+    // is_seeded(), can read it, so the zero initializer is never observable.
     nonce.copy_from_slice(&seed[KEY_LEN..SEED_LEN]);
     (key, nonce)
 }

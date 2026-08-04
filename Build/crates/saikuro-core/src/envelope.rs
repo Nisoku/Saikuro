@@ -5,12 +5,18 @@
 //! serialised to binary using MessagePack (via `rmp-serde`) before transit;
 //! the types here are the canonical in-memory representation.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 use crate::{
     capability::CapabilityToken, invocation::InvocationId, value::Value, PROTOCOL_VERSION,
 };
+
+/// Maximum number of key/value metadata entries an [`Envelope`] can carry.
+pub const ENVELOPE_META_CAPACITY: usize = 16;
+
+/// Fixed-capacity map of metadata entries on an [`Envelope`].
+pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// The type of an outgoing invocation.
 ///
@@ -90,8 +96,8 @@ pub struct Envelope {
     pub args: Vec<Value>,
 
     /// Optional key/value metadata bag (trace IDs, deadlines, …).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub meta: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "MetaMap::is_empty")]
+    pub meta: MetaMap,
 
     /// Capability token presented by the caller.  Required when the target
     /// function declares one or more `capabilities`.
@@ -113,7 +119,8 @@ pub struct Envelope {
     pub seq: Option<u64>,
 }
 
-// Shared MessagePack serialization for wire types.
+// Shared MessagePack serialization for wire types. rmp-serde is std-only.
+#[cfg(feature = "std")]
 macro_rules! impl_msgpack {
     ($ty:ty) => {
         impl $ty {
@@ -130,7 +137,9 @@ macro_rules! impl_msgpack {
     };
 }
 
+#[cfg(feature = "std")]
 impl_msgpack!(Envelope);
+#[cfg(feature = "std")]
 impl_msgpack!(ResponseEnvelope);
 
 impl Envelope {
@@ -142,7 +151,7 @@ impl Envelope {
             id: InvocationId::new(),
             target: target.into(),
             args,
-            meta: BTreeMap::new(),
+            meta: MetaMap::new(),
             capability: None,
             batch_items: None,
             stream_control: None,

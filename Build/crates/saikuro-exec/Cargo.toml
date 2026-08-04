@@ -9,14 +9,18 @@ repository.workspace = true
 
 [features]
 default = ["tokio-runtime"]
-tokio-runtime = ["tokio/full", "tokio-util"]
-wasm-runtime = ["wasm-bindgen-futures", "fluvio-wasm-timer"]
-embassy-runtime = []
+tokio-runtime = ["dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
+wasm-runtime = ["dep:tokio", "wasm-bindgen-futures", "fluvio-wasm-timer", "futures/std"]
+embassy-runtime = ["dep:embassy-sync", "dep:embassy-time", "dep:embassy-futures"]
 
 [dependencies]
-tokio      = { version = "1.52.3", default-features = false, features = ["macros"] }
+tokio      = { version = "1.52.3", default-features = false, features = ["macros"], optional = true }
 tokio-util = { version = "0.7.18", features = ["codec"], optional = true }
 
 futures = { workspace = true }
 wasm-bindgen-futures = { version = "0.4.71", optional = true }
 fluvio-wasm-timer = { version = "0.2.5", optional = true }
+
+embassy-sync    = { workspace = true, optional = true }
+embassy-time    = { workspace = true, optional = true }
+embassy-futures = { workspace = true, optional = true }

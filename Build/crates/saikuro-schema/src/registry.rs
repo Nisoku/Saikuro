@@ -78,7 +78,7 @@ impl SchemaRegistry {
     /// immediately frozen into production mode.
     pub fn from_frozen_schema(schema: Schema) -> Self {
         let registry = Self::new();
-        for (ns_name, ns_schema) in schema.namespaces {
+        for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
             registry.namespaces.insert(
                 ns_name.clone(),
                 NamespaceEntry {
@@ -87,7 +87,7 @@ impl SchemaRegistry {
                 },
             );
         }
-        for (type_name, type_def) in schema.types {
+        for (type_name, type_def) in (*schema.types).into_iter() {
             registry.types.insert(type_name, type_def);
         }
         *registry.mode.write() = RegistryMode::Production;
@@ -134,10 +134,10 @@ impl SchemaRegistry {
     ) -> Result<(), RegistryError> {
         let provider_id = provider_id.into();
         // Merge types first (functions may reference them).
-        for (name, typedef) in schema.types {
+        for (name, typedef) in (*schema.types).into_iter() {
             self.types.insert(name, typedef);
         }
-        for (ns_name, ns_schema) in schema.namespaces {
+        for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
             self.register(NamespaceRegistration {
                 namespace: ns_name,
                 schema: ns_schema,
@@ -209,12 +209,14 @@ impl SchemaRegistry {
         for entry in self.namespaces.iter() {
             schema
                 .namespaces
-                .insert(entry.key().clone(), entry.value().schema.clone());
+                .insert(entry.key().clone(), entry.value().schema.clone())
+                .ok();
         }
         for entry in self.types.iter() {
             schema
                 .types
-                .insert(entry.key().clone(), entry.value().clone());
+                .insert(entry.key().clone(), entry.value().clone())
+                .ok();
         }
         schema
     }

@@ -9,10 +9,17 @@
 //! The runtime's router intercepts `Log` envelopes before they reach a
 //! provider and dispatches them to the configured [`LogSink`].
 
+use alloc::{boxed::Box, string::String};
+use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 use crate::value::Value;
+
+/// Maximum number of structured context fields a [`LogRecord`] can carry.
+pub const LOG_FIELDS_CAPACITY: usize = 16;
+
+/// Fixed-capacity map of structured context fields on [`LogRecord`].
+pub type LogFieldMap = heapless::FnvIndexMap<String, Value, LOG_FIELDS_CAPACITY>;
 
 //  Log level
 
@@ -62,8 +69,8 @@ pub struct LogRecord {
     pub msg: String,
 
     /// Additional structured context fields.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub fields: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "LogFieldMap::is_empty")]
+    pub fields: LogFieldMap,
 }
 
 impl LogRecord {
@@ -79,19 +86,31 @@ impl LogRecord {
             level,
             name: name.into(),
             msg: msg.into(),
-            fields: BTreeMap::new(),
+            fields: LogFieldMap::new(),
         }
     }
 
     /// Add a structured field and return `self` for chaining.
-    pub fn with_field(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
-        self.fields.insert(key.into(), value.into());
-        self
+    ///
+    /// Fails with [`crate::error::SaikuroError::CapacityExceeded`] if the
+    /// record is already at [`LOG_FIELDS_CAPACITY`] fields.
+    pub fn with_field(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<Value>,
+    ) -> Result<Self, crate::error::SaikuroError> {
+        let key = key.into();
+        self.fields.insert(key.clone(), value.into()).map_err(|_| {
+            crate::error::SaikuroError::CapacityExceeded(format!(
+                "log field bag full at key '{key}'"
+            ))
+        })?;
+        Ok(self)
     }
 }
 
-/// Helper: extract a `Value::String` from a map by key.
-fn take_string(map: &mut BTreeMap<String, Value>, key: &str) -> Option<String> {
+/// Helper: extract a `Value::String` from a [`ValueMap`](crate::value::ValueMap) by key.
+fn take_string(map: &mut crate::value::ValueMap, key: &str) -> Option<String> {
     match map.remove(key) {
         Some(Value::String(s)) => Some(s),
         _ => None,
@@ -114,12 +133,18 @@ impl TryFrom<Value> for LogRecord {
                     .unwrap_or(LogLevel::Info);
                 let name = take_string(&mut map, "name").unwrap_or_default();
                 let msg = take_string(&mut map, "msg").unwrap_or_default();
+                let mut fields = LogFieldMap::new();
+                for (k, v) in map.into_iter() {
+                    fields
+                        .insert(k, v)
+                        .map_err(|_| "log record has too many fields")?;
+                }
                 Ok(LogRecord {
                     ts,
                     level,
                     name,
                     msg,
-                    fields: map,
+                    fields,
                 })
             }
             _ => Err("expected a Map"),
@@ -127,8 +152,8 @@ impl TryFrom<Value> for LogRecord {
     }
 }
 
-impl std::fmt::Display for LogRecord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for LogRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "[{}] {} {} :  {}",
@@ -149,10 +174,11 @@ pub type LogSink = Box<dyn Fn(LogRecord) + Send + Sync + 'static>;
 
 /// A simple log sink that serialises each [`LogRecord`] as a JSON line and
 /// writes it to stderr.  Used when no richer sink is configured.
+#[cfg(feature = "std")]
 pub fn stderr_log_sink() -> LogSink {
     Box::new(|record: LogRecord| {
         if let Ok(json) = serde_json::to_string(&record) {
-            eprintln!("{}", json);
+            std::eprintln!("{}", json);
         }
     })
 }

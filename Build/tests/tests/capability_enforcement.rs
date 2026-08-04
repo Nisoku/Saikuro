@@ -33,7 +33,7 @@ fn empty_set_denies_required_cap() {
 
 #[test]
 fn set_with_exact_token_grants() {
-    let set = CapabilitySet::from_tokens([CapabilityToken::new("math.basic")]);
+    let set = CapabilitySet::from_tokens([CapabilityToken::new("math.basic")]).unwrap();
     assert!(set.grants(&CapabilityToken::new("math.basic")));
     assert!(!set.grants(&CapabilityToken::new("math.advanced")));
 }
@@ -49,7 +49,8 @@ fn wildcard_set_grants_everything() {
 #[test]
 fn grants_all_requires_every_token() {
     let set =
-        CapabilitySet::from_tokens([CapabilityToken::new("read"), CapabilityToken::new("write")]);
+        CapabilitySet::from_tokens([CapabilityToken::new("read"), CapabilityToken::new("write")])
+            .unwrap();
     let required = [CapabilityToken::new("read"), CapabilityToken::new("write")];
     assert!(set.grants_all(required.iter()));
 
@@ -89,7 +90,7 @@ fn engine_grants_function_with_no_required_caps() {
 fn engine_grants_when_caller_holds_required_cap() {
     let engine = CapabilityEngine::new();
     let schema = fn_requiring(&["data.read"]);
-    let caps = CapabilitySet::from_tokens([CapabilityToken::new("data.read")]);
+    let caps = CapabilitySet::from_tokens([CapabilityToken::new("data.read")]).unwrap();
     assert!(matches!(
         engine.check(&caps, &schema),
         CapabilityOutcome::Granted
@@ -100,7 +101,7 @@ fn engine_grants_when_caller_holds_required_cap() {
 fn engine_denies_when_caller_missing_cap() {
     let engine = CapabilityEngine::new();
     let schema = fn_requiring(&["data.write"]);
-    let caps = CapabilitySet::from_tokens([CapabilityToken::new("data.read")]);
+    let caps = CapabilitySet::from_tokens([CapabilityToken::new("data.read")]).unwrap();
     let result = engine.check(&caps, &schema);
     match result {
         CapabilityOutcome::Denied { missing } => {
@@ -115,7 +116,7 @@ fn engine_denies_on_first_missing_cap() {
     // Function requires both A and B; caller has only A.
     let engine = CapabilityEngine::new();
     let schema = fn_requiring(&["cap.a", "cap.b"]);
-    let caps = CapabilitySet::from_tokens([CapabilityToken::new("cap.a")]);
+    let caps = CapabilitySet::from_tokens([CapabilityToken::new("cap.a")]).unwrap();
     assert!(matches!(
         engine.check(&caps, &schema),
         CapabilityOutcome::Denied { .. }
@@ -187,13 +188,13 @@ fn capability_set_insert_and_len() {
     assert_eq!(set.len(), 0);
     assert!(set.is_empty());
 
-    set.insert(CapabilityToken::new("a"));
-    set.insert(CapabilityToken::new("b"));
+    set.insert(CapabilityToken::new("a")).ok();
+    set.insert(CapabilityToken::new("b")).ok();
     assert_eq!(set.len(), 2);
     assert!(!set.is_empty());
 
     // Duplicate insert should not grow the set.
-    set.insert(CapabilityToken::new("a"));
+    set.insert(CapabilityToken::new("a")).ok();
     assert_eq!(set.len(), 2);
 }
 
@@ -204,7 +205,7 @@ fn capability_set_iter_contains_all_tokens() {
         CapabilityToken::new("y"),
         CapabilityToken::new("z"),
     ];
-    let set = CapabilitySet::from_tokens(tokens.clone());
+    let set = CapabilitySet::from_tokens(tokens.clone()).unwrap();
     let collected: std::collections::HashSet<_> = set.iter().cloned().collect();
     for t in &tokens {
         assert!(collected.contains(t));

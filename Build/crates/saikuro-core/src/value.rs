@@ -3,11 +3,28 @@
 //! Saikuro carries typed arguments on the wire, but the runtime must be able
 //! to handle values whose exact Rust type is not known at compile time.
 //! [`Value`] is the universal representation that can model every type in the
-//! Saikuro type system, round-trip through MessagePack without loss, and be
-//! validated against a schema field descriptor.
+//! Saikuro type system, round-trip through MessagePack without loss (bounded
+//! by [`VALUE_MAP_CAPACITY`] for map values), and be validated against a
+//! schema field descriptor.
 
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
+/// Maximum number of entries a [`Value::Map`] can hold.
+///
+/// Saikuro's wire format is schema-driven: argument lists, error detail bags,
+/// and log fields are all small by construction. This bound keeps `Value`
+/// embeddable without a heap-based map. Deserialising a map larger than this
+/// fails cleanly with a serde error rather than truncating.
+pub const VALUE_MAP_CAPACITY: usize = 64;
+
+/// Fixed-capacity, insertion-ordered map backing [`Value::Map`].
+///
+/// Insertion order is deterministic for a given construction sequence, which
+/// keeps serialisation order stable for content-addressed hashing. Entries are
+/// serialised in insertion order, so two semantically-equal maps built in
+/// different orders are not byte-identical (and are not `PartialEq`-equal).
+pub type ValueMap = heapless::FnvIndexMap<String, Value, VALUE_MAP_CAPACITY>;
 
 /// A dynamically-typed value that can appear in an invocation argument list,
 /// a return value, an error detail bag, or a schema default.
@@ -15,7 +32,7 @@ use std::collections::BTreeMap;
 /// The set of variants is deliberately minimal:  it mirrors the MessagePack
 /// type system so serialisation is lossless:  while still providing the
 /// richness needed to express the full Saikuro type system.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum Value {
     /// Explicit absence of a value.
@@ -55,9 +72,41 @@ pub enum Value {
     #[serde(with = "serde_bytes")]
     Bytes(Vec<u8>),
 
-    /// String-keyed mapping of values. `BTreeMap` is used for deterministic
-    /// serialisation order, which makes content-addressed hashing predictable.
-    Map(BTreeMap<String, Value>),
+    /// String-keyed mapping of values. A `Box<ValueMap>` breaks the recursive
+    /// `Value -> ValueMap -> Value` cycle: heapless maps are stored inline, so
+    /// without indirection `Value` would have infinite size. The `ValueMap` is
+    /// an insertion-ordered fixed-capacity map, so serialisation order is
+    /// deterministic, which makes content-addressed hashing predictable.
+    Map(Box<ValueMap>),
+}
+
+/// Equality for [`Value`].
+///
+/// Implemented manually because the fixed-capacity map backing `Map` only
+/// implements `PartialEq` when the value type is `Eq`, which `Value` cannot be
+/// (it contains `f64`). Map equality is order-sensitive: two maps with the same
+/// entries inserted in different orders are *not* equal, matching the byte-level
+/// serialisation behaviour (see [`ValueMap`]).
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::UInt(a), Self::UInt(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Bytes(a), Self::Bytes(b)) => a == b,
+            (Self::Array(a), Self::Array(b)) => a == b,
+            (Self::Map(a), Self::Map(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b.iter())
+                        .all(|((ka, va), (kb, vb))| ka == kb && va == vb)
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -138,7 +187,7 @@ impl Value {
 
     /// Attempt to borrow the inner map. Returns `None` for other variants.
     #[inline]
-    pub fn as_map(&self) -> Option<&BTreeMap<String, Value>> {
+    pub fn as_map(&self) -> Option<&ValueMap> {
         match self {
             Self::Map(m) => Some(m),
             _ => None,
@@ -227,12 +276,6 @@ impl From<Vec<Value>> for Value {
     }
 }
 
-impl From<BTreeMap<String, Value>> for Value {
-    fn from(v: BTreeMap<String, Value>) -> Self {
-        Self::Map(v)
-    }
-}
-
 impl<T: Into<Value>> From<Option<T>> for Value {
     fn from(v: Option<T>) -> Self {
         match v {
@@ -246,37 +289,41 @@ impl<T: Into<Value>> From<Option<T>> for Value {
 mod tests {
     use super::*;
     use crate::schema::{
-        FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+        FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
+        TypeDescriptor, Visibility,
     };
-    use std::collections::HashMap;
 
     /// Regression: Schema -> msgpack bytes -> Value -> msgpack bytes -> Schema must round-trip.
     #[test]
     fn schema_round_trip_via_value() {
-        let mut functions = HashMap::new();
-        functions.insert(
-            "hello".to_owned(),
-            FunctionSchema {
-                args: vec![],
-                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-                visibility: Visibility::Public,
-                capabilities: vec![],
-                idempotent: false,
-                doc: None,
-            },
-        );
-        let mut namespaces = HashMap::new();
-        namespaces.insert(
-            "svc".to_owned(),
-            NamespaceSchema {
-                functions,
-                doc: None,
-            },
-        );
+        let mut functions = FunctionMap::new();
+        functions
+            .insert(
+                "hello".to_owned(),
+                FunctionSchema {
+                    args: vec![],
+                    returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                    visibility: Visibility::Public,
+                    capabilities: vec![],
+                    idempotent: false,
+                    doc: None,
+                },
+            )
+            .expect("schema fits in FunctionMap capacity");
+        let mut namespaces = NamespaceMap::new();
+        namespaces
+            .insert(
+                "svc".to_owned(),
+                NamespaceSchema {
+                    functions: Box::new(functions),
+                    doc: None,
+                },
+            )
+            .expect("schema fits in NamespaceMap capacity");
         let schema = Schema {
             version: 1,
-            namespaces,
-            types: HashMap::new(),
+            namespaces: Box::new(namespaces),
+            types: Box::new(crate::schema::TypeMap::new()),
         };
 
         let bytes1 = rmp_serde::to_vec_named(&schema).expect("schema to msgpack");
@@ -313,5 +360,26 @@ mod tests {
             matches!(decoded, Value::Bytes(_)),
             "Expected Bytes, got: {decoded:?}"
         );
+    }
+
+    #[test]
+    fn check_sizes() {
+        std::eprintln!("Value: {} bytes", std::mem::size_of::<Value>());
+        std::eprintln!("ValueMap: {} bytes", std::mem::size_of::<ValueMap>());
+    }
+
+    /// Value::Map with a nested map must round-trip.
+    #[test]
+    fn simple_map_round_trip() {
+        let mut inner = ValueMap::new();
+        inner.insert("b".to_owned(), Value::Int(2)).expect("fits");
+        let mut outer = ValueMap::new();
+        outer
+            .insert("a".to_owned(), Value::Map(Box::new(inner)))
+            .expect("fits");
+        let original = Value::Map(Box::new(outer));
+        let bytes = rmp_serde::to_vec_named(&original).expect("serialize");
+        let decoded: Value = rmp_serde::from_slice(&bytes).expect("deserialize");
+        assert_eq!(original, decoded);
     }
 }

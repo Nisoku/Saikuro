@@ -4,7 +4,10 @@ use bytes::Bytes;
 use saikuro_core::{
     capability::{CapabilitySet, CapabilityToken},
     envelope::{Envelope, InvocationType},
-    schema::{FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility},
+    schema::{
+        FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
+        TypeDescriptor, TypeMap, Visibility,
+    },
     value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
@@ -20,68 +23,77 @@ use saikuro_transport::{
     memory::MemoryTransport,
     traits::{Transport, TransportReceiver, TransportSender},
 };
-use std::collections::HashMap;
 
 //  Helpers
 
 fn build_schema() -> Schema {
-    let mut functions = HashMap::new();
-    functions.insert(
-        "public_fn".to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    functions.insert(
-        "internal_fn".to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Internal,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    functions.insert(
-        "private_fn".to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Private,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    functions.insert(
-        "guarded_fn".to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Public,
-            capabilities: vec![CapabilityToken::new("special.cap")],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    let mut namespaces = HashMap::new();
-    namespaces.insert(
-        "svc".to_owned(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    let mut functions = FunctionMap::new();
+    functions
+        .insert(
+            "public_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
+    functions
+        .insert(
+            "internal_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Internal,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
+    functions
+        .insert(
+            "private_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Private,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
+    functions
+        .insert(
+            "guarded_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Public,
+                capabilities: vec![CapabilityToken::new("special.cap")],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
+    let mut namespaces = NamespaceMap::new();
+    namespaces
+        .insert(
+            "svc".to_owned(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
     Schema {
         version: 1,
-        namespaces,
-        types: HashMap::new(),
+        namespaces: Box::new(namespaces),
+        types: Box::new(TypeMap::new()),
     }
 }
 
@@ -286,7 +298,7 @@ fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() {
         let schema = build_schema();
         let env = make_announce(&schema);
 
-        let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")]);
+        let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")]).unwrap();
         let frames = run_and_collect(registry, caps, true, env).await;
         assert_eq!(frames.len(), 2);
 

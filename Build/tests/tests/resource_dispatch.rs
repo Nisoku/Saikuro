@@ -332,10 +332,10 @@ fn resource_handle_from_value_rejects_non_map() {
 /// `ResourceHandle::from_value` returns `None` for a map that has no `id` field.
 #[test]
 fn resource_handle_from_value_rejects_missing_id() {
-    use std::collections::BTreeMap;
-    let mut map: BTreeMap<String, Value> = BTreeMap::new();
-    map.insert("size".to_owned(), Value::Int(100));
-    let v = Value::Map(map);
+    use saikuro_core::value::ValueMap;
+    let mut map = ValueMap::new();
+    map.insert("size".to_owned(), Value::Int(100)).ok();
+    let v = Value::Map(Box::new(map));
     assert!(
         ResourceHandle::from_value(&v).is_none(),
         "from_value must return None when 'id' is absent"

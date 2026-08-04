@@ -157,7 +157,9 @@ fn internal_error_maps_correctly() {
 fn error_detail_with_detail_accumulates_entries() {
     let detail = ErrorDetail::new(ErrorCode::ProviderError, "something went wrong")
         .with_detail("field", Value::String("arg_a".into()))
-        .with_detail("line", Value::Int(42));
+        .unwrap()
+        .with_detail("line", Value::Int(42))
+        .unwrap();
 
     assert_eq!(detail.details["field"], Value::String("arg_a".into()));
     assert_eq!(detail.details["line"], Value::Int(42));
@@ -177,7 +179,8 @@ fn error_detail_display_includes_code_and_message() {
 fn error_response_survives_msgpack_roundtrip() {
     let id = InvocationId::new();
     let detail = ErrorDetail::new(ErrorCode::InvalidArguments, "bad types")
-        .with_detail("arg", Value::String("x".into()));
+        .with_detail("arg", Value::String("x".into()))
+        .unwrap();
 
     let resp = ResponseEnvelope::err(id, detail.clone());
     let bytes = resp.to_msgpack().expect("serialize");

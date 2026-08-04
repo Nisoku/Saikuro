@@ -4,8 +4,8 @@ use saikuro_core::{
     envelope::{Envelope, InvocationType},
     error::ErrorCode,
     schema::{
-        ArgumentDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, TypeDescriptor,
-        Visibility,
+        ArgumentDescriptor, FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType,
+        TypeDescriptor, Visibility,
     },
     value::Value,
 };
@@ -13,7 +13,6 @@ use saikuro_schema::{
     registry::{NamespaceRegistration, SchemaRegistry},
     validator::{InvocationValidator, ValidationError},
 };
-use std::collections::HashMap;
 
 // Helpers
 
@@ -56,25 +55,31 @@ fn unit_fn() -> FunctionSchema {
 
 fn make_registry_with_math() -> SchemaRegistry {
     let registry = SchemaRegistry::new();
-    let mut functions = HashMap::new();
-    functions.insert("add".into(), two_arg_fn(Visibility::Public));
-    functions.insert("noop".into(), unit_fn());
-    functions.insert("internal_op".into(), {
-        let mut f = unit_fn();
-        f.visibility = Visibility::Internal;
-        f
-    });
-    functions.insert("secret".into(), {
-        let mut f = unit_fn();
-        f.visibility = Visibility::Private;
-        f
-    });
+    let mut functions = FunctionMap::new();
+    functions
+        .insert("add".into(), two_arg_fn(Visibility::Public))
+        .ok();
+    functions.insert("noop".into(), unit_fn()).ok();
+    functions
+        .insert("internal_op".into(), {
+            let mut f = unit_fn();
+            f.visibility = Visibility::Internal;
+            f
+        })
+        .ok();
+    functions
+        .insert("secret".into(), {
+            let mut f = unit_fn();
+            f.visibility = Visibility::Private;
+            f
+        })
+        .ok();
 
     registry
         .register(NamespaceRegistration {
             namespace: "math".into(),
             schema: NamespaceSchema {
-                functions,
+                functions: Box::new(functions),
                 doc: None,
             },
             provider_id: "provider-1".into(),
@@ -235,38 +240,40 @@ fn malformed_target_without_dot_fails() {
 fn optional_argument_may_be_omitted() {
     // Register a function with one required and one optional argument.
     let registry = SchemaRegistry::new();
-    let mut functions = HashMap::new();
-    functions.insert(
-        "greet".into(),
-        FunctionSchema {
-            args: vec![
-                ArgumentDescriptor {
-                    name: "name".into(),
-                    r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                    optional: false,
-                    default: None,
-                    doc: None,
-                },
-                ArgumentDescriptor {
-                    name: "greeting".into(),
-                    r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                    optional: true,
-                    default: Some(Value::String("Hello".into())),
-                    doc: None,
-                },
-            ],
-            returns: TypeDescriptor::primitive(PrimitiveType::String),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
+    let mut functions = FunctionMap::new();
+    functions
+        .insert(
+            "greet".into(),
+            FunctionSchema {
+                args: vec![
+                    ArgumentDescriptor {
+                        name: "name".into(),
+                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                        optional: false,
+                        default: None,
+                        doc: None,
+                    },
+                    ArgumentDescriptor {
+                        name: "greeting".into(),
+                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                        optional: true,
+                        default: Some(Value::String("Hello".into())),
+                        doc: None,
+                    },
+                ],
+                returns: TypeDescriptor::primitive(PrimitiveType::String),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
     registry
         .register(NamespaceRegistration {
             namespace: "greet".into(),
             schema: NamespaceSchema {
-                functions,
+                functions: Box::new(functions),
                 doc: None,
             },
             provider_id: "p".into(),

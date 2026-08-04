@@ -12,8 +12,8 @@ use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
     schema::{
-        ArgumentDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
-        Visibility,
+        ArgumentDescriptor, FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema,
+        PrimitiveType, Schema, TypeDescriptor, TypeMap, Visibility,
     },
     value::Value,
     ResponseEnvelope,
@@ -192,58 +192,64 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             let done_tx = Arc::new(Mutex::new(Some(done_tx)));
             let call_count = Arc::new(AtomicUsize::new(0));
 
-            let mut functions = std::collections::HashMap::new();
-            functions.insert(
-                "add".to_owned(),
-                FunctionSchema {
-                    args: vec![
-                        ArgumentDescriptor {
-                            name: "a".to_owned(),
-                            r#type: TypeDescriptor::primitive(PrimitiveType::I64),
-                            optional: false,
-                            default: None,
-                            doc: None,
-                        },
-                        ArgumentDescriptor {
-                            name: "b".to_owned(),
-                            r#type: TypeDescriptor::primitive(PrimitiveType::I64),
-                            optional: false,
-                            default: None,
-                            doc: None,
-                        },
-                    ],
-                    returns: TypeDescriptor::primitive(PrimitiveType::Any),
-                    visibility: Visibility::Public,
-                    capabilities: vec![],
-                    idempotent: false,
-                    doc: None,
-                },
-            );
-            functions.insert(
-                "watch".to_owned(),
-                FunctionSchema {
-                    args: vec![],
-                    returns: TypeDescriptor::Stream {
-                        item: Box::new(TypeDescriptor::primitive(PrimitiveType::Any)),
+            let mut functions = FunctionMap::new();
+            functions
+                .insert(
+                    "add".to_owned(),
+                    FunctionSchema {
+                        args: vec![
+                            ArgumentDescriptor {
+                                name: "a".to_owned(),
+                                r#type: TypeDescriptor::primitive(PrimitiveType::I64),
+                                optional: false,
+                                default: None,
+                                doc: None,
+                            },
+                            ArgumentDescriptor {
+                                name: "b".to_owned(),
+                                r#type: TypeDescriptor::primitive(PrimitiveType::I64),
+                                optional: false,
+                                default: None,
+                                doc: None,
+                            },
+                        ],
+                        returns: TypeDescriptor::primitive(PrimitiveType::Any),
+                        visibility: Visibility::Public,
+                        capabilities: vec![],
+                        idempotent: false,
+                        doc: None,
                     },
-                    visibility: Visibility::Public,
-                    capabilities: vec![],
-                    idempotent: false,
-                    doc: None,
-                },
-            );
-            let mut namespaces = std::collections::HashMap::new();
-            namespaces.insert(
-                "math".to_owned(),
-                NamespaceSchema {
-                    functions,
-                    doc: None,
-                },
-            );
+                )
+                .ok();
+            functions
+                .insert(
+                    "watch".to_owned(),
+                    FunctionSchema {
+                        args: vec![],
+                        returns: TypeDescriptor::Stream {
+                            item: Box::new(TypeDescriptor::primitive(PrimitiveType::Any)),
+                        },
+                        visibility: Visibility::Public,
+                        capabilities: vec![],
+                        idempotent: false,
+                        doc: None,
+                    },
+                )
+                .ok();
+            let mut namespaces = NamespaceMap::new();
+            namespaces
+                .insert(
+                    "math".to_owned(),
+                    NamespaceSchema {
+                        functions: Box::new(functions),
+                        doc: None,
+                    },
+                )
+                .ok();
             let schema = Schema {
                 version: 1,
-                namespaces,
-                types: std::collections::HashMap::new(),
+                namespaces: Box::new(namespaces),
+                types: Box::new(TypeMap::new()),
             };
             handle
                 .register_schema(schema, "cpp-runtime-provider")

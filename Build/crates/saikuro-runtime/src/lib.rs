@@ -18,35 +18,37 @@ pub use runtime::SaikuroRuntime;
 mod tests {
     use crate::runtime::SaikuroRuntime;
     use saikuro_core::schema::{
-        FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+        FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
+        Visibility,
     };
-    use std::collections::HashMap;
 
     /// Smoke test: build a runtime, register a schema, verify lookup works.
     #[test]
     fn schema_registration_roundtrip() {
         let rt = SaikuroRuntime::builder().build();
 
-        let mut functions = HashMap::new();
-        functions.insert(
-            "ping".to_owned(),
-            FunctionSchema {
-                args: vec![],
-                returns: TypeDescriptor::primitive(PrimitiveType::String),
-                visibility: Visibility::Public,
-                capabilities: vec![],
-                idempotent: true,
-                doc: Some("Returns 'pong'".to_owned()),
-            },
-        );
+        let mut functions = FunctionMap::new();
+        functions
+            .insert(
+                "ping".to_owned(),
+                FunctionSchema {
+                    args: vec![],
+                    returns: TypeDescriptor::primitive(PrimitiveType::String),
+                    visibility: Visibility::Public,
+                    capabilities: vec![],
+                    idempotent: true,
+                    doc: Some("Returns 'pong'".to_owned()),
+                },
+            )
+            .ok();
 
         let ns = NamespaceSchema {
-            functions,
+            functions: Box::new(functions),
             doc: None,
         };
 
         let mut schema = Schema::new();
-        schema.namespaces.insert("health".to_owned(), ns);
+        schema.namespaces.insert("health".to_owned(), ns).ok();
 
         rt.schema_registry()
             .merge_schema(schema, "test-provider")

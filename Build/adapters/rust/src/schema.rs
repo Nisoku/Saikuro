@@ -56,42 +56,39 @@ impl NamespaceSchema {
 
     /// Convert to the core `NamespaceSchema` for announcement.
     pub fn to_core(&self) -> CoreNamespaceSchema {
-        let functions: HashMap<String, CoreFunctionSchema> = self
-            .functions
-            .iter()
-            .map(|(name, fs)| {
-                let args: Vec<ArgumentDescriptor> = fs
-                    .args
-                    .iter()
-                    .map(|a| ArgumentDescriptor {
-                        name: a.name.clone(),
-                        r#type: a.r#type.clone(),
-                        optional: a.optional,
-                        doc: a.doc.clone(),
-                        default: None,
-                    })
-                    .collect();
+        let mut functions = saikuro_core::schema::FunctionMap::new();
+        for (name, fs) in &self.functions {
+            let args: Vec<ArgumentDescriptor> = fs
+                .args
+                .iter()
+                .map(|a| ArgumentDescriptor {
+                    name: a.name.clone(),
+                    r#type: a.r#type.clone(),
+                    optional: a.optional,
+                    doc: a.doc.clone(),
+                    default: None,
+                })
+                .collect();
 
-                let core_fn = CoreFunctionSchema {
-                    args,
-                    returns: fs.returns.clone().unwrap_or(TypeDescriptor::Primitive {
-                        r#type: PrimitiveType::Any,
-                    }),
-                    visibility: fs.visibility,
-                    capabilities: fs
-                        .capabilities
-                        .iter()
-                        .map(|s| saikuro_core::capability::CapabilityToken::from(s.as_str()))
-                        .collect(),
-                    idempotent: fs.idempotent,
-                    doc: fs.doc.clone(),
-                };
-                (name.clone(), core_fn)
-            })
-            .collect();
+            let core_fn = CoreFunctionSchema {
+                args,
+                returns: fs.returns.clone().unwrap_or(TypeDescriptor::Primitive {
+                    r#type: PrimitiveType::Any,
+                }),
+                visibility: fs.visibility,
+                capabilities: fs
+                    .capabilities
+                    .iter()
+                    .map(|s| saikuro_core::capability::CapabilityToken::from(s.as_str()))
+                    .collect(),
+                idempotent: fs.idempotent,
+                doc: fs.doc.clone(),
+            };
+            functions.insert(name.clone(), core_fn).ok();
+        }
 
         CoreNamespaceSchema {
-            functions,
+            functions: Box::new(functions),
             doc: self.doc.clone(),
         }
     }
@@ -101,7 +98,7 @@ impl NamespaceSchema {
 pub(crate) fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Schema {
     let mut schema = Schema::new();
     for (ns_name, ns) in namespaces {
-        schema.namespaces.insert(ns_name.clone(), ns.to_core());
+        schema.namespaces.insert(ns_name.clone(), ns.to_core()).ok();
     }
     schema
 }

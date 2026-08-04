@@ -26,12 +26,12 @@ rust-version = "1.75"
 [workspace.dependencies]
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 rmp-serde = "1.3"
 rmpv = { version = "1.3", features = ["with-serde"] }
 bytes = "1.7"
-futures = "0.3"
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
 async-trait = "0.1"
 pin-project-lite = "0.2"
 
@@ -51,6 +51,14 @@ chacha20 = { version = "0.9", default-features = false }
 # all. Native instructions are still used where available.
 portable-atomic = { version = "1", default-features = false, features = ["fallback", "critical-section"] }
 
+# Fixed-capacity collections for no_std builds. `BTreeMap` does not exist in
+# heapless. IndexMap/IndexSet give deterministic (insertion-ordered) maps with a
+# compile-time capacity and a serde impl that errors on overflow.
+# heapless 0.7 is unusable here: its FnvIndexMap keys must implement the
+# hash32::Hash trait, which `String` does not. 0.8 keys use the standard
+# `Hash` trait (foldhash backend, no_std-safe).
+heapless = { version = "0.8", default-features = false, features = ["serde"] }
+
 # Duration / utility serde helpers
 serde_with = "3.0"
 
@@ -62,8 +70,13 @@ strum = { version = "0.28.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json"] }
 
+# Embedded async runtime (embassy) for no_std MCU targets
+embassy-sync    = { version = "0.6", default-features = false }
+embassy-time    = { version = "0.3", default-features = false }
+embassy-futures = { version = "0.1", default-features = false }
+
 # Error handling:  both are wasm-safe
-thiserror = "2.0"
+thiserror = { version = "2.0", default-features = false }
 anyhow = "1.0"
 
 # Concurrency: dashmap and parking_lot are wasm-safe for single-threaded WASM i think
@@ -82,5 +95,5 @@ saikuro-router    = { path = "crates/saikuro-router", default-features = false }
 saikuro-runtime   = { path = "crates/saikuro-runtime", default-features = false }
 saikuro-codegen   = { path = "crates/saikuro-codegen" }
 saikuro-exec      = { path = "crates/saikuro-exec", default-features = false }
-saikuro-random    = { path = "crates/saikuro-random" }
+saikuro-random    = { path = "crates/saikuro-random", default-features = false }
 saikuro           = { path = "adapters/rust", default-features = false }

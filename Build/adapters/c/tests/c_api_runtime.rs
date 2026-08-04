@@ -11,7 +11,10 @@ use saikuro_c::{
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
-    schema::{FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility},
+    schema::{
+        FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
+        TypeDescriptor, TypeMap, Visibility,
+    },
     value::Value,
     ResponseEnvelope,
 };
@@ -34,32 +37,36 @@ fn make_schema(namespace: &str, function: &str, n_args: usize) -> Schema {
         })
         .collect();
 
-    let mut functions = std::collections::HashMap::new();
-    functions.insert(
-        function.to_owned(),
-        FunctionSchema {
-            args,
-            returns: TypeDescriptor::primitive(PrimitiveType::Any),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
+    let mut functions = FunctionMap::new();
+    functions
+        .insert(
+            function.to_owned(),
+            FunctionSchema {
+                args,
+                returns: TypeDescriptor::primitive(PrimitiveType::Any),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
 
-    let mut namespaces = std::collections::HashMap::new();
-    namespaces.insert(
-        namespace.to_owned(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    let mut namespaces = NamespaceMap::new();
+    namespaces
+        .insert(
+            namespace.to_owned(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
 
     Schema {
         version: 1,
-        namespaces,
-        types: std::collections::HashMap::new(),
+        namespaces: Box::new(namespaces),
+        types: Box::new(TypeMap::new()),
     }
 }
 

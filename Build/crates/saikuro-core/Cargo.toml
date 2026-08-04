@@ -8,16 +8,25 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 
+# The crate is always `no_std` + `alloc`. The default `std` feature adds the
+# std-only conveniences (msgpack codec helpers, `std::io::Error` variant) and
+# selects the OS entropy backend; `custom` selects the caller-provided getrandom
+# backend for bare-metal targets (see saikuro-random).
+[features]
+default = ["std"]
+std = ["dep:rmp-serde", "saikuro-random/os"]
+custom = ["saikuro-random/custom"]
+
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
+# serde_json is used for schema tooling and the stderr log sink; `alloc`
+# keeps it no_std-compatible.
+serde_json = { workspace = true, default-features = false, features = ["alloc"] }
 serde_bytes = { workspace = true }
-rmp-serde = { workspace = true }
-rmpv = { workspace = true }
-bytes = { workspace = true }
 uuid = { workspace = true }
-saikuro-random = { workspace = true }
-thiserror = { workspace = true }
-chrono = { workspace = true }
-serde_with = { workspace = true }
+saikuro-random = { workspace = true, default-features = false }
+thiserror = { workspace = true, default-features = false }
 strum = { workspace = true }
+heapless = { workspace = true }
+# msgpack helpers on Envelope/ResponseEnvelope; rmp-serde is std-only.
+rmp-serde = { workspace = true, optional = true }

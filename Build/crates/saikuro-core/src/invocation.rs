@@ -5,9 +5,13 @@
 //! originating invocation using this identifier. UUIDs v4 are used to ensure
 //! global uniqueness without coordination.
 
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::ByteBuf;
-use std::fmt;
 use uuid::Uuid;
 
 /// A globally-unique identifier for a single invocation.
@@ -126,7 +130,7 @@ impl From<InvocationId> for Uuid {
     }
 }
 
-impl std::str::FromStr for InvocationId {
+impl core::str::FromStr for InvocationId {
     type Err = uuid::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -137,6 +141,7 @@ impl std::str::FromStr for InvocationId {
 #[cfg(test)]
 mod tests {
     use super::InvocationId;
+    use alloc::string::ToString;
 
     #[test]
     fn msgpack_roundtrip_uses_binary_uuid() {

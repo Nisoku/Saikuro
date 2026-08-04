@@ -1,9 +1,7 @@
 //! Common generator traits and output types.
 
-use std::collections::BTreeMap;
-
 use saikuro_core::schema::{
-    FieldDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition,
+    FieldMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition,
     TypeDescriptor, Visibility,
 };
 
@@ -148,7 +146,7 @@ pub fn convert_type(desc: &TypeDescriptor, conv: &impl TypeConverter) -> String 
 pub fn generate_types_from_schema(
     schema: &Schema,
     header: Vec<String>,
-    mut on_record: impl FnMut(&str, &BTreeMap<String, FieldDescriptor>) -> Result<Vec<String>>,
+    mut on_record: impl FnMut(&str, &FieldMap) -> Result<Vec<String>>,
     mut on_enum: impl FnMut(&str, &[String]) -> Result<Vec<String>>,
     mut on_alias: impl FnMut(&str, &TypeDescriptor) -> Result<Vec<String>>,
 ) -> Result<String> {

@@ -5,10 +5,9 @@ use saikuro_core::{
     envelope::{Envelope, InvocationType, ResponseEnvelope, StreamControl},
     error::{ErrorCode, ErrorDetail},
     invocation::InvocationId,
-    value::Value,
+    value::{Value, ValueMap},
     PROTOCOL_VERSION,
 };
-use std::collections::BTreeMap;
 
 // Helpers
 
@@ -77,8 +76,9 @@ fn envelope_with_capability_roundtrip() {
 fn envelope_with_meta_roundtrip() {
     let mut env = Envelope::call("trace.op", vec![]);
     env.meta
-        .insert("trace-id".into(), Value::String("abc-123".into()));
-    env.meta.insert("deadline-ms".into(), Value::Int(5000));
+        .insert("trace-id".into(), Value::String("abc-123".into()))
+        .ok();
+    env.meta.insert("deadline-ms".into(), Value::Int(5000)).ok();
     let decoded = roundtrip_envelope(&env);
     assert_eq!(decoded.meta["trace-id"], Value::String("abc-123".into()));
     assert_eq!(decoded.meta["deadline-ms"], Value::Int(5000));
@@ -147,9 +147,9 @@ fn value_all_variants_roundtrip() {
         Value::Bytes(vec![0x00, 0xff, 0x7e]),
         Value::Array(vec![Value::Int(1), Value::String("two".into())]),
         {
-            let mut m = BTreeMap::new();
-            m.insert("key".into(), Value::Bool(false));
-            Value::Map(m)
+            let mut m = ValueMap::new();
+            m.insert("key".into(), Value::Bool(false)).ok();
+            Value::Map(Box::new(m))
         },
     ];
 

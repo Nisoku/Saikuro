@@ -28,11 +28,11 @@
 //! }
 //! ```
 
+use alloc::{borrow::ToOwned, boxed::Box, string::String};
+use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fmt;
 
-use crate::value::Value;
+use crate::value::{Value, ValueMap};
 
 // ResourceHandle
 
@@ -104,18 +104,23 @@ impl ResourceHandle {
     /// Convert this handle into a [`Value`] map suitable for embedding in an
     /// envelope `result` field.
     pub fn to_value(&self) -> Value {
-        let mut map = BTreeMap::new();
-        map.insert("id".to_owned(), Value::String(self.id.clone()));
+        // A handle serialises to at most 4 fields, well under VALUE_MAP_CAPACITY.
+        let mut map = ValueMap::new();
+        map.insert("id".to_owned(), Value::String(self.id.clone()))
+            .expect("resource handle map fits in VALUE_MAP_CAPACITY");
         if let Some(mime) = &self.mime_type {
-            map.insert("mime_type".to_owned(), Value::String(mime.clone()));
+            map.insert("mime_type".to_owned(), Value::String(mime.clone()))
+                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
         }
         if let Some(size) = self.size {
-            map.insert("size".to_owned(), Value::UInt(size));
+            map.insert("size".to_owned(), Value::UInt(size))
+                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
         }
         if let Some(uri) = &self.uri {
-            map.insert("uri".to_owned(), Value::String(uri.clone()));
+            map.insert("uri".to_owned(), Value::String(uri.clone()))
+                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
         }
-        Value::Map(map)
+        Value::Map(Box::new(map))
     }
 
     /// Attempt to deserialise a [`ResourceHandle`] from a [`Value`].

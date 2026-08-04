@@ -3,6 +3,11 @@
 //! Re-exports one backend implementation depending on enabled cargo features.
 //! Supported backends: `tokio-runtime` (default), `wasm-runtime`, `embassy-runtime`.
 
+#![cfg_attr(feature = "embassy-runtime", no_std)]
+
+#[cfg(feature = "embassy-runtime")]
+extern crate alloc;
+
 #[cfg(all(feature = "tokio-runtime", feature = "wasm-runtime"))]
 compile_error!("Features `tokio-runtime` and `wasm-runtime` are mutually exclusive.");
 
@@ -22,6 +27,7 @@ compile_error!(
      Enable one of `tokio-runtime`, `wasm-runtime`, or `embassy-runtime`."
 );
 
+#[cfg(any(feature = "tokio-runtime", feature = "wasm-runtime"))]
 pub use tokio as _tokio;
 
 #[cfg(feature = "tokio-runtime")]
@@ -39,6 +45,9 @@ mod embassy_backend;
 #[cfg(feature = "embassy-runtime")]
 pub use embassy_backend::*;
 
+#[cfg(feature = "embassy-runtime")]
+pub use futures as _futures;
+
 #[macro_export]
 macro_rules! select {
     ($($tt:tt)*) => {
@@ -47,9 +56,23 @@ macro_rules! select {
 }
 
 #[doc(hidden)]
+#[cfg(any(feature = "tokio-runtime", feature = "wasm-runtime"))]
 #[macro_export]
 macro_rules! select_impl {
     ($($tt:tt)*) => {
         $crate::_tokio::select! { $($tt)* }
+    };
+}
+
+/// Embassy-compatible `select!` for two branches.
+///
+/// Each branch future must be fused (`.fuse()`) because `futures::select!`
+/// requires `FusedFuture`
+#[doc(hidden)]
+#[cfg(feature = "embassy-runtime")]
+#[macro_export]
+macro_rules! select_impl {
+    ($($tt:tt)*) => {
+        $crate::_futures::select! { $($tt)* }
     };
 }

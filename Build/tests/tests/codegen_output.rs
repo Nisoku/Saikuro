@@ -5,10 +5,9 @@ use saikuro_codegen::{
     rust::RustGenerator, typescript::TypeScriptGenerator,
 };
 use saikuro_core::schema::{
-    ArgumentDescriptor, FieldDescriptor, FunctionSchema, NamespaceSchema, PrimitiveType, Schema,
-    TypeDefinition, TypeDescriptor, Visibility,
+    ArgumentDescriptor, FieldDescriptor, FieldMap, FunctionMap, FunctionSchema, NamespaceSchema,
+    PrimitiveType, Schema, TypeDefinition, TypeDescriptor, Visibility,
 };
-use std::collections::{BTreeMap, HashMap};
 
 // Schema builders
 
@@ -31,21 +30,30 @@ fn simple_fn(vis: Visibility) -> FunctionSchema {
 
 fn make_schema_with_math() -> Schema {
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
-    functions.insert("add".into(), simple_fn(Visibility::Public));
-    functions.insert("sub".into(), {
-        let mut f = simple_fn(Visibility::Internal);
-        f.doc = None;
-        f
-    });
-    functions.insert("secret".into(), simple_fn(Visibility::Private));
-    schema.namespaces.insert(
-        "math".into(),
-        NamespaceSchema {
-            functions,
-            doc: Some("Math namespace".into()),
-        },
-    );
+    let mut functions = FunctionMap::new();
+    functions
+        .insert("add".into(), simple_fn(Visibility::Public))
+        .ok();
+    functions
+        .insert("sub".into(), {
+            let mut f = simple_fn(Visibility::Internal);
+            f.doc = None;
+            f
+        })
+        .ok();
+    functions
+        .insert("secret".into(), simple_fn(Visibility::Private))
+        .ok();
+    schema
+        .namespaces
+        .insert(
+            "math".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: Some("Math namespace".into()),
+            },
+        )
+        .ok();
     schema
 }
 
@@ -53,42 +61,58 @@ fn make_schema_with_types() -> Schema {
     let mut schema = Schema::new();
 
     // Record type.
-    let mut fields = BTreeMap::new();
-    fields.insert(
-        "name".into(),
-        FieldDescriptor {
-            r#type: TypeDescriptor::primitive(PrimitiveType::String),
-            optional: false,
-            doc: None,
-        },
-    );
-    fields.insert(
-        "age".into(),
-        FieldDescriptor {
-            r#type: TypeDescriptor::primitive(PrimitiveType::I64),
-            optional: true,
-            doc: None,
-        },
-    );
+    let mut fields = FieldMap::new();
+    fields
+        .insert(
+            "name".into(),
+            FieldDescriptor {
+                r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                optional: false,
+                doc: None,
+            },
+        )
+        .ok();
+    fields
+        .insert(
+            "age".into(),
+            FieldDescriptor {
+                r#type: TypeDescriptor::primitive(PrimitiveType::I64),
+                optional: true,
+                doc: None,
+            },
+        )
+        .ok();
     schema
         .types
-        .insert("Person".into(), TypeDefinition::Record { fields });
+        .insert(
+            "Person".into(),
+            TypeDefinition::Record {
+                fields: Box::new(fields),
+            },
+        )
+        .ok();
 
     // Enum type.
-    schema.types.insert(
-        "Color".into(),
-        TypeDefinition::Enum {
-            variants: vec!["Red".into(), "Green".into(), "Blue".into()],
-        },
-    );
+    schema
+        .types
+        .insert(
+            "Color".into(),
+            TypeDefinition::Enum {
+                variants: vec!["Red".into(), "Green".into(), "Blue".into()],
+            },
+        )
+        .ok();
 
     // Alias type.
-    schema.types.insert(
-        "UserId".into(),
-        TypeDefinition::Alias {
-            inner: TypeDescriptor::primitive(PrimitiveType::String),
-        },
-    );
+    schema
+        .types
+        .insert(
+            "UserId".into(),
+            TypeDefinition::Alias {
+                inner: TypeDescriptor::primitive(PrimitiveType::String),
+            },
+        )
+        .ok();
 
     schema
 }
@@ -236,7 +260,7 @@ fn python_all_primitive_types_map_correctly() {
     ];
 
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
+    let mut functions = FunctionMap::new();
     for (name, prim, _) in primitive_cases {
         let f = FunctionSchema {
             args: vec![],
@@ -246,15 +270,18 @@ fn python_all_primitive_types_map_correctly() {
             idempotent: false,
             doc: None,
         };
-        functions.insert((*name).to_owned(), f);
+        functions.insert((*name).to_owned(), f).ok();
     }
-    schema.namespaces.insert(
-        "types_ns".into(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    schema
+        .namespaces
+        .insert(
+            "types_ns".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
 
     let gen = PythonGenerator;
     let output = gen.generate(&schema).expect("generate");
@@ -398,7 +425,7 @@ fn typescript_all_primitive_types_map_correctly() {
     ];
 
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
+    let mut functions = FunctionMap::new();
     for (name, prim, _) in primitive_cases {
         let f = FunctionSchema {
             args: vec![],
@@ -408,15 +435,18 @@ fn typescript_all_primitive_types_map_correctly() {
             idempotent: false,
             doc: None,
         };
-        functions.insert((*name).to_owned(), f);
+        functions.insert((*name).to_owned(), f).ok();
     }
-    schema.namespaces.insert(
-        "types_ns".into(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    schema
+        .namespaces
+        .insert(
+            "types_ns".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
 
     let gen = TypeScriptGenerator;
     let output = gen.generate(&schema).expect("generate");
@@ -440,40 +470,45 @@ fn typescript_all_primitive_types_map_correctly() {
 #[test]
 fn typescript_optional_arg_has_question_mark() {
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
-    functions.insert(
-        "greet".into(),
-        FunctionSchema {
-            args: vec![
-                ArgumentDescriptor {
-                    name: "name".into(),
-                    r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                    optional: false,
-                    default: None,
-                    doc: None,
-                },
-                ArgumentDescriptor {
-                    name: "greeting".into(),
-                    r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                    optional: true,
-                    default: None,
-                    doc: None,
-                },
-            ],
-            returns: TypeDescriptor::primitive(PrimitiveType::String),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
-    schema.namespaces.insert(
-        "greeter".into(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    let mut functions = FunctionMap::new();
+    functions
+        .insert(
+            "greet".into(),
+            FunctionSchema {
+                args: vec![
+                    ArgumentDescriptor {
+                        name: "name".into(),
+                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                        optional: false,
+                        default: None,
+                        doc: None,
+                    },
+                    ArgumentDescriptor {
+                        name: "greeting".into(),
+                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                        optional: true,
+                        default: None,
+                        doc: None,
+                    },
+                ],
+                returns: TypeDescriptor::primitive(PrimitiveType::String),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
+    schema
+        .namespaces
+        .insert(
+            "greeter".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
 
     let gen = TypeScriptGenerator;
     let output = gen.generate(&schema).expect("generate");
@@ -493,65 +528,74 @@ fn typescript_optional_arg_has_question_mark() {
 
 fn make_schema_with_stream_and_channel() -> Schema {
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
+    let mut functions = FunctionMap::new();
 
     // Stream-returning function.
-    functions.insert(
-        "subscribe".into(),
-        FunctionSchema {
-            args: vec![ArgumentDescriptor {
-                name: "topic".into(),
-                r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                optional: false,
-                default: None,
-                doc: None,
-            }],
-            returns: TypeDescriptor::Stream {
-                item: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
+    functions
+        .insert(
+            "subscribe".into(),
+            FunctionSchema {
+                args: vec![ArgumentDescriptor {
+                    name: "topic".into(),
+                    r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                    optional: false,
+                    default: None,
+                    doc: None,
+                }],
+                returns: TypeDescriptor::Stream {
+                    item: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
+                },
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: Some("Subscribe to a topic and receive a stream of messages.".into()),
             },
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: Some("Subscribe to a topic and receive a stream of messages.".into()),
-        },
-    );
+        )
+        .ok();
 
     // Channel-returning function.
-    functions.insert(
-        "chat".into(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::Channel {
-                inbound: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
-                outbound: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
+    functions
+        .insert(
+            "chat".into(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::Channel {
+                    inbound: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
+                    outbound: Box::new(TypeDescriptor::primitive(PrimitiveType::String)),
+                },
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: Some("Open a bidirectional chat channel.".into()),
             },
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: Some("Open a bidirectional chat channel.".into()),
-        },
-    );
+        )
+        .ok();
 
     // Regular call-returning function for contrast.
-    functions.insert(
-        "ping".into(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::String),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        },
-    );
+    functions
+        .insert(
+            "ping".into(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::String),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
+        .ok();
 
-    schema.namespaces.insert(
-        "events".into(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    schema
+        .namespaces
+        .insert(
+            "events".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
     schema
 }
 
@@ -836,7 +880,7 @@ fn csharp_all_primitive_types_map_correctly() {
     ];
 
     let mut schema = Schema::new();
-    let mut functions = HashMap::new();
+    let mut functions = FunctionMap::new();
     for (name, prim, _) in primitive_cases {
         let f = FunctionSchema {
             args: vec![],
@@ -846,15 +890,18 @@ fn csharp_all_primitive_types_map_correctly() {
             idempotent: false,
             doc: None,
         };
-        functions.insert((*name).to_owned(), f);
+        functions.insert((*name).to_owned(), f).ok();
     }
-    schema.namespaces.insert(
-        "types_ns".into(),
-        NamespaceSchema {
-            functions,
-            doc: None,
-        },
-    );
+    schema
+        .namespaces
+        .insert(
+            "types_ns".into(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
+        .ok();
 
     let gen = CSharpGenerator;
     let output = gen.generate(&schema).expect("generate");

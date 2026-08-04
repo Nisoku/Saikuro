@@ -2,17 +2,24 @@
 //!
 //! Errors are modelled at two levels:
 //!
-//! 1. **[`SaikuroError`]** :  the Rust `std::error::Error`-implementing type
+//! 1. **[`SaikuroError`]** :  the Rust `Error`-implementing type
 //!    used throughout the runtime for fallible operations.
 //! 2. **[`ErrorDetail`]** :  the wire representation serialised into
 //!    [`ResponseEnvelope`] when an invocation fails.  This is what remote
 //!    adapters receive and surface to their callers.
 
+use alloc::string::{String, ToString};
+use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use thiserror::Error;
 
 use crate::value::Value;
+
+/// Maximum number of structured context entries an [`ErrorDetail`] can carry.
+pub const ERROR_DETAIL_CAPACITY: usize = 16;
+
+/// Fixed-capacity map of structured context entries on [`ErrorDetail`].
+pub type DetailMap = heapless::FnvIndexMap<String, Value, ERROR_DETAIL_CAPACITY>;
 
 /// Machine-readable error codes transmitted on the wire.
 ///
@@ -76,8 +83,8 @@ pub enum ErrorCode {
     Internal,
 }
 
-impl std::fmt::Display for ErrorCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Delegate to the derived Debug output which matches the serde names.
         write!(f, "{self:?}")
     }
@@ -93,8 +100,8 @@ pub struct ErrorDetail {
     pub message: String,
 
     /// Optional structured context (stack traces, field paths, …).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub details: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "DetailMap::is_empty")]
+    pub details: DetailMap,
 }
 
 impl ErrorDetail {
@@ -103,19 +110,31 @@ impl ErrorDetail {
         Self {
             code,
             message: message.into(),
-            details: BTreeMap::new(),
+            details: DetailMap::new(),
         }
     }
 
     /// Add a detail entry and return `self` for chaining.
-    pub fn with_detail(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
-        self.details.insert(key.into(), value.into());
-        self
+    ///
+    /// Fails with [`SaikuroError::CapacityExceeded`] if the detail bag is
+    /// already at [`ERROR_DETAIL_CAPACITY`] entries.
+    pub fn with_detail(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<Value>,
+    ) -> core::result::Result<Self, SaikuroError> {
+        let key = key.into();
+        self.details
+            .insert(key.clone(), value.into())
+            .map_err(|_| {
+                SaikuroError::CapacityExceeded(format!("error detail bag full at key '{key}'"))
+            })?;
+        Ok(self)
     }
 }
 
-impl std::fmt::Display for ErrorDetail {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ErrorDetail {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[{}] {}", self.code, self.message)
     }
 }
@@ -190,16 +209,24 @@ pub enum SaikuroError {
     #[error("out-of-order sequence: expected {expected}, got {received}")]
     OutOfOrder { expected: u64, received: u64 },
 
-    //  Serialisation
+    //  Serialisation (rmp-serde is std-only)
+    #[cfg(feature = "std")]
     #[error("msgpack encode error: {0}")]
     MsgpackEncode(#[from] rmp_serde::encode::Error),
 
+    #[cfg(feature = "std")]
     #[error("msgpack decode error: {0}")]
     MsgpackDecode(#[from] rmp_serde::decode::Error),
 
     //  I/O
+    #[cfg(feature = "std")]
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// A fixed-capacity map reached its compile-time limit
+    /// (e.g. [`crate::value::VALUE_MAP_CAPACITY`]).
+    #[error("capacity exceeded: {0}")]
+    CapacityExceeded(String),
 
     //  Catch-all
     #[error("internal error: {0}")]
@@ -228,10 +255,11 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::StreamClosed => ErrorCode::StreamClosed,
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
+            #[cfg(feature = "std")]
             SaikuroError::MsgpackEncode(_)
             | SaikuroError::MsgpackDecode(_)
-            | SaikuroError::Io(_)
-            | SaikuroError::Internal(_) => ErrorCode::Internal,
+            | SaikuroError::Io(_) => ErrorCode::Internal,
+            SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
         };
 
         ErrorDetail::new(code, err.to_string())
@@ -239,4 +267,4 @@ impl From<SaikuroError> for ErrorDetail {
 }
 
 /// Convenience alias for `Result<T, SaikuroError>`.
-pub type Result<T> = std::result::Result<T, SaikuroError>;
+pub type Result<T> = core::result::Result<T, SaikuroError>;

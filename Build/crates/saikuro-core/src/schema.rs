@@ -5,13 +5,31 @@
 //! workspace can read schemas without depending on the heavier validation
 //! and registry machinery in `saikuro-schema`.
 
+use alloc::{boxed::Box, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
 
 use crate::capability::CapabilityToken;
 
 /// The protocol version this schema was compiled against.
 pub const SCHEMA_VERSION: u32 = 1;
+
+/// Maximum number of functions a single namespace can declare.
+pub const SCHEMA_FUNCTIONS_CAPACITY: usize = 256;
+/// Maximum number of namespaces a root schema can declare.
+pub const SCHEMA_NAMESPACES_CAPACITY: usize = 256;
+/// Maximum number of user-defined types a root schema can declare.
+pub const SCHEMA_TYPES_CAPACITY: usize = 256;
+/// Maximum number of fields a record type can declare.
+pub const RECORD_FIELDS_CAPACITY: usize = 64;
+
+/// Fixed-capacity, insertion-ordered map of function schemas.
+pub type FunctionMap = heapless::FnvIndexMap<String, FunctionSchema, SCHEMA_FUNCTIONS_CAPACITY>;
+/// Fixed-capacity, insertion-ordered map of namespace schemas.
+pub type NamespaceMap = heapless::FnvIndexMap<String, NamespaceSchema, SCHEMA_NAMESPACES_CAPACITY>;
+/// Fixed-capacity, insertion-ordered map of user-defined types.
+pub type TypeMap = heapless::FnvIndexMap<String, TypeDefinition, SCHEMA_TYPES_CAPACITY>;
+/// Fixed-capacity, insertion-ordered map of record fields.
+pub type FieldMap = heapless::FnvIndexMap<String, FieldDescriptor, RECORD_FIELDS_CAPACITY>;
 
 //  Primitive types
 
@@ -41,8 +59,8 @@ pub enum PrimitiveType {
     Unit,
 }
 
-impl std::fmt::Display for PrimitiveType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let s = match self {
             Self::Bool => "bool",
             Self::I8 => "i8",
@@ -200,9 +218,7 @@ pub struct FieldDescriptor {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TypeDefinition {
     /// A product type (named fields).
-    Record {
-        fields: BTreeMap<String, FieldDescriptor>,
-    },
+    Record { fields: Box<FieldMap> },
     /// A sum type (tagged union of named variants).
     Enum { variants: Vec<String> },
     /// A newtype wrapper around another type.
@@ -215,7 +231,7 @@ pub enum TypeDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceSchema {
     /// All functions exposed by this namespace.
-    pub functions: HashMap<String, FunctionSchema>,
+    pub functions: Box<FunctionMap>,
     /// Human-readable description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,
@@ -231,11 +247,11 @@ pub struct Schema {
     pub version: u32,
 
     /// All registered namespaces, keyed by namespace name.
-    pub namespaces: HashMap<String, NamespaceSchema>,
+    pub namespaces: Box<NamespaceMap>,
 
     /// User-defined types, keyed by type name.
     #[serde(default)]
-    pub types: HashMap<String, TypeDefinition>,
+    pub types: Box<TypeMap>,
 }
 
 impl Schema {
@@ -243,8 +259,8 @@ impl Schema {
     pub fn new() -> Self {
         Self {
             version: SCHEMA_VERSION,
-            namespaces: HashMap::new(),
-            types: HashMap::new(),
+            namespaces: Box::new(NamespaceMap::new()),
+            types: Box::new(TypeMap::new()),
         }
     }
 

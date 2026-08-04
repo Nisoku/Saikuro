@@ -473,7 +473,7 @@ where
         // Copy types:  they are passive descriptors and always included.
         filtered.types = full.types.clone();
 
-        for (ns_name, ns_schema) in &full.namespaces {
+        for (ns_name, ns_schema) in full.namespaces.iter() {
             let accessible = self.capability_engine.filter_accessible_functions(
                 ns_schema.functions.iter().map(|(n, s)| (n.as_str(), s)),
                 &self.peer_capabilities,
@@ -481,19 +481,24 @@ where
             if accessible.is_empty() {
                 continue;
             }
-            let functions = ns_schema
-                .functions
-                .iter()
-                .filter(|(name, _)| accessible.contains(name))
-                .map(|(name, schema)| (name.clone(), schema.clone()))
-                .collect();
-            filtered.namespaces.insert(
-                ns_name.clone(),
-                saikuro_core::schema::NamespaceSchema {
-                    functions,
-                    doc: ns_schema.doc.clone(),
-                },
+            let functions = Box::new(
+                ns_schema
+                    .functions
+                    .iter()
+                    .filter(|(name, _)| accessible.contains(name))
+                    .map(|(name, schema)| (name.clone(), schema.clone()))
+                    .collect(),
             );
+            filtered
+                .namespaces
+                .insert(
+                    ns_name.clone(),
+                    saikuro_core::schema::NamespaceSchema {
+                        functions,
+                        doc: ns_schema.doc.clone(),
+                    },
+                )
+                .ok();
         }
 
         filtered

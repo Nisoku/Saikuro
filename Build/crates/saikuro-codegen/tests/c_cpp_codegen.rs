@@ -9,23 +9,25 @@ fn sample_schema() -> Schema {
     let mut schema = Schema::new();
 
     let mut ns = NamespaceSchema {
-        functions: Default::default(),
+        functions: Box::default(),
         doc: Some("Math functions".to_owned()),
     };
 
-    ns.functions.insert(
-        "add".to_owned(),
-        FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::I64),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: true,
-            doc: Some("Add two values".to_owned()),
-        },
-    );
+    ns.functions
+        .insert(
+            "add".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::I64),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: true,
+                doc: Some("Add two values".to_owned()),
+            },
+        )
+        .ok();
 
-    schema.namespaces.insert("math".to_owned(), ns);
+    schema.namespaces.insert("math".to_owned(), ns).ok();
 
     schema
 }

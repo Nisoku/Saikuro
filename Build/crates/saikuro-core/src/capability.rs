@@ -9,13 +9,18 @@
 //! A [`CapabilitySet`] is the collection of tokens held by a connected peer,
 //! issued during the handshake phase.
 
+use alloc::string::String;
+use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fmt;
-use std::sync::OnceLock;
 
 /// Sentinel token value that grants access to all capabilities.
 pub const WILDCARD_TOKEN: &str = "*";
+
+/// Maximum number of distinct capability tokens a peer can hold.
+pub const CAPABILITY_SET_CAPACITY: usize = 256;
+
+/// Fixed-capacity set of capability tokens held by a peer.
+pub type TokenSet = heapless::FnvIndexSet<CapabilityToken, CAPABILITY_SET_CAPACITY>;
 
 /// A single capability token :  a namespaced, human-readable permission string.
 ///
@@ -63,7 +68,7 @@ impl From<String> for CapabilityToken {
 /// on every invocation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CapabilitySet {
-    tokens: HashSet<CapabilityToken>,
+    tokens: TokenSet,
 }
 
 impl CapabilitySet {
@@ -73,10 +78,19 @@ impl CapabilitySet {
     }
 
     /// Construct a set from an iterator of tokens.
-    pub fn from_tokens(iter: impl IntoIterator<Item = CapabilityToken>) -> Self {
-        Self {
-            tokens: iter.into_iter().collect(),
+    ///
+    /// Fails if the iterator yields more than [`CAPABILITY_SET_CAPACITY`]
+    /// distinct tokens.
+    pub fn from_tokens(
+        iter: impl IntoIterator<Item = CapabilityToken>,
+    ) -> Result<Self, &'static str> {
+        let mut tokens = TokenSet::new();
+        for token in iter {
+            tokens
+                .insert(token)
+                .map_err(|_| "capability set capacity exceeded")?;
         }
+        Ok(Self { tokens })
     }
 
     /// Construct an unrestricted set that passes all capability checks.
@@ -85,13 +99,15 @@ impl CapabilitySet {
         // Sentinel: we use a special token that the capability engine
         // recognises as granting everything.
         Self::from_tokens([CapabilityToken::new(WILDCARD_TOKEN)])
+            .expect("wildcard token always fits in CAPABILITY_SET_CAPACITY")
     }
 
     /// Return `true` if this set grants the given capability.
     ///
     /// The wildcard token `"*"` grants every capability.
     pub fn grants(&self, required: &CapabilityToken) -> bool {
-        self.tokens.contains(wildcard_token()) || self.tokens.contains(required)
+        self.tokens.contains(&CapabilityToken::new(WILDCARD_TOKEN))
+            || self.tokens.contains(required)
     }
 
     /// Return `true` if this set satisfies *all* of the required capabilities.
@@ -100,8 +116,11 @@ impl CapabilitySet {
     }
 
     /// Add a token to the set.
-    pub fn insert(&mut self, token: CapabilityToken) {
-        self.tokens.insert(token);
+    ///
+    /// Fails (returning the token) if the set is already at
+    /// [`CAPABILITY_SET_CAPACITY`] distinct tokens.
+    pub fn insert(&mut self, token: CapabilityToken) -> Result<bool, CapabilityToken> {
+        self.tokens.insert(token)
     }
 
     /// Return an iterator over all tokens in the set.
@@ -118,10 +137,4 @@ impl CapabilitySet {
     pub fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
-}
-
-static WILDCARD: OnceLock<CapabilityToken> = OnceLock::new();
-
-fn wildcard_token() -> &'static CapabilityToken {
-    WILDCARD.get_or_init(|| CapabilityToken::new(WILDCARD_TOKEN))
 }
