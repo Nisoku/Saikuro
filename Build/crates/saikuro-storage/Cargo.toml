@@ -40,7 +40,6 @@ saikuro-exec = { workspace = true, default-features = false }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
-rmp-serde = { workspace = true }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }

@@ -209,14 +209,12 @@ pub enum SaikuroError {
     #[error("out-of-order sequence: expected {expected}, got {received}")]
     OutOfOrder { expected: u64, received: u64 },
 
-    //  Serialisation (rmp-serde is std-only)
-    #[cfg(feature = "std")]
+    //  Serialisation
     #[error("msgpack encode error: {0}")]
-    MsgpackEncode(#[from] rmp_serde::encode::Error),
+    MsgpackEncode(#[from] crate::msgpack::EncodeError),
 
-    #[cfg(feature = "std")]
     #[error("msgpack decode error: {0}")]
-    MsgpackDecode(#[from] rmp_serde::decode::Error),
+    MsgpackDecode(#[from] crate::msgpack::DecodeError),
 
     //  I/O
     #[cfg(feature = "std")]
@@ -255,10 +253,9 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::StreamClosed => ErrorCode::StreamClosed,
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
+            SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
             #[cfg(feature = "std")]
-            SaikuroError::MsgpackEncode(_)
-            | SaikuroError::MsgpackDecode(_)
-            | SaikuroError::Io(_) => ErrorCode::Internal,
+            SaikuroError::Io(_) => ErrorCode::Internal,
             SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
         };
 

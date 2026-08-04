@@ -1,33 +1,33 @@
 //! Embassy backend for `saikuro-exec` (`no_std`).
 //!
-//! Provides embassy-backed implementations of the saikuro-exec API surface.
-//! The actual executor is provided by the application via `embassy-executor`;
-//! this crate only supplies the concurrency facade.
+//! Embassy-backed implementations of the saikuro-exec API surface. The actual
+//! executor comes from the application via `embassy-executor`; all this crate
+//! provides is the concurrency facade.
 //!
 //! # Channels
 //!
 //! `mpsc`, `oneshot`, and `watch` are real, owned wrappers over embassy-sync
-//! primitives.  The channel state is shared between the sender and receiver
-//! through `alloc::sync::Arc`, so the handles are `'static` (matching the
-//! tokio facade) and the backing storage is freed once every handle is
-//! dropped.  Facade channels are created once and live for the lifetime of the
-//! process, which is how the router uses them.
+//! primitives. The channel state is shared between sender and receiver through
+//! `alloc::sync::Arc`, so the handles are `'static` (same as the tokio facade)
+//! and the backing storage is freed once the last handle is dropped. In
+//! practice the router creates its facade channels once and keeps them around
+//! for the whole life of the process.
 //!
 //! Channel state is guarded by
-//! `embassy_sync::blocking_mutex::CriticalSectionRawMutex`.  On single-core
-//! MCUs the `critical-section` backend comes from the HAL
-//! (`critical-section-single-core`, `cortex-m`, and so on); multicore targets
-//! must provide a critical-section implementation that covers the whole core.
+//! `embassy_sync::blocking_mutex::CriticalSectionRawMutex`. On single-core MCUs
+//! the `critical-section` backend comes from the HAL
+//! (`critical-section-single-core`, `cortex-m`, etc.); multicore targets have
+//! to supply a critical-section impl that covers the whole core.
 //!
 //! # Task lifecycle
 //!
-//! `spawn` and `block_on` are not provided.  The embassy executor
-//! owns task scheduling: the application creates a static
-//! `embassy_executor::Executor` and hands out `Spawner`s.  A facade cannot
-//! invent a global executor without conflicting with the application's own.
-//! The stubs exist so host-only crates that select `tokio-runtime` resolve
-//! unchanged; they panic with a pointer to the embassy equivalent.
-//! `net`, `signal`, and `runtime` are likewise absent from the embassy model.
+//! There's no `spawn` or `block_on` here. The embassy executor owns task
+//! scheduling: the application stands up a static `embassy_executor::Executor`
+//! and hands out `Spawner`s. A facade can't conjure its own global executor
+//! without clashing with the application's. The stubs are only here so that
+//! host-only crates selecting `tokio-runtime` still resolve, call one and it
+//! panics, pointing you at the embassy equivalent. `net`, `signal`, and
+//! `runtime` are missing from the embassy model for the same reason.
 
 use alloc::sync::Arc;
 use core::cell::RefCell;

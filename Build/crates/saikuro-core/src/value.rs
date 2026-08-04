@@ -326,10 +326,10 @@ mod tests {
             types: Box::new(crate::schema::TypeMap::new()),
         };
 
-        let bytes1 = rmp_serde::to_vec_named(&schema).expect("schema to msgpack");
-        let value: Value = rmp_serde::from_slice(&bytes1).expect("msgpack to Value");
-        let bytes2 = rmp_serde::to_vec_named(&value).expect("Value to msgpack");
-        let schema2: Schema = rmp_serde::from_slice(&bytes2).expect("msgpack to Schema");
+        let bytes1 = crate::msgpack::to_vec(&schema).expect("schema to msgpack");
+        let value: Value = crate::msgpack::from_slice(&bytes1).expect("msgpack to Value");
+        let bytes2 = crate::msgpack::to_vec(&value).expect("Value to msgpack");
+        let schema2: Schema = crate::msgpack::from_slice(&bytes2).expect("msgpack to Schema");
 
         assert_eq!(schema2.version, 1);
         assert!(
@@ -342,8 +342,8 @@ mod tests {
     #[test]
     fn array_not_confused_with_bytes() {
         let original = Value::Array(vec![Value::Int(1), Value::Int(2)]);
-        let bytes = rmp_serde::to_vec_named(&original).expect("serialize");
-        let decoded: Value = rmp_serde::from_slice(&bytes).expect("deserialize");
+        let bytes = crate::msgpack::to_vec(&original).expect("serialize");
+        let decoded: Value = crate::msgpack::from_slice(&bytes).expect("deserialize");
         assert!(
             matches!(decoded, Value::Array(_)),
             "Expected Array, got: {decoded:?}"
@@ -354,8 +354,8 @@ mod tests {
     #[test]
     fn bytes_round_trip() {
         let original = Value::Bytes(vec![0xde, 0xad, 0xbe, 0xef]);
-        let bytes = rmp_serde::to_vec_named(&original).expect("serialize");
-        let decoded: Value = rmp_serde::from_slice(&bytes).expect("deserialize");
+        let bytes = crate::msgpack::to_vec(&original).expect("serialize");
+        let decoded: Value = crate::msgpack::from_slice(&bytes).expect("deserialize");
         assert!(
             matches!(decoded, Value::Bytes(_)),
             "Expected Bytes, got: {decoded:?}"
@@ -378,8 +378,8 @@ mod tests {
             .insert("a".to_owned(), Value::Map(Box::new(inner)))
             .expect("fits");
         let original = Value::Map(Box::new(outer));
-        let bytes = rmp_serde::to_vec_named(&original).expect("serialize");
-        let decoded: Value = rmp_serde::from_slice(&bytes).expect("deserialize");
+        let bytes = crate::msgpack::to_vec(&original).expect("serialize");
+        let decoded: Value = crate::msgpack::from_slice(&bytes).expect("deserialize");
         assert_eq!(original, decoded);
     }
 }

@@ -1,20 +1,20 @@
 //! Deterministic ChaCha20 DRBG backend.
 //!
-//! A counter-mode DRBG built from the RFC 8439 ChaCha20 stream cipher. The
-//! keystream for block `n` is `ChaCha20(key, nonce)` seeked to byte offset
-//! `n * 64`, so the entire stream is a pure function of the 56-byte seed
-//! (32-byte key, 24-byte XChaCha20 nonce). Identical seeds produce identical
-//! output, which is what makes this backend usable for deterministic tests.
+//! This is a counter-mode DRBG over the RFC 8439 ChaCha20 stream cipher. Block
+//! `n` of the keystream is `ChaCha20(key, nonce)` seeked to byte `n * 64`, so
+//! the whole stream is just a function of the 56-byte seed (32-byte key +
+//! 24-byte XChaCha20 nonce). Same seed in, same bytes out: that's the whole
+//! point, since it lets tests be deterministic.
 //!
-//! On MCUs with no entropy source (e.g. RP2040) the binary seeds the global
-//! state from whatever weak entropy the hardware can provide (ROSC jitter) and
-//! all [`crate::fill`] calls draw from it.
+//! On MCUs with no entropy source (RP2040, say) the binary seeds the global
+//! state from whatever weak entropy the hardware has lying around (ROSC jitter)
+//! and every [`crate::fill`] call pulls from that.
 
-// portable-atomic instead of core::sync::atomic: the MCU targets (riscv32imc,
-// thumbv6m) have no native atomics and riscv32imac has no 64-bit ones.
-// portable-atomic maps to native instructions where they exist and to the
-// critical-section fallback elsewhere, which keeps this module compiling for
-// every supported target.
+// We use portable-atomic rather than core::sync::atomic because some of the MCU
+// targets don't have the atomics we need: riscv32imc and thumbv6m have no
+// native atomics at all, and riscv32imac has no 64-bit ones. portable-atomic
+// uses native instructions when they're there and falls back to
+// critical-section otherwise, so this module keeps compiling everywhere.
 use portable_atomic::{AtomicBool, AtomicU64, Ordering};
 
 use chacha20::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
@@ -33,8 +33,8 @@ const SEED_WORDS: usize = SEED_LEN / 8;
 
 /// Generate keystream block `index` for the given key and nonce.
 ///
-/// Errors if the block index overruns the cipher's u32 block counter (2^32
-/// blocks, i.e. 256 GiB of stream), which is how exhaustion is surfaced.
+/// Returns an error if `index` runs past the cipher's u32 block counter (2^32
+/// blocks, ~256 GiB of stream) -- that's how we signal the DRBG is exhausted.
 fn keystream_block(
     key: &[u8; KEY_LEN],
     nonce: &[u8; NONCE_LEN],
@@ -42,7 +42,7 @@ fn keystream_block(
 ) -> Result<[u8; BLOCK_LEN], crate::Error> {
     let mut cipher =
         XChaCha20::new_from_slices(key, nonce).map_err(|_| crate::Error::InvalidSeed)?;
-    // chacha20's seek positions are byte offsets, not block indices.
+    // chacha20 seeks by byte offset, not by block index.
     let pos = index
         .checked_mul(BLOCK_LEN as u64)
         .ok_or(crate::Error::DrbgExhausted)?;
@@ -56,9 +56,9 @@ fn keystream_block(
 
 /// A seedable, deterministic counter-mode ChaCha20 DRBG.
 ///
-/// Local instances are the unit-testable form of the backend; the process-wide
-/// seeded state ([`seed_from_slice`]) is a thin wrapper over the same
-/// keystream construction.
+/// Local instances are the easy-to-unit-test form of this backend. The
+/// process-wide seeded state ([`seed_from_slice`]) is just a thin wrapper around
+/// the same keystream construction.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Drbg {
     key: [u8; KEY_LEN],
@@ -69,7 +69,7 @@ pub struct Drbg {
 impl Drbg {
     /// Construct a DRBG from a seed of at least [`SEED_LEN`] bytes.
     ///
-    /// The first 32 bytes form the key, the next 24 the nonce; extra bytes are
+    /// First 32 bytes are the key, next 24 are the nonce. Anything past that is
     /// ignored.
     pub fn from_seed(seed: &[u8]) -> Result<Self, crate::Error> {
         if seed.len() < SEED_LEN {
@@ -105,7 +105,7 @@ impl Drbg {
         &mut self,
         dest: &mut [core::mem::MaybeUninit<u8>],
     ) -> Result<(), crate::Error> {
-        // SAFETY: `MaybeUninit<u8>` carries no validity constraints, so writing
+        // SAFETY: `MaybeUninit<u8>` has no validity constraints, so writing
         // initialized bytes through an `&mut [u8]` view is always sound.
         let bytes =
             unsafe { core::slice::from_raw_parts_mut(dest.as_mut_ptr() as *mut u8, dest.len()) };
@@ -115,8 +115,10 @@ impl Drbg {
 
 static SEEDED: AtomicBool = AtomicBool::new(false);
 static COUNTER: AtomicU64 = AtomicU64::new(0);
-// Explicit literal: an array-repeat of a non-Copy type needs inline const
-// blocks, which require rustc >= 1.79 and the workspace floor is 1.75.
+// Written out longhand on purpose: array-repeat of a non-Copy type wants inline
+// const blocks, and those need rustc >= 1.79 while our workspace floor is 1.75.
+// I'm keeping it that low because I don't want Saikuro to be not compatible
+// with older toolchains, and 1.75 is the oldest that is reasonable.
 static SEED: [AtomicU64; SEED_WORDS] = [
     AtomicU64::new(0),
     AtomicU64::new(0),
@@ -129,9 +131,9 @@ static SEED: [AtomicU64; SEED_WORDS] = [
 
 /// Seed the process-wide DRBG from `seed`.
 ///
-/// Call once at startup, before any concurrent [`crate::fill`]. The seed words
-/// are stored with release ordering and each word is individually atomic, so
-/// readers that observe `SEEDED` never see a partially-written seed.
+/// Call this once at startup, before any concurrent [`crate::fill`]. Each seed
+/// word is stored individually with release ordering, so a reader that sees
+/// `SEEDED` will never catch a half-written seed.
 pub fn seed_from_slice(seed: &[u8]) -> Result<(), crate::Error> {
     if seed.len() < SEED_LEN {
         return Err(crate::Error::InvalidSeed);
@@ -160,9 +162,9 @@ fn read_seed() -> ([u8; KEY_LEN], [u8; NONCE_LEN]) {
     let mut key = [0u8; KEY_LEN];
     let mut nonce = [0u8; NONCE_LEN];
     key.copy_from_slice(&seed[..KEY_LEN]);
-    // SEED is zero-initialized only because it is a static; seed_from_slice()
-    // writes external entropy into it before fill(), which is guarded by
-    // is_seeded(), can read it, so the zero initializer is never observable.
+    // SEED only starts out zeroed because it's a static. seed_from_slice() writes
+    // real entropy into it before anyone calls fill(), and fill() is gated on
+    // is_seeded(), so nobody ever actually reads the zero initializer.
     nonce.copy_from_slice(&seed[KEY_LEN..SEED_LEN]);
     (key, nonce)
 }
@@ -186,7 +188,7 @@ pub fn fill(dest: &mut [u8]) -> Result<(), crate::Error> {
 
 /// Fill potentially uninitialized `dest` from the process-wide DRBG.
 pub fn fill_uninit(dest: &mut [core::mem::MaybeUninit<u8>]) -> Result<(), crate::Error> {
-    // SAFETY: `MaybeUninit<u8>` carries no validity constraints, so writing
+    // SAFETY: `MaybeUninit<u8>` has no validity constraints, so writing
     // initialized bytes through an `&mut [u8]` view is always sound.
     let bytes =
         unsafe { core::slice::from_raw_parts_mut(dest.as_mut_ptr() as *mut u8, dest.len()) };

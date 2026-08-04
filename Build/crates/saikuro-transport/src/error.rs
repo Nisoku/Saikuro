@@ -29,10 +29,10 @@ pub enum TransportError {
     Io(#[from] std::io::Error),
 
     #[error("msgpack encode error: {0}")]
-    MsgpackEncode(#[from] rmp_serde::encode::Error),
+    MsgpackEncode(#[from] saikuro_core::msgpack::EncodeError),
 
     #[error("msgpack decode error: {0}")]
-    MsgpackDecode(#[from] rmp_serde::decode::Error),
+    MsgpackDecode(#[from] saikuro_core::msgpack::DecodeError),
 
     #[error("channel closed")]
     ChannelClosed,

@@ -1,15 +1,13 @@
 //! Randomness and entropy facade for Saikuro.
 //!
-//! Hides the platform entropy source behind a small `no_std` API so that
-//! protocol types do not depend on a specific RNG crate.
+//! Wraps the platform entropy source in a small `no_std` API so protocol types
+//! don't have to depend on one specific RNG crate.
 //!
-//! Backend selection mirrors saikuro-exec: a binary selects its
-//! entropy source with cargo features
+//! Backend selection works the same way as saikuro-exec: the binary picks its
+//! entropy source through cargo features.
 //!
 //! # Determinism
-//!
-//! Enabling `drbg` makes every call reproducible for a given seed, which is
-//! the only way to write deterministic tests over code that issues UUIDs.
+//! Turn on `drbg` and every call becomes reproducible for a given seed
 
 #![no_std]
 
@@ -25,25 +23,25 @@ pub use uuid::Uuid;
 
 /// Deterministic, seedable ChaCha20 DRBG.
 ///
-/// Available with the `drbg` feature. Local instances are fully deterministic:
-/// identical seeds produce identical streams, which makes them usable in
-/// reproducible tests and as the entropy core for MCUs without a hardware RNG.
+/// Comes with the `drbg` feature. Local instances are fully deterministic:
+/// the same seed always gives the same stream, which is what makes them handy
+/// for reproducible tests and as the entropy core on MCUs with no hardware RNG.
 #[cfg(feature = "drbg")]
 pub use drbg::Drbg;
 
 /// Errors produced by the entropy facade.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
-    /// The getrandom-based backend failed to produce entropy.
+    /// The getrandom-based backend couldn't produce entropy.
     #[cfg(any(feature = "os", feature = "wasm", feature = "custom"))]
     Backend(getrandom::Error),
-    /// The DRBG backend was used before being seeded.
+    /// The DRBG was used before anyone seeded it.
     #[cfg(feature = "drbg")]
     DrbgNotSeeded,
-    /// The seed passed to the DRBG was too short.
+    /// The seed handed to the DRBG was too short.
     #[cfg(feature = "drbg")]
     InvalidSeed,
-    /// The DRBG keystream for the current seed has been exhausted.
+    /// The DRBG keystream for the current seed ran out.
     #[cfg(feature = "drbg")]
     DrbgExhausted,
 }
@@ -75,16 +73,16 @@ impl From<getrandom::Error> for Error {
 
 /// Fill `dest` with cryptographically secure random bytes.
 ///
-/// With the `drbg` feature the DRBG backend is used instead; it must be
-/// seeded first via [`seed_from_slice`].
+/// With the `drbg` feature on you get the DRBG backend instead, and you have to
+/// seed it first via [`seed_from_slice`].
 pub fn fill(dest: &mut [u8]) -> Result<(), Error> {
     fill_impl(dest)
 }
 
 /// Fill potentially uninitialized `dest` with random bytes.
 ///
-/// Semantics match [`getrandom::fill_uninit`]: every byte is initialized on
-/// success, even in error paths the buffer may be partially written.
+/// Same semantics as [`getrandom::fill_uninit`]: on success every byte is
+/// initialized, and even on the error path the buffer may be partly written.
 pub fn fill_uninit(dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
     fill_uninit_impl(dest)
 }
@@ -105,8 +103,8 @@ pub fn u64() -> Result<u64, Error> {
 
 /// Generate a random RFC 4122 version 4 UUID.
 ///
-/// The 16 random bytes come from the active backend; version and variant bits
-/// are set per RFC 9562 section 5.8.
+/// The 16 random bytes come from the active backend; the version and variant
+/// bits get set per RFC 9562 section 5.8.
 pub fn uuid_v4() -> Result<Uuid, Error> {
     let mut bytes = [0u8; 16];
     fill(&mut bytes)?;
@@ -117,11 +115,10 @@ pub fn uuid_v4() -> Result<Uuid, Error> {
 
 /// Seed the DRBG backend from `seed`.
 ///
-/// The seed must be at least 56 bytes; the first 32 bytes form the ChaCha20
-/// key and the next 24 the XChaCha20 nonce. Call once at startup, before any
-/// concurrent `fill` call (the seed bytes are written before tasks spawn, so
-/// readers never observe a partially-written seed). Only available with the
-/// `drbg` feature.
+/// The seed needs at least 56 bytes: the first 32 are the ChaCha20 key and the
+/// next 24 are the XChaCha20 nonce. Call it once at startup, before any
+/// concurrent `fill` calls, since the seed is written before tasks spawn, readers
+/// never catch a half-written seed. Only there with the `drbg` feature.
 #[cfg(feature = "drbg")]
 pub fn seed_from_slice(seed: &[u8]) -> Result<(), Error> {
     drbg::seed_from_slice(seed)

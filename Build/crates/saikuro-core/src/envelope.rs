@@ -2,7 +2,7 @@
 //!
 //! Every message exchanged between a language adapter and the Saikuro runtime
 //! is wrapped in an [`Envelope`] or [`ResponseEnvelope`].  Envelopes are
-//! serialised to binary using MessagePack (via `rmp-serde`) before transit;
+//! serialised to binary using MessagePack via `crate::msgpack` before transit;
 //! the types here are the canonical in-memory representation.
 
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
@@ -119,27 +119,25 @@ pub struct Envelope {
     pub seq: Option<u64>,
 }
 
-// Shared MessagePack serialization for wire types. rmp-serde is std-only.
-#[cfg(feature = "std")]
+// Shared MessagePack serialization for wire types. The codec is no_std + alloc,
+// so these helpers exist on every build target.
 macro_rules! impl_msgpack {
     ($ty:ty) => {
         impl $ty {
             /// Serialise this envelope to MessagePack bytes.
-            pub fn to_msgpack(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
-                rmp_serde::to_vec_named(self)
+            pub fn to_msgpack(&self) -> Result<Vec<u8>, crate::msgpack::EncodeError> {
+                crate::msgpack::to_vec(self)
             }
 
             /// Deserialise from MessagePack bytes.
-            pub fn from_msgpack(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
-                rmp_serde::from_slice(bytes)
+            pub fn from_msgpack(bytes: &[u8]) -> Result<Self, crate::msgpack::DecodeError> {
+                crate::msgpack::from_slice(bytes)
             }
         }
     };
 }
 
-#[cfg(feature = "std")]
 impl_msgpack!(Envelope);
-#[cfg(feature = "std")]
 impl_msgpack!(ResponseEnvelope);
 
 impl Envelope {

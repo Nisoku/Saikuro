@@ -91,14 +91,14 @@ impl StorageError {
     }
 }
 
-impl From<rmp_serde::encode::Error> for StorageError {
-    fn from(e: rmp_serde::encode::Error) -> Self {
+impl From<saikuro_core::msgpack::EncodeError> for StorageError {
+    fn from(e: saikuro_core::msgpack::EncodeError) -> Self {
         StorageError::Serialization(e.to_string())
     }
 }
 
-impl From<rmp_serde::decode::Error> for StorageError {
-    fn from(e: rmp_serde::decode::Error) -> Self {
+impl From<saikuro_core::msgpack::DecodeError> for StorageError {
+    fn from(e: saikuro_core::msgpack::DecodeError) -> Self {
         StorageError::Deserialization(e.to_string())
     }
 }

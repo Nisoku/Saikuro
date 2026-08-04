@@ -71,7 +71,7 @@ type PendingCalls = Arc<DashMap<InvocationId, oneshot::Sender<ResponseEnvelope>>
 
 /// Encode a serializable value as MessagePack `Bytes`.
 fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
-    rmp_serde::to_vec_named(value)
+    saikuro_core::msgpack::to_vec(value)
         .map(Bytes::from)
         .map_err(|e| e.to_string())
 }
@@ -276,7 +276,7 @@ where
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
     /// response on failure.
     fn decode_envelope(&self, frame: &[u8]) -> Result<Envelope, Box<ResponseEnvelope>> {
-        match rmp_serde::from_slice(frame) {
+        match saikuro_core::msgpack::from_slice(frame) {
             Ok(env) => Ok(env),
             Err(e) => {
                 warn!(peer = %self.peer_id, "envelope decode failed: {e}");
@@ -318,7 +318,7 @@ where
         // Envelope has `type` (the discriminant) as a required field.
         // We can tell them apart by attempting ResponseEnvelope decode and
         // checking if the resulting `id` matches any pending call.
-        if let Ok(resp) = rmp_serde::from_slice::<ResponseEnvelope>(&frame) {
+        if let Ok(resp) = saikuro_core::msgpack::from_slice::<ResponseEnvelope>(&frame) {
             if let Some((_, sender)) = pending.remove(&resp.id) {
                 let _ = sender.send(resp);
                 return true;
@@ -358,7 +358,7 @@ where
 
         let schema: Option<Schema> = envelope.args.into_iter().next().and_then(|v| {
             let bytes = encode_bytes(&v).ok()?;
-            rmp_serde::from_slice(&bytes).ok()
+            saikuro_core::msgpack::from_slice(&bytes).ok()
         });
 
         match schema {
@@ -511,7 +511,7 @@ where
         let schema_value: Value = {
             let bytes =
                 encode_bytes(&filtered).map_err(|e| format!("sandbox schema encode error: {e}"))?;
-            rmp_serde::from_slice::<Value>(&bytes)
+            saikuro_core::msgpack::from_slice::<Value>(&bytes)
                 .map_err(|e| format!("sandbox schema value decode error: {e}"))?
         };
         let announce = Envelope::announce(schema_value);

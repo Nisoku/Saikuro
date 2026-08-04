@@ -1,28 +1,29 @@
-# Saikuro Cargo configuration
+# Saikuro Cargo config
 #
-# WASM test runner: requires `cargo install wasm-bindgen-cli`
-# Run with:  cargo test -p saikuro-tests --target wasm32-unknown-unknown
-# Or:        wasm-pack test --headless --chrome Build/tests
+# WASM tests need wasm-bindgen-cli (cargo install wasm-bindgen-cli).
+#   cargo test -p saikuro-tests --target wasm32-unknown-unknown
+#   wasm-pack test --headless --chrome Build/tests
 
-# getrandom 0.3 selects its backend at compile time via the
-# `getrandom_backend` cfg.
+# getrandom 0.3 picks its backend at compile time with the `getrandom_backend`
+# cfg, so we set it per-target here.
 #
-# - wasm32-unknown-unknown has no OS entropy source, so every build for that
-#   target pins the `wasm_js` backend; the matching cargo feature is enabled
-#   by saikuro-random's `wasm` feature (wired through adapters/rust,
-#   saikuro-runtime, and saikuro-tests' wasm32 deps).
-# - bare-metal MCU targets have no OS and no practical wasm host, so they use
-#   the `custom` backend. The final binary must define `__getrandom_v03_custom`
-#   (a no-op here would link a broken RNG, so `fill` fails loudly instead). The
-#   matching cargo feature is enabled via saikuro-random's `custom` feature.
+# wasm32-unknown-unknown has no OS entropy, so we pin the `wasm_js` backend on
+# every build for it. saikuro-random's `wasm` feature turns on the matching
+# cargo feature (threaded through adapters/rust, saikuro-runtime, and
+# saikuro-tests' wasm32 deps).
 #
-# Host targets leave the cfg unset and getrandom uses its per-target default
-# (the OS backends).
+# Bare-metal MCU targets have no OS and no real wasm host, so they get the
+# `custom` backend. Whatever we link has to define `__getrandom_v03_custom` --
+# we deliberately don't stub it, because a no-op would be a silently broken RNG.
+# Better to have `fill` blow up than hand back fake randomness. saikuro-random's
+# `custom` feature wires up the cargo feature.
+#
+# Host targets: leave the cfg alone and let getrandom use its normal OS backend.
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 
-# Bare-metal targets (verification + intended chips):
+# Bare-metal targets:
 #   riscv32imc-unknown-none-elf        ESP32-C3
 #   thumbv6m-none-eabi                 RP2040
 #   thumbv8m.main-none-eabihf          RP2350

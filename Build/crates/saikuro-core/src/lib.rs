@@ -23,6 +23,7 @@ pub mod envelope;
 pub mod error;
 pub mod invocation;
 pub mod log;
+pub mod msgpack;
 pub mod resource;
 pub mod schema;
 pub mod sync;

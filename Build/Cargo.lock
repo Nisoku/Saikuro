@@ -1009,6 +1009,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "messagepack-core"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95fe590f7b7d58bfefd83d9995c0b09eaecb8607e4bb66a658c95c0bd691f876"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "messagepack-serde"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a630d3ff4e4c893267925baffa3f8e75f0cdb20d212170ee7d8576a45ac1869"
+dependencies = [
+ "messagepack-core",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
 name = "minicov"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1428,7 +1448,7 @@ name = "saikuro-core"
 version = "0.1.0"
 dependencies = [
  "heapless",
- "rmp-serde",
+ "messagepack-serde",
  "saikuro-random",
  "serde",
  "serde_bytes",
@@ -1488,7 +1508,6 @@ dependencies = [
  "dashmap",
  "futures",
  "parking_lot 0.12.5",
- "rmp-serde",
  "saikuro-core",
  "saikuro-exec",
  "saikuro-random",
@@ -1524,7 +1543,6 @@ dependencies = [
  "futures",
  "js-sys",
  "parking_lot 0.12.5",
- "rmp-serde",
  "rusqlite",
  "saikuro-core",
  "saikuro-exec",
@@ -1556,6 +1574,7 @@ dependencies = [
  "saikuro-runtime",
  "saikuro-schema",
  "saikuro-transport",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",
@@ -1574,7 +1593,6 @@ dependencies = [
  "futures",
  "js-sys",
  "pin-project-lite",
- "rmp-serde",
  "saikuro-core",
  "saikuro-exec",
  "send_wrapper",

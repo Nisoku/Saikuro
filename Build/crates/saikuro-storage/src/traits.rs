@@ -125,7 +125,7 @@ pub trait KeyValueBackendExt: KeyValueBackend {
     ) -> Result<Option<T>> {
         match self.get(namespace, key).await? {
             Some(bytes) => {
-                let value = rmp_serde::from_slice(&bytes)
+                let value = saikuro_core::msgpack::from_slice(&bytes)
                     .map_err(|e| super::error::StorageError::deserialization(e.to_string()))?;
                 Ok(Some(value))
             }
@@ -140,7 +140,7 @@ pub trait KeyValueBackendExt: KeyValueBackend {
         key: &str,
         value: &T,
     ) -> Result<()> {
-        let bytes = rmp_serde::to_vec_named(value)
+        let bytes = saikuro_core::msgpack::to_vec(value)
             .map_err(|e| super::error::StorageError::serialization(e.to_string()))?;
         self.put(namespace, key, Bytes::from(bytes)).await
     }

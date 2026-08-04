@@ -30,7 +30,6 @@ saikuro-core = { workspace = true }
 
 serde       = { workspace = true }
 bytes       = { workspace = true }
-rmp-serde   = { workspace = true }
 async-trait = { workspace = true }
 futures     = { workspace = true }
 pin-project-lite = { workspace = true }
