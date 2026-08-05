@@ -219,13 +219,21 @@ fn drop_receiver_while_sender_is_sending() {
         });
 
         // Fill the channel then try to send one more (which will block,
-        // then fail when the receiver is dropped).
+        // then fail when the receiver is dropped).  The abort task may drop
+        // the receiver mid-fill on a loaded machine, which is the same
+        // acceptable outcome as the final send below.
+        let mut receiver_dropped = false;
         for _ in 0..256 {
-            sender.send(Bytes::from_static(b"x")).await.unwrap();
+            if sender.send(Bytes::from_static(b"x")).await.is_err() {
+                receiver_dropped = true;
+                break;
+            }
         }
-        // This send may return an error (receiver dropped) or succeed
-        // (if the abort task hasn't run yet).  Either is acceptable.
-        let _ = sender.send(Bytes::from_static(b"last")).await;
+        if !receiver_dropped {
+            // This send may return an error (receiver dropped) or succeed
+            // (if the abort task hasn't run yet).  Either is acceptable.
+            let _ = sender.send(Bytes::from_static(b"last")).await;
+        }
         abort.await.unwrap();
     })
 }

@@ -1,5 +1,9 @@
 //! Transport error type.
+//!
+//! The crate is `no_std` + `alloc` without the `std` feature, so the raw
+//! `std::io::Error` variant is gated the same way as in saikuro-core.
 
+use alloc::string::String;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -25,6 +29,7 @@ pub enum TransportError {
     #[error("transport not supported on this platform")]
     NotSupported,
 
+    #[cfg(feature = "std")]
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -38,4 +43,4 @@ pub enum TransportError {
     ChannelClosed,
 }
 
-pub type Result<T> = std::result::Result<T, TransportError>;
+pub type Result<T> = core::result::Result<T, TransportError>;

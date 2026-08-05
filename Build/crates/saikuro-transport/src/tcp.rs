@@ -6,15 +6,13 @@
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::StreamExt;
 use saikuro_exec::net::{TcpListener, TcpStream};
-use saikuro_exec::tokio_util::codec::Framed;
 use std::net::SocketAddr;
 use tracing::debug;
 
 use crate::{
     error::Result,
-    framing::LengthPrefixedCodec,
+    framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
 
@@ -26,7 +24,7 @@ use crate::{
 /// Use [`TcpConnector`] to establish outgoing connections and
 /// [`TcpTransportListener`] to accept incoming ones.
 pub struct TcpTransport {
-    framed: Framed<TcpStream, LengthPrefixedCodec>,
+    framed: FramedStream<TcpStream>,
     peer_addr: SocketAddr,
 }
 
@@ -38,7 +36,7 @@ impl TcpTransport {
         // matters more than segment coalescing.
         stream.set_nodelay(true)?;
         Ok(Self {
-            framed: Framed::new(stream, LengthPrefixedCodec::new()),
+            framed: FramedStream::new(stream),
             peer_addr,
         })
     }
@@ -71,14 +69,14 @@ impl Transport for TcpTransport {
 // Sender / Receiver
 
 pub struct TcpSender {
-    inner: futures::stream::SplitSink<Framed<TcpStream, LengthPrefixedCodec>, Bytes>,
+    inner: futures::stream::SplitSink<FramedStream<TcpStream>, Bytes>,
     peer_addr: SocketAddr,
 }
 
 impl_native_sender!(TcpSender, peer_addr, "tcp");
 
 pub struct TcpReceiver {
-    inner: futures::stream::SplitStream<Framed<TcpStream, LengthPrefixedCodec>>,
+    inner: futures::stream::SplitStream<FramedStream<TcpStream>>,
     peer_addr: SocketAddr,
 }
 

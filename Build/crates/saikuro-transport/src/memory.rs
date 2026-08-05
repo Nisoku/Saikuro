@@ -4,6 +4,8 @@
 //! channels.  There is no serialisation overhead beyond MessagePack (which
 //! the runtime performs regardless of transport); frames arrive as
 //! `Bytes` objects with zero copying.
+use alloc::boxed::Box;
+use alloc::string::String;
 use async_trait::async_trait;
 use bytes::Bytes;
 use saikuro_exec::mpsc;

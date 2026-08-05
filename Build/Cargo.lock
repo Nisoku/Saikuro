@@ -1563,6 +1563,7 @@ name = "saikuro-tests"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "futures",
  "js-sys",
  "rmp-serde",
  "saikuro",
@@ -1595,6 +1596,7 @@ dependencies = [
  "pin-project-lite",
  "saikuro-core",
  "saikuro-exec",
+ "saikuro-random",
  "send_wrapper",
  "serde",
  "thiserror 2.0.18",

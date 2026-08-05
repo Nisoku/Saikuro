@@ -8,15 +8,13 @@
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::StreamExt;
 use saikuro_exec::net::{UnixListener, UnixStream};
-use saikuro_exec::tokio_util::codec::Framed;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use crate::{
     error::Result,
-    framing::LengthPrefixedCodec,
+    framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
 
@@ -24,7 +22,7 @@ use crate::{
 
 /// A Unix domain socket transport connection.
 pub struct UnixTransport {
-    framed: Framed<UnixStream, LengthPrefixedCodec>,
+    framed: FramedStream<UnixStream>,
     path: PathBuf,
 }
 
@@ -32,7 +30,7 @@ impl UnixTransport {
     /// Wrap an already-connected [`UnixStream`].
     pub fn new(stream: UnixStream, path: PathBuf) -> Self {
         Self {
-            framed: Framed::new(stream, LengthPrefixedCodec::new()),
+            framed: FramedStream::new(stream),
             path,
         }
     }
@@ -65,14 +63,14 @@ impl Transport for UnixTransport {
 // Sender / Receiver
 
 pub struct UnixSender {
-    inner: futures::stream::SplitSink<Framed<UnixStream, LengthPrefixedCodec>, Bytes>,
+    inner: futures::stream::SplitSink<FramedStream<UnixStream>, Bytes>,
     path: PathBuf,
 }
 
 impl_native_sender!(UnixSender, path, "unix");
 
 pub struct UnixReceiver {
-    inner: futures::stream::SplitStream<Framed<UnixStream, LengthPrefixedCodec>>,
+    inner: futures::stream::SplitStream<FramedStream<UnixStream>>,
     path: PathBuf,
 }
 

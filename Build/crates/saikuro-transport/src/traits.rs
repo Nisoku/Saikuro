@@ -5,6 +5,7 @@
 //! to WebSocket when moving to WASM) without touching any routing or
 //! schema logic.
 
+use alloc::boxed::Box;
 use async_trait::async_trait;
 use bytes::Bytes;
 

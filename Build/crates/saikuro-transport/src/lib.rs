@@ -8,11 +8,19 @@
 //! | [`memory`]         | always on           | native + wasm32   |
 //! | [`unix`]           | `native-transport`  | Unix only         |
 //! | [`tcp`]            | `native-transport`  | native only       |
-//! | [`websocket`]      | `ws-transport`      | native + wasm32   |
+//! | [`websocket`]      | `native-ws`/wasm32  | native + wasm32   |
 //! | [`wasm_host`]      | always on (wasm32)  | wasm32 only       |
+//!
+//! The crate is `no_std` + `alloc` without the `std` feature; the in-memory
+//! transport, selector, traits, and error types compile for bare-metal MCU
+//! targets.  Native backends (Unix/TCP/WebSocket) require `std`.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
 
 pub mod error;
-#[cfg(feature = "native-transport")]
 pub mod framing;
 pub mod memory;
 pub mod selector;
@@ -28,7 +36,10 @@ pub mod tcp;
 ))]
 pub mod unix;
 
-#[cfg(feature = "ws-transport")]
+#[cfg(all(
+    feature = "ws-transport",
+    any(feature = "native-ws", target_arch = "wasm32")
+))]
 pub mod websocket;
 
 #[cfg(target_arch = "wasm32")]
@@ -49,10 +60,13 @@ pub use tcp::TcpTransport;
 ))]
 pub use unix::UnixTransport;
 
-#[cfg(feature = "ws-transport")]
+#[cfg(all(
+    feature = "ws-transport",
+    any(feature = "native-ws", target_arch = "wasm32")
+))]
 pub use websocket::WebSocketTransport;
 
-#[cfg(all(feature = "ws-transport", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "native-ws", not(target_arch = "wasm32")))]
 pub use websocket::WsTransportListener;
 
 #[cfg(target_arch = "wasm32")]

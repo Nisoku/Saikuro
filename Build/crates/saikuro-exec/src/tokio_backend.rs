@@ -34,6 +34,10 @@ pub mod net {
     pub use tokio::net::*;
 }
 
+pub mod io {
+    pub use tokio::io::*;
+}
+
 pub mod signal {
     pub use tokio::signal::*;
 }

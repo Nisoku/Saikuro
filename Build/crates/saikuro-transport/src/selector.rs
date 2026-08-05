@@ -15,6 +15,8 @@
 //! The user can override any of these choices by supplying an explicit
 //! [`TransportConfig`].
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 /// The set of transport backends Saikuro knows about.
