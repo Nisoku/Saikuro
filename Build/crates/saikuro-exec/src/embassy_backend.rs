@@ -477,6 +477,11 @@ pub mod mpsc {
     /// reference-counted and freed once all handles are dropped.
     pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
         assert!(
+            capacity > 0,
+            "saikuro-exec: mpsc capacity 0 is unsupported; a channel must hold \
+             at least one message"
+        );
+        assert!(
             capacity <= CHANNEL_CAPACITY,
             "saikuro-exec: mpsc capacity {capacity} exceeds the fixed \
              embassy capacity {CHANNEL_CAPACITY}"

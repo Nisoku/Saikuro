@@ -35,7 +35,9 @@ pub mod net {
 }
 
 pub mod io {
-    pub use tokio::io::*;
+    pub use tokio::io::{
+        duplex, split, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf,
+    };
 }
 
 pub mod signal {

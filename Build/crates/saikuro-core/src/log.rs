@@ -174,7 +174,7 @@ pub type LogSink = Box<dyn Fn(LogRecord) + Send + Sync + 'static>;
 
 /// A simple log sink that serialises each [`LogRecord`] as a JSON line and
 /// writes it to stderr.  Used when no richer sink is configured.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 pub fn stderr_log_sink() -> LogSink {
     Box::new(|record: LogRecord| {
         if let Ok(json) = serde_json::to_string(&record) {

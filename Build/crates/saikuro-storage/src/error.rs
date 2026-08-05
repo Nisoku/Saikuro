@@ -1,9 +1,13 @@
 //! Error types for the storage backend abstraction.
 
-use std::io;
+use alloc::string::String;
+use alloc::string::ToString;
 use thiserror::Error;
 
-pub type Result<T> = std::result::Result<T, StorageError>;
+#[cfg(feature = "std")]
+use std::io;
+
+pub type Result<T> = core::result::Result<T, StorageError>;
 
 /// Error type for all storage backend operations.
 #[derive(Error, Debug)]
@@ -20,6 +24,7 @@ pub enum StorageError {
     #[error("namespace already exists: {0}")]
     NamespaceAlreadyExists(String),
 
+    #[cfg(feature = "std")]
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 

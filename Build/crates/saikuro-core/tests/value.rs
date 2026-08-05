@@ -43,11 +43,12 @@ fn schema_round_trip_via_value() {
     let bytes2 = msgpack::to_vec(&value).expect("Value to msgpack");
     let schema2: Schema = msgpack::from_slice(&bytes2).expect("msgpack to Schema");
 
-    assert_eq!(schema2.version, 1);
-    assert!(
-        schema2.namespaces.contains_key("svc"),
-        "namespace 'svc' not found after round-trip"
-    );
+    // `Schema` does not derive PartialEq (its heapless map and doc fields do
+    // not support it), so compare the decoded schema's re-encoding with the
+    // original bytes.  A byte-identical re-encoding proves the round-trip lost
+    // no field and changed nothing.
+    let bytes3 = msgpack::to_vec(&schema2).expect("schema2 to msgpack");
+    assert_eq!(bytes3, bytes1, "schema changed across the Value round-trip");
 }
 
 /// Regression: Value::Array must not be confused with Value::Bytes.
@@ -68,10 +69,11 @@ fn bytes_round_trip() {
     let original = Value::Bytes(vec![0xde, 0xad, 0xbe, 0xef]);
     let bytes = msgpack::to_vec(&original).expect("serialize");
     let decoded: Value = msgpack::from_slice(&bytes).expect("deserialize");
-    assert!(
-        matches!(decoded, Value::Bytes(_)),
-        "Expected Bytes, got: {decoded:?}"
+    assert_eq!(
+        decoded, original,
+        "bytes payload changed across the round-trip"
     );
+    assert_eq!(bytes[0], 0xC4, "Value::Bytes must encode as msgpack bin8");
 }
 
 #[test]

@@ -9,20 +9,23 @@ repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 
 [features]
-default = ["native-storage"]
+default = ["std", "native-storage"]
+std = []
 native-storage = [
+    "std",
     "inmemory",
     "local-storage",
     "session-storage",
     "saikuro-exec/tokio-runtime",
 ]
-inmemory = ["dashmap", "parking_lot"]
+inmemory = ["std", "dashmap"]
 local-storage = ["inmemory"]
 session-storage = ["inmemory"]
-fs-storage = ["dep:tokio", "saikuro-exec/tokio-runtime"]
-sled-storage = ["dep:tokio", "dep:sled", "saikuro-exec/tokio-runtime"]
-sqlite-storage = ["dep:tokio", "dep:rusqlite", "saikuro-exec/tokio-runtime"]
+fs-storage = ["std", "dep:tokio", "saikuro-exec/tokio-runtime"]
+sled-storage = ["std", "dep:tokio", "dep:sled", "saikuro-exec/tokio-runtime"]
+sqlite-storage = ["std", "dep:tokio", "dep:rusqlite", "saikuro-exec/tokio-runtime"]
 wasm-storage = [
+    "std",
     "inmemory",
     "local-storage",
     "session-storage",
@@ -39,7 +42,7 @@ saikuro-core = { workspace = true }
 saikuro-exec = { workspace = true, default-features = false }
 
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["alloc"] }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -47,7 +50,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 dashmap = { workspace = true, optional = true }
-parking_lot = { workspace = true, optional = true }
 tokio = { version = "1.52.3", features = ["rt"], optional = true }
 sled = { version = "0.34.7", optional = true }
 rusqlite = { version = "0.40.0", features = ["bundled"], optional = true }

@@ -217,7 +217,7 @@ pub enum SaikuroError {
     MsgpackDecode(#[from] crate::msgpack::DecodeError),
 
     //  I/O
-    #[cfg(feature = "std")]
+    #[cfg(any(feature = "std", feature = "std-no-os"))]
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -254,7 +254,7 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
             SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
-            #[cfg(feature = "std")]
+            #[cfg(any(feature = "std", feature = "std-no-os"))]
             SaikuroError::Io(_) => ErrorCode::Internal,
             SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
         };

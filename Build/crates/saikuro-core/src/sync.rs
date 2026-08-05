@@ -11,17 +11,19 @@
 //! and MCU targets.  The guards are only ever held for short map mutations;
 //! they are never held across an `await`.
 //!
-//! Lock poisoning is not recovered from: a panic while one of these guards is
-//! held poisons the lock, and the next acquisition panics too, so the bug
-//! surfaces immediately instead of being silently recovered from.
+//! Poisoning behaviour is backend-specific.  `std::sync::Mutex` and
+//! `std::sync::RwLock` write guards become poisoned if a panic unwinds while
+//! they are held, and the next acquisition then panics, surfacing the bug
+//! immediately.  `std::sync::RwLock` read guards never poison a lock, and the
+//! `spin` guards used on no_std builds expose no poison state at all.
 
 use core::fmt;
 use core::ops::{Deref, DerefMut};
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 use std::sync as imp;
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(any(feature = "std", feature = "std-no-os")))]
 use spin as imp;
 
 /// A reader-writer lock.  `read`/`write` return guards that deref to the
@@ -64,7 +66,7 @@ trait MutexAccess<T: ?Sized> {
     fn lock_guard(&self) -> imp::MutexGuard<'_, T>;
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
     fn read_guard(&self) -> imp::RwLockReadGuard<'_, T> {
         self.read()
@@ -77,7 +79,7 @@ impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
     fn lock_guard(&self) -> imp::MutexGuard<'_, T> {
         self.lock()
@@ -85,7 +87,7 @@ impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
     }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(any(feature = "std", feature = "std-no-os")))]
 impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
     fn read_guard(&self) -> imp::RwLockReadGuard<'_, T> {
         self.read()
@@ -96,7 +98,7 @@ impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
     }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(any(feature = "std", feature = "std-no-os")))]
 impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
     fn lock_guard(&self) -> imp::MutexGuard<'_, T> {
         self.lock()

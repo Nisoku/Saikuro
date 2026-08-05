@@ -71,8 +71,16 @@ fn codec_handles_partial_input() {
 
 #[test]
 fn codec_rejects_oversized_frame_then_recovers() {
-    // Forge a 4 GiB length header (u32 max) that exceeds MAX_FRAME_SIZE.
-    let mut wire = BytesMut::from(&[0xFF, 0xFF, 0xFF, 0xFF][..]);
+    // Forge a length header just over MAX_FRAME_SIZE and retain the declared
+    // trailing payload on the wire.  The codec must swallow exactly that many
+    // bytes so they are not misread as a fresh header, then resynchronize at
+    // the valid frame that follows on the same buffer.
+    let forged = saikuro_transport::MAX_FRAME_SIZE as u32 + 3;
+    let valid = encode_frames(&[Bytes::from_static(b"ok")]);
+    let mut wire = BytesMut::new();
+    wire.put_u32(forged);
+    wire.resize(4 + forged as usize, 0);
+    wire.extend_from_slice(&valid);
 
     let mut codec = LengthPrefixedCodec::new();
     match codec.decode(&mut wire) {
@@ -80,12 +88,9 @@ fn codec_rejects_oversized_frame_then_recovers() {
         other => panic!("expected MessageTooLarge, got {other:?}"),
     }
 
-    // The codec must reset after the bogus header so a subsequent valid frame
-    // decodes instead of erroring forever.
-    let valid = encode_frames(&[Bytes::from_static(b"ok")]);
-    wire.extend_from_slice(&valid);
     let got = codec.decode(&mut wire).expect("decode").expect("frame");
     assert_eq!(got, Bytes::from_static(b"ok"));
+    assert!(wire.is_empty(), "all wire bytes consumed");
 }
 
 #[test]
@@ -149,6 +154,32 @@ fn framed_stream_truncated_frame_errors() {
             Some(Err(TransportError::FramingError(_))) => {}
             other => panic!("expected FramingError, got {other:?}"),
         }
+        // The stream is terminal after a framing error.
+        assert!(framed_server.next().await.is_none());
+    })
+}
+
+#[test]
+fn framed_stream_stays_terminal_after_oversized_frame_error() {
+    block_on(async {
+        let (client, server) = saikuro_exec::io::duplex(4096);
+        let (_rx, mut tx) = saikuro_exec::io::split(client);
+        let mut framed_server = FramedStream::new(server);
+
+        // Forge an oversized length header.  The byte stream is unaligned
+        // after it, so the reader must error once and stay terminal rather
+        // than resuming and misreading payload bytes as a header.
+        let mut wire = BytesMut::new();
+        wire.put_u32(u32::MAX);
+        tx.write_all(&wire).await.expect("write");
+        tx.shutdown().await.expect("shutdown");
+        drop(tx);
+
+        match framed_server.next().await {
+            Some(Err(TransportError::MessageTooLarge { .. })) => {}
+            other => panic!("expected MessageTooLarge, got {other:?}"),
+        }
+        assert!(framed_server.next().await.is_none());
     })
 }
 

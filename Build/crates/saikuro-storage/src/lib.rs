@@ -3,6 +3,16 @@
 //! Provides a platform-agnostic storage interface for key-value and file-like
 //! operations. Works across native (std::fs, databases) and WASM environments
 //! (OPFS, IndexedDB, localStorage, sessionStorage).
+//!
+//! The crate is `no_std` + `alloc` without the `std` feature: the config,
+//! error, trait, and util modules compile for bare-metal MCU targets, and the
+//! concrete backends (in-memory, native fs/sled/sqlite, wasm storage) all
+//! require `std`.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
 
 pub mod config;
 pub mod error;

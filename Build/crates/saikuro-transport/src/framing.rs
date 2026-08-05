@@ -27,6 +27,10 @@ pub use crate::MAX_FRAME_SIZE;
 pub struct LengthPrefixedCodec {
     /// Once we've read the length header we cache it here to avoid re-parsing.
     pending_len: Option<u32>,
+    /// Payload bytes still owed for a frame whose length header exceeded
+    /// [`MAX_FRAME_SIZE`].  The header is consumed but the declared payload
+    /// must be swallowed so it is not misinterpreted as a fresh header.
+    discard_remaining: u64,
 }
 
 impl LengthPrefixedCodec {
@@ -36,8 +40,21 @@ impl LengthPrefixedCodec {
 
     /// Decode the next complete frame from `src`, returning `Ok(None)` until a
     /// full frame is buffered.  Consumes the header and payload from the front
-    /// of `src` when a frame is returned.
+    /// of `src` when a frame is returned.  A header over the size limit yields
+    /// `MessageTooLarge` and the codec then discards the declared payload on
+    /// subsequent calls so it resynchronizes at the next real header.
     pub fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Bytes>> {
+        // Swallow any payload owed by a rejected oversized frame before
+        // touching normal framing state.
+        if self.discard_remaining > 0 {
+            let take = core::cmp::min(self.discard_remaining, src.len() as u64);
+            src.advance(take as usize);
+            self.discard_remaining -= take;
+            if self.discard_remaining > 0 {
+                return Ok(None);
+            }
+        }
+
         // Phase 1: read the 4-byte length header if we don't have it yet.
         let frame_len = match self.pending_len {
             Some(len) => len,
@@ -57,9 +74,11 @@ impl LengthPrefixedCodec {
             usize::try_from(frame_len).map_err(|_| message_too_large(frame_len as usize))?;
 
         if frame_len > MAX_FRAME_SIZE {
-            // Reset so the next call re-reads a fresh header instead of
-            // erroring forever on the same bogus length.
+            // The declared payload will never be decoded, so count it against
+            // the discard budget instead of resetting and letting the next
+            // call misread payload bytes as a length header.
             self.pending_len = None;
+            self.discard_remaining = frame_len as u64;
             return Err(message_too_large(frame_len));
         }
 
@@ -108,7 +127,7 @@ pub mod framed {
     use core::pin::Pin;
     use core::task::{Context, Poll};
 
-    use bytes::Buf;
+    use bytes::{Buf, BufMut};
     use futures::{ready, Sink, Stream};
     use pin_project_lite::pin_project;
     use saikuro_exec::io::{AsyncRead, AsyncWrite};
@@ -116,8 +135,10 @@ pub mod framed {
     use super::LengthPrefixedCodec;
     use crate::error::{Result, TransportError};
 
-    /// Bytes to request from the underlying stream on each read.  Large enough
-    /// to amortize syscalls without over-committing memory on small frames.
+    /// Minimum capacity to make available for each read when no frame is
+    /// pending.  Large enough to amortize syscalls without over-committing
+    /// memory on small frames; when a frame is pending, decode reserves the
+    /// exact remaining frame bytes so the read spans the whole frame.
     const READ_CHUNK: usize = 4096;
 
     pin_project! {
@@ -127,6 +148,10 @@ pub mod framed {
             codec: LengthPrefixedCodec,
             read_buf: bytes::BytesMut,
             write_buf: bytes::BytesMut,
+            // Set once a framing, I/O, or truncation error is surfaced so the
+            // stream stays terminal and later polls report the end instead of
+            // resuming on an unaligned byte stream.
+            failed: bool,
         }
     }
 
@@ -137,6 +162,7 @@ pub mod framed {
                 codec: LengthPrefixedCodec::new(),
                 read_buf: bytes::BytesMut::new(),
                 write_buf: bytes::BytesMut::new(),
+                failed: false,
             }
         }
 
@@ -160,6 +186,10 @@ pub mod framed {
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let mut this = self.project();
 
+            if *this.failed {
+                return Poll::Ready(None);
+            }
+
             loop {
                 // decode any complete frames already buffered.
                 match this.codec.decode(this.read_buf) {
@@ -168,22 +198,35 @@ pub mod framed {
                     Err(e) => {
                         // Corrupt or oversized frame; the byte stream is no
                         // longer aligned, so surface the error and terminate.
-                        this.read_buf.clear();
+                        *this.failed = true;
                         return Poll::Ready(Some(Err(e)));
                     }
                 }
 
-                // Read into a stack chunk and append only the filled bytes.
-                // Reading directly into a zero-fill-resized read_buf would
-                // leave phantom zero bytes behind if poll_read returns
-                // Pending, and those would decode as bogus zero-length frames.
-                let mut chunk = [0u8; READ_CHUNK];
-                let mut read_buf = saikuro_exec::io::ReadBuf::new(&mut chunk);
-                let filled = match ready!(this.inner.as_mut().poll_read(cx, &mut read_buf)) {
-                    Ok(()) => read_buf.filled().len(),
-                    Err(e) => return Poll::Ready(Some(Err(TransportError::from(e)))),
+                // Read directly into the uninitialized tail of read_buf.  When
+                // a frame is pending, decode already reserved the remaining
+                // frame bytes so chunk_mut spans the whole frame; otherwise
+                // reserve the chunk size so the read still has a writable
+                // target.  advance_mut only appends the filled bytes, so a
+                // Pending read leaves no phantom bytes behind.
+                this.read_buf.reserve(READ_CHUNK);
+                let filled = {
+                    let dst = this.read_buf.chunk_mut();
+                    // SAFETY: chunk_mut borrows the uninitialized tail of the
+                    // buffer; the slice is only filled by poll_read below
+                    // before we advance_mut by the filled length.
+                    let dst = unsafe { dst.as_uninit_slice_mut() };
+                    let mut read_buf = saikuro_exec::io::ReadBuf::uninit(dst);
+                    match ready!(this.inner.as_mut().poll_read(cx, &mut read_buf)) {
+                        Ok(()) => read_buf.filled().len(),
+                        Err(e) => {
+                            *this.failed = true;
+                            return Poll::Ready(Some(Err(TransportError::from(e))));
+                        }
+                    }
                 };
-                this.read_buf.extend_from_slice(read_buf.filled());
+                // SAFETY: poll_read initialized the first `filled` bytes.
+                unsafe { this.read_buf.advance_mut(filled) };
 
                 if filled == 0 {
                     // EOF from the peer.  A clean close happens only at a
@@ -191,6 +234,7 @@ pub mod framed {
                     if this.read_buf.is_empty() {
                         return Poll::Ready(None);
                     }
+                    *this.failed = true;
                     return Poll::Ready(Some(Err(TransportError::FramingError(
                         "connection closed mid-frame".into(),
                     ))));

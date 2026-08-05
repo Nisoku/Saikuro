@@ -1,5 +1,9 @@
 //! Storage backend traits and utilities.
 
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Serialize};

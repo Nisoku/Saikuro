@@ -6,6 +6,9 @@
 // crate's integration tests can exercise them; on native they are otherwise
 // only referenced from the wasm32-gated backends.
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 use bytes::Bytes;
 
 use super::config::StorageConfig;

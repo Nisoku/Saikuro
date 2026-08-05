@@ -12,7 +12,8 @@ keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 #
 #   std:               gate for std-only code (the Io error variant and the
 #                      native/WebSocket/wasm backends).  The crate is no_std +
-#                      alloc without it.
+#                      alloc without it.  Forwards core's std-no-os so wasm32
+#                      never selects the OS entropy backend through transport.
 #   native-transport:  Unix socket + TCP (requires std networking; disabled on wasm32)
 #   ws-transport:      WebSocket module (compiled on wasm32, or on native with native-ws)
 #   native-ws:         WebSocket + tokio-tungstenite on native (non-wasm32 only)
@@ -24,16 +25,19 @@ keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 # The in-memory transport is always compiled; it has zero OS dependencies.
 [features]
 default = ["std", "native-transport"]
-std = ["saikuro-core/std"]
+std = ["saikuro-core/std-no-os"]
 embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/drbg"]
-native-transport = ["std", "saikuro-exec/tokio-runtime"]
+# native features also forward core/std so native builds keep the OS entropy
+# backend that core/std selects; only the crate-level lifter (std) switches to
+# std-no-os for wasm32.
+native-transport = ["std", "saikuro-exec/tokio-runtime", "saikuro-core/std"]
 ws-transport = []
 # wasm32 has no OS entropy source; the js getrandom backend is forwarded here
 # (matching saikuro-runtime's own wasm-runtime feature).
 wasm-runtime = ["std", "saikuro-exec/wasm-runtime", "saikuro-random/wasm"]
 
 # native-ws is only available on non-wasm32 (where tokio-tungstenite exists)
-native-ws = ["ws-transport", "std", "saikuro-exec/tokio-runtime", "tokio-tungstenite", "tungstenite"]
+native-ws = ["ws-transport", "std", "saikuro-exec/tokio-runtime", "saikuro-core/std", "tokio-tungstenite", "tungstenite"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }

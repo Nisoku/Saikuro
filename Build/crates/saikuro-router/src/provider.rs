@@ -147,12 +147,41 @@ impl ProviderRegistry {
     /// If a namespace already has a provider, the old one is replaced.  The
     /// namespace is then removed from the old provider's record so a later
     /// deregistration of the old provider cannot reclaim the new provider's
-    /// namespace.
+    /// namespace.  Re-registering a provider with fewer namespaces releases
+    /// the routes it no longer owns (unless a newer provider took them over).
     pub fn register(&self, handle: ProviderHandle) {
         let provider_id = handle.id().to_owned();
         let namespaces = handle.namespaces().to_vec();
 
         let mut state = self.inner.write();
+
+        // A re-registering provider that dropped a namespace must release its
+        // route.  Remove each previously-owned namespace that is absent from
+        // the new list, but only while it still points at this provider (a
+        // newer provider may have taken it over).
+        let dropped: Vec<String> = state
+            .by_provider
+            .get(&provider_id)
+            .map(|owned| {
+                owned
+                    .iter()
+                    .filter(|ns| !namespaces.contains(ns))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        for ns in &dropped {
+            if state
+                .by_namespace
+                .get(ns)
+                .map(|h| h.id() == provider_id)
+                .unwrap_or(false)
+            {
+                state.by_namespace.remove(ns);
+                debug!(namespace = %ns, provider = %provider_id, "released dropped namespace route");
+            }
+        }
+
         for ns in &namespaces {
             match state.by_namespace.insert(ns.clone(), handle.clone()) {
                 Some(old) => {

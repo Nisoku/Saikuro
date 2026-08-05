@@ -7,15 +7,15 @@
 //!
 //! The crate is always `#![no_std]` + `alloc`: strings and vectors come from
 //! `alloc`, and all maps/sets are fixed-capacity `heapless` collections. The
-//! default `std` feature adds std-only conveniences (the msgpack codec helpers
-//! on envelopes and the `Io` error variant).
+//! msgpack codec is available on every target; the default `std` feature adds
+//! the `Io` error variant, a stderr log sink, and std-backed sync primitives.
 
 #![no_std]
 
 #[macro_use]
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 extern crate std;
 
 pub mod capability;
@@ -33,7 +33,7 @@ pub use capability::{CapabilitySet, CapabilityToken};
 pub use envelope::{split_target, Envelope, InvocationType, ResponseEnvelope};
 pub use error::{ErrorCode, ErrorDetail, SaikuroError};
 pub use invocation::InvocationId;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "std-no-os"))]
 pub use log::stderr_log_sink;
 pub use log::{LogLevel, LogRecord, LogSink};
 pub use resource::ResourceHandle;

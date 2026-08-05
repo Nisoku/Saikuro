@@ -3,10 +3,10 @@
 //! This is the reference implementation and the default backend for
 //! Saikuro's ephemeral storage needs.
 
+use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use dashmap::DashMap;
-use std::sync::Arc;
 use tracing::debug;
 
 use super::{

@@ -1,6 +1,7 @@
 //! Configuration for storage backends.
 
-use std::time::Duration;
+use alloc::string::String;
+use core::time::Duration;
 
 /// Selects which storage backend implementation to use at runtime.
 ///
@@ -86,6 +87,7 @@ pub struct StorageConfig {
     ///
     /// When `None`, the factory uses a built-in default
     /// (`./saikuro_data`, `./saikuro_sled`, `./saikuro.sqlite`).
+    #[cfg(feature = "std")]
     pub storage_path: Option<std::path::PathBuf>,
 
     /// Automatic cleanup policy.
@@ -110,6 +112,7 @@ impl Default for StorageConfig {
             namespace_prefix: None,
             auto_create_namespaces: true,
             sync_on_write: false,
+            #[cfg(feature = "std")]
             storage_path: None,
         }
     }
@@ -140,6 +143,7 @@ impl StorageConfig {
     }
 
     /// Set the filesystem / database path for native persistent backends.
+    #[cfg(feature = "std")]
     pub fn with_storage_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
         self.storage_path = Some(path.into());
         self

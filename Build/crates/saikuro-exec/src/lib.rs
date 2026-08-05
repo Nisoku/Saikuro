@@ -48,6 +48,13 @@ pub use embassy_backend::*;
 #[cfg(feature = "embassy-runtime")]
 pub use futures as _futures;
 
+/// Branch on the first future to complete.
+///
+/// The tokio and wasm backends delegate to `tokio::select!` and accept its
+/// full syntax.  The embassy backend only supports `pattern = future => { ... }`
+/// branches (see `select_impl!`); it rejects `else`, `biased;`, guards, and
+/// expression handlers.  Cross-backend code must stay within the shared subset
+/// so it compiles on every backend.
 #[macro_export]
 macro_rules! select {
     ($($tt:tt)*) => {

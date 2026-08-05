@@ -144,7 +144,7 @@ impl Provider {
     /// Serve on an already-connected transport.
     pub async fn serve_on(self, mut transport: Box<dyn AdapterTransport>) -> Result<()> {
         // Announce schema.
-        self.announce(&mut *transport).await;
+        self.announce(&mut *transport).await?;
 
         // Serve loop.
         info!(namespace = %self.namespace, "provider ready, entering serve loop");
@@ -202,21 +202,21 @@ impl Provider {
 
     // Announce
 
-    async fn announce(&self, transport: &mut dyn AdapterTransport) {
+    async fn announce(&self, transport: &mut dyn AdapterTransport) -> Result<()> {
         // A capacity overflow here means the announcement would be silently
         // truncated; fail the announce instead of publishing a partial schema.
         let schema = match self.build_schema() {
             Ok(schema) => schema,
             Err(e) => {
                 warn!(error = %e, "failed to build schema announcement");
-                return;
+                return Err(e);
             }
         };
         let schema_value = match serde_json::to_value(&schema) {
             Ok(v) => json_to_core(v),
             Err(e) => {
                 warn!(error = %e, "failed to serialize schema for announcement");
-                return;
+                return Err(Error::Codec(e.to_string()));
             }
         };
 
@@ -225,13 +225,13 @@ impl Provider {
             Ok(b) => Bytes::from(b),
             Err(e) => {
                 warn!(error = %e, "failed to encode announce envelope");
-                return;
+                return Err(Error::Codec(e.to_string()));
             }
         };
 
         if let Err(e) = transport.send(frame).await {
             warn!(error = %e, "failed to send schema announce");
-            return;
+            return Err(Error::Transport(e.to_string()));
         }
 
         // Wait for the runtime ack.  The runtime must reply with ok_empty
@@ -263,6 +263,8 @@ impl Provider {
                 debug!(namespace = %self.namespace, "schema announce ack timed out, continuing");
             }
         }
+
+        Ok(())
     }
 }
 // Dispatch helpers

@@ -6,6 +6,13 @@ fn msgpack_roundtrip_uses_binary_uuid() {
     let id = InvocationId::new();
     let encoded = msgpack::to_vec(&id).expect("encode invocation id");
     let decoded: InvocationId = msgpack::from_slice(&encoded).expect("decode invocation id");
+    // The wire form must be msgpack bin8: 0xC4 marker, one length byte of 16,
+    // then the raw UUID bytes.  Pinning the exact encoding keeps the binary
+    // contract stable across future format changes.
+    assert_eq!(encoded.len(), 18, "expected bin8 header plus 16 UUID bytes");
+    assert_eq!(encoded[0], 0xC4, "expected msgpack bin8 marker");
+    assert_eq!(encoded[1], 16, "expected 16-byte payload length");
+
     assert_eq!(id, decoded);
 }
 
