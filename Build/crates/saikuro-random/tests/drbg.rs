@@ -6,7 +6,6 @@ use saikuro_random::{fill, is_seeded, seed_from_slice, Drbg, Error};
 
 const SEED_LEN: usize = 56;
 const KEY_LEN: usize = 32;
-const NONCE_LEN: usize = 24;
 const BLOCK_LEN: usize = 64;
 
 const SEED_ONE: [u8; SEED_LEN] = [
@@ -71,6 +70,7 @@ fn short_seed_is_rejected() {
 #[test]
 fn global_stream_matches_a_seeded_local_drbg_and_advances() {
     seed_from_slice(&SEED_ONE).expect("valid seed");
+    assert_eq!(seed_from_slice(&SEED_ONE), Err(Error::AlreadySeeded));
     assert!(is_seeded());
 
     let mut first = [0u8; 32];

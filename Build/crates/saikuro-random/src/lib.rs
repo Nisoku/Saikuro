@@ -29,6 +29,13 @@ compile_error!(
      build with `--no-default-features --features drbg`"
 );
 
+#[cfg(any(
+    all(feature = "os", feature = "wasm"),
+    all(feature = "os", feature = "custom"),
+    all(feature = "wasm", feature = "custom")
+))]
+compile_error!("saikuro-random: select exactly one of `os`, `wasm`, or `custom`");
+
 #[cfg(feature = "drbg")]
 mod drbg;
 
@@ -57,6 +64,12 @@ pub enum Error {
     /// The DRBG keystream for the current seed ran out.
     #[cfg(feature = "drbg")]
     DrbgExhausted,
+    /// No entropy backend was selected.
+    #[cfg(not(any(feature = "os", feature = "wasm", feature = "custom", feature = "drbg")))]
+    NoBackend,
+    /// The process-wide DRBG was already initialized.
+    #[cfg(feature = "drbg")]
+    AlreadySeeded,
 }
 
 impl core::fmt::Display for Error {
@@ -70,6 +83,15 @@ impl core::fmt::Display for Error {
             Error::InvalidSeed => write!(f, "DRBG seed must be at least 56 bytes"),
             #[cfg(feature = "drbg")]
             Error::DrbgExhausted => write!(f, "DRBG keystream exhausted; reseed required"),
+            #[cfg(feature = "drbg")]
+            Error::AlreadySeeded => write!(f, "DRBG has already been seeded"),
+            #[cfg(not(any(
+                feature = "os",
+                feature = "wasm",
+                feature = "custom",
+                feature = "drbg"
+            )))]
+            Error::NoBackend => write!(f, "no entropy backend selected"),
         }
     }
 }
@@ -171,12 +193,12 @@ fn fill_uninit_impl(dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
         .map(|_| ())
 }
 
-#[cfg(all(
-    not(feature = "os"),
-    not(feature = "wasm"),
-    not(feature = "custom"),
-    not(feature = "drbg")
-))]
-compile_error!(
-    "saikuro-random requires exactly one entropy backend: enable `os`, `wasm`, `custom`, or `drbg`"
-);
+#[cfg(not(any(feature = "os", feature = "wasm", feature = "custom", feature = "drbg")))]
+fn fill_impl(_dest: &mut [u8]) -> Result<(), Error> {
+    Err(Error::NoBackend)
+}
+
+#[cfg(not(any(feature = "os", feature = "wasm", feature = "custom", feature = "drbg")))]
+fn fill_uninit_impl(_dest: &mut [MaybeUninit<u8>]) -> Result<(), Error> {
+    Err(Error::NoBackend)
+}

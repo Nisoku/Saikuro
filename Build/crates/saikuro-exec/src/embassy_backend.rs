@@ -21,13 +21,13 @@
 //!
 //! # Task lifecycle
 //!
-//! There's no `spawn` or `block_on` here. The embassy executor owns task
+//! There is no `spawn` or `block_on` here. The embassy executor owns task
 //! scheduling: the application stands up a static `embassy_executor::Executor`
-//! and hands out `Spawner`s. A facade can't conjure its own global executor
-//! without clashing with the application's. The stubs are only here so that
-//! host-only crates selecting `tokio-runtime` still resolve, call one and it
-//! panics, pointing you at the embassy equivalent. `net`, `signal`, and
-//! `runtime` are missing from the embassy model for the same reason.
+//! and hands out `Spawner`s. A facade cannot create a global executor without
+//! clashing with the application's. Tokio-style task and runtime APIs are not
+//! exported for this backend, so unsupported shared code fails at compile time
+//! instead of panicking on device. `net`, `signal`, and `runtime` are absent for
+//! the same reason.
 
 use alloc::sync::Arc;
 use core::cell::RefCell;
@@ -81,92 +81,6 @@ pub async fn yield_now() {
 #[doc(hidden)]
 pub fn fuse_select<F: Future>(fut: F) -> Fuse<F> {
     FutureExt::fuse(fut)
-}
-
-// Spawn / Block-on
-// See the module documentation: the application owns the executor and its
-// Spawner, so the facade cannot provide a global spawn or block_on.
-pub fn spawn<F, T>(_fut: F) -> JoinHandle<T>
-where
-    F: Future<Output = T> + Send + 'static,
-    T: Send + 'static,
-{
-    panic!(
-        "saikuro-exec: embassy spawn requires a Spawner; \
-         use embassy_executor::Spawner::spawn() directly"
-    )
-}
-
-pub fn block_on<F>(_future: F) -> F::Output
-where
-    F: Future,
-{
-    panic!(
-        "saikuro-exec: block_on is not available on embassy-runtime; \
-         use embassy_executor::Executor instead"
-    )
-}
-
-// JoinHandle / Runtime stubs
-pub struct JoinHandle<T> {
-    _marker: core::marker::PhantomData<T>,
-}
-
-impl<T> Future for JoinHandle<T> {
-    type Output = Result<T, JoinError>;
-
-    fn poll(
-        self: core::pin::Pin<&mut Self>,
-        _cx: &mut core::task::Context<'_>,
-    ) -> core::task::Poll<Self::Output> {
-        unreachable!("saikuro-exec: JoinHandle::poll on embassy-runtime (spawn is not provided)")
-    }
-}
-
-#[derive(Debug)]
-pub struct JoinError;
-
-impl core::fmt::Display for JoinError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("task was cancelled")
-    }
-}
-
-pub struct Runtime {
-    _private: (),
-}
-
-pub struct RuntimeBuilder {
-    _private: (),
-}
-
-impl RuntimeBuilder {
-    pub fn enable_all(self) -> Self {
-        self
-    }
-
-    pub fn build(self) -> Result<Runtime, RuntimeBuildError> {
-        Ok(Runtime { _private: () })
-    }
-}
-
-#[derive(Debug)]
-pub struct RuntimeBuildError;
-
-impl core::fmt::Display for RuntimeBuildError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("embassy runtime does not support tokio-style Builder")
-    }
-}
-
-pub fn new_runtime() -> RuntimeBuilder {
-    RuntimeBuilder { _private: () }
-}
-
-impl Runtime {
-    pub fn block_on<F: Future>(&self, _future: F) -> F::Output {
-        panic!("saikuro-exec: Runtime::block_on is not available on embassy-runtime")
-    }
 }
 
 // mpsc
@@ -1019,39 +933,5 @@ pub mod watch {
             version: 0,
         };
         (Sender { inner }, receiver)
-    }
-}
-
-pub mod net {
-    // Empty. networking on embedded uses embassy-net, not tokio::net.
-}
-
-pub mod runtime {
-    pub struct Builder {
-        _private: (),
-    }
-
-    pub struct Runtime {
-        _private: (),
-    }
-
-    impl Builder {
-        pub fn new_current_thread() -> Self {
-            Builder { _private: () }
-        }
-
-        pub fn enable_all(self) -> Self {
-            self
-        }
-
-        pub fn build(self) -> Result<Runtime, super::RuntimeBuildError> {
-            Ok(Runtime { _private: () })
-        }
-    }
-
-    impl Runtime {
-        pub fn block_on<F: core::future::Future>(&self, _future: F) -> F::Output {
-            panic!("saikuro-exec: runtime::Runtime::block_on is not available on embassy-runtime")
-        }
     }
 }

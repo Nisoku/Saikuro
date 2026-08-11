@@ -28,11 +28,13 @@ tracing-subscriber = { workspace = true }
 
 # Native-only: enable TCP/Unix transport backends
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+saikuro-core      = { workspace = true, features = ["std"] }
 saikuro-transport = { workspace = true, features = ["native-transport"] }
 saikuro-runtime   = { workspace = true, features = ["native-transport"] }
 
 # WASM-only: BroadcastChannel-based host transport, no native-transport
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+saikuro-core      = { workspace = true, features = ["std-no-os"] }
 saikuro-transport = { workspace = true, features = ["wasm-runtime"] }
 saikuro-runtime   = { workspace = true, default-features = false }
 # WASM has no OS entropy; saikuro-core draws randomness via saikuro-random,

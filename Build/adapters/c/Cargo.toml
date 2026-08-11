@@ -31,6 +31,6 @@ clap = { version = "4.5", features = ["derive"] }
 regex = "1.11"
 
 [dev-dependencies]
-saikuro-core = { workspace = true }
+saikuro-core = { workspace = true, features = ["std"] }
 saikuro-runtime = { workspace = true }
 saikuro-transport = { workspace = true }

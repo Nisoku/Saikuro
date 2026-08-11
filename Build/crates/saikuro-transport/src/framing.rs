@@ -38,6 +38,12 @@ impl LengthPrefixedCodec {
         Self::default()
     }
 
+    /// Return whether decoding has consumed a header and still expects bytes.
+    #[cfg(feature = "native-transport")]
+    pub(crate) fn has_pending_frame(&self) -> bool {
+        self.pending_len.is_some() || self.discard_remaining != 0
+    }
+
     /// Decode the next complete frame from `src`, returning `Ok(None)` until a
     /// full frame is buffered.  Consumes the header and payload from the front
     /// of `src` when a frame is returned.  A header over the size limit yields
@@ -231,7 +237,7 @@ pub mod framed {
                 if filled == 0 {
                     // EOF from the peer.  A clean close happens only at a
                     // frame boundary; leftover bytes mean a truncated frame.
-                    if this.read_buf.is_empty() {
+                    if this.read_buf.is_empty() && !this.codec.has_pending_frame() {
                         return Poll::Ready(None);
                     }
                     *this.failed = true;

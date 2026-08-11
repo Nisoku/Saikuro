@@ -17,7 +17,7 @@ required-features = ["cli"]
 cli = ["dep:clap"]
 
 [dependencies]
-saikuro-core   = { workspace = true }
+saikuro-core   = { workspace = true, default-features = false }
 saikuro-schema = { workspace = true }
 
 serde       = { workspace = true }

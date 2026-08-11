@@ -96,3 +96,22 @@ fn simple_map_round_trip() {
     let decoded: Value = msgpack::from_slice(&bytes).expect("deserialize");
     assert_eq!(original, decoded);
 }
+
+#[test]
+fn map_equality_and_encoding_ignore_insertion_order() {
+    let mut first = ValueMap::new();
+    first.insert("b".to_owned(), Value::Int(2)).expect("fits");
+    first.insert("a".to_owned(), Value::Int(1)).expect("fits");
+
+    let mut second = ValueMap::new();
+    second.insert("a".to_owned(), Value::Int(1)).expect("fits");
+    second.insert("b".to_owned(), Value::Int(2)).expect("fits");
+
+    let first = Value::Map(Box::new(first));
+    let second = Value::Map(Box::new(second));
+    assert_eq!(first, second);
+    assert_eq!(
+        msgpack::to_vec(&first).expect("serialize first"),
+        msgpack::to_vec(&second).expect("serialize second")
+    );
+}

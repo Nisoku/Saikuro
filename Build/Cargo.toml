@@ -95,7 +95,7 @@ spin = { version = "0.12", default-features = false, features = [
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 
 # Internal crates
-saikuro-core = { path = "crates/saikuro-core" }
+saikuro-core = { path = "crates/saikuro-core", default-features = false }
 saikuro-schema = { path = "crates/saikuro-schema", default-features = false }
 saikuro-storage = { path = "crates/saikuro-storage", default-features = false }
 saikuro-transport = { path = "crates/saikuro-transport", default-features = false }

@@ -30,6 +30,8 @@ const NONCE_LEN: usize = 24;
 const SEED_LEN: usize = KEY_LEN + NONCE_LEN;
 /// Global seed stored as `SEED_LEN / 8` independent `u64` words.
 const SEED_WORDS: usize = SEED_LEN / 8;
+/// ChaCha20 exposes a 32-bit block counter for each key and nonce.
+const MAX_BLOCKS: u64 = 1u64 << 32;
 
 /// Generate keystream block `index` for the given key and nonce.
 ///
@@ -90,7 +92,12 @@ impl Drbg {
     pub fn fill(&mut self, dest: &mut [u8]) -> Result<(), crate::Error> {
         let blocks = dest.len().div_ceil(BLOCK_LEN);
         let start = self.counter;
-        self.counter = self.counter.saturating_add(blocks as u64);
+        let block_count = blocks as u64;
+        let end = start
+            .checked_add(block_count)
+            .filter(|&end| end <= MAX_BLOCKS)
+            .ok_or(crate::Error::DrbgExhausted)?;
+        self.counter = end;
         for i in 0..blocks {
             let block = keystream_block(&self.key, &self.nonce, start + i as u64)?;
             let from = i * BLOCK_LEN;
@@ -114,6 +121,7 @@ impl Drbg {
 }
 
 static SEEDED: AtomicBool = AtomicBool::new(false);
+static INITIALIZING: AtomicBool = AtomicBool::new(false);
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 // Written out longhand on purpose: array-repeat of a non-Copy type wants inline
 // const blocks, and those need rustc >= 1.79 while our workspace floor is 1.75.
@@ -138,6 +146,13 @@ pub fn seed_from_slice(seed: &[u8]) -> Result<(), crate::Error> {
     if seed.len() < SEED_LEN {
         return Err(crate::Error::InvalidSeed);
     }
+    if SEEDED.load(Ordering::Acquire)
+        || INITIALIZING
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+    {
+        return Err(crate::Error::AlreadySeeded);
+    }
     for (i, word) in SEED.iter().enumerate() {
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(&seed[i * 8..i * 8 + 8]);
@@ -145,6 +160,7 @@ pub fn seed_from_slice(seed: &[u8]) -> Result<(), crate::Error> {
     }
     COUNTER.store(0, Ordering::Relaxed);
     SEEDED.store(true, Ordering::Release);
+    INITIALIZING.store(false, Ordering::Release);
     Ok(())
 }
 
@@ -176,7 +192,7 @@ pub fn fill(dest: &mut [u8]) -> Result<(), crate::Error> {
     }
     let (key, nonce) = read_seed();
     let blocks = dest.len().div_ceil(BLOCK_LEN);
-    let start = COUNTER.fetch_add(blocks as u64, Ordering::Relaxed);
+    let start = reserve_blocks(blocks as u64)?;
     for i in 0..blocks {
         let block = keystream_block(&key, &nonce, start + i as u64)?;
         let from = i * BLOCK_LEN;
@@ -184,6 +200,20 @@ pub fn fill(dest: &mut [u8]) -> Result<(), crate::Error> {
         dest[from..to].copy_from_slice(&block[..to - from]);
     }
     Ok(())
+}
+
+fn reserve_blocks(blocks: u64) -> Result<u64, crate::Error> {
+    let mut current = COUNTER.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(blocks)
+            .filter(|&next| next <= MAX_BLOCKS)
+            .ok_or(crate::Error::DrbgExhausted)?;
+        match COUNTER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return Ok(current),
+            Err(observed) => current = observed,
+        }
+    }
 }
 
 /// Fill potentially uninitialized `dest` from the process-wide DRBG.

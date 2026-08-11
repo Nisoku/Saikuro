@@ -160,6 +160,27 @@ fn framed_stream_truncated_frame_errors() {
 }
 
 #[test]
+fn framed_stream_rejects_header_only_eof() {
+    block_on(async {
+        let (client, server) = saikuro_exec::io::duplex(4096);
+        let (_rx, mut tx) = saikuro_exec::io::split(client);
+        let mut framed_server = FramedStream::new(server);
+
+        let mut header = BytesMut::new();
+        header.put_u32(100);
+        tx.write_all(&header).await.expect("write");
+        tx.shutdown().await.expect("shutdown");
+        drop(tx);
+
+        match framed_server.next().await {
+            Some(Err(TransportError::FramingError(_))) => {}
+            other => panic!("expected FramingError, got {other:?}"),
+        }
+        assert!(framed_server.next().await.is_none());
+    })
+}
+
+#[test]
 fn framed_stream_stays_terminal_after_oversized_frame_error() {
     block_on(async {
         let (client, server) = saikuro_exec::io::duplex(4096);

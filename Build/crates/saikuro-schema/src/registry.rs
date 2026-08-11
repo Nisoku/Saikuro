@@ -16,7 +16,10 @@
 //! `BTreeMap`s for deterministic iteration on both host and MCU targets.
 
 use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
-use saikuro_core::schema::{FunctionSchema, NamespaceSchema, Schema, TypeDefinition};
+use saikuro_core::schema::{
+    FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
+    SCHEMA_TYPES_CAPACITY,
+};
 use saikuro_core::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -124,6 +127,11 @@ impl SchemaRegistry {
         }
 
         let ns = registration.namespace.clone();
+        if !schemata.namespaces.contains_key(&ns)
+            && schemata.namespaces.len() == SCHEMA_NAMESPACES_CAPACITY
+        {
+            return Err(RegistryError::SchemaCapacity);
+        }
         if schemata.namespaces.contains_key(&ns) {
             warn!(namespace = %ns, "overwriting existing namespace schema");
         } else {
@@ -155,11 +163,25 @@ impl SchemaRegistry {
         // `freeze()` cannot interleave between the type and namespace phases.
         let mut schemata = self.inner.write();
 
-        // In production mode only namespace registration is forbidden; an empty
-        // namespace list is therefore a no-op merge (types alone are permitted).
-        if schemata.mode == RegistryMode::Production && !schema.namespaces.is_empty() {
+        if schemata.mode == RegistryMode::Production {
             let ns = schema.namespaces.keys().next().cloned().unwrap_or_default();
             return Err(RegistryError::FrozenSchema(ns));
+        }
+
+        let new_namespaces = schema
+            .namespaces
+            .keys()
+            .filter(|name| !schemata.namespaces.contains_key(*name))
+            .count();
+        let new_types = schema
+            .types
+            .keys()
+            .filter(|name| !schemata.types.contains_key(*name))
+            .count();
+        if schemata.namespaces.len() + new_namespaces > SCHEMA_NAMESPACES_CAPACITY
+            || schemata.types.len() + new_types > SCHEMA_TYPES_CAPACITY
+        {
+            return Err(RegistryError::SchemaCapacity);
         }
 
         // Merge types first (functions may reference them).
@@ -189,6 +211,9 @@ impl SchemaRegistry {
     /// Called when a provider disconnects.
     pub fn deregister_provider(&self, provider_id: &str) {
         let mut schemata = self.inner.write();
+        if schemata.mode == RegistryMode::Production {
+            return;
+        }
         schemata.namespaces.retain(|_ns, entry| {
             let keep = entry.provider_id != provider_id;
             if !keep {
@@ -316,7 +341,7 @@ pub enum RegistryError {
     #[error("validation error: {0}")]
     Validation(#[from] ValidationError),
 
-    #[error("schema capacity exceeded while exporting snapshot")]
+    #[error("schema registry capacity exceeded")]
     SchemaCapacity,
 }
 

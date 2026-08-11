@@ -8,7 +8,7 @@
 //! schema field descriptor.
 
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 
 /// Maximum number of entries a [`Value::Map`] can hold.
 ///
@@ -18,12 +18,11 @@ use serde::{Deserialize, Serialize};
 /// fails cleanly with a serde error rather than truncating.
 pub const VALUE_MAP_CAPACITY: usize = 64;
 
-/// Fixed-capacity, insertion-ordered map backing [`Value::Map`].
+/// Fixed-capacity map backing [`Value::Map`].
 ///
-/// Insertion order is deterministic for a given construction sequence, which
-/// keeps serialisation order stable for content-addressed hashing. Entries are
-/// serialised in insertion order, so two semantically-equal maps built in
-/// different orders are not byte-identical (and are not `PartialEq`-equal).
+/// The map retains insertion order internally, but [`Value`] serializes map
+/// entries in key order and compares them by key so construction order does
+/// not affect protocol bytes or semantic equality.
 pub type ValueMap = heapless::FnvIndexMap<String, Value, VALUE_MAP_CAPACITY>;
 
 /// A dynamically-typed value that can appear in an invocation argument list,
@@ -75,18 +74,30 @@ pub enum Value {
     /// String-keyed mapping of values. A `Box<ValueMap>` breaks the recursive
     /// `Value -> ValueMap -> Value` cycle: heapless maps are stored inline, so
     /// without indirection `Value` would have infinite size. The `ValueMap` is
-    /// an insertion-ordered fixed-capacity map, so serialisation order is
-    /// deterministic, which makes content-addressed hashing predictable.
-    Map(Box<ValueMap>),
+    /// a fixed-capacity map. Serialization sorts entries by key to preserve
+    /// the canonical ordering previously provided by `BTreeMap`.
+    Map(#[serde(serialize_with = "serialize_value_map")] Box<ValueMap>),
+}
+
+fn serialize_value_map<S>(map: &ValueMap, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut entries: Vec<_> = map.iter().collect();
+    entries.sort_unstable_by_key(|(key, _)| *key);
+    let mut output = serializer.serialize_map(Some(entries.len()))?;
+    for (key, value) in entries {
+        output.serialize_entry(key, value)?;
+    }
+    output.end()
 }
 
 /// Equality for [`Value`].
 ///
 /// Implemented manually because the fixed-capacity map backing `Map` only
 /// implements `PartialEq` when the value type is `Eq`, which `Value` cannot be
-/// (it contains `f64`). Map equality is order-sensitive: two maps with the same
-/// entries inserted in different orders are *not* equal, matching the byte-level
-/// serialisation behaviour (see [`ValueMap`]).
+/// (it contains `f64`). Map equality is key-based and independent of insertion
+/// order.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -101,8 +112,7 @@ impl PartialEq for Value {
             (Self::Map(a), Self::Map(b)) => {
                 a.len() == b.len()
                     && a.iter()
-                        .zip(b.iter())
-                        .all(|((ka, va), (kb, vb))| ka == kb && va == vb)
+                        .all(|(key, value)| b.get(key).is_some_and(|other| other == value))
             }
             _ => false,
         }

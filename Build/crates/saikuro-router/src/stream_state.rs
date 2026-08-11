@@ -135,18 +135,19 @@ impl ChannelState {
 /// `Ord`, so `BTreeMap` keys keep iteration deterministic.
 #[derive(Clone, Default)]
 pub struct StreamStateStore {
-    streams: Arc<RwLock<BTreeMap<InvocationId, Arc<StreamState>>>>,
-    /// Receivers for stream item channels.  Stored here so the channel stays
-    /// live (i.e. `item_tx.send()` does not fail with "channel closed") until
-    /// a caller explicitly takes and consumes the receiver.
-    stream_receivers: Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
-    channels: Arc<RwLock<BTreeMap<InvocationId, Arc<ChannelState>>>>,
-    /// Receivers for channel inbound messages.
-    channel_inbound_receivers:
-        Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
-    /// Receivers for channel outbound messages.
-    channel_outbound_receivers:
-        Arc<RwLock<BTreeMap<InvocationId, mpsc::Receiver<ResponseEnvelope>>>>,
+    streams: Arc<RwLock<BTreeMap<InvocationId, StreamEntry>>>,
+    channels: Arc<RwLock<BTreeMap<InvocationId, ChannelEntry>>>,
+}
+
+struct StreamEntry {
+    state: Arc<StreamState>,
+    receiver: Option<mpsc::Receiver<ResponseEnvelope>>,
+}
+
+struct ChannelEntry {
+    state: Arc<ChannelState>,
+    inbound_receiver: Option<mpsc::Receiver<ResponseEnvelope>>,
+    outbound_receiver: Option<mpsc::Receiver<ResponseEnvelope>>,
 }
 
 impl StreamStateStore {
@@ -166,17 +167,21 @@ impl StreamStateStore {
         state: Arc<StreamState>,
         receiver: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.streams.write().insert(id, state);
-        self.stream_receivers.write().insert(id, receiver);
+        self.streams.write().insert(
+            id,
+            StreamEntry {
+                state,
+                receiver: Some(receiver),
+            },
+        );
     }
 
     pub fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.read().get(id).cloned()
+        self.streams.read().get(id).map(|entry| entry.state.clone())
     }
 
     pub fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.stream_receivers.write().remove(id);
-        self.streams.write().remove(id)
+        self.streams.write().remove(id).map(|entry| entry.state)
     }
 
     /// Take the receiver half of the stream item channel.
@@ -188,7 +193,10 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.stream_receivers.write().remove(id)
+        self.streams
+            .write()
+            .get_mut(id)
+            .and_then(|entry| entry.receiver.take())
     }
 
     // Channel
@@ -200,23 +208,25 @@ impl StreamStateStore {
         inbound_rx: mpsc::Receiver<ResponseEnvelope>,
         outbound_rx: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.channels.write().insert(id, state);
-        self.channel_inbound_receivers
-            .write()
-            .insert(id, inbound_rx);
-        self.channel_outbound_receivers
-            .write()
-            .insert(id, outbound_rx);
+        self.channels.write().insert(
+            id,
+            ChannelEntry {
+                state,
+                inbound_receiver: Some(inbound_rx),
+                outbound_receiver: Some(outbound_rx),
+            },
+        );
     }
 
     pub fn get_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
-        self.channels.read().get(id).cloned()
+        self.channels
+            .read()
+            .get(id)
+            .map(|entry| entry.state.clone())
     }
 
     pub fn remove_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
-        self.channel_inbound_receivers.write().remove(id);
-        self.channel_outbound_receivers.write().remove(id);
-        self.channels.write().remove(id)
+        self.channels.write().remove(id).map(|entry| entry.state)
     }
 
     /// Take the inbound receiver (client -> provider) for a channel.
@@ -224,7 +234,10 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.channel_inbound_receivers.write().remove(id)
+        self.channels
+            .write()
+            .get_mut(id)
+            .and_then(|entry| entry.inbound_receiver.take())
     }
 
     /// Take the outbound receiver (provider -> client) for a channel.
@@ -232,6 +245,9 @@ impl StreamStateStore {
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
-        self.channel_outbound_receivers.write().remove(id)
+        self.channels
+            .write()
+            .get_mut(id)
+            .and_then(|entry| entry.outbound_receiver.take())
     }
 }

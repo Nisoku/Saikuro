@@ -228,6 +228,10 @@ impl InvocationRouter {
     async fn dispatch_stream_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
+        if !valid_channel_capacity(self.config.stream_channel_capacity) {
+            return error_response(id, SaikuroError::BufferOverflow.into());
+        }
+
         let provider = match self.resolve_namespace(&envelope.target) {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
@@ -290,6 +294,10 @@ impl InvocationRouter {
         }
 
         // Otherwise, open a new channel as before
+        if !valid_channel_capacity(self.config.channel_capacity) {
+            return error_response(id, SaikuroError::BufferOverflow.into());
+        }
+
         let provider = match self.resolve_namespace(&envelope.target) {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
@@ -505,6 +513,17 @@ impl InvocationRouter {
 
         Ok(handle)
     }
+}
+
+fn valid_channel_capacity(capacity: usize) -> bool {
+    if capacity == 0 {
+        return false;
+    }
+    #[cfg(feature = "embassy")]
+    if capacity > saikuro_exec::mpsc::CHANNEL_CAPACITY {
+        return false;
+    }
+    true
 }
 
 //  Helpers

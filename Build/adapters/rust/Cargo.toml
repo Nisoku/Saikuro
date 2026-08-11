@@ -29,10 +29,10 @@ storage-sqlite  = ["saikuro-storage/sqlite-storage"]
 wasm-storage    = ["saikuro-storage/wasm-storage"]
 
 [dependencies]
-saikuro-core      = { path = "../../crates/saikuro-core" }
+saikuro-core      = { path = "../../crates/saikuro-core", default-features = false }
 saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false }
 saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
-saikuro-random    = { path = "../../crates/saikuro-random" }
+saikuro-random    = { path = "../../crates/saikuro-random", default-features = false }
 
 anyhow      = { workspace = true }
 serde       = { version = "1.0", features = ["derive"] }

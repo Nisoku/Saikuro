@@ -73,12 +73,21 @@ impl<'de> Deserialize<'de> for InvocationId {
 }
 
 impl InvocationId {
+    /// Try to generate a fresh invocation identifier from the active entropy
+    /// backend.
+    #[inline]
+    pub fn try_new() -> Result<Self, saikuro_random::Error> {
+        saikuro_random::uuid_v4().map(Self)
+    }
+
     /// Generate a fresh, globally-unique invocation identifier.
+    ///
+    /// Panics when the configured entropy backend is unavailable. Embedded
+    /// startup code should seed its DRBG first or use [`Self::try_new`] to
+    /// propagate initialization failures.
     #[inline]
     pub fn new() -> Self {
-        // Entropy failure is a platform-level fault: without it no invocation
-        // id can ever be minted, so aborting is the only sane response.
-        Self(saikuro_random::uuid_v4().expect("entropy backend unavailable"))
+        Self::try_new().expect("entropy backend unavailable")
     }
 
     /// Construct from an existing UUID.
