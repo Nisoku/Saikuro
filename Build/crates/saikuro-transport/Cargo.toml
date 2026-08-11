@@ -21,12 +21,14 @@ keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 #   embassy:           no_std embassy-executor backend for MCU targets; forwards the
 #                      drbg entropy source so the crate is self-contained under
 #                      `--no-default-features --features embassy`
+#   embedded-io:       local, statically-dispatched embedded-io-async transport
 #
 # The in-memory transport is always compiled; it has zero OS dependencies.
 [features]
 default = ["std", "native-transport"]
 std = []
 embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/drbg"]
+embedded-io = ["dep:embedded-io-async"]
 # native features also forward core/std so native builds keep the OS entropy
 # backend that core/std selects; only the crate-level lifter (std) switches to
 # std-no-os for wasm32.
@@ -60,6 +62,7 @@ thiserror   = { workspace = true }
 tracing     = { version = "0.1", default-features = false }
 saikuro-exec = { workspace = true, default-features = false }
 saikuro-random = { workspace = true, default-features = false }
+embedded-io-async = { version = "0.7.0", default-features = false, optional = true }
 
 # WebSocket support on native (tokio-tungstenite uses mio which doesn't compile on wasm32)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -84,3 +87,4 @@ web-sys = { version = "0.3", features = [
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+futures = { workspace = true, features = ["executor"] }

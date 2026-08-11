@@ -1,13 +1,8 @@
 #![cfg(target_arch = "wasm32")]
 
-use std::cell::RefCell;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use async_trait::async_trait;
 use bytes::Bytes;
 use js_sys::{ArrayBuffer, Uint8Array};
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -20,27 +15,15 @@ use web_sys::{
 use super::{
     config::StorageConfig,
     error::{Result, StorageError},
-    traits::{FileBackend, KeyValueBackend, StorageBackend},
+    traits::{LocalFileBackend, LocalKeyValueBackend, LocalStorageBackend},
 };
 
 thread_local! {
     static ROOT_HANDLE: RefCell<Option<FileSystemDirectoryHandle>> = const { RefCell::new(None) };
 }
 
-struct SendJsFuture(JsFuture);
-
-unsafe impl Send for SendJsFuture {}
-
-impl Future for SendJsFuture {
-    type Output = <JsFuture as Future>::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.get_mut().0).poll(cx)
-    }
-}
-
-fn promise_await(promise: ::js_sys::Promise) -> SendJsFuture {
-    SendJsFuture(JsFuture::from(promise))
+fn promise_await(promise: ::js_sys::Promise) -> JsFuture {
+    JsFuture::from(promise)
 }
 
 async fn pick_directory() -> Result<FileSystemDirectoryHandle> {
@@ -346,8 +329,7 @@ impl FsAccessStorage {
     }
 }
 
-#[async_trait]
-impl KeyValueBackend for FsAccessStorage {
+impl LocalKeyValueBackend for FsAccessStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
     }
@@ -429,8 +411,7 @@ impl KeyValueBackend for FsAccessStorage {
     }
 }
 
-#[async_trait]
-impl FileBackend for FsAccessStorage {
+impl LocalFileBackend for FsAccessStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let (dirs, file_name) = navigate_path(path);
         let parent = self.navigate_to_dir(&dirs, false).await?;
@@ -514,14 +495,9 @@ impl FileBackend for FsAccessStorage {
     }
 }
 
-#[async_trait]
-impl StorageBackend for FsAccessStorage {
+impl LocalStorageBackend for FsAccessStorage {
     fn supports_files(&self) -> bool {
         true
-    }
-
-    fn as_file_backend(&self) -> Option<&dyn FileBackend> {
-        Some(self)
     }
 
     async fn flush(&self) -> Result<()> {

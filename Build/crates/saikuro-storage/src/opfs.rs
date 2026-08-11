@@ -1,11 +1,6 @@
-use std::cell::RefCell;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use async_trait::async_trait;
 use bytes::Bytes;
 use js_sys::{ArrayBuffer, Uint8Array};
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -16,25 +11,13 @@ use web_sys::{
 use super::{
     config::StorageConfig,
     error::{Result, StorageError},
-    traits::{FileBackend, KeyValueBackend, StorageBackend},
+    traits::{LocalFileBackend, LocalKeyValueBackend, LocalStorageBackend},
 };
 
 const ROOT_DIR_NAME: &str = "SaikuroStorage";
 
-struct SendJsFuture(JsFuture);
-
-unsafe impl Send for SendJsFuture {}
-
-impl Future for SendJsFuture {
-    type Output = <JsFuture as Future>::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.get_mut().0).poll(cx)
-    }
-}
-
-fn promise_await(promise: ::js_sys::Promise) -> SendJsFuture {
-    SendJsFuture(JsFuture::from(promise))
+fn promise_await(promise: ::js_sys::Promise) -> JsFuture {
+    JsFuture::from(promise)
 }
 
 thread_local! {
@@ -326,8 +309,7 @@ impl Default for OpfsStorage {
     }
 }
 
-#[async_trait]
-impl KeyValueBackend for OpfsStorage {
+impl LocalKeyValueBackend for OpfsStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
     }
@@ -411,8 +393,7 @@ impl KeyValueBackend for OpfsStorage {
     }
 }
 
-#[async_trait]
-impl FileBackend for OpfsStorage {
+impl LocalFileBackend for OpfsStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let (dirs, file_name) = navigate_path(path);
         let parent = self.navigate_to_dir(&dirs, false).await?;
@@ -496,14 +477,9 @@ impl FileBackend for OpfsStorage {
     }
 }
 
-#[async_trait]
-impl StorageBackend for OpfsStorage {
+impl LocalStorageBackend for OpfsStorage {
     fn supports_files(&self) -> bool {
         true
-    }
-
-    fn as_file_backend(&self) -> Option<&dyn FileBackend> {
-        Some(self)
     }
 
     async fn flush(&self) -> Result<()> {

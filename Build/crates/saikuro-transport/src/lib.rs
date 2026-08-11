@@ -26,6 +26,9 @@ pub mod memory;
 pub mod selector;
 pub mod traits;
 
+#[cfg(feature = "embedded-io")]
+pub mod embedded_io;
+
 #[cfg(all(feature = "native-transport", not(target_arch = "wasm32")))]
 pub mod tcp;
 
@@ -49,6 +52,12 @@ pub use error::TransportError;
 pub use memory::MemoryTransport;
 pub use selector::{TransportConfig, TransportKind, TransportSelector};
 pub use traits::{Transport, TransportReceiver, TransportSender};
+
+#[cfg(feature = "embedded-io")]
+pub use embedded_io::{
+    EmbeddedIoReceiver, EmbeddedIoSender, EmbeddedIoTransport, LocalTransportReceiver,
+    LocalTransportSender,
+};
 
 #[cfg(all(feature = "native-transport", not(target_arch = "wasm32")))]
 pub use tcp::TcpTransport;

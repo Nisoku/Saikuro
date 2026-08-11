@@ -1,13 +1,20 @@
 //! Saikuro Storage Backend Abstraction
 //!
-//! Provides a platform-agnostic storage interface for key-value and file-like
-//! operations. Works across native (std::fs, databases) and WASM environments
-//! (OPFS, IndexedDB, localStorage, sessionStorage).
+//! Provides two storage tiers for key-value and file-like operations:
+//!
+//! - [`StorageBackend`] is the object-safe, `Send + Sync` host API used by
+//!   native adapters as `Box<dyn StorageBackend>`.
+//! - [`LocalStorageBackend`] and [`LocalKeyValueBackend`] use native async
+//!   functions for statically selected single-threaded and `no_std` backends.
+//!
+//! Browser storage implements the local tier because JavaScript handles and
+//! their futures are thread-local. Local futures must be awaited on their
+//! owning executor and must not be passed to `tokio::spawn`.
 //!
 //! The crate is `no_std` + `alloc` without the `std` feature: the config,
 //! error, trait, and util modules compile for bare-metal MCU targets, and the
-//! concrete backends (in-memory, native fs/sled/sqlite, wasm storage) all
-//! require `std`.
+//! concrete backends (in-memory, native fs/sled/sqlite, wasm storage) require
+//! `std`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -48,9 +55,8 @@ pub mod session_storage;
 #[macro_export]
 macro_rules! impl_web_storage {
     ($name:ident, $storage_fn:ident) => {
-        use async_trait::async_trait;
         use bytes::Bytes;
-        use $crate::traits::{KeyValueBackend, StorageBackend};
+        use $crate::traits::{LocalKeyValueBackend, LocalStorageBackend};
 
         pub struct $name {
             config: $crate::StorageConfig,
@@ -88,8 +94,7 @@ macro_rules! impl_web_storage {
             }
         }
 
-        #[async_trait]
-        impl KeyValueBackend for $name {
+        impl LocalKeyValueBackend for $name {
             fn config(&self) -> &$crate::StorageConfig {
                 &self.config
             }
@@ -171,8 +176,7 @@ macro_rules! impl_web_storage {
             }
         }
 
-        #[async_trait]
-        impl StorageBackend for $name {
+        impl LocalStorageBackend for $name {
             fn supports_files(&self) -> bool {
                 false
             }
@@ -182,7 +186,10 @@ macro_rules! impl_web_storage {
 
 pub use config::{BackendKind, CleanupPolicy, PersistenceMode, StorageConfig};
 pub use error::{Result, StorageError};
-pub use traits::{FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend};
+pub use traits::{
+    FileBackend, KeyValueBackend, KeyValueBackendExt, LocalFileBackend, LocalKeyValueBackend,
+    LocalStorageBackend, StorageBackend,
+};
 
 #[cfg(feature = "inmemory")]
 pub use inmemory::InMemoryStorage;

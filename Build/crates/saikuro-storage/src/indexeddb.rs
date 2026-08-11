@@ -4,14 +4,9 @@
 //! that survives page reloads. Enabled automatically when the `wasm-storage`
 //! feature is active on a `wasm32` target.
 
-use std::cell::RefCell;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use async_trait::async_trait;
 use bytes::Bytes;
 use js_sys::Uint8Array;
+use std::cell::RefCell;
 use wasm_bindgen::{prelude::*, JsCast};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -22,7 +17,7 @@ use web_sys::{
 use super::{
     config::StorageConfig,
     error::{Result, StorageError},
-    traits::{KeyValueBackend, StorageBackend},
+    traits::{LocalKeyValueBackend, LocalStorageBackend},
 };
 
 const DB_NAME: &str = "SaikuroStorage";
@@ -31,24 +26,6 @@ const DB_VERSION: u32 = 1;
 
 thread_local! {
     static DB_HANDLE: RefCell<Option<IdbDatabase>> = const { RefCell::new(None) };
-}
-
-// Send-safe JsFuture wrapper
-/// A `JsFuture` wrapper that implements `Send`.
-///
-/// SAFETY: On single-threaded `wasm32-unknown-unknown` no `JsValue` ever
-/// crosses a thread boundary, so the `Send` requirement of the storage trait
-/// is satisfied soundly.
-struct SendJsFuture(JsFuture);
-
-unsafe impl Send for SendJsFuture {}
-
-impl Future for SendJsFuture {
-    type Output = <JsFuture as Future>::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.get_mut().0).poll(cx)
-    }
 }
 
 // Helpers
@@ -62,7 +39,7 @@ fn key_prefix(namespace: &str) -> String {
 
 /// Convert an `IdbRequest` into a Rust `Future` by wrapping its `onsuccess`
 /// and `onerror` in a JavaScript Promise.
-fn idb_await(request: &IdbRequest) -> SendJsFuture {
+fn idb_await(request: &IdbRequest) -> JsFuture {
     let req = request.clone();
     let promise =
         js_sys::Promise::new(&mut |resolve: js_sys::Function, reject: js_sys::Function| {
@@ -87,7 +64,7 @@ fn idb_await(request: &IdbRequest) -> SendJsFuture {
             req.set_onerror(Some(err.as_ref().unchecked_ref()));
             err.forget();
         });
-    SendJsFuture(JsFuture::from(promise))
+    JsFuture::from(promise)
 }
 
 /// Convert a JsValue containing an `ArrayBuffer` to `Bytes`.
@@ -168,28 +145,28 @@ async fn tx(
     Ok((transaction, store))
 }
 
-fn store_get(store: &IdbObjectStore, key: &JsValue) -> Result<SendJsFuture> {
+fn store_get(store: &IdbObjectStore, key: &JsValue) -> Result<JsFuture> {
     let request = store
         .get(key)
         .map_err(|_| StorageError::internal("IndexedDB get request failed"))?;
     Ok(idb_await(&request))
 }
 
-fn store_put(store: &IdbObjectStore, key: &JsValue, value: &JsValue) -> Result<SendJsFuture> {
+fn store_put(store: &IdbObjectStore, key: &JsValue, value: &JsValue) -> Result<JsFuture> {
     let request = store
         .put_with_key(value, key)
         .map_err(|_| StorageError::internal("IndexedDB put request failed"))?;
     Ok(idb_await(&request))
 }
 
-fn store_delete(store: &IdbObjectStore, key: &JsValue) -> Result<SendJsFuture> {
+fn store_delete(store: &IdbObjectStore, key: &JsValue) -> Result<JsFuture> {
     let request = store
         .delete(key)
         .map_err(|_| StorageError::internal("IndexedDB delete request failed"))?;
     Ok(idb_await(&request))
 }
 
-fn store_get_all_keys(store: &IdbObjectStore, query: Option<&JsValue>) -> Result<SendJsFuture> {
+fn store_get_all_keys(store: &IdbObjectStore, query: Option<&JsValue>) -> Result<JsFuture> {
     let request = match query {
         Some(q) => store.get_all_keys_with_key(q),
         None => store.get_all_keys(),
@@ -246,8 +223,7 @@ impl Default for IndexedDbStorage {
     }
 }
 
-#[async_trait]
-impl KeyValueBackend for IndexedDbStorage {
+impl LocalKeyValueBackend for IndexedDbStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
     }
@@ -357,8 +333,7 @@ impl KeyValueBackend for IndexedDbStorage {
     }
 }
 
-#[async_trait]
-impl StorageBackend for IndexedDbStorage {
+impl LocalStorageBackend for IndexedDbStorage {
     fn supports_files(&self) -> bool {
         false
     }
