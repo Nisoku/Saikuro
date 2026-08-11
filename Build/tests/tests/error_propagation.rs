@@ -177,7 +177,7 @@ fn error_detail_display_includes_code_and_message() {
 
 #[test]
 fn error_response_survives_msgpack_roundtrip() {
-    let id = InvocationId::new();
+    let id = InvocationId::new().expect("entropy available");
     let detail = ErrorDetail::new(ErrorCode::InvalidArguments, "bad types")
         .with_detail("arg", Value::String("x".into()))
         .unwrap();
@@ -220,7 +220,7 @@ fn all_error_codes_survive_msgpack_roundtrip() {
     ];
 
     for code in codes {
-        let id = InvocationId::new();
+        let id = InvocationId::new().expect("entropy available");
         let detail = ErrorDetail::new(code.clone(), format!("test for {code:?}"));
         let resp = ResponseEnvelope::err(id, detail);
         let bytes = resp.to_msgpack().expect("serialize");
@@ -245,7 +245,9 @@ fn provider_returns_error_response_to_caller() {
             router::InvocationRouter,
         };
 
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(
+            saikuro_exec::ChannelCapacity::try_from(4).expect("4 is a valid channel capacity"),
+        );
         let handle = ProviderHandle::new("failing", vec!["fail".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle);
@@ -261,7 +263,7 @@ fn provider_returns_error_response_to_caller() {
         });
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::call("fail.op", vec![]);
+        let env = Envelope::call("fail.op", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok, "call to failing provider should not be ok");

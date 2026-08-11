@@ -20,9 +20,6 @@ saikuro-exec   = { workspace = true, default-features = false }
 
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
-# Atomics for sequence tracking that also work on MCU targets without native
-# 64-bit CAS (thumbv7m); native instructions are used where available.
-portable-atomic = { workspace = true }
 # tracing is declared directly so the `std` feature stays off on MCU; the
 # `attributes` feature is required by `#[instrument]` on `dispatch`.
 tracing = { version = "0.1", default-features = false, features = ["attributes"] }

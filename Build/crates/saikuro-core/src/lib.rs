@@ -24,6 +24,7 @@ pub mod error;
 pub mod invocation;
 pub mod log;
 pub mod msgpack;
+pub mod registration;
 pub mod resource;
 pub mod schema;
 pub mod sync;
@@ -36,6 +37,7 @@ pub use invocation::InvocationId;
 #[cfg(any(feature = "std", feature = "std-no-os"))]
 pub use log::stderr_log_sink;
 pub use log::{LogLevel, LogRecord, LogSink};
+pub use registration::RegistrationToken;
 pub use resource::ResourceHandle;
 pub use value::Value;
 

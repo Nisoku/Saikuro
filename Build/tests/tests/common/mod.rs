@@ -7,7 +7,7 @@ use saikuro_core::{
         TypeDescriptor, TypeMap, Visibility,
     },
     value::Value,
-    ResponseEnvelope,
+    RegistrationToken, ResponseEnvelope,
 };
 use saikuro_exec::mpsc;
 use saikuro_router::{
@@ -24,7 +24,9 @@ use saikuro_transport::{
 };
 
 pub fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
+    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
+        saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
+    );
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),
         vec![namespace.to_owned()],
@@ -73,7 +75,7 @@ pub fn schema_to_value(schema: &Schema) -> Value {
 }
 
 pub fn make_announce_envelope(schema: &Schema) -> Envelope {
-    Envelope::announce(schema_to_value(schema))
+    Envelope::announce(schema_to_value(schema)).expect("entropy available")
 }
 
 pub fn register_namespace(registry: &SchemaRegistry, namespace: &str, function: &str) {
@@ -97,6 +99,7 @@ pub async fn round_trip_via_handler(
 
     let handler = ConnectionHandler {
         peer_id: "test-peer".to_owned(),
+        registration_token: RegistrationToken::new(),
         sender: handler_sender,
         receiver: handler_receiver,
         validator,

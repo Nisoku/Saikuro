@@ -150,7 +150,8 @@ fn a_rust_provider_simulated_client_call() {
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "py-client");
 
         // 3:  Send a raw `Call` envelope (exactly what Python SaikuroClient does).
-        let call_env = Envelope::call("math.add", vec![Value::Int(3), Value::Int(7)]);
+        let call_env = Envelope::call("math.add", vec![Value::Int(3), Value::Int(7)])
+            .expect("entropy available");
         let call_id = call_env.id;
         tx.send(encode_envelope(&call_env))
             .await
@@ -194,7 +195,8 @@ fn l_csharp_style_client_wire_fidelity() {
 
         // Encode exactly as a C# adapter would: named-field MessagePack.
         // C# adapters use the same rmp_serde::to_vec_named encoding as TypeScript.
-        let env = Envelope::call("buf.len", vec![Value::Bytes(b"hello".to_vec())]);
+        let env = Envelope::call("buf.len", vec![Value::Bytes(b"hello".to_vec())])
+            .expect("entropy available");
         let id = env.id;
         let raw = rmp_serde::to_vec_named(&env).expect("csharp-style encode");
         tx.send(Bytes::from(raw)).await.expect("send");
@@ -384,7 +386,8 @@ fn n_rust_adapter_provider_serves_simulated_client() {
         // Connect a simulated client and call `words.reverse`.
         let (mut client_tx, mut client_rx) = connect_simulated_peer(&handle, "n-sim-client");
 
-        let call = Envelope::call("words.reverse", vec![Value::String("saikuro".into())]);
+        let call = Envelope::call("words.reverse", vec![Value::String("saikuro".into())])
+            .expect("entropy available");
         let call_id = call.id;
         client_tx
             .send(encode_envelope(&call))
@@ -421,7 +424,7 @@ fn b_simulated_provider_rust_client_dispatch() {
 
         // 2:  Send an Announce so the runtime learns about `greeter.hello`.
         let schema = make_schema("greeter", "hello");
-        let announce = Envelope::announce(schema_to_value(&schema));
+        let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
         provider_tx
             .send(encode_envelope(&announce))
             .await
@@ -455,7 +458,7 @@ fn b_simulated_provider_rust_client_dispatch() {
         saikuro_exec::sleep(std::time::Duration::from_millis(20)).await;
 
         // 5:  Rust-side dispatch through handle (simulates any Rust caller).
-        let call = Envelope::call("greeter.hello", vec![]);
+        let call = Envelope::call("greeter.hello", vec![]).expect("entropy available");
         let resp = handle.dispatch(call, &CapabilitySet::empty()).await;
 
         assert!(resp.ok, "greeter.hello call must succeed: {:?}", resp.error);
@@ -491,7 +494,7 @@ fn c_rust_and_simulated_providers_coexist() {
         let (mut ext_tx, mut ext_rx) = connect_simulated_peer(&handle, "ext-provider");
 
         let ext_schema = make_schema_with_args("ext", "echo", 1);
-        let announce = Envelope::announce(schema_to_value(&ext_schema));
+        let announce = Envelope::announce(schema_to_value(&ext_schema)).expect("entropy available");
         ext_tx
             .send(encode_envelope(&announce))
             .await
@@ -519,7 +522,7 @@ fn c_rust_and_simulated_providers_coexist() {
         let (mut client_tx, mut client_rx) = connect_simulated_peer(&handle, "shared-client");
 
         // Call the Rust provider.
-        let ping = Envelope::call("svc.ping", vec![]);
+        let ping = Envelope::call("svc.ping", vec![]).expect("entropy available");
         let ping_id = ping.id;
         client_tx
             .send(encode_envelope(&ping))
@@ -532,7 +535,8 @@ fn c_rust_and_simulated_providers_coexist() {
         assert_eq!(ping_resp.result, Some(Value::String("pong".into())));
 
         // Call the simulated external provider.
-        let echo = Envelope::call("ext.echo", vec![Value::String("hello".into())]);
+        let echo = Envelope::call("ext.echo", vec![Value::String("hello".into())])
+            .expect("entropy available");
         let echo_id = echo.id;
         client_tx
             .send(encode_envelope(&echo))
@@ -575,9 +579,9 @@ fn d_batch_call_from_simulated_client() {
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "batch-client");
 
         // Build two inner Call envelopes.
-        let item_a = Envelope::call("items.get", vec![Value::Int(1)]);
-        let item_b = Envelope::call("items.get", vec![Value::Int(2)]);
-        let batch_id = InvocationId::new();
+        let item_a = Envelope::call("items.get", vec![Value::Int(1)]).expect("entropy available");
+        let item_b = Envelope::call("items.get", vec![Value::Int(2)]).expect("entropy available");
+        let batch_id = InvocationId::new().expect("entropy available");
 
         // Construct the batch envelope exactly as TypeScript/Python adapters do.
         let batch_env = Envelope {
@@ -624,7 +628,7 @@ fn e_call_unknown_namespace_returns_error_on_wire() {
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "err-client");
 
-        let env = Envelope::call("nope.fn", vec![]);
+        let env = Envelope::call("nope.fn", vec![]).expect("entropy available");
         let id = env.id;
         tx.send(encode_envelope(&env)).await.expect("send");
 
@@ -690,7 +694,7 @@ fn f_announce_then_client_call_round_trip() {
         let (mut prov_tx, mut prov_rx) = connect_simulated_peer(&handle, "prov-f");
 
         let schema = make_schema_with_args("calc", "square", 1);
-        let announce = Envelope::announce(schema_to_value(&schema));
+        let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
         prov_tx
             .send(encode_envelope(&announce))
             .await
@@ -719,7 +723,7 @@ fn f_announce_then_client_call_round_trip() {
         // Simulated client
         let (mut cli_tx, mut cli_rx) = connect_simulated_peer(&handle, "cli-f");
 
-        let call = Envelope::call("calc.square", vec![Value::Int(9)]);
+        let call = Envelope::call("calc.square", vec![Value::Int(9)]).expect("entropy available");
         let call_id = call.id;
         cli_tx
             .send(encode_envelope(&call))
@@ -765,7 +769,8 @@ fn g_concurrent_simulated_clients() {
             tasks.push(saikuro_exec::spawn(async move {
                 let (mut tx, mut rx) =
                     connect_simulated_peer(&handle_clone, &format!("concurrent-client-{i}"));
-                let env = Envelope::call("echo.run", vec![Value::Int(i as i64)]);
+                let env = Envelope::call("echo.run", vec![Value::Int(i as i64)])
+                    .expect("entropy available");
                 let id = env.id;
                 tx.send(encode_envelope(&env)).await.expect("send");
                 let frame = rx.recv().await.expect("recv").expect("frame");
@@ -807,7 +812,8 @@ fn h_cast_fire_and_forget_returns_ok_empty() {
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "cast-client");
 
-        let cast = Envelope::cast("logger.info", vec![Value::String("fire!".into())]);
+        let cast = Envelope::cast("logger.info", vec![Value::String("fire!".into())])
+            .expect("entropy available");
         let cast_id = cast.id;
         tx.send(encode_envelope(&cast)).await.expect("send cast");
 
@@ -836,7 +842,7 @@ fn i_provider_reconnect_and_reannounce() {
             let (mut prov_tx, mut prov_rx) = connect_simulated_peer(&handle, "reconnect-prov-v1");
 
             let schema = make_schema("svc2", "op");
-            let announce = Envelope::announce(schema_to_value(&schema));
+            let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
             prov_tx
                 .send(encode_envelope(&announce))
                 .await
@@ -860,7 +866,7 @@ fn i_provider_reconnect_and_reannounce() {
             saikuro_exec::sleep(std::time::Duration::from_millis(20)).await;
 
             let (mut cli_tx, mut cli_rx) = connect_simulated_peer(&handle, "cli-reconnect-v1");
-            let call = Envelope::call("svc2.op", vec![]);
+            let call = Envelope::call("svc2.op", vec![]).expect("entropy available");
             cli_tx.send(encode_envelope(&call)).await.expect("send");
             let resp = decode_response(cli_rx.recv().await.unwrap().unwrap());
             assert!(resp.ok, "v1 call must succeed");
@@ -877,7 +883,7 @@ fn i_provider_reconnect_and_reannounce() {
         let (mut prov2_tx, mut prov2_rx) = connect_simulated_peer(&handle, "reconnect-prov-v2");
 
         let schema2 = make_schema("svc2", "op");
-        let announce2 = Envelope::announce(schema_to_value(&schema2));
+        let announce2 = Envelope::announce(schema_to_value(&schema2)).expect("entropy available");
         prov2_tx
             .send(encode_envelope(&announce2))
             .await
@@ -899,7 +905,7 @@ fn i_provider_reconnect_and_reannounce() {
         saikuro_exec::sleep(std::time::Duration::from_millis(20)).await;
 
         let (mut cli2_tx, mut cli2_rx) = connect_simulated_peer(&handle, "cli-reconnect-v2");
-        let call2 = Envelope::call("svc2.op", vec![]);
+        let call2 = Envelope::call("svc2.op", vec![]).expect("entropy available");
         cli2_tx
             .send(encode_envelope(&call2))
             .await
@@ -939,7 +945,8 @@ fn j_typescript_style_client_wire_fidelity() {
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "ts-client");
 
         // Encode exactly as TypeScript does: named field map via rmp_serde::to_vec_named.
-        let env = Envelope::call("str.upper", vec![Value::String("hello".into())]);
+        let env = Envelope::call("str.upper", vec![Value::String("hello".into())])
+            .expect("entropy available");
         let id = env.id;
         let raw = rmp_serde::to_vec_named(&env).expect("ts-style encode");
         tx.send(Bytes::from(raw)).await.expect("send");
@@ -980,7 +987,7 @@ fn k_response_id_always_matches_request_id() {
         // Send 20 calls pipelined:  don't wait for each response.
         let mut sent_ids: Vec<InvocationId> = Vec::new();
         for _ in 0..20 {
-            let env = Envelope::call("id_check.fn", vec![]);
+            let env = Envelope::call("id_check.fn", vec![]).expect("entropy available");
             sent_ids.push(env.id);
             tx.send(encode_envelope(&env)).await.expect("send");
         }

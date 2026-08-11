@@ -21,6 +21,7 @@ use saikuro_core::schema::{
     SCHEMA_TYPES_CAPACITY,
 };
 use saikuro_core::sync::RwLock;
+use saikuro_core::RegistrationToken;
 use tracing::{debug, info, warn};
 
 use crate::validator::ValidationError;
@@ -47,6 +48,8 @@ pub struct NamespaceRegistration {
     pub schema: NamespaceSchema,
     /// Opaque identifier for the provider connection (used for routing).
     pub provider_id: String,
+    /// Identity of this specific provider registration.
+    pub registration_token: RegistrationToken,
 }
 
 //  Registry
@@ -65,6 +68,7 @@ struct Schemata {
 struct NamespaceEntry {
     schema: NamespaceSchema,
     provider_id: String,
+    registration_token: RegistrationToken,
 }
 
 /// The live schema registry.
@@ -96,12 +100,14 @@ impl SchemaRegistry {
             types: BTreeMap::new(),
             mode: RegistryMode::Production,
         };
+        let frozen_token = RegistrationToken::new();
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
             schemata.namespaces.insert(
                 ns_name,
                 NamespaceEntry {
                     schema: ns_schema,
                     provider_id: "frozen".to_owned(),
+                    registration_token: frozen_token,
                 },
             );
         }
@@ -143,6 +149,7 @@ impl SchemaRegistry {
             NamespaceEntry {
                 schema: registration.schema,
                 provider_id: registration.provider_id,
+                registration_token: registration.registration_token,
             },
         );
         Ok(())
@@ -156,6 +163,16 @@ impl SchemaRegistry {
         &self,
         schema: Schema,
         provider_id: impl Into<String>,
+    ) -> Result<(), RegistryError> {
+        self.merge_schema_with_token(schema, provider_id, RegistrationToken::new())
+    }
+
+    /// Merge a schema document under an existing provider registration.
+    pub fn merge_schema_with_token(
+        &self,
+        schema: Schema,
+        provider_id: impl Into<String>,
+        registration_token: RegistrationToken,
     ) -> Result<(), RegistryError> {
         let provider_id = provider_id.into();
 
@@ -200,22 +217,25 @@ impl SchemaRegistry {
                 NamespaceEntry {
                     schema: ns_schema,
                     provider_id: provider_id.clone(),
+                    registration_token,
                 },
             );
         }
         Ok(())
     }
 
-    /// Remove all namespaces owned by `provider_id`.
+    /// Remove namespaces owned by one specific provider registration.
     ///
-    /// Called when a provider disconnects.
-    pub fn deregister_provider(&self, provider_id: &str) {
+    /// A stale disconnect cannot remove schemas from a newer registration that
+    /// reused the same provider ID.
+    pub fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
         let mut schemata = self.inner.write();
         if schemata.mode == RegistryMode::Production {
             return;
         }
         schemata.namespaces.retain(|_ns, entry| {
-            let keep = entry.provider_id != provider_id;
+            let keep =
+                entry.provider_id != provider_id || entry.registration_token != registration_token;
             if !keep {
                 debug!(provider = %provider_id, "deregistered namespace on disconnect");
             }

@@ -5,7 +5,7 @@
 //! serialised to binary using MessagePack via `crate::msgpack` before transit;
 //! the types here are the canonical in-memory representation.
 
-use alloc::{borrow::ToOwned, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
@@ -168,11 +168,14 @@ impl_msgpack!(ResponseEnvelope);
 
 impl Envelope {
     /// Construct the simplest possible call envelope.
-    pub fn call(target: impl Into<String>, args: Vec<Value>) -> Self {
-        Self {
+    pub fn call(
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<Self, saikuro_random::Error> {
+        Ok(Self {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Call,
-            id: InvocationId::new(),
+            id: InvocationId::new()?,
             target: target.into(),
             args,
             meta: MetaMap::new(),
@@ -180,44 +183,47 @@ impl Envelope {
             batch_items: None,
             stream_control: None,
             seq: None,
-        }
+        })
     }
 
     /// Construct a fire-and-forget cast envelope.
-    pub fn cast(target: impl Into<String>, args: Vec<Value>) -> Self {
-        Self {
-            invocation_type: InvocationType::Cast,
-            ..Self::call(target, args)
-        }
+    pub fn cast(
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<Self, saikuro_random::Error> {
+        let mut envelope = Self::call(target, args)?;
+        envelope.invocation_type = InvocationType::Cast;
+        Ok(envelope)
     }
 
     /// Construct the initial envelope that opens a stream.
-    pub fn stream_open(target: impl Into<String>, args: Vec<Value>) -> Self {
-        Self {
-            invocation_type: InvocationType::Stream,
-            ..Self::call(target, args)
-        }
+    pub fn stream_open(
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<Self, saikuro_random::Error> {
+        let mut envelope = Self::call(target, args)?;
+        envelope.invocation_type = InvocationType::Stream;
+        Ok(envelope)
     }
 
     /// Construct the initial envelope that opens a bidirectional channel.
-    pub fn channel_open(target: impl Into<String>, args: Vec<Value>) -> Self {
-        Self {
-            invocation_type: InvocationType::Channel,
-            ..Self::call(target, args)
-        }
+    pub fn channel_open(
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<Self, saikuro_random::Error> {
+        let mut envelope = Self::call(target, args)?;
+        envelope.invocation_type = InvocationType::Channel;
+        Ok(envelope)
     }
 
     /// Construct a schema-announcement envelope.
     ///
     /// `schema_bytes` is the MessagePack-encoded [`Schema`](crate::schema::Schema)
     /// stored as a raw `Bytes` value in `args[0]`.
-    pub fn announce(schema_value: Value) -> Self {
-        Self {
-            invocation_type: InvocationType::Announce,
-            target: "$saikuro.announce".to_owned(),
-            args: vec![schema_value],
-            ..Self::call("$saikuro.announce", vec![])
-        }
+    pub fn announce(schema_value: Value) -> Result<Self, saikuro_random::Error> {
+        let mut envelope = Self::call("$saikuro.announce", vec![schema_value])?;
+        envelope.invocation_type = InvocationType::Announce;
+        Ok(envelope)
     }
 
     /// Construct a resource-access envelope.
@@ -225,11 +231,13 @@ impl Envelope {
     /// `target` is the provider function that manages the resource.
     /// `args` are provider-specific arguments that identify or parameterise
     /// the resource request (e.g. a resource ID, byte range, or query).
-    pub fn resource(target: impl Into<String>, args: Vec<Value>) -> Self {
-        Self {
-            invocation_type: InvocationType::Resource,
-            ..Self::call(target, args)
-        }
+    pub fn resource(
+        target: impl Into<String>,
+        args: Vec<Value>,
+    ) -> Result<Self, saikuro_random::Error> {
+        let mut envelope = Self::call(target, args)?;
+        envelope.invocation_type = InvocationType::Resource;
+        Ok(envelope)
     }
 
     /// Return the namespace portion of `target` (everything before the last `.`).

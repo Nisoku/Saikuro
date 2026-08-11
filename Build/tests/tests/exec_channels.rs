@@ -7,12 +7,28 @@
 use saikuro_exec::{mpsc, oneshot, watch};
 use std::time::Duration;
 
+fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
+    saikuro_exec::ChannelCapacity::try_from(value).expect("test channel capacity must be valid")
+}
+
+#[test]
+fn channel_capacity_enforces_shared_backend_bounds() {
+    use saikuro_exec::ChannelCapacity;
+
+    assert_eq!(ChannelCapacity::MIN.get(), 1);
+    assert_eq!(ChannelCapacity::MAX.get(), 256);
+    assert_eq!(ChannelCapacity::try_from(1), Ok(ChannelCapacity::MIN));
+    assert_eq!(ChannelCapacity::try_from(256), Ok(ChannelCapacity::MAX));
+    assert_eq!(ChannelCapacity::try_from(0).unwrap_err().value(), 0);
+    assert_eq!(ChannelCapacity::try_from(257).unwrap_err().value(), 257);
+}
+
 // MPSC
 
 #[test]
 fn mpsc_send_recv_single() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u32>(16);
+        let (tx, mut rx) = mpsc::channel::<u32>(capacity(16));
         tx.send(42).await.unwrap();
         assert_eq!(rx.recv().await, Some(42));
     })
@@ -21,7 +37,7 @@ fn mpsc_send_recv_single() {
 #[test]
 fn mpsc_send_recv_multiple_in_order() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<i32>(32);
+        let (tx, mut rx) = mpsc::channel::<i32>(capacity(32));
         for i in 0..10 {
             tx.send(i).await.unwrap();
         }
@@ -34,7 +50,7 @@ fn mpsc_send_recv_multiple_in_order() {
 #[test]
 fn mpsc_backpressure_sender_waits() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u8>(3);
+        let (tx, mut rx) = mpsc::channel::<u8>(capacity(3));
         // Fill the buffer:  3 slots.
         tx.send(1).await.unwrap();
         tx.send(2).await.unwrap();
@@ -63,7 +79,7 @@ fn mpsc_backpressure_sender_waits() {
 #[test]
 fn mpsc_try_send_on_full_channel() {
     saikuro_exec::block_on(async {
-        let (tx, _rx) = mpsc::channel::<u8>(2);
+        let (tx, _rx) = mpsc::channel::<u8>(capacity(2));
         tx.send(1).await.unwrap();
         tx.send(2).await.unwrap();
         // Channel is full; try_send should fail with the value returned.
@@ -74,7 +90,7 @@ fn mpsc_try_send_on_full_channel() {
 #[test]
 fn mpsc_try_send_on_closed_channel() {
     saikuro_exec::block_on(async {
-        let (tx, rx) = mpsc::channel::<u8>(2);
+        let (tx, rx) = mpsc::channel::<u8>(capacity(2));
         drop(rx);
         // Allow the drop to propagate.
         saikuro_exec::yield_now().await;
@@ -85,7 +101,7 @@ fn mpsc_try_send_on_closed_channel() {
 #[test]
 fn mpsc_sender_clone() {
     saikuro_exec::block_on(async {
-        let (tx1, mut rx) = mpsc::channel::<&'static str>(8);
+        let (tx1, mut rx) = mpsc::channel::<&'static str>(capacity(8));
         let tx2 = tx1.clone();
         tx1.send("from-1").await.unwrap();
         tx2.send("from-2").await.unwrap();
@@ -101,7 +117,7 @@ fn mpsc_sender_clone() {
 #[test]
 fn mpsc_send_after_all_receivers_dropped_errors() {
     saikuro_exec::block_on(async {
-        let (tx, rx) = mpsc::channel::<u8>(8);
+        let (tx, rx) = mpsc::channel::<u8>(capacity(8));
         drop(rx);
         let result = tx.send(7).await;
         assert!(result.is_err(), "send should fail after receiver dropped");
@@ -111,7 +127,7 @@ fn mpsc_send_after_all_receivers_dropped_errors() {
 #[test]
 fn mpsc_recv_returns_none_when_all_senders_dropped() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u8>(8);
+        let (tx, mut rx) = mpsc::channel::<u8>(capacity(8));
         tx.send(1).await.unwrap();
         drop(tx);
         // The buffered message must still be received.
@@ -124,7 +140,7 @@ fn mpsc_recv_returns_none_when_all_senders_dropped() {
 #[test]
 fn mpsc_large_message() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(8);
+        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(capacity(8));
         let big = vec![0xABu8; 1024 * 1024]; // 1 MiB
         tx.send(big.clone()).await.unwrap();
         let got = rx.recv().await.unwrap();
@@ -137,7 +153,7 @@ fn mpsc_large_message() {
 #[test]
 fn mpsc_many_messages_in_order() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u64>(1024);
+        let (tx, mut rx) = mpsc::channel::<u64>(saikuro_exec::ChannelCapacity::MAX);
         let n = 5000u64;
         let tx_clone = tx.clone();
         let producer = saikuro_exec::spawn(async move {
@@ -159,7 +175,7 @@ fn mpsc_many_messages_in_order() {
 #[test]
 fn mpsc_is_closed() {
     saikuro_exec::block_on(async {
-        let (tx, rx) = mpsc::channel::<u8>(8);
+        let (tx, rx) = mpsc::channel::<u8>(capacity(8));
         assert!(!tx.is_closed());
         drop(rx);
         saikuro_exec::yield_now().await;
@@ -171,7 +187,7 @@ fn mpsc_is_closed() {
 #[test]
 fn mpsc_multiple_concurrent_senders() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u32>(256);
+        let (tx, mut rx) = mpsc::channel::<u32>(saikuro_exec::ChannelCapacity::MAX);
         let mut handles = Vec::new();
         for i in 0..10 {
             let t = tx.clone();

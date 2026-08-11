@@ -35,7 +35,7 @@ fn make_log_envelope(level: LogLevel, name: &str, msg: &str) -> Envelope {
     Envelope {
         version: PROTOCOL_VERSION,
         invocation_type: InvocationType::Log,
-        id: InvocationId::new(),
+        id: InvocationId::new().expect("entropy available"),
         target: "$log".to_owned(),
         args: vec![value],
         meta: Default::default(),
@@ -57,7 +57,9 @@ fn make_router_with_sink(sink: LogSink) -> InvocationRouter {
 fn log_envelope_is_not_routed_to_provider() {
     saikuro_exec::block_on(async {
         // Even with a registered provider, a Log envelope must NOT reach it.
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(8);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(
+            saikuro_exec::ChannelCapacity::try_from(8).expect("8 is a valid channel capacity"),
+        );
         let handle = ProviderHandle::new("logger", vec!["$log".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle);
@@ -137,7 +139,7 @@ fn log_envelope_with_no_args_returns_ok_without_panicking() {
         let env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Log,
-            id: InvocationId::new(),
+            id: InvocationId::new().expect("entropy available"),
             target: "$log".to_owned(),
             args: vec![],
             meta: Default::default(),
@@ -169,7 +171,7 @@ fn log_envelope_with_invalid_args_returns_ok_without_panicking() {
         let env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Log,
-            id: InvocationId::new(),
+            id: InvocationId::new().expect("entropy available"),
             target: "$log".to_owned(),
             args: vec![Value::String("not a log record".into())],
             meta: Default::default(),
@@ -192,7 +194,9 @@ fn log_envelope_with_invalid_args_returns_ok_without_panicking() {
 fn router_with_custom_sink_still_routes_calls() {
     saikuro_exec::block_on(async {
         // A custom log sink must not interfere with normal call routing.
-        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(8);
+        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
+            saikuro_exec::ChannelCapacity::try_from(8).expect("8 is a valid channel capacity"),
+        );
         let handle = ProviderHandle::new("math", vec!["math".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle);
@@ -213,7 +217,7 @@ fn router_with_custom_sink_still_routes_calls() {
         let (sink, _captured) = capturing_sink();
         let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
 
-        let env = Envelope::call("math.compute", vec![]);
+        let env = Envelope::call("math.compute", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
         assert!(resp.ok, "call should still succeed with custom log sink");
         assert_eq!(resp.result, Some(Value::Int(99)));

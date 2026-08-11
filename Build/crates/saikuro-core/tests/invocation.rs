@@ -3,7 +3,7 @@ use saikuro_core::InvocationId;
 
 #[test]
 fn msgpack_roundtrip_uses_binary_uuid() {
-    let id = InvocationId::new();
+    let id = InvocationId::new().expect("entropy available");
     let encoded = msgpack::to_vec(&id).expect("encode invocation id");
     let decoded: InvocationId = msgpack::from_slice(&encoded).expect("decode invocation id");
     // The wire form must be msgpack bin8: 0xC4 marker, one length byte of 16,

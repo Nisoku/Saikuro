@@ -12,7 +12,7 @@ use alloc::{
     borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec,
 };
 use async_trait::async_trait;
-use saikuro_core::{envelope::Envelope, sync::RwLock, ResponseEnvelope};
+use saikuro_core::{envelope::Envelope, sync::RwLock, RegistrationToken, ResponseEnvelope};
 use saikuro_exec::{mpsc, oneshot};
 use tracing::{debug, warn};
 
@@ -69,6 +69,7 @@ pub struct ProviderWorkItem {
 #[derive(Clone)]
 pub struct ProviderHandle {
     id: String,
+    registration_token: RegistrationToken,
     namespaces: Vec<String>,
     sender: mpsc::Sender<ProviderWorkItem>,
 }
@@ -79,11 +80,27 @@ impl ProviderHandle {
         namespaces: Vec<String>,
         sender: mpsc::Sender<ProviderWorkItem>,
     ) -> Self {
+        Self::with_registration_token(id, RegistrationToken::new(), namespaces, sender)
+    }
+
+    /// Build a provider handle for an existing registration.
+    pub fn with_registration_token(
+        id: impl Into<String>,
+        registration_token: RegistrationToken,
+        namespaces: Vec<String>,
+        sender: mpsc::Sender<ProviderWorkItem>,
+    ) -> Self {
         Self {
             id: id.into(),
+            registration_token,
             namespaces,
             sender,
         }
+    }
+
+    /// Return the identity of this specific provider registration.
+    pub fn registration_token(&self) -> RegistrationToken {
+        self.registration_token
     }
 }
 
@@ -133,8 +150,8 @@ pub struct ProviderRegistry {
 struct RegistryState {
     /// namespace -> provider handle
     by_namespace: BTreeMap<String, ProviderHandle>,
-    /// provider_id -> list of namespaces (for cleanup on disconnect)
-    by_provider: BTreeMap<String, Vec<String>>,
+    /// provider identity -> list of namespaces (for cleanup on disconnect)
+    by_provider: BTreeMap<(String, RegistrationToken), Vec<String>>,
 }
 
 impl ProviderRegistry {
@@ -151,6 +168,8 @@ impl ProviderRegistry {
     /// the routes it no longer owns (unless a newer provider took them over).
     pub fn register(&self, handle: ProviderHandle) {
         let provider_id = handle.id().to_owned();
+        let registration_token = handle.registration_token();
+        let provider_key = (provider_id.clone(), registration_token);
         let namespaces = handle.namespaces().to_vec();
 
         let mut state = self.inner.write();
@@ -161,7 +180,7 @@ impl ProviderRegistry {
         // newer provider may have taken it over).
         let dropped: Vec<String> = state
             .by_provider
-            .get(&provider_id)
+            .get(&provider_key)
             .map(|owned| {
                 owned
                     .iter()
@@ -174,7 +193,7 @@ impl ProviderRegistry {
             if state
                 .by_namespace
                 .get(ns)
-                .map(|h| h.id() == provider_id)
+                .map(|h| h.id() == provider_id && h.registration_token() == registration_token)
                 .unwrap_or(false)
             {
                 state.by_namespace.remove(ns);
@@ -186,8 +205,9 @@ impl ProviderRegistry {
             match state.by_namespace.insert(ns.clone(), handle.clone()) {
                 Some(old) => {
                     warn!(namespace = %ns, provider = %provider_id, "replacing existing namespace provider");
-                    if old.id() != provider_id {
-                        if let Some(old_ns_list) = state.by_provider.get_mut(old.id()) {
+                    if old.id() != provider_id || old.registration_token() != registration_token {
+                        let old_key = (old.id().to_owned(), old.registration_token());
+                        if let Some(old_ns_list) = state.by_provider.get_mut(&old_key) {
                             old_ns_list.retain(|n| n != ns);
                         }
                     }
@@ -197,21 +217,23 @@ impl ProviderRegistry {
                 }
             }
         }
-        state.by_provider.insert(provider_id, namespaces);
+        state.by_provider.insert(provider_key, namespaces);
     }
 
-    /// Remove all namespace registrations for the given provider ID.
+    /// Remove all namespaces owned by one specific provider registration.
     ///
     /// A namespace is removed from the lookup index only while it still points
-    /// at this provider; a namespace a newer provider took over is left alone.
-    pub fn deregister(&self, provider_id: &str) {
+    /// at this registration; namespaces taken over by a newer registration are
+    /// left alone even when it uses the same provider ID.
+    pub fn deregister(&self, provider_id: &str, registration_token: RegistrationToken) {
         let mut state = self.inner.write();
-        if let Some(namespaces) = state.by_provider.remove(provider_id) {
+        let provider_key = (provider_id.to_owned(), registration_token);
+        if let Some(namespaces) = state.by_provider.remove(&provider_key) {
             for ns in namespaces {
                 if state
                     .by_namespace
                     .get(&ns)
-                    .map(|h| h.id() == provider_id)
+                    .map(|h| h.id() == provider_id && h.registration_token() == registration_token)
                     .unwrap_or(false)
                 {
                     state.by_namespace.remove(&ns);

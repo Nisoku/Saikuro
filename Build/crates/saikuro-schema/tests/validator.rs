@@ -7,7 +7,7 @@ fn batch_with_empty_items_returns_empty_batch_error() {
     let registry = SchemaRegistry::new();
     let validator = InvocationValidator::new(registry);
 
-    let mut batch = Envelope::call("", vec![]);
+    let mut batch = Envelope::call("", vec![]).expect("entropy available");
     batch.invocation_type = InvocationType::Batch;
     batch.target = String::new();
     batch.batch_items = Some(vec![]);

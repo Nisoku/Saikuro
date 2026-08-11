@@ -20,7 +20,9 @@ mod common;
 
 /// Build a `ProviderRegistry` with a single provider subscribed to `namespace`.
 fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
+    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
+        saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
+    );
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),
         vec![namespace.to_owned()],
@@ -56,7 +58,8 @@ fn handle_to_value(handle: &ResourceHandle) -> Value {
 /// check before testing the full dispatch path.
 #[test]
 fn resource_envelope_constructor_sets_correct_type() {
-    let env = Envelope::resource("files.open", vec![Value::String("/tmp/data.csv".into())]);
+    let env = Envelope::resource("files.open", vec![Value::String("/tmp/data.csv".into())])
+        .expect("entropy available");
     assert_eq!(env.invocation_type, InvocationType::Resource);
     assert_eq!(env.target, "files.open");
     assert_eq!(env.args.len(), 1);
@@ -77,7 +80,8 @@ fn resource_envelope_routes_as_call() {
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::resource("files.open", vec![Value::String("/tmp/data.csv".into())]);
+        let env = Envelope::resource("files.open", vec![Value::String("/tmp/data.csv".into())])
+            .expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(
@@ -103,7 +107,8 @@ fn resource_envelope_returns_handle_from_provider() {
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::resource("storage.get", vec![Value::String("xyz-999".into())]);
+        let env = Envelope::resource("storage.get", vec![Value::String("xyz-999".into())])
+            .expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(
@@ -131,7 +136,7 @@ fn resource_to_unknown_namespace_returns_no_provider() {
         let registry = ProviderRegistry::new(); // empty
         let router = InvocationRouter::with_providers(registry);
 
-        let env = Envelope::resource("missing.open", vec![]);
+        let env = Envelope::resource("missing.open", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok, "should fail for unknown namespace");
@@ -150,14 +155,15 @@ fn resource_to_unknown_namespace_returns_no_provider() {
 #[test]
 fn resource_to_dropped_provider_returns_unavailable() {
     saikuro_exec::block_on(async {
-        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(1);
+        let (work_tx, work_rx) =
+            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
         let handle = ProviderHandle::new("gone", vec!["blobs".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle);
         drop(work_rx); // provider vanished
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::resource("blobs.get", vec![]);
+        let env = Envelope::resource("blobs.get", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok, "should fail for dropped provider");
@@ -220,7 +226,7 @@ fn resource_dispatch_through_connection_handler() {
         let schema_registry = SchemaRegistry::new();
         common::register_namespace(&schema_registry, "docs", "fetch");
 
-        let env = Envelope::resource("docs.fetch", vec![]);
+        let env = Envelope::resource("docs.fetch", vec![]).expect("entropy available");
 
         let resp = common::round_trip_via_handler(schema_registry, provider_registry, env).await;
 
@@ -246,7 +252,7 @@ fn resource_to_unknown_namespace_via_handler_returns_namespace_not_found() {
         let schema_registry = SchemaRegistry::new(); // empty:  no namespaces registered
         let provider_registry = ProviderRegistry::new();
 
-        let env = Envelope::resource("unknown_ns.open", vec![]);
+        let env = Envelope::resource("unknown_ns.open", vec![]).expect("entropy available");
         let resp = common::round_trip_via_handler(schema_registry, provider_registry, env).await;
 
         assert!(!resp.ok, "should fail for unregistered namespace");
@@ -271,7 +277,7 @@ fn resource_response_id_matches_request_id() {
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::resource("corr.get", vec![]);
+        let env = Envelope::resource("corr.get", vec![]).expect("entropy available");
         let request_id = env.id;
         let resp = router.dispatch(env).await;
 
@@ -300,7 +306,7 @@ fn concurrent_resource_invocations_all_succeed() {
         for _ in 0..10 {
             let r = router.clone();
             joins.push(saikuro_exec::spawn(async move {
-                let env = Envelope::resource("bulk.fetch", vec![]);
+                let env = Envelope::resource("bulk.fetch", vec![]).expect("entropy available");
                 r.dispatch(env).await
             }));
         }

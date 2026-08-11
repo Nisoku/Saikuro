@@ -33,10 +33,11 @@ use crate::{
 };
 
 /// Default capacity for the outbound frame channel and stream/channel buffers.
-const CHANNEL_CAPACITY: usize = 256;
+const CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
 
 /// Capacity for stream and channel pending item buffers.
-const STREAM_CHANNEL_CAPACITY: usize = 128;
+const STREAM_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
+    saikuro_exec::ChannelCapacity::DEFAULT;
 
 /// Options for [`Client`].
 #[derive(Debug, Clone, Default)]
@@ -338,7 +339,7 @@ impl Client {
         timeout: Option<Duration>,
     ) -> Result<Value> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Call, &target, args, None);
+        let envelope = make_envelope(InvocationType::Call, &target, args, None)?;
         let id = envelope.id;
 
         let (tx, rx) = oneshot::channel();
@@ -370,7 +371,7 @@ impl Client {
     /// Fire-and-forget invocation. No response is expected.
     pub async fn cast(&self, target: impl Into<String>, args: Vec<Value>) -> Result<()> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Cast, &target, args, None);
+        let envelope = make_envelope(InvocationType::Cast, &target, args, None)?;
         self.send_envelope(&envelope).await
     }
 
@@ -383,7 +384,7 @@ impl Client {
         args: Vec<Value>,
     ) -> Result<SaikuroStream> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Stream, &target, args, None);
+        let envelope = make_envelope(InvocationType::Stream, &target, args, None)?;
         let id = envelope.id;
 
         let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
@@ -405,12 +406,12 @@ impl Client {
         let batch_items: Vec<Envelope> = calls
             .into_iter()
             .map(|(target, args)| make_envelope(InvocationType::Call, &target, args, None))
-            .collect();
+            .collect::<Result<_>>()?;
 
         let batch_env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Batch,
-            id: InvocationId::new(),
+            id: InvocationId::new()?,
             target: "$batch".into(),
             args: vec![],
             meta: Default::default(),
@@ -450,7 +451,7 @@ impl Client {
         args: Vec<Value>,
     ) -> Result<SaikuroChannel> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Channel, &target, args, None);
+        let envelope = make_envelope(InvocationType::Channel, &target, args, None)?;
         let id = envelope.id;
 
         let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
@@ -469,7 +470,7 @@ impl Client {
     /// Invoke a resource-producing function and return the resource payload.
     pub async fn resource(&self, target: impl Into<String>, args: Vec<Value>) -> Result<Value> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Resource, &target, args, None);
+        let envelope = make_envelope(InvocationType::Resource, &target, args, None)?;
         let id = envelope.id;
 
         let (tx, rx) = oneshot::channel();
@@ -510,7 +511,7 @@ impl Client {
             "$log",
             vec![Value::Object(record)],
             None,
-        );
+        )?;
         self.send_envelope(&envelope).await
     }
 
@@ -730,15 +731,15 @@ fn make_envelope(
     target: &str,
     args: Vec<Value>,
     capability: Option<saikuro_core::capability::CapabilityToken>,
-) -> Envelope {
-    make_envelope_with_id(
-        InvocationId::new(),
+) -> Result<Envelope> {
+    Ok(make_envelope_with_id(
+        InvocationId::new()?,
         inv_type,
         target,
         args,
         capability,
         None,
-    )
+    ))
 }
 
 fn make_envelope_with_id(

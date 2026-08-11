@@ -5,13 +5,17 @@
 
 use saikuro_exec::{mpsc, oneshot, select};
 
+fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
+    saikuro_exec::ChannelCapacity::try_from(value).expect("test channel capacity must be valid")
+}
+
 // BASIC SELECT
 
 #[test]
 fn select_first_ready_branch_wins() {
     saikuro_exec::block_on(async {
-        let (tx1, mut rx1) = mpsc::channel::<u32>(8);
-        let (tx2, mut rx2) = mpsc::channel::<u32>(8);
+        let (tx1, mut rx1) = mpsc::channel::<u32>(capacity(8));
+        let (tx2, mut rx2) = mpsc::channel::<u32>(capacity(8));
 
         tx1.send(10).await.unwrap();
         tx2.send(20).await.unwrap();
@@ -36,7 +40,7 @@ fn select_first_ready_branch_wins() {
 fn select_with_oneshot_and_mpsc() {
     saikuro_exec::block_on(async {
         let (otx, orx) = oneshot::channel::<&'static str>();
-        let (mtx, mut mrx) = mpsc::channel::<u32>(8);
+        let (mtx, mut mrx) = mpsc::channel::<u32>(capacity(8));
 
         mtx.send(7).await.unwrap();
         otx.send("oneshot").unwrap();
@@ -70,7 +74,7 @@ fn select_with_oneshot_and_mpsc() {
 #[test]
 fn select_pattern_matching_extracts_value() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u32>(8);
+        let (tx, mut rx) = mpsc::channel::<u32>(capacity(8));
         tx.send(99).await.unwrap();
 
         select! {
@@ -84,7 +88,7 @@ fn select_pattern_matching_extracts_value() {
 #[test]
 fn select_non_exhaustive_pattern_skipped() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<Option<u32>>(8);
+        let (tx, mut rx) = mpsc::channel::<Option<u32>>(capacity(8));
         tx.send(Some(42)).await.unwrap();
 
         // Await the receiver directly to avoid double-borrowing in select
@@ -100,8 +104,8 @@ fn select_non_exhaustive_pattern_skipped() {
 #[test]
 fn select_first_branch_preferred_when_both_ready() {
     saikuro_exec::block_on(async {
-        let (tx1, mut rx1) = mpsc::channel::<u32>(8);
-        let (tx2, mut rx2) = mpsc::channel::<u32>(8);
+        let (tx1, mut rx1) = mpsc::channel::<u32>(capacity(8));
+        let (tx2, mut rx2) = mpsc::channel::<u32>(capacity(8));
         tx1.send(1).await.unwrap();
         tx2.send(2).await.unwrap();
 
@@ -122,7 +126,7 @@ fn select_first_branch_preferred_when_both_ready() {
 #[test]
 fn select_yields_when_no_branch_ready() {
     saikuro_exec::block_on(async {
-        let (tx, mut rx) = mpsc::channel::<u32>(8);
+        let (tx, mut rx) = mpsc::channel::<u32>(capacity(8));
         let sender = saikuro_exec::spawn(async move {
             saikuro_exec::sleep(std::time::Duration::from_millis(20)).await;
             tx.send(7).await.unwrap();
@@ -139,10 +143,10 @@ fn select_yields_when_no_branch_ready() {
 #[test]
 fn select_one_branch_never_ready_other_receives() {
     saikuro_exec::block_on(async {
-        let (tx, mut dead_rx) = mpsc::channel::<u32>(8);
+        let (tx, mut dead_rx) = mpsc::channel::<u32>(capacity(8));
         drop(tx);
 
-        let (live_tx, mut live_rx) = mpsc::channel::<u32>(8);
+        let (live_tx, mut live_rx) = mpsc::channel::<u32>(capacity(8));
         live_tx.send(42).await.unwrap();
 
         select! {
@@ -161,9 +165,9 @@ fn select_one_branch_never_ready_other_receives() {
 #[test]
 fn select_with_three_branches() {
     saikuro_exec::block_on(async {
-        let (_tx1, mut rx1) = mpsc::channel::<u32>(8);
-        let (tx2, mut rx2) = mpsc::channel::<u32>(8);
-        let (_tx3, mut rx3) = mpsc::channel::<u32>(8);
+        let (_tx1, mut rx1) = mpsc::channel::<u32>(capacity(8));
+        let (tx2, mut rx2) = mpsc::channel::<u32>(capacity(8));
+        let (_tx3, mut rx3) = mpsc::channel::<u32>(capacity(8));
 
         tx2.send(2).await.unwrap();
 
@@ -180,10 +184,10 @@ fn select_with_three_branches() {
 #[test]
 fn select_on_closed_channel_picks_other_branch() {
     saikuro_exec::block_on(async {
-        let (tx, mut closed_rx) = mpsc::channel::<u32>(8);
+        let (tx, mut closed_rx) = mpsc::channel::<u32>(capacity(8));
         drop(tx);
 
-        let (live_tx, mut live_rx) = mpsc::channel::<&'static str>(8);
+        let (live_tx, mut live_rx) = mpsc::channel::<&'static str>(capacity(8));
         live_tx.send("alive").await.unwrap();
 
         select! {
@@ -204,7 +208,7 @@ fn select_mpsc_then_oneshot_sequentially() {
     saikuro_exec::block_on(async {
         // First select: mpsc fires.
         let (_otx, orx) = oneshot::channel::<&'static str>();
-        let (mtx, mut mrx) = mpsc::channel::<u32>(8);
+        let (mtx, mut mrx) = mpsc::channel::<u32>(capacity(8));
         mtx.send(5).await.unwrap();
 
         let mut result = None;
@@ -219,7 +223,7 @@ fn select_mpsc_then_oneshot_sequentially() {
         // Second select: oneshot fires.
         let (otx2, orx2) = oneshot::channel::<&'static str>();
         otx2.send("hello").unwrap();
-        let (_mtx2, mut mrx2) = mpsc::channel::<u32>(8);
+        let (_mtx2, mut mrx2) = mpsc::channel::<u32>(capacity(8));
 
         let mut msg_result = None;
         select! {

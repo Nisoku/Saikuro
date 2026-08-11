@@ -19,7 +19,13 @@ where
 }
 
 pub mod mpsc {
-    pub use tokio::sync::mpsc::{channel, Receiver, Sender};
+    use crate::ChannelCapacity;
+    pub use tokio::sync::mpsc::{Receiver, Sender};
+
+    /// Create a bounded channel with a validated capacity.
+    pub fn channel<T>(capacity: ChannelCapacity) -> (Sender<T>, Receiver<T>) {
+        tokio::sync::mpsc::channel(capacity.get())
+    }
 }
 
 pub mod oneshot {

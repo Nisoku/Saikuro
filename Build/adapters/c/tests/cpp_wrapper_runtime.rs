@@ -356,7 +356,8 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
                 .await
                 .expect("send ack");
 
-            let call = Envelope::call("math.add", vec![Value::Int(20), Value::Int(22)]);
+            let call = Envelope::call("math.add", vec![Value::Int(20), Value::Int(22)])
+                .expect("entropy available");
             tx.send(call.to_msgpack().expect("encode call").into())
                 .await
                 .expect("send call");

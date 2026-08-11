@@ -87,14 +87,11 @@ pub fn fuse_select<F: Future>(fut: F) -> Fuse<F> {
 /// Bounded multi-producer, single-consumer channel.
 pub mod mpsc {
     use super::*;
+    use crate::ChannelCapacity;
 
     /// Fixed backing capacity of an embassy mpsc channel.
     ///
-    /// `saikuro-exec::mpsc::channel` takes a runtime capacity to match tokio's
-    /// API, but embassy-sync's `Channel` needs the capacity as a const generic.
-    /// The facade allocates a queue of this size and asserts that the requested
-    /// capacity fits within it.  The router's default channel capacity is 128;
-    /// 256 leaves headroom for runtime configuration.
+    /// The fixed queue backing every Embassy channel.
     pub const CHANNEL_CAPACITY: usize = 256;
 
     /// Waker slots for senders blocked on a full channel.
@@ -386,22 +383,12 @@ pub mod mpsc {
 
     /// Create a bounded channel with the given capacity.
     ///
-    /// The embassy backend stores the queue in a fixed `CHANNEL_CAPACITY`
-    /// buffer, so `capacity` must not exceed it.  The channel state is
-    /// reference-counted and freed once all handles are dropped.
-    pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
-        assert!(
-            capacity > 0,
-            "saikuro-exec: mpsc capacity 0 is unsupported; a channel must hold \
-             at least one message"
-        );
-        assert!(
-            capacity <= CHANNEL_CAPACITY,
-            "saikuro-exec: mpsc capacity {capacity} exceeds the fixed \
-             embassy capacity {CHANNEL_CAPACITY}"
-        );
+    /// The Embassy backend stores the queue in a fixed `CHANNEL_CAPACITY`
+    /// buffer. The validated capacity cannot exceed that backing queue. The
+    /// channel state is reference-counted and freed once all handles are dropped.
+    pub fn channel<T>(capacity: ChannelCapacity) -> (Sender<T>, Receiver<T>) {
         let inner = Arc::new(ChannelInner {
-            state: CriticalSectionMutex::new(RefCell::new(ChannelState::new(capacity))),
+            state: CriticalSectionMutex::new(RefCell::new(ChannelState::new(capacity.get()))),
             channel: EmbChannel::new(),
         });
         inner.state.lock(|s| {

@@ -35,3 +35,4 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 heapless = { workspace = true }
 spin = { workspace = true }
 messagepack-serde = { workspace = true }
+portable-atomic = { workspace = true }

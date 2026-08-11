@@ -1,5 +1,6 @@
 //! Channel dispatch Tests
 
+use futures::{pin_mut, poll};
 use saikuro_core::{
     envelope::{Envelope, StreamControl},
     error::ErrorCode,
@@ -10,6 +11,8 @@ use saikuro_core::{
 use saikuro_exec::mpsc;
 use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
 use saikuro_router::router::InvocationRouter;
+use saikuro_router::stream_state::{ChannelState, DeliveryOutcome};
+use std::task::Poll;
 
 mod common;
 
@@ -56,7 +59,8 @@ fn channel_open_returns_ok_empty() {
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::channel_open("chat.open", vec![Value::String("room1".into())]);
+        let env = Envelope::channel_open("chat.open", vec![Value::String("room1".into())])
+            .expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(resp.ok, "channel open should return ok");
@@ -71,7 +75,7 @@ fn channel_open_to_unknown_namespace_returns_no_provider() {
         let registry = ProviderRegistry::new();
         let router = InvocationRouter::with_providers(registry);
 
-        let env = Envelope::channel_open("ghost.open", vec![]);
+        let env = Envelope::channel_open("ghost.open", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok);
@@ -86,7 +90,7 @@ fn route_channel_inbound_delivers_to_state() {
         let (registry, mut work_rx) = common::make_provider("pipe");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("pipe.connect", vec![]);
+        let open_env = Envelope::channel_open("pipe.connect", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -122,7 +126,7 @@ fn route_channel_outbound_delivers_to_state() {
         let (registry, mut work_rx) = common::make_provider("pipe2");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("pipe2.connect", vec![]);
+        let open_env = Envelope::channel_open("pipe2.connect", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -156,7 +160,7 @@ fn route_channel_inbound_end_removes_state() {
         let (registry, mut work_rx) = common::make_provider("fin_chan");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("fin_chan.open", vec![]);
+        let open_env = Envelope::channel_open("fin_chan.open", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -183,7 +187,7 @@ fn route_channel_outbound_end_removes_state() {
         let (registry, mut work_rx) = common::make_provider("fin_out");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("fin_out.open", vec![]);
+        let open_env = Envelope::channel_open("fin_out.open", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -210,7 +214,8 @@ fn route_channel_abort_removes_state() {
         let (registry, mut work_rx) = common::make_provider("abort_chan");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("abort_chan.open", vec![]);
+        let open_env =
+            Envelope::channel_open("abort_chan.open", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -235,7 +240,7 @@ fn route_channel_inbound_to_unknown_channel_fails() {
         let registry = ProviderRegistry::new();
         let router = InvocationRouter::with_providers(registry);
 
-        let phantom_id = InvocationId::new();
+        let phantom_id = InvocationId::new().expect("entropy available");
         let item = channel_item(phantom_id, 0, Value::Null);
         let err = router.route_channel_inbound(item).await;
         assert!(err.is_err(), "routing to non-existent channel should fail");
@@ -248,7 +253,7 @@ fn route_channel_outbound_to_unknown_channel_fails() {
         let registry = ProviderRegistry::new();
         let router = InvocationRouter::with_providers(registry);
 
-        let phantom_id = InvocationId::new();
+        let phantom_id = InvocationId::new().expect("entropy available");
         let item = channel_item(phantom_id, 0, Value::Null);
         let err = router.route_channel_outbound(item).await;
         assert!(
@@ -266,8 +271,8 @@ fn multiple_channels_are_independent() {
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
-        let env1 = Envelope::channel_open("multi_chan.ch1", vec![]);
-        let env2 = Envelope::channel_open("multi_chan.ch2", vec![]);
+        let env1 = Envelope::channel_open("multi_chan.ch1", vec![]).expect("entropy available");
+        let env2 = Envelope::channel_open("multi_chan.ch2", vec![]).expect("entropy available");
         let id1 = env1.id;
         let id2 = env2.id;
 
@@ -300,7 +305,8 @@ fn multiple_channels_are_independent() {
 #[test]
 fn channel_open_to_dropped_provider_returns_unavailable() {
     saikuro_exec::block_on(async {
-        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(1);
+        let (work_tx, work_rx) =
+            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
         let handle = ProviderHandle::new(
             "dropped-provider".to_owned(),
             vec!["dropped".to_owned()],
@@ -313,7 +319,7 @@ fn channel_open_to_dropped_provider_returns_unavailable() {
         drop(work_rx);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::channel_open("dropped.open", vec![]);
+        let env = Envelope::channel_open("dropped.open", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok);
@@ -332,7 +338,8 @@ fn channel_pause_resume_round_trips() {
         let (registry, mut work_rx) = common::make_provider("bpressure");
 
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("bpressure.stream", vec![]);
+        let open_env =
+            Envelope::channel_open("bpressure.stream", vec![]).expect("entropy available");
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -377,5 +384,50 @@ fn channel_pause_resume_round_trips() {
             .try_recv()
             .expect("resume frame should be buffered");
         assert_eq!(received2.stream_control, Some(StreamControl::Resume));
+    })
+}
+
+#[test]
+fn concurrent_channel_delivery_preserves_order_and_terminal_closure() {
+    saikuro_exec::block_on(async {
+        let id = InvocationId::new().expect("entropy available");
+        let (inbound_tx, mut inbound_rx) = mpsc::channel(saikuro_exec::ChannelCapacity::MIN);
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(saikuro_exec::ChannelCapacity::MIN);
+        inbound_tx
+            .send(ResponseEnvelope::ok_empty(id))
+            .await
+            .expect("receiver remains open");
+        let state = ChannelState::new(inbound_tx, outbound_tx);
+
+        let first = state.deliver(channel_item(id, 0, Value::Int(0)), true);
+        pin_mut!(first);
+        assert!(matches!(poll!(first.as_mut()), Poll::Pending));
+
+        let terminal = state.deliver(channel_end(id, 1), true);
+        pin_mut!(terminal);
+        assert!(matches!(poll!(terminal.as_mut()), Poll::Pending));
+
+        assert!(inbound_rx.recv().await.is_some());
+        assert_eq!(first.await, DeliveryOutcome::Delivered);
+        assert_eq!(
+            inbound_rx.recv().await.and_then(|response| response.seq),
+            Some(0)
+        );
+        assert_eq!(terminal.await, DeliveryOutcome::Terminal);
+        assert_eq!(
+            inbound_rx.recv().await.and_then(|response| response.seq),
+            Some(1)
+        );
+
+        assert_eq!(
+            state
+                .deliver(channel_item(id, 0, Value::Int(9)), false)
+                .await,
+            DeliveryOutcome::Closed
+        );
+        assert!(
+            outbound_rx.try_recv().is_err(),
+            "post-terminal frame was not delivered"
+        );
     })
 }

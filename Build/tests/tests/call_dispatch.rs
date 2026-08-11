@@ -15,7 +15,9 @@ use std::time::Duration;
 /// Returns the [`ProviderRegistry`] with the provider registered, plus a
 /// join handle so callers can wait for completion.
 fn make_echo_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
+    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
+        saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
+    );
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),
         vec![namespace.to_owned()],
@@ -68,7 +70,8 @@ fn call_returns_provider_response() {
         let _responder = spawn_responder(work_rx, Value::Int(42));
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]);
+        let env = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)])
+            .expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(resp.ok, "call should succeed");
@@ -85,7 +88,8 @@ fn cast_returns_ok_empty_immediately() {
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::cast("logger.info", vec![Value::String("hello".into())]);
+        let env = Envelope::cast("logger.info", vec![Value::String("hello".into())])
+            .expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(resp.ok, "cast should always return ok");
@@ -99,7 +103,7 @@ fn call_to_unknown_namespace_returns_no_provider() {
         let registry = ProviderRegistry::new(); // empty
         let router = InvocationRouter::with_providers(registry);
 
-        let env = Envelope::call("nonexistent.fn", vec![]);
+        let env = Envelope::call("nonexistent.fn", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok);
@@ -111,7 +115,8 @@ fn call_to_unknown_namespace_returns_no_provider() {
 #[test]
 fn call_to_dropped_provider_returns_unavailable() {
     saikuro_exec::block_on(async {
-        let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(1);
+        let (work_tx, work_rx) =
+            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
         let handle = ProviderHandle::new("gone", vec!["svc".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle);
@@ -120,7 +125,7 @@ fn call_to_dropped_provider_returns_unavailable() {
         drop(work_rx);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::call("svc.op", vec![]);
+        let env = Envelope::call("svc.op", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok);
@@ -145,7 +150,7 @@ fn call_times_out_when_provider_does_not_respond() {
         };
         let router = InvocationRouter::new(registry, config);
 
-        let env = Envelope::call("slow.fn", vec![]);
+        let env = Envelope::call("slow.fn", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(!resp.ok);
@@ -163,7 +168,7 @@ fn multiple_sequential_calls_all_succeed() {
         let router = InvocationRouter::with_providers(registry);
 
         for _ in 0..5 {
-            let env = Envelope::call("counter.inc", vec![]);
+            let env = Envelope::call("counter.inc", vec![]).expect("entropy available");
             let resp = router.dispatch(env).await;
             assert!(resp.ok);
         }
@@ -182,7 +187,7 @@ fn concurrent_calls_all_succeed() {
         for _ in 0..20 {
             let r = router.clone();
             handles.push(saikuro_exec::spawn(async move {
-                let env = Envelope::call("parallel.op", vec![]);
+                let env = Envelope::call("parallel.op", vec![]).expect("entropy available");
                 r.dispatch(env).await
             }));
         }
@@ -201,7 +206,7 @@ fn call_with_null_target_returns_malformed_or_no_provider() {
         let router = InvocationRouter::with_providers(registry);
 
         // A target with no dot is malformed.
-        let env = Envelope::call("nodothere", vec![]);
+        let env = Envelope::call("nodothere", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
         assert!(!resp.ok);
         let err = resp.error.unwrap();
@@ -222,7 +227,7 @@ fn cast_to_unknown_namespace_returns_ok() {
         let registry = ProviderRegistry::new();
         let router = InvocationRouter::with_providers(registry);
 
-        let env = Envelope::cast("missing.fn", vec![]);
+        let env = Envelope::cast("missing.fn", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
         // Our implementation returns ok_empty for casts even when the namespace
         // is missing, as per fire-and-forget semantics.

@@ -46,6 +46,10 @@ pub enum Error {
     /// The provider's schema exceeds the fixed capacity of the core schema maps.
     #[error("schema capacity exceeded while building the announcement")]
     SchemaCapacityExceeded,
+
+    /// The configured entropy source could not generate an invocation ID.
+    #[error("entropy error: {0}")]
+    Entropy(#[from] saikuro_random::Error),
 }
 
 impl Error {

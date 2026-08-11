@@ -15,7 +15,9 @@ use saikuro_router::{
 //  Helpers
 
 fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response: Value) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(64);
+    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
+        saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
+    );
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),
         vec![namespace.to_owned()],
@@ -47,8 +49,9 @@ fn batch_with_single_item_succeeds() {
 
         let router = InvocationRouter::with_providers(registry);
 
-        let item = Envelope::call("math.add", vec![Value::Int(3), Value::Int(4)]);
-        let mut batch = Envelope::call("", vec![]);
+        let item = Envelope::call("math.add", vec![Value::Int(3), Value::Int(4)])
+            .expect("entropy available");
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = Some(vec![item]);
@@ -73,10 +76,10 @@ fn batch_with_multiple_items_returns_all_results() {
         let router = InvocationRouter::with_providers(registry);
 
         let items: Vec<Envelope> = (0..5)
-            .map(|i| Envelope::call("svc.op", vec![Value::Int(i)]))
+            .map(|i| Envelope::call("svc.op", vec![Value::Int(i)]).expect("entropy available"))
             .collect();
 
-        let mut batch = Envelope::call("", vec![]);
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = Some(items);
@@ -100,7 +103,7 @@ fn batch_with_no_items_field_returns_malformed() {
         let registry = ProviderRegistry::new();
         let router = InvocationRouter::with_providers(registry);
 
-        let mut batch = Envelope::call("", vec![]);
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = None; // explicitly absent
@@ -122,11 +125,11 @@ fn batch_items_targeting_different_namespaces() {
         let router = InvocationRouter::with_providers(registry);
 
         let items = vec![
-            Envelope::call("ns_a.fn", vec![]),
-            Envelope::call("ns_b.fn", vec![]),
+            Envelope::call("ns_a.fn", vec![]).expect("entropy available"),
+            Envelope::call("ns_b.fn", vec![]).expect("entropy available"),
         ];
 
-        let mut batch = Envelope::call("", vec![]);
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = Some(items);
@@ -155,11 +158,11 @@ fn batch_item_to_unknown_namespace_returns_null_in_result() {
         let router = InvocationRouter::with_providers(registry);
 
         let items = vec![
-            Envelope::call("known.fn", vec![]),
-            Envelope::call("ghost.fn", vec![]), // no provider for this
+            Envelope::call("known.fn", vec![]).expect("entropy available"),
+            Envelope::call("ghost.fn", vec![]).expect("entropy available"), // no provider for this
         ];
 
-        let mut batch = Envelope::call("", vec![]);
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = Some(items);
@@ -182,7 +185,9 @@ fn batch_result_is_ordered_array() {
         let registry = ProviderRegistry::new();
 
         // Provider that echos back the first integer argument.
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(64);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(
+            saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
+        );
         let handle = ProviderHandle::new("ordered", vec!["ord".to_owned()], work_tx);
         registry.register(handle);
 
@@ -199,10 +204,10 @@ fn batch_result_is_ordered_array() {
 
         let items: Vec<Envelope> = vec![10i64, 20, 30, 40]
             .into_iter()
-            .map(|n| Envelope::call("ord.fn", vec![Value::Int(n)]))
+            .map(|n| Envelope::call("ord.fn", vec![Value::Int(n)]).expect("entropy available"))
             .collect();
 
-        let mut batch = Envelope::call("", vec![]);
+        let mut batch = Envelope::call("", vec![]).expect("entropy available");
         batch.invocation_type = InvocationType::Batch;
         batch.target = String::new();
         batch.batch_items = Some(items);

@@ -16,7 +16,7 @@ required-features = ["native-transport"]
 [features]
 default = ["native-transport"]
 native-transport = ["saikuro-transport/native-transport", "saikuro-exec/tokio-runtime"]
-ws-transport = ["saikuro-transport/native-ws", "dep:tokio-tungstenite", "dep:tungstenite"]
+ws-transport = ["saikuro-transport/native-ws"]
 wasm-runtime = [
     "saikuro-transport/wasm-runtime",
     "saikuro-exec/wasm-runtime",
@@ -46,9 +46,5 @@ serde_with  = { workspace = true }
 # CLI and error handling for binary
 anyhow      = { workspace = true }
 clap        = { version = "4.5", features = ["derive", "env"] }
-
-# WebSocket server-side (optional, depends on ws-transport feature)
-tokio-tungstenite = { version = "0.24", optional = true }
-tungstenite       = { version = "0.30", optional = true }
 
 [dev-dependencies]

@@ -46,7 +46,7 @@ use saikuro_core::{
     invocation::InvocationId,
     schema::Schema,
     value::Value,
-    ResponseEnvelope,
+    RegistrationToken, ResponseEnvelope,
 };
 use saikuro_exec::{mpsc, oneshot, spawn};
 use saikuro_router::{
@@ -86,6 +86,8 @@ where
     R: TransportReceiver,
 {
     pub peer_id: String,
+    /// Identity of this connection's provider registration.
+    pub registration_token: RegistrationToken,
     pub sender: S,
     pub receiver: R,
     pub validator: InvocationValidator,
@@ -147,7 +149,8 @@ where
 
         // Channel through which the ForwardTask sends frames TO the peer.
         // The recv loop serialises all outbound writes through `self.sender`.
-        let (forward_tx, mut forward_rx) = mpsc::channel::<Bytes>(256);
+        let (forward_tx, mut forward_rx) =
+            mpsc::channel::<Bytes>(saikuro_exec::ChannelCapacity::MAX);
 
         loop {
             saikuro_exec::select! {
@@ -191,8 +194,10 @@ where
         }
 
         // Clean up: deregister any provider the peer announced.
-        self.provider_registry.deregister(&self.peer_id);
-        self.schema_registry.deregister_provider(&self.peer_id);
+        self.provider_registry
+            .deregister(&self.peer_id, self.registration_token);
+        self.schema_registry
+            .deregister_provider(&self.peer_id, self.registration_token);
 
         info!(peer = %self.peer_id, "connection handler exiting");
     }
@@ -208,11 +213,12 @@ where
         frame: Bytes,
         pending: &PendingCalls,
         forward_tx: &mpsc::Sender<Bytes>,
-    ) -> (ResponseEnvelope, Option<Schema>) {
+    ) -> Option<(ResponseEnvelope, Option<Schema>)> {
         // 1. Decode the MessagePack envelope.
         let envelope = match self.decode_envelope(&frame) {
             Ok(e) => e,
-            Err(resp) => return (*resp, None),
+            Err(Some(resp)) => return Some((*resp, None)),
+            Err(None) => return None,
         };
 
         let id = envelope.id;
@@ -229,11 +235,11 @@ where
                 } else {
                     None
                 };
-                return (response, sandbox_schema);
+                return Some((response, sandbox_schema));
             }
             InvocationType::Log => {
                 // Let the router's log sink handle it:  no validation needed.
-                return (self.router.dispatch(envelope).await, None);
+                return Some((self.router.dispatch(envelope).await, None));
             }
             _ => {}
         }
@@ -242,10 +248,10 @@ where
         let validation = match self.validator.validate(&envelope) {
             Ok(report) => report,
             Err(e) => {
-                return (
+                return Some((
                     ResponseEnvelope::err(id, ErrorDetail::new(e.error_code(), e.to_string())),
                     None,
-                );
+                ));
             }
         };
 
@@ -256,7 +262,7 @@ where
         {
             CapabilityOutcome::Granted => {}
             CapabilityOutcome::Denied { missing } => {
-                return (
+                return Some((
                     ResponseEnvelope::err(
                         id,
                         ErrorDetail::new(
@@ -265,28 +271,35 @@ where
                         ),
                     ),
                     None,
-                );
+                ));
             }
         }
 
         // 5. Route to provider.
-        (self.router.dispatch(envelope).await, None)
+        Some((self.router.dispatch(envelope).await, None))
     }
 
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
     /// response on failure.
-    fn decode_envelope(&self, frame: &[u8]) -> Result<Envelope, Box<ResponseEnvelope>> {
+    fn decode_envelope(&self, frame: &[u8]) -> Result<Envelope, Option<Box<ResponseEnvelope>>> {
         match saikuro_core::msgpack::from_slice(frame) {
             Ok(env) => Ok(env),
             Err(e) => {
                 warn!(peer = %self.peer_id, "envelope decode failed: {e}");
-                Err(Box::new(ResponseEnvelope::err(
-                    InvocationId::new(),
+                let id = match InvocationId::new() {
+                    Ok(id) => id,
+                    Err(error) => {
+                        error!(peer = %self.peer_id, %error, "cannot generate malformed-envelope response ID");
+                        return Err(None);
+                    }
+                };
+                Err(Some(Box::new(ResponseEnvelope::err(
+                    id,
                     ErrorDetail::new(
                         saikuro_core::error::ErrorCode::MalformedEnvelope,
                         format!("msgpack decode error: {e}"),
                     ),
-                )))
+                ))))
             }
         }
     }
@@ -307,7 +320,14 @@ where
                     self.max_message_size
                 ),
             );
-            let response = ResponseEnvelope::err(InvocationId::new(), err);
+            let id = match InvocationId::new() {
+                Ok(id) => id,
+                Err(error) => {
+                    error!(peer = %self.peer_id, %error, "cannot generate oversized-frame response ID");
+                    return false;
+                }
+            };
+            let response = ResponseEnvelope::err(id, err);
             let _ = self.send_response(response).await;
             return true;
         }
@@ -325,7 +345,10 @@ where
             }
         }
 
-        let (response, sandbox_schema) = self.handle_frame(frame, pending, forward_tx).await;
+        let Some((response, sandbox_schema)) = self.handle_frame(frame, pending, forward_tx).await
+        else {
+            return false;
+        };
 
         if let Err(e) = self.send_response(response).await {
             error!(peer = %self.peer_id, "send error: {e}");
@@ -366,7 +389,11 @@ where
                 let ns_count = s.namespaces.len();
                 let namespaces: Vec<String> = s.namespaces.keys().cloned().collect();
 
-                match self.schema_registry.merge_schema(s, &self.peer_id) {
+                match self.schema_registry.merge_schema_with_token(
+                    s,
+                    &self.peer_id,
+                    self.registration_token,
+                ) {
                     Ok(()) => {
                         info!(
                             peer = %self.peer_id,
@@ -418,8 +445,14 @@ where
         pending: &PendingCalls,
         forward_tx: &mpsc::Sender<Bytes>,
     ) {
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(256);
-        let handle = ProviderHandle::new(self.peer_id.clone(), namespaces, work_tx);
+        let (work_tx, mut work_rx) =
+            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MAX);
+        let handle = ProviderHandle::with_registration_token(
+            self.peer_id.clone(),
+            self.registration_token,
+            namespaces,
+            work_tx,
+        );
         self.provider_registry.register(handle);
 
         let pending_clone = pending.clone();
@@ -520,7 +553,8 @@ where
             saikuro_core::msgpack::from_slice::<Value>(&bytes)
                 .map_err(|e| format!("sandbox schema value decode error: {e}"))?
         };
-        let announce = Envelope::announce(schema_value);
+        let announce = Envelope::announce(schema_value)
+            .map_err(|e| format!("announce invocation ID error: {e}"))?;
         let frame =
             encode_bytes(&announce).map_err(|e| format!("announce frame encode error: {e}"))?;
         info!(peer = %self.peer_id, "pushing sandbox-filtered schema to peer");

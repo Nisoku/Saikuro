@@ -1,9 +1,10 @@
 //! Runtime configuration.
 
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::time::Duration;
 
+use saikuro_exec::ChannelCapacity;
 use saikuro_router::router::RouterConfig;
 use saikuro_schema::registry::RegistryMode;
 use saikuro_transport::selector::TransportConfig;
@@ -34,8 +35,12 @@ pub struct RuntimeConfig {
     pub max_message_size: usize,
 
     /// Buffer capacity for per-stream item queues.
-    #[serde(default = "default_stream_capacity")]
-    pub stream_buffer_capacity: usize,
+    #[serde(
+        default = "default_stream_capacity",
+        deserialize_with = "deserialize_channel_capacity",
+        serialize_with = "serialize_channel_capacity"
+    )]
+    pub stream_buffer_capacity: ChannelCapacity,
 
     /// Enable structured JSON logging via `tracing-subscriber`.
     #[serde(default)]
@@ -95,6 +100,24 @@ fn default_call_timeout() -> Duration {
 fn default_max_message_size() -> usize {
     16 * 1024 * 1024
 }
-fn default_stream_capacity() -> usize {
-    128
+fn default_stream_capacity() -> ChannelCapacity {
+    ChannelCapacity::DEFAULT
+}
+
+fn deserialize_channel_capacity<'de, D>(deserializer: D) -> Result<ChannelCapacity, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = usize::deserialize(deserializer)?;
+    ChannelCapacity::try_from(value).map_err(D::Error::custom)
+}
+
+fn serialize_channel_capacity<S>(
+    capacity: &ChannelCapacity,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(capacity.get() as u64)
 }

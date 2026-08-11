@@ -73,21 +73,12 @@ impl<'de> Deserialize<'de> for InvocationId {
 }
 
 impl InvocationId {
-    /// Try to generate a fresh invocation identifier from the active entropy
-    /// backend.
-    #[inline]
-    pub fn try_new() -> Result<Self, saikuro_random::Error> {
-        saikuro_random::uuid_v4().map(Self)
-    }
-
     /// Generate a fresh, globally-unique invocation identifier.
     ///
-    /// Panics when the configured entropy backend is unavailable. Embedded
-    /// startup code should seed its DRBG first or use [`Self::try_new`] to
-    /// propagate initialization failures.
+    /// Returns an error when the configured entropy backend is unavailable.
     #[inline]
-    pub fn new() -> Self {
-        Self::try_new().expect("entropy backend unavailable")
+    pub fn new() -> Result<Self, saikuro_random::Error> {
+        saikuro_random::uuid_v4().map(Self)
     }
 
     /// Construct from an existing UUID.
@@ -106,12 +97,6 @@ impl InvocationId {
     #[inline]
     pub fn as_bytes(&self) -> &[u8; 16] {
         self.0.as_bytes()
-    }
-}
-
-impl Default for InvocationId {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

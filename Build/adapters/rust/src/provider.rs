@@ -220,7 +220,7 @@ impl Provider {
             }
         };
 
-        let announce_env = Envelope::announce(schema_value);
+        let announce_env = Envelope::announce(schema_value)?;
         let frame = match announce_env.to_msgpack() {
             Ok(b) => Bytes::from(b),
             Err(e) => {

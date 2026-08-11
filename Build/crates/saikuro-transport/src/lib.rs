@@ -125,4 +125,5 @@ macro_rules! impl_native_receiver {
 ///
 /// This bounds memory usage and provides backpressure: if the receiver is
 /// slow the sender's `send` call will yield until space frees up.
-pub const DEFAULT_CHANNEL_CAPACITY: usize = 256;
+pub const DEFAULT_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
+    saikuro_exec::ChannelCapacity::MAX;

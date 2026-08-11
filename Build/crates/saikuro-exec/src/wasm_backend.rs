@@ -105,8 +105,9 @@ pub mod mpsc {
         inner: inner::Receiver<T>,
     }
 
-    pub fn channel<T>(buffer: usize) -> (Sender<T>, Receiver<T>) {
-        let (tx, rx) = inner::channel(buffer);
+    /// Create a bounded channel with a validated capacity.
+    pub fn channel<T>(buffer: crate::ChannelCapacity) -> (Sender<T>, Receiver<T>) {
+        let (tx, rx) = inner::channel(buffer.get());
         (
             Sender {
                 inner: Arc::new(Mutex::new(tx)),

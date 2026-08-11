@@ -16,19 +16,19 @@
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, sync::Arc, vec::Vec};
 use core::time::Duration;
 use saikuro_core::{
-    envelope::{Envelope, InvocationType, StreamControl},
+    envelope::{Envelope, InvocationType},
     error::{ErrorDetail, SaikuroError},
     invocation::InvocationId,
     log::{LogLevel, LogRecord, LogSink},
     ResponseEnvelope,
 };
-use saikuro_exec::{mpsc, oneshot, timeout};
+use saikuro_exec::{mpsc, oneshot, timeout, ChannelCapacity};
 use tracing::{debug, instrument, warn};
 
 use crate::{
     error::{Result, RouterError},
     provider::{Provider, ProviderRegistry},
-    stream_state::{ChannelState, StreamState, StreamStateStore},
+    stream_state::{ChannelState, DeliveryOutcome, StreamState, StreamStateStore},
 };
 
 //  Config
@@ -41,18 +41,18 @@ pub struct RouterConfig {
     pub call_timeout: Duration,
 
     /// Capacity of per-stream item channels.
-    pub stream_channel_capacity: usize,
+    pub stream_channel_capacity: ChannelCapacity,
 
     /// Capacity of per-channel inbound/outbound item channels.
-    pub channel_capacity: usize,
+    pub channel_capacity: ChannelCapacity,
 }
 
 impl Default for RouterConfig {
     fn default() -> Self {
         Self {
             call_timeout: Duration::from_secs(30),
-            stream_channel_capacity: 128,
-            channel_capacity: 128,
+            stream_channel_capacity: ChannelCapacity::DEFAULT,
+            channel_capacity: ChannelCapacity::DEFAULT,
         }
     }
 }
@@ -228,10 +228,6 @@ impl InvocationRouter {
     async fn dispatch_stream_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
-        if !valid_channel_capacity(self.config.stream_channel_capacity) {
-            return error_response(id, SaikuroError::BufferOverflow.into());
-        }
-
         let provider = match self.resolve_namespace(&envelope.target) {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
@@ -267,20 +263,19 @@ impl InvocationRouter {
                 seq: envelope.seq,
                 stream_control: envelope.stream_control,
             };
-            if let Err(e) = channel.inbound_tx().send(resp).await {
-                return error_response(
-                    id,
-                    SaikuroError::ProviderUnavailable(format!("channel data delivery failed: {e}"))
-                        .into(),
-                );
-            }
-            // If this is a terminal frame, clean up the channel and return ok_empty
-            if matches!(
-                envelope.stream_control,
-                Some(StreamControl::End | StreamControl::Abort)
-            ) {
-                self.streams.remove_channel(&id);
-                return ResponseEnvelope::ok_empty(id);
+            match channel.deliver(resp, true).await {
+                DeliveryOutcome::Terminal => {
+                    self.streams.remove_channel_if(&id, &channel);
+                    return ResponseEnvelope::ok_empty(id);
+                }
+                DeliveryOutcome::Closed => {
+                    self.streams.remove_channel_if(&id, &channel);
+                    return error_response(id, RouterError::ChannelClosed(id.to_string()).into());
+                }
+                DeliveryOutcome::OutOfOrder => {
+                    warn!(%id, "out-of-order channel item dropped");
+                }
+                DeliveryOutcome::Delivered => {}
             }
             // For non-terminal frames, do not return a response (one-way)
             return ResponseEnvelope {
@@ -294,10 +289,6 @@ impl InvocationRouter {
         }
 
         // Otherwise, open a new channel as before
-        if !valid_channel_capacity(self.config.channel_capacity) {
-            return error_response(id, SaikuroError::BufferOverflow.into());
-        }
-
         let provider = match self.resolve_namespace(&envelope.target) {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
@@ -389,55 +380,32 @@ impl InvocationRouter {
     /// opened channel (i.e. a `Channel`-type envelope whose ID matches an
     /// existing channel state entry).
     /// Route a channel item in the given direction.
-    async fn route_channel_item(
-        &self,
-        response: ResponseEnvelope,
-        pick_tx: impl FnOnce(&ChannelState) -> &mpsc::Sender<ResponseEnvelope>,
-        advance_seq: impl FnOnce(&ChannelState, u64) -> bool,
-    ) -> Result<()> {
+    async fn route_channel_item(&self, response: ResponseEnvelope, inbound: bool) -> Result<()> {
         let id = response.id;
         let state = self
             .streams
             .get_channel(&id)
             .ok_or_else(|| RouterError::ChannelNotFound(id.to_string()))?;
 
-        if state.is_closed() {
-            return Err(RouterError::ChannelClosed(id.to_string()));
-        }
-
-        // Sequence check.
-        if let Some(seq) = response.seq {
-            if !advance_seq(&state, seq) {
-                warn!(%id, seq, "out-of-order channel item dropped");
-                return Ok(());
+        match state.deliver(response, inbound).await {
+            DeliveryOutcome::Closed => {
+                self.streams.remove_channel_if(&id, &state);
+                Err(RouterError::ChannelClosed(id.to_string()))
             }
+            DeliveryOutcome::OutOfOrder => {
+                warn!(%id, "out-of-order channel item dropped");
+                Ok(())
+            }
+            DeliveryOutcome::Terminal => {
+                self.streams.remove_channel_if(&id, &state);
+                Ok(())
+            }
+            DeliveryOutcome::Delivered => Ok(()),
         }
-
-        let is_terminal = matches!(
-            response.stream_control,
-            Some(StreamControl::End) | Some(StreamControl::Abort)
-        );
-
-        pick_tx(&state)
-            .send(response)
-            .await
-            .map_err(|_| RouterError::ChannelClosed(id.to_string()))?;
-
-        if is_terminal {
-            state.mark_closed();
-            self.streams.remove_channel(&id);
-        }
-
-        Ok(())
     }
 
     pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(
-            response,
-            |s| s.inbound_tx(),
-            |s, seq| s.advance_inbound(seq),
-        )
-        .await
+        self.route_channel_item(response, true).await
     }
 
     /// Route an outbound channel item (provider -> client direction) to the
@@ -446,12 +414,7 @@ impl InvocationRouter {
     /// Called by the provider adapter when it wants to push a message to the
     /// client side of an open channel.
     pub async fn route_channel_outbound(&self, response: ResponseEnvelope) -> Result<()> {
-        self.route_channel_item(
-            response,
-            |s| s.outbound_tx(),
-            |s, seq| s.advance_outbound(seq),
-        )
-        .await
+        self.route_channel_item(response, false).await
     }
 
     /// Route an inbound stream item to the appropriate open stream.
@@ -462,38 +425,21 @@ impl InvocationRouter {
             .get_stream(&id)
             .ok_or_else(|| RouterError::StreamNotFound(id.to_string()))?;
 
-        if state.is_closed() {
-            return Err(RouterError::StreamClosed(id.to_string()));
-        }
-
-        // Sequence check.
-        if let Some(seq) = response.seq {
-            if !state.advance_seq(seq) {
-                warn!(%id, seq, "out-of-order stream item dropped");
-                return Ok(());
+        match state.deliver(response).await {
+            DeliveryOutcome::Closed => {
+                self.streams.remove_stream_if(&id, &state);
+                Err(RouterError::StreamClosed(id.to_string()))
             }
+            DeliveryOutcome::OutOfOrder => {
+                warn!(%id, "out-of-order stream item dropped");
+                Ok(())
+            }
+            DeliveryOutcome::Terminal => {
+                self.streams.remove_stream_if(&id, &state);
+                Ok(())
+            }
+            DeliveryOutcome::Delivered => Ok(()),
         }
-
-        // Determine if this is a terminal frame before consuming `response`.
-        let is_terminal = matches!(
-            response.stream_control,
-            Some(StreamControl::End) | Some(StreamControl::Abort)
-        );
-
-        // Send the item first so the receiver is still alive when we deliver.
-        state
-            .item_tx()
-            .send(response)
-            .await
-            .map_err(|_| RouterError::StreamClosed(id.to_string()))?;
-
-        // Only after successful delivery, mark closed and drop the receiver.
-        if is_terminal {
-            state.mark_closed();
-            self.streams.remove_stream(&id);
-        }
-
-        Ok(())
     }
 
     // Helpers
@@ -513,17 +459,6 @@ impl InvocationRouter {
 
         Ok(handle)
     }
-}
-
-fn valid_channel_capacity(capacity: usize) -> bool {
-    if capacity == 0 {
-        return false;
-    }
-    #[cfg(feature = "embassy")]
-    if capacity > saikuro_exec::mpsc::CHANNEL_CAPACITY {
-        return false;
-    }
-    true
 }
 
 //  Helpers

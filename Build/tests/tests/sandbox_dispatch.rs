@@ -103,7 +103,7 @@ fn schema_to_value(schema: &Schema) -> Value {
 }
 
 fn make_announce(schema: &Schema) -> Envelope {
-    Envelope::announce(schema_to_value(schema))
+    Envelope::announce(schema_to_value(schema)).expect("entropy available")
 }
 
 /// Send `envelope` through a `ConnectionHandler` (optionally sandboxed) and
@@ -132,6 +132,7 @@ async fn run_and_collect(
 
     let handler = ConnectionHandler {
         peer_id: "sandbox-peer".to_owned(),
+        registration_token: saikuro_core::RegistrationToken::new(),
         sender: handler_sender,
         receiver: handler_receiver,
         validator,
@@ -352,7 +353,7 @@ fn sandbox_handler_denies_internal_function_invocation() {
         let invoke_env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Call,
-            id: InvocationId::new(),
+            id: InvocationId::new().expect("entropy available"),
             target: "svc.internal_fn".to_owned(),
             args: vec![],
             meta: Default::default(),

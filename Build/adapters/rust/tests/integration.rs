@@ -549,7 +549,7 @@ fn client_acknowledges_announce_on_connect() {
 
         let (client_side, mut runtime_side) = InMemoryTransport::pair();
 
-        let announce_id = saikuro_core::invocation::InvocationId::new();
+        let announce_id = saikuro_core::invocation::InvocationId::new().expect("entropy available");
         let announce = Envelope {
             version: saikuro_core::PROTOCOL_VERSION,
             invocation_type: InvocationType::Announce,
@@ -594,7 +594,8 @@ fn envelope_roundtrip_msgpack_preserves_fields() {
                 saikuro_core::value::Value::Int(1),
                 saikuro_core::value::Value::Int(2),
             ],
-        );
+        )
+        .expect("entropy available");
 
         let bytes = original.to_msgpack().expect("encode envelope");
         let decoded = Envelope::from_msgpack(&bytes).expect("decode envelope");

@@ -83,6 +83,7 @@ fn make_registry_with_math() -> SchemaRegistry {
                 doc: None,
             },
             provider_id: "provider-1".into(),
+            registration_token: saikuro_core::RegistrationToken::new(),
         })
         .unwrap();
 
@@ -122,7 +123,8 @@ fn lookup_unknown_function_in_known_namespace() {
 fn valid_call_passes_validation() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
-    let env = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]);
+    let env =
+        Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]).expect("entropy available");
     assert!(validator.validate(&env).is_ok());
 }
 
@@ -132,7 +134,7 @@ fn wrong_arity_fails_validation() {
     let validator = InvocationValidator::new(registry);
 
     // too few args
-    let env_few = Envelope::call("math.add", vec![Value::Int(1)]);
+    let env_few = Envelope::call("math.add", vec![Value::Int(1)]).expect("entropy available");
     let err = validator.validate(&env_few).unwrap_err();
     assert!(matches!(err, ValidationError::ArgumentArity { .. }));
     assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
@@ -141,7 +143,8 @@ fn wrong_arity_fails_validation() {
     let env_many = Envelope::call(
         "math.add",
         vec![Value::Int(1), Value::Int(2), Value::Int(3)],
-    );
+    )
+    .expect("entropy available");
     let err = validator.validate(&env_many).unwrap_err();
     assert!(matches!(err, ValidationError::ArgumentArity { .. }));
 }
@@ -155,7 +158,8 @@ fn wrong_type_fails_validation() {
     let env = Envelope::call(
         "math.add",
         vec![Value::String("hello".into()), Value::Int(2)],
-    );
+    )
+    .expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
         matches!(err, ValidationError::ArgumentType { .. }),
@@ -169,7 +173,7 @@ fn internal_visibility_denied_for_external_callers() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("math.internal_op", vec![]);
+    let env = Envelope::call("math.internal_op", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
         matches!(err, ValidationError::VisibilityDenied { .. }),
@@ -183,7 +187,7 @@ fn private_function_denied_for_external_callers() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("math.secret", vec![]);
+    let env = Envelope::call("math.secret", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
         matches!(err, ValidationError::VisibilityDenied { .. }),
@@ -196,7 +200,7 @@ fn batch_with_no_items_fails() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
 
-    let mut env = Envelope::call("", vec![]);
+    let mut env = Envelope::call("", vec![]).expect("entropy available");
     env.invocation_type = InvocationType::Batch;
     env.target = String::new();
     env.batch_items = None;
@@ -214,7 +218,7 @@ fn batch_with_empty_items_fails() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
 
-    let mut env = Envelope::call("", vec![]);
+    let mut env = Envelope::call("", vec![]).expect("entropy available");
     env.invocation_type = InvocationType::Batch;
     env.target = String::new();
     env.batch_items = Some(vec![]);
@@ -228,7 +232,7 @@ fn malformed_target_without_dot_fails() {
     let registry = make_registry_with_math();
     let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("nofunctionpart", vec![]);
+    let env = Envelope::call("nofunctionpart", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
         matches!(err, ValidationError::MalformedEnvelope(_)),
@@ -277,12 +281,14 @@ fn optional_argument_may_be_omitted() {
                 doc: None,
             },
             provider_id: "p".into(),
+            registration_token: saikuro_core::RegistrationToken::new(),
         })
         .unwrap();
 
     let validator = InvocationValidator::new(registry);
     // Providing only the required argument should pass.
-    let env = Envelope::call("greet.greet", vec![Value::String("Alice".into())]);
+    let env = Envelope::call("greet.greet", vec![Value::String("Alice".into())])
+        .expect("entropy available");
     assert!(
         validator.validate(&env).is_ok(),
         "one-arg call to two-arg fn (second optional) should pass"

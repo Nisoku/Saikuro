@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use saikuro_core::{
-    capability::CapabilitySet, envelope::Envelope, schema::Schema, ResponseEnvelope,
+    capability::CapabilitySet, envelope::Envelope, schema::Schema, RegistrationToken,
+    ResponseEnvelope,
 };
 use saikuro_exec::mpsc;
 use saikuro_router::{
@@ -50,14 +51,31 @@ impl RuntimeHandle {
             .map_err(Into::into)
     }
 
+    /// Register or merge a schema under an existing provider registration.
+    pub fn register_schema_with_token(
+        &self,
+        schema: Schema,
+        provider_id: impl Into<String>,
+        registration_token: RegistrationToken,
+    ) -> Result<()> {
+        self.schema_registry
+            .merge_schema_with_token(schema, provider_id, registration_token)
+            .map_err(Into::into)
+    }
+
     /// Register a single namespace from a provider.
     pub fn register_namespace(&self, reg: NamespaceRegistration) -> Result<()> {
         self.schema_registry.register(reg).map_err(Into::into)
     }
 
     /// Deregister all schemas owned by a provider (called on disconnect).
-    pub fn deregister_provider_schema(&self, provider_id: &str) {
-        self.schema_registry.deregister_provider(provider_id);
+    pub fn deregister_provider_schema(
+        &self,
+        provider_id: &str,
+        registration_token: RegistrationToken,
+    ) {
+        self.schema_registry
+            .deregister_provider(provider_id, registration_token);
     }
 
     /// Export a snapshot of the current schema state.
@@ -72,10 +90,12 @@ impl RuntimeHandle {
         self.provider_registry.register(handle);
     }
 
-    /// Deregister a provider by ID (called on disconnect).
-    pub fn deregister_provider(&self, provider_id: &str) {
-        self.provider_registry.deregister(provider_id);
-        self.schema_registry.deregister_provider(provider_id);
+    /// Deregister one provider generation from routing and schema ownership.
+    pub fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
+        self.provider_registry
+            .deregister(provider_id, registration_token);
+        self.schema_registry
+            .deregister_provider(provider_id, registration_token);
     }
 
     // Dispatch
@@ -140,6 +160,7 @@ impl RuntimeHandle {
         let (sender, receiver) = transport.split();
         let handler = ConnectionHandler {
             peer_id: peer_id.clone(),
+            registration_token: RegistrationToken::new(),
             sender,
             receiver,
             validator: InvocationValidator::new(self.schema_registry.clone()),
@@ -168,14 +189,22 @@ impl RuntimeHandle {
         provider_id: impl Into<String>,
         namespaces: Vec<String>,
         handler: F,
-    ) where
+    ) -> RegistrationToken
+    where
         F: Fn(Envelope) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = ResponseEnvelope> + Send + 'static,
     {
         let provider_id = provider_id.into();
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(256);
+        let registration_token = RegistrationToken::new();
+        let (work_tx, mut work_rx) =
+            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MAX);
 
-        let handle = ProviderHandle::new(provider_id.clone(), namespaces.clone(), work_tx);
+        let handle = ProviderHandle::with_registration_token(
+            provider_id.clone(),
+            registration_token,
+            namespaces.clone(),
+            work_tx,
+        );
         self.provider_registry.register(handle);
 
         let handler = Arc::new(handler);
@@ -193,6 +222,8 @@ impl RuntimeHandle {
                 });
             }
         });
+
+        registration_token
     }
 
     // Helpers

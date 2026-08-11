@@ -30,6 +30,9 @@ pub enum RuntimeError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("entropy error: {0}")]
+    Entropy(#[from] saikuro_random::Error),
 }
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;

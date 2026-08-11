@@ -48,6 +48,7 @@ async fn round_trip_while_alive(
 
     let handler = ConnectionHandler {
         peer_id: "test-peer".to_owned(),
+        registration_token: saikuro_core::RegistrationToken::new(),
         sender: handler_sender,
         receiver: handler_receiver,
         validator,
@@ -183,7 +184,7 @@ fn announce_with_invalid_schema_returns_error() {
         let bad_env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Announce,
-            id: InvocationId::new(),
+            id: InvocationId::new().expect("entropy available"),
             target: "$saikuro.announce".to_owned(),
             args: vec![Value::String("not a schema".into())],
             meta: Default::default(),
@@ -216,7 +217,7 @@ fn announce_with_no_args_returns_error() {
         let empty_env = Envelope {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Announce,
-            id: InvocationId::new(),
+            id: InvocationId::new().expect("entropy available"),
             target: "$saikuro.announce".to_owned(),
             args: vec![],
             meta: Default::default(),
@@ -248,7 +249,9 @@ fn announce_does_not_route_to_provider() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
 
-        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(4);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(
+            saikuro_exec::ChannelCapacity::try_from(4).expect("4 is a valid channel capacity"),
+        );
         let handle = ProviderHandle::new("interceptor", vec!["$saikuro".to_owned()], work_tx);
         let providers = ProviderRegistry::new();
         providers.register(handle);

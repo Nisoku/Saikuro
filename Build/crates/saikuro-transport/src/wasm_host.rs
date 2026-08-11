@@ -251,7 +251,7 @@ impl TransportConnector for WasmHostConnector {
             .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
 
         // Signal channel: listener's accept reply will unblock us.
-        let (signal_tx, mut signal_rx) = mpsc::channel::<()>(1);
+        let (signal_tx, mut signal_rx) = mpsc::channel::<()>(saikuro_exec::ChannelCapacity::MIN);
 
         // Temporary accept handler on the private channel.
         // Scoped in a block so the raw `Closure` is consumed into the
@@ -323,7 +323,9 @@ impl WasmHostListener {
         let base = BroadcastChannel::new(&base_name)
             .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
 
-        let (tx, rx) = mpsc::channel::<String>(32);
+        let (tx, rx) = mpsc::channel::<String>(
+            saikuro_exec::ChannelCapacity::try_from(32).expect("32 is a valid channel capacity"),
+        );
 
         let handler_tx = tx;
         let handler: Closure<dyn FnMut(MessageEvent)> = Closure::new(move |event: MessageEvent| {

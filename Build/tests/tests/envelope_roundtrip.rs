@@ -25,7 +25,8 @@ fn roundtrip_response(resp: &ResponseEnvelope) -> ResponseEnvelope {
 
 #[test]
 fn call_envelope_roundtrip() {
-    let env = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]);
+    let env =
+        Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]).expect("entropy available");
     let decoded = roundtrip_envelope(&env);
     assert_eq!(decoded.version, PROTOCOL_VERSION);
     assert_eq!(decoded.invocation_type, InvocationType::Call);
@@ -40,7 +41,8 @@ fn call_envelope_roundtrip() {
 
 #[test]
 fn cast_envelope_roundtrip() {
-    let env = Envelope::cast("logger.info", vec![Value::String("hello".into())]);
+    let env = Envelope::cast("logger.info", vec![Value::String("hello".into())])
+        .expect("entropy available");
     let decoded = roundtrip_envelope(&env);
     assert_eq!(decoded.invocation_type, InvocationType::Cast);
     assert_eq!(decoded.args[0], Value::String("hello".into()));
@@ -48,14 +50,15 @@ fn cast_envelope_roundtrip() {
 
 #[test]
 fn stream_open_envelope_roundtrip() {
-    let env = Envelope::stream_open("events.subscribe", vec![Value::String("topic".into())]);
+    let env = Envelope::stream_open("events.subscribe", vec![Value::String("topic".into())])
+        .expect("entropy available");
     let decoded = roundtrip_envelope(&env);
     assert_eq!(decoded.invocation_type, InvocationType::Stream);
 }
 
 #[test]
 fn channel_open_envelope_roundtrip() {
-    let env = Envelope::channel_open("chat.session", vec![]);
+    let env = Envelope::channel_open("chat.session", vec![]).expect("entropy available");
     let decoded = roundtrip_envelope(&env);
     assert_eq!(decoded.invocation_type, InvocationType::Channel);
     assert!(decoded.args.is_empty());
@@ -63,7 +66,7 @@ fn channel_open_envelope_roundtrip() {
 
 #[test]
 fn envelope_with_capability_roundtrip() {
-    let mut env = Envelope::call("secure.op", vec![]);
+    let mut env = Envelope::call("secure.op", vec![]).expect("entropy available");
     env.capability = Some(CapabilityToken::new("admin:write"));
     let decoded = roundtrip_envelope(&env);
     assert_eq!(
@@ -74,7 +77,7 @@ fn envelope_with_capability_roundtrip() {
 
 #[test]
 fn envelope_with_meta_roundtrip() {
-    let mut env = Envelope::call("trace.op", vec![]);
+    let mut env = Envelope::call("trace.op", vec![]).expect("entropy available");
     env.meta
         .insert("trace-id".into(), Value::String("abc-123".into()))
         .ok();
@@ -86,14 +89,14 @@ fn envelope_with_meta_roundtrip() {
 
 #[test]
 fn envelope_meta_serializes_canonically_regardless_of_insertion_order() {
-    let id = InvocationId::new();
-    let mut a = Envelope::call("trace.op", vec![]);
+    let id = InvocationId::new().expect("entropy available");
+    let mut a = Envelope::call("trace.op", vec![]).expect("entropy available");
     a.id = id;
     a.meta.insert("z".into(), Value::Int(1)).ok();
     a.meta.insert("a".into(), Value::Int(2)).ok();
     a.meta.insert("m".into(), Value::Int(3)).ok();
 
-    let mut b = Envelope::call("trace.op", vec![]);
+    let mut b = Envelope::call("trace.op", vec![]).expect("entropy available");
     b.id = id;
     b.meta.insert("m".into(), Value::Int(3)).ok();
     b.meta.insert("a".into(), Value::Int(2)).ok();
@@ -106,9 +109,11 @@ fn envelope_meta_serializes_canonically_regardless_of_insertion_order() {
 
 #[test]
 fn batch_envelope_roundtrip() {
-    let item1 = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]);
-    let item2 = Envelope::call("math.mul", vec![Value::Int(3), Value::Int(4)]);
-    let mut env = Envelope::call("", vec![]);
+    let item1 =
+        Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]).expect("entropy available");
+    let item2 =
+        Envelope::call("math.mul", vec![Value::Int(3), Value::Int(4)]).expect("entropy available");
+    let mut env = Envelope::call("", vec![]).expect("entropy available");
     env.invocation_type = InvocationType::Batch;
     env.target = String::new();
     env.batch_items = Some(vec![item1, item2]);
@@ -122,7 +127,7 @@ fn batch_envelope_roundtrip() {
 
 #[test]
 fn stream_item_with_seq_roundtrip() {
-    let id = InvocationId::new();
+    let id = InvocationId::new().expect("entropy available");
     let resp = ResponseEnvelope::stream_item(id, 42, Value::Float(std::f64::consts::PI));
     let decoded = roundtrip_response(&resp);
     assert!(decoded.ok);
@@ -133,7 +138,7 @@ fn stream_item_with_seq_roundtrip() {
 
 #[test]
 fn stream_end_sentinel_roundtrip() {
-    let id = InvocationId::new();
+    let id = InvocationId::new().expect("entropy available");
     let resp = ResponseEnvelope::stream_end(id, 99);
     let decoded = roundtrip_response(&resp);
     assert!(decoded.ok);
@@ -144,7 +149,7 @@ fn stream_end_sentinel_roundtrip() {
 
 #[test]
 fn error_response_roundtrip() {
-    let id = InvocationId::new();
+    let id = InvocationId::new().expect("entropy available");
     let detail = ErrorDetail::new(ErrorCode::FunctionNotFound, "no such fn");
     let resp = ResponseEnvelope::err(id, detail);
     let decoded = roundtrip_response(&resp);
@@ -174,7 +179,7 @@ fn value_all_variants_roundtrip() {
     ];
 
     for v in &cases {
-        let env = Envelope::call("ns.fn", vec![v.clone()]);
+        let env = Envelope::call("ns.fn", vec![v.clone()]).expect("entropy available");
         let decoded = roundtrip_envelope(&env);
         assert_eq!(
             &decoded.args[0],
