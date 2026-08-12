@@ -11,6 +11,26 @@
 //! and MCU targets.  The guards are only ever held for short map mutations;
 //! they are never held across an `await`.
 //!
+//! # Task-context restriction (no_std)
+//!
+//! On `no_std` builds these locks are spinlocks: acquisition busy-waits and
+//! never yields or sleeps.  They are only safe when all three conditions hold:
+//!
+//! - the guard is never held across an `.await`.  A task that yields while
+//!   holding a spinlock stalls any other task that spins on it, and on a
+//!   single-core cooperative executor such as Embassy that is a deadlock;
+//! - the critical section is short and does not re-enter the same lock or call
+//!   anything that could yield or run another task;
+//! - no interrupt context acquires a lock that a task can hold while interrupts
+//!   are enabled: a preempting ISR spinning on a held lock never makes
+//!   progress.  Data shared with interrupts must use a
+//!   `critical-section`-backed primitive instead.
+//!
+//! `saikuro-router` uses these locks only for short synchronous map mutations
+//! that never await, which satisfies the restriction.  Async locks belong in
+//! `saikuro-exec`, whose Embassy backend binds them to
+//! `CriticalSectionRawMutex` so awaiters park instead of spinning.
+//!
 //! Poisoning behaviour is backend-specific.  `std::sync::Mutex` and
 //! `std::sync::RwLock` write guards become poisoned if a panic unwinds while
 //! they are held, and the next acquisition then panics, surfacing the bug

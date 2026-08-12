@@ -17,6 +17,11 @@ embassy-runtime = [
     "dep:embassy-futures",
     "futures/async-await",
 ]
+embassy-test = [
+    "embassy-runtime",
+    "embassy-time/std",
+    "embassy-time/generic-queue",
+]
 
 [dependencies]
 tokio      = { version = "1.52.3", default-features = false, features = ["macros"], optional = true }
@@ -29,3 +34,6 @@ fluvio-wasm-timer = { version = "0.2.5", optional = true }
 embassy-sync    = { workspace = true, optional = true }
 embassy-time    = { workspace = true, optional = true }
 embassy-futures = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures-executor = "0.3"

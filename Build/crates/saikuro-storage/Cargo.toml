@@ -10,7 +10,7 @@ keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 
 [features]
 default = ["std", "native-storage"]
-std = ["saikuro-core/std"]
+std = []
 custom = ["saikuro-core/custom"]
 drbg = ["saikuro-core/drbg"]
 native-storage = [
@@ -18,19 +18,21 @@ native-storage = [
     "inmemory",
     "local-storage",
     "session-storage",
+    "saikuro-core/std",
     "saikuro-exec/tokio-runtime",
 ]
 inmemory = ["std", "dashmap"]
 local-storage = ["inmemory"]
 session-storage = ["inmemory"]
-fs-storage = ["std", "dep:tokio", "saikuro-exec/tokio-runtime"]
-sled-storage = ["std", "dep:tokio", "dep:sled", "saikuro-exec/tokio-runtime"]
-sqlite-storage = ["std", "dep:tokio", "dep:rusqlite", "saikuro-exec/tokio-runtime"]
+fs-storage = ["std", "dep:tokio", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
+sled-storage = ["std", "dep:tokio", "dep:sled", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
+sqlite-storage = ["std", "dep:tokio", "dep:rusqlite", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
 wasm-storage = [
     "std",
     "inmemory",
     "local-storage",
     "session-storage",
+    "saikuro-core/std-no-os",
     "saikuro-exec/wasm-runtime",
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",

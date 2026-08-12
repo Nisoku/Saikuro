@@ -1385,6 +1385,7 @@ dependencies = [
  "embassy-time",
  "fluvio-wasm-timer",
  "futures",
+ "futures-executor",
  "tokio",
  "tokio-util",
  "wasm-bindgen-futures",
