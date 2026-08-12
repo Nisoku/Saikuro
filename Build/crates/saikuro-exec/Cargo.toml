@@ -46,5 +46,6 @@ embassy-net     = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
+embassy-executor = { version = "0.6", default-features = false }
 embassy-net-driver-channel = "0.3"
 futures-executor = "0.3"

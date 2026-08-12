@@ -1,22 +1,3 @@
-//! Cancellation and closure tests for the Embassy execution backend.
-//!
-//! The Embassy backend's channel and barrier contract is normally 
-//! only exercised on hardware.  The `embassy-test` feature runs the 
-//! same backend on the host std target: it selects `embassy-runtime` 
-//! and adds `embassy-time/std`, which also links the std 
-// `critical-section` implementation the raw-mutex channel state requires.
-//!
-//! Run with:
-//!
-//! ```text
-//! cargo test -p saikuro-exec --no-default-features --features embassy-test
-//! ```
-//!
-//! The tests are deterministic: no threads, no sleeps, and the executor is the
-//! single-threaded `futures-executor` block_on.  A future that would block
-//! forever is wrapped in `saikuro_exec::timeout` so a regression fails the test
-//! instead of hanging the binary.
-
 #![cfg(feature = "embassy-test")]
 
 use std::future::Future;
