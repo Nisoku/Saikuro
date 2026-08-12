@@ -8,13 +8,6 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 
-# The crate is always `no_std` + `alloc`. The default `std` feature adds the
-# std-only conveniences (`std::io::Error` variant, stderr log sink) and selects
-# the OS entropy backend; `std-no-os` is the same crate-level conveniences
-# without the OS entropy backend, for targets that cannot reach it (wasm32);
-# `custom` selects the caller-provided getrandom backend and `drbg` the
-# deterministic chacha20 DRBG for bare-metal targets (see saikuro-random).
-# `std` is mutually exclusive with `custom`/`drbg`.
 [features]
 default = ["std"]
 std = ["saikuro-random/os"]
@@ -31,7 +24,7 @@ serde_bytes = { workspace = true }
 uuid = { workspace = true }
 saikuro-random = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
-strum = { version = "0.28", default-features = false, features = ["derive"] }
+strum = { workspace = true }
 heapless = { workspace = true }
 spin = { workspace = true }
 messagepack-serde = { workspace = true }

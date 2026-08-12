@@ -25,8 +25,6 @@ rust-version = "1.75"
 
 [workspace.dependencies]
 # Serialization
-# no_std-compatible by default; workspace members that need std behaviour
-# enable it explicitly via `features = ["std"]` on their serde dependency.
 serde = { version = "1.0", default-features = false, features = [
     "alloc",
     "derive",
@@ -38,18 +36,15 @@ serde_bytes = { version = "0.11", default-features = false, features = [
 messagepack-serde = { version = "0.2.4", default-features = false, features = [
     "alloc",
 ] }
-# Reference wire-format implementation used only by the adapter simulators
-# (tests/tests/common, cross_language_wire, sandbox_dispatch, log_dispatch) and
-# the adapters/rust reference adapter
 rmp-serde = "1.3"
-bytes = "1.7"
+bytes = "1.12"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 async-trait = "0.1"
 pin-project-lite = "0.2"
 
-uuid = { version = "1.23.2", default-features = false }
+uuid = { version = "1.23", default-features = false }
 
-getrandom = { version = "0.3.1", default-features = false }
+getrandom = { version = "0.3", default-features = false }
 chacha20 = { version = "0.9", default-features = false }
 portable-atomic = { version = "1", default-features = false, features = [
     "fallback",
@@ -58,15 +53,12 @@ portable-atomic = { version = "1", default-features = false, features = [
 
 heapless = { version = "0.8", default-features = false, features = ["serde"] }
 
-# Duration / utility serde helpers
 serde_with = "3.0"
 
-# Enum string conversion
-strum = { version = "0.28.0", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
 
-# Logging / tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.23", features = [
+tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "fmt",
     "json",
@@ -78,12 +70,10 @@ embassy-futures = { version = "0.1", default-features = false }
 embassy-net = { version = "0.5", default-features = false }
 embedded-storage-async = { version = "0.4", default-features = false }
 
-# Error handling
-thiserror = { version = "2.0", default-features = false }
+thiserror = { version = "2", default-features = false }
 anyhow = "1.0"
 
-# Concurrency
-dashmap = "6.1"
+dashmap = "7.0.0-rc2"
 parking_lot = "0.12"
 spin = { version = "0.12", default-features = false, features = [
     "mutex",
@@ -92,8 +82,40 @@ spin = { version = "0.12", default-features = false, features = [
     "portable-atomic",
 ] }
 
-# Time
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+
+# Tokio
+tokio = { version = "1.53", default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+
+# Embassy executor (dev-dep only)
+embassy-executor = { version = "0.6", default-features = false }
+embassy-net-driver-channel = "0.3"
+
+# WASM
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
+fluvio-wasm-timer = "0.2"
+send_wrapper = "0.6"
+wasm-bindgen-test = "0.3"
+
+# Embedded IO
+embedded-io-async = { version = "0.7", default-features = false }
+
+# WebSocket
+tokio-tungstenite = { version = "0.30", default-features = false }
+
+# Storage backends
+sled = "0.34"
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+# Futures
+futures-executor = "0.3"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
 
 # Internal crates
 saikuro-core = { path = "crates/saikuro-core", default-features = false }

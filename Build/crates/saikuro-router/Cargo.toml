@@ -20,9 +20,7 @@ saikuro-exec   = { workspace = true, default-features = false }
 
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
-# tracing is declared directly so the `std` feature stays off on MCU; the
-# `attributes` feature is required by `#[instrument]` on `dispatch`.
-tracing = { version = "0.1", default-features = false, features = ["attributes"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 saikuro-exec = { workspace = true }

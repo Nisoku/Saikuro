@@ -43,8 +43,7 @@ dashmap     = { workspace = true }
 parking_lot = { workspace = true }
 serde_with  = { workspace = true }
 
-# CLI and error handling for binary
 anyhow      = { workspace = true }
-clap        = { version = "4.5", features = ["derive", "env"] }
+clap        = { workspace = true, features = ["env"] }
 
 [dev-dependencies]

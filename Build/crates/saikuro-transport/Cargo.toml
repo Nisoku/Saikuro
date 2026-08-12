@@ -8,73 +8,44 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 
-# Feature flags control which transport backends are compiled in.
-#
-#   std:               gate for std-only code (the Io error variant and the
-#                      native/WebSocket/wasm backends).  The crate is no_std +
-#                      alloc without it.  Forwards core's std-no-os so wasm32
-#                      never selects the OS entropy backend through transport.
-#   native-transport:  Unix socket + TCP (requires std networking; disabled on wasm32)
-#   ws-transport:      WebSocket module (compiled on wasm32, or on native with native-ws)
-#   native-ws:         WebSocket + tokio-tungstenite on native (non-wasm32 only)
-#   wasm-host-transport: BroadcastChannel transport (wasm32 only)
-#   embassy:           no_std embassy-executor backend for MCU targets; forwards the
-#                      drbg entropy source so the crate is self-contained under
-#                      `--no-default-features --features embassy`
-#   embedded-io:       local, statically-dispatched embedded-io-async transport
-#
-# The in-memory transport is always compiled; it has zero OS dependencies.
 [features]
 default = ["std", "native-transport"]
 std = []
 embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/drbg"]
 embedded-io = ["dep:embedded-io-async"]
-# native features also forward core/std so native builds keep the OS entropy
-# backend that core/std selects; only the crate-level lifter (std) switches to
-# std-no-os for wasm32.
 native-transport = ["std", "saikuro-exec/tokio-runtime", "saikuro-core/std"]
 ws-transport = []
-# wasm32 has no OS entropy source; the js getrandom backend is forwarded here
-# (matching saikuro-runtime's own wasm-runtime feature).
 wasm-runtime = [
     "std",
     "saikuro-core/std-no-os",
     "saikuro-exec/wasm-runtime",
     "saikuro-random/wasm",
 ]
-
-# native-ws is only available on non-wasm32 (where tokio-tungstenite exists)
 native-ws = ["ws-transport", "std", "saikuro-exec/tokio-runtime", "saikuro-core/std", "tokio-tungstenite"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
 
 serde       = { workspace = true }
-# bytes is declared directly so the `std` feature stays off on MCU targets;
-# native builds still get it via tokio's own dependency.
-bytes       = { version = "1.7", default-features = false }
+bytes       = { workspace = true }
 async-trait = { workspace = true }
 futures     = { workspace = true }
 pin-project-lite = { workspace = true }
 thiserror   = { workspace = true }
-# tracing is declared directly so the `std` feature stays off on MCU; only the
-# event macros are used (no `#[instrument]`).
-tracing     = { version = "0.1", default-features = false }
+tracing     = { workspace = true }
 saikuro-exec = { workspace = true, default-features = false }
 saikuro-random = { workspace = true, default-features = false }
-embedded-io-async = { version = "0.7.0", default-features = false, optional = true }
+embedded-io-async = { workspace = true, optional = true }
 
-# WebSocket support on native (tokio-tungstenite uses mio which doesn't compile on wasm32)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"], optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
 
-# WASM host transport + WASM WebSocket
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-send_wrapper = "0.6"
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [
+send_wrapper = { workspace = true }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = [
     "BroadcastChannel",
     "Crypto",
     "MessageEvent",

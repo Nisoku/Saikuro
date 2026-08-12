@@ -47,23 +47,23 @@ saikuro-core = { path = "../saikuro-core", default-features = false }
 
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
-bytes = { version = "1.7", default-features = false }
+bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }
-tracing = { version = "0.1", default-features = false }
+tracing = { workspace = true }
 
 dashmap = { workspace = true, optional = true }
-tokio = { version = "1.52.3", features = ["rt"], optional = true }
-sled = { version = "0.34.7", optional = true }
-rusqlite = { version = "0.40.0", features = ["bundled"], optional = true }
+tokio = { workspace = true, optional = true }
+sled = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
 embedded-storage-async = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { version = "0.2.122", optional = true }
-wasm-bindgen-futures = { version = "0.4.72", optional = true }
-js-sys = { version = "0.3.99", optional = true }
-web-sys = { version = "0.3.99", optional = true, features = [
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "Blob",
     "BroadcastChannel",
     "DomException",
@@ -97,7 +97,7 @@ web-sys = { version = "0.3.99", optional = true, features = [
 [dev-dependencies]
 saikuro-exec = { workspace = true, features = ["tokio-runtime"] }
 tracing-subscriber = { workspace = true }
-futures-executor = "0.3"
+futures-executor = { workspace = true }
 embedded-storage-async = { workspace = true }
 
 [[test]]

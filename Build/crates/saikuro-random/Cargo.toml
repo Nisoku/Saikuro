@@ -8,7 +8,6 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "random", "rng"]
 
-# The active randomness source is selected by exactly one backend feature.
 [features]
 default = ["os"]
 os = ["dep:getrandom", "getrandom/std", "std"]

@@ -26,25 +26,21 @@ serde_json    = { workspace = true }
 tracing       = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-# Native-only: enable TCP/Unix transport backends
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 saikuro-core      = { workspace = true, features = ["std"] }
 saikuro-transport = { workspace = true, features = ["native-transport"] }
 saikuro-runtime   = { workspace = true, features = ["native-transport"] }
 
-# WASM-only: BroadcastChannel-based host transport, no native-transport
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 saikuro-core      = { workspace = true, features = ["std-no-os"] }
 saikuro-transport = { workspace = true, features = ["wasm-runtime"] }
 saikuro-runtime   = { workspace = true, default-features = false }
-# WASM has no OS entropy; saikuro-core draws randomness via saikuro-random,
-# so the whole graph must use the wasm_js backend on this target.
 saikuro-random    = { workspace = true, features = ["wasm"] }
-wasm-bindgen = "0.2"
-wasm-bindgen-test = "0.3"
-wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
-web-sys = { version = "0.3", features = [
+wasm-bindgen = { workspace = true }
+wasm-bindgen-test = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = [
     "BroadcastChannel",
     "MessageEvent",
 ] }
