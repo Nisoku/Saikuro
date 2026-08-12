@@ -40,6 +40,7 @@ wasm-storage = [
     "dep:web-sys",
 ]
 fs-access = ["wasm-storage"]
+flash-storage = ["dep:embedded-storage-async"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
@@ -56,6 +57,7 @@ dashmap = { workspace = true, optional = true }
 tokio = { version = "1.52.3", features = ["rt"], optional = true }
 sled = { version = "0.34.7", optional = true }
 rusqlite = { version = "0.40.0", features = ["bundled"], optional = true }
+embedded-storage-async = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2.122", optional = true }
@@ -93,5 +95,11 @@ web-sys = { version = "0.3.99", optional = true, features = [
 ] }
 
 [dev-dependencies]
-saikuro-exec = { workspace = true }
+saikuro-exec = { workspace = true, features = ["tokio-runtime"] }
 tracing-subscriber = { workspace = true }
+futures-executor = "0.3"
+embedded-storage-async = { workspace = true }
+
+[[test]]
+name = "flash"
+required-features = ["flash-storage"]

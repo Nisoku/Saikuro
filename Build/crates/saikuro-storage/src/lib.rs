@@ -47,6 +47,9 @@ pub mod local_storage;
 #[cfg(feature = "session-storage")]
 pub mod session_storage;
 
+#[cfg(feature = "flash-storage")]
+pub mod flash;
+
 /// Generates a web-storage-backed key-value backend.
 ///
 /// `$name` is the struct name (e.g., `LocalStorage`).
@@ -185,6 +188,9 @@ macro_rules! impl_web_storage {
 }
 
 pub use config::{BackendKind, CleanupPolicy, PersistenceMode, StorageConfig};
+
+#[cfg(feature = "flash-storage")]
+pub use config::FlashConfig;
 pub use error::{Result, StorageError};
 pub use traits::{
     FileBackend, KeyValueBackend, KeyValueBackendExt, LocalFileBackend, LocalKeyValueBackend,
@@ -226,3 +232,6 @@ pub use sled::SledStorage;
 
 #[cfg(feature = "sqlite-storage")]
 pub use sqlite::SqliteStorage;
+
+#[cfg(feature = "flash-storage")]
+pub use flash::FlashKvStore;

@@ -72,11 +72,11 @@ tracing-subscriber = { version = "0.3.23", features = [
     "json",
 ] }
 
-# Embedded async runtime (embassy) for no_std MCU targets
 embassy-sync = { version = "0.6", default-features = false }
 embassy-time = { version = "0.3", default-features = false }
 embassy-futures = { version = "0.1", default-features = false }
 embassy-net = { version = "0.5", default-features = false }
+embedded-storage-async = { version = "0.4", default-features = false }
 
 # Error handling
 thiserror = { version = "2.0", default-features = false }
