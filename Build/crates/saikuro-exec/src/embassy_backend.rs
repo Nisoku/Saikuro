@@ -26,8 +26,9 @@
 //! and hands out `Spawner`s. A facade cannot create a global executor without
 //! clashing with the application's. Tokio-style task and runtime APIs are not
 //! exported for this backend, so unsupported shared code fails at compile time
-//! instead of panicking on device. `net`, `signal`, and `runtime` are absent for
-//! the same reason.
+//! instead of panicking on device. `runtime` is absent for the same reason;
+//! `net` is available behind the `net` feature (the app owns the stack; see
+//! the module documentation).
 
 use alloc::sync::Arc;
 use core::cell::RefCell;
@@ -43,6 +44,9 @@ use embassy_sync::channel::TrySendError as EmbTrySendError;
 use embassy_sync::waitqueue::MultiWakerRegistration;
 use embassy_time::{Duration as EmbDuration, Timer};
 use futures::future::{Fuse, FutureExt};
+
+#[cfg(feature = "net")]
+pub use crate::embassy_net::net;
 
 // Sleep / Timeout / Yield
 

@@ -22,6 +22,10 @@ embassy-test = [
     "embassy-time/std",
     "embassy-time/generic-queue",
 ]
+# TCP/IP networking for the Embassy backend. The application owns the device
+# driver, stack resources, and runner (see `saikuro_exec::net`); this feature
+# only pulls in the `embassy-net` stack and exposes it.
+net = ["dep:embassy-net"]
 
 [dependencies]
 tokio      = { version = "1.52.3", default-features = false, features = ["macros"], optional = true }
@@ -34,6 +38,13 @@ fluvio-wasm-timer = { version = "0.2.5", optional = true }
 embassy-sync    = { workspace = true, optional = true }
 embassy-time    = { workspace = true, optional = true }
 embassy-futures = { workspace = true, optional = true }
+embassy-net     = { workspace = true, optional = true, features = [
+    "medium-ip",
+    "proto-ipv4",
+    "tcp",
+    "udp",
+] }
 
 [dev-dependencies]
+embassy-net-driver-channel = "0.3"
 futures-executor = "0.3"

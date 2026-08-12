@@ -11,6 +11,9 @@ extern crate alloc;
 mod capacity;
 pub use capacity::{ChannelCapacity, InvalidChannelCapacity};
 
+#[cfg(all(feature = "embassy-runtime", feature = "net"))]
+mod embassy_net;
+
 #[cfg(all(feature = "tokio-runtime", feature = "wasm-runtime"))]
 compile_error!("Features `tokio-runtime` and `wasm-runtime` are mutually exclusive.");
 
