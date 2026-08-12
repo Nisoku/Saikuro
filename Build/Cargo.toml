@@ -88,7 +88,7 @@ chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 tokio = { version = "1.53", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 
-# Embassy executor (dev-dep only)
+# Embassy executor
 embassy-executor = { version = "0.6", default-features = false }
 embassy-net-driver-channel = "0.3"
 
