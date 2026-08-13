@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "random", "rng"]
 
+[lib]
+path = "lib.rs"
+
 [features]
 default = ["std", "native"]
 std = ["rand_core/std"]
