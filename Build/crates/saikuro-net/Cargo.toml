@@ -14,11 +14,7 @@ path = "lib.rs"
 default = ["std", "native"]
 std = []
 native = ["std", "dep:tokio", "tokio/full"]
-no_std = [
-    "dep:embassy-net",
-    "embassy-net/{medium-ip,proto-ipv4,tcp,udp}",
-    "dep:embedded-io-async",
-]
+no_std = []
 embedded = [
     "dep:embassy-net",
     "embassy-net/{medium-ip,proto-ipv4,tcp,udp}",
