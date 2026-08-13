@@ -8,6 +8,7 @@ members = [
     "crates/saikuro-router",
     "crates/saikuro-runtime",
     "crates/saikuro-exec",
+    "crates/saikuro-net",
     "crates/saikuro-random",
     "crates/saikuro-codegen",
     "adapters/c",

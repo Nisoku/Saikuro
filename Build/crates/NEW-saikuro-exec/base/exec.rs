@@ -27,18 +27,25 @@ struct JoinSlot<T> {
 
 type JoinResultSlot<T> = CriticalSectionMutex<RefCell<JoinSlot<T>>>;
 
-static GLOBAL_EXECUTOR: OnceCell<&'static Executor> = OnceCell::new();
-static GLOBAL_SPAWNER: OnceCell<&'static Spawner> = OnceCell::new();
+static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+static SPAWNER: OnceCell<Spawner> = OnceCell::new();
 
 fn global_executor() -> &'static Executor {
-    *GLOBAL_EXECUTOR.get_or_init(|| Box::leak(Box::new(Executor::new())))
+    EXECUTOR.get_or_init(Executor::new)
 }
 
 fn global_spawner() -> &'static Spawner {
-    *GLOBAL_SPAWNER.get_or_init(|| {
-        let executor = global_executor();
-        Box::leak(Box::new(executor.spawner()))
-    })
+    SPAWNER.get_or_init(|| global_executor().spawner())
+}
+
+/// Safe wrapper around embassy-executor's `unsafe fn poll()`. The host or
+/// `main` calls this in a loop.
+pub fn pump() {
+    let executor = global_executor();
+    // SAFETY: `executor` is `&'static` and initialized exactly once via
+    // `get_or_init`. `poll` is never called reentrantly on this executor,
+    // and the embassy pender (arch-spin) never calls `poll` directly.
+    unsafe { executor.poll() };
 }
 
 pub fn new_runtime() -> Runtime {
@@ -98,24 +105,24 @@ impl RuntimeBuilder {
 }
 
 pub fn block_on<F: Future + 'static>(fut: F) -> F::Output {
-    let executor = global_executor();
-    let slot: &'static JoinResultSlot<Option<F::Output>> = Box::leak(Box::new(
-        CriticalSectionMutex::new(RefCell::new(JoinSlot {
+    let slot: Arc<JoinResultSlot<Option<F::Output>>> = Arc::new(CriticalSectionMutex::new(
+        RefCell::new(JoinSlot {
             value: None,
             closed: false,
             wakers: MultiWakerRegistration::new(),
-        })),
+        }),
     ));
-    let token = executor.spawn(async move {
+    let task_slot = slot.clone();
+    let token = global_executor().spawn(async move {
         let result = fut.await;
-        slot.lock(|s| {
+        task_slot.lock(|s| {
             s.borrow_mut().value = Some(result);
             s.borrow().wakers.wake();
         });
     });
     global_spawner().spawn(token).ok();
     loop {
-        unsafe { executor.poll() };
+        pump();
         if let Some(v) = slot.lock(|s| s.borrow_mut().value.take()) {
             return v;
         }
