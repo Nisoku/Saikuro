@@ -12,7 +12,7 @@ keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 default = ["std", "native-storage"]
 std = []
 custom = ["saikuro-core/custom"]
-drbg = ["saikuro-core/drbg"]
+drbg = ["saikuro-core/embedded"]
 native-storage = [
     "std",
     "inmemory",

@@ -3,28 +3,40 @@
 
 //! Networking and IO facade for Saikuro.
 
-#[cfg(all(
-    feature = "native",
-    any(feature = "no_std", feature = "embedded", feature = "wasm")
+// Exactly one engine must be selected
+#[cfg(any(
+    all(feature = "native", any(feature = "no_std", feature = "wasm", feature = "embedded")),
+    all(feature = "no_std", any(feature = "native", feature = "wasm", feature = "embedded")),
+    all(feature = "wasm", any(feature = "native", feature = "no_std", feature = "embedded")),
+    all(
+        feature = "embedded",
+        any(feature = "native", feature = "no_std", feature = "wasm")
+    )
 ))]
-compile_error!("only one of native/no_std/embedded/wasm may be enabled");
-#[cfg(all(feature = "no_std", any(feature = "embedded", feature = "wasm")))]
-compile_error!("only one of native/no_std/embedded/wasm may be enabled");
-#[cfg(all(feature = "embedded", feature = "wasm"))]
-compile_error!("only one of native/no_std/embedded/wasm may be enabled");
-#[cfg(not(any(
-    feature = "native",
-    feature = "no_std",
-    feature = "embedded",
-    feature = "wasm"
-)))]
-compile_error!("exactly one of native/no_std/embedded/wasm must be enabled");
+compile_error!("exactly one engine must be enabled: native | no_std | wasm | embedded");
+
+#[cfg(all(feature = "std", feature = "no_std"))]
+compile_error!("the no_std engine cannot be combined with the std toolchain");
+
+mod shared;
+pub use shared::*;
+
+#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
+mod base;
+#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
+pub use base::*;
 
 #[cfg(feature = "native")]
-pub mod native;
-#[cfg(feature = "no_std")]
-pub mod no_std;
-#[cfg(feature = "embedded")]
-pub mod embedded;
+mod native;
+#[cfg(feature = "native")]
+pub use native::*;
+
 #[cfg(feature = "wasm")]
-pub mod wasm;
+mod wasm;
+#[cfg(feature = "wasm")]
+pub use wasm::*;
+
+#[cfg(feature = "embedded")]
+mod embedded;
+#[cfg(feature = "embedded")]
+pub use embedded::*;

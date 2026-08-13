@@ -8,22 +8,26 @@
 # cfg, so we set it per-target here.
 #
 # wasm32-unknown-unknown has no OS entropy, so we pin the `wasm_js` backend on
-# every build for it. saikuro-random's `wasm` feature turns on the matching
+# every build for it. saikuro-random's `wasm` engine enables the matching
 # cargo feature (threaded through adapters/rust, saikuro-runtime, and
 # saikuro-tests' wasm32 deps).
 #
-# Bare-metal MCU targets have no OS and no real wasm host, so they get the
-# `custom` backend. Whatever we link has to define `__getrandom_v03_custom` --
-# we deliberately don't stub it, because a no-op would be a silently broken RNG.
-# Better to have `fill` blow up than hand back fake randomness. saikuro-random's
-# `custom` feature wires up the cargo feature.
+# The `no_std` engine (WASI preview1/preview2) relies on getrandom's built-in
+# WASI backend, selected automatically by the target triple -- no cfg needed.
+#
+# Bare-metal MCU targets no longer use getrandom at all: saikuro-random's
+# `embedded` engine takes entropy from an application-provided `EntropySource`
+# trait via `init_from`, so there is no `__getrandom_v03_custom` to link. The
+# `custom` cfgs below are retained only for any direct getrandom usage and are
+# inert for the embedded engine.
 #
 # Host targets: leave the cfg alone and let getrandom use its normal OS backend.
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 
-# Bare-metal targets:
+# Bare-metal targets (retained for direct getrandom usage; the embedded engine
+# uses the EntropySource trait instead):
 #   riscv32imc-unknown-none-elf        ESP32-C3
 #   thumbv6m-none-eabi                 RP2040
 #   thumbv8m.main-none-eabihf          RP2350

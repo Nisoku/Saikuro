@@ -9,17 +9,18 @@ repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "random", "rng"]
 
 [features]
-default = ["os"]
-os = ["dep:getrandom", "getrandom/std", "std"]
-wasm = ["dep:getrandom", "getrandom/wasm_js", "std"]
-custom = ["dep:getrandom"]
-drbg = ["dep:chacha20", "dep:portable-atomic"]
-std = []
+default = ["std", "native"]
+std = ["rand_core/std"]
+native = ["std", "getrandom", "getrandom/std"]
+no_std = ["getrandom"]
+wasm = ["getrandom", "getrandom/wasm_js"]
+embedded = []
 
 [dependencies]
 getrandom = { workspace = true, optional = true }
-chacha20 = { workspace = true, optional = true }
-portable-atomic = { workspace = true, optional = true }
+chacha20 = { workspace = true }
+portable-atomic = { workspace = true }
+rand_core = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

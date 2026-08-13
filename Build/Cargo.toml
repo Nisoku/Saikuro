@@ -52,6 +52,8 @@ portable-atomic = { version = "1", default-features = false, features = [
     "critical-section",
 ] }
 
+rand_core = { version = "0.9", default-features = false }
+
 heapless = { version = "0.8", default-features = false, features = ["serde"] }
 
 serde_with = "3.0"

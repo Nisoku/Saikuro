@@ -11,7 +11,7 @@ keywords = ["ipc", "cross-language", "saikuro", "router", "rpc"]
 [features]
 default = ["std"]
 std = ["saikuro-core/std", "saikuro-exec/tokio-runtime"]
-embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/drbg"]
+embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/embedded"]
 
 [dependencies]
 saikuro-core   = { path = "../saikuro-core", default-features = false }

@@ -17,7 +17,10 @@ native = ["std", "dep:tokio", "tokio/full"]
 no_std = []
 embedded = [
     "dep:embassy-net",
-    "embassy-net/{medium-ip,proto-ipv4,tcp,udp}",
+    "embassy-net/medium-ip",
+    "embassy-net/proto-ipv4",
+    "embassy-net/tcp",
+    "embassy-net/udp",
     "dep:embedded-io-async",
 ]
 wasm = []
@@ -27,4 +30,5 @@ embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue"]
 tokio = { workspace = true, optional = true }
 embassy-net = { workspace = true, optional = true }
 embedded-io-async = { workspace = true, optional = true }
+embassy-time = { workspace = true, optional = true }
 futures = { workspace = true }

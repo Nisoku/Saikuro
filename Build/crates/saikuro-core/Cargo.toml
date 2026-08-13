@@ -10,10 +10,11 @@ keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 
 [features]
 default = ["std"]
-std = ["saikuro-random/os"]
+std = ["saikuro-random/native"]
 std-no-os = ["saikuro-random/wasm"]
-custom = ["saikuro-random/custom"]
-drbg = ["saikuro-random/drbg"]
+custom = ["saikuro-random/embedded"]
+embedded = ["saikuro-random/embedded"]
+wasi = ["saikuro-random/no_std"]
 
 [dependencies]
 serde = { workspace = true }
