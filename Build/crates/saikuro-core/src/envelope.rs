@@ -63,7 +63,7 @@ pub enum InvocationType {
     /// Structured log record forwarded from an adapter to the runtime log sink.
     ///
     /// Log envelopes are never routed to a provider.  The runtime extracts the
-    /// [`LogRecord`](crate::log::LogRecord) from `args[0]` and passes it to the
+    /// [`LogRecord`](saikuro_log::LogRecord) from `args[0]` and passes it to the
     /// configured log sink.  No response envelope is sent.
     Log,
     /// Schema announcement sent by a provider immediately after connecting.

@@ -22,7 +22,6 @@ pub mod capability;
 pub mod envelope;
 pub mod error;
 pub mod invocation;
-pub mod log;
 pub mod msgpack;
 pub mod registration;
 pub mod resource;
@@ -34,9 +33,6 @@ pub use capability::{CapabilitySet, CapabilityToken};
 pub use envelope::{split_target, Envelope, InvocationType, ResponseEnvelope};
 pub use error::{ErrorCode, ErrorDetail, SaikuroError};
 pub use invocation::InvocationId;
-#[cfg(any(feature = "std", feature = "std-no-os"))]
-pub use log::stderr_log_sink;
-pub use log::{LogLevel, LogRecord, LogSink};
 pub use registration::RegistrationToken;
 pub use resource::ResourceHandle;
 pub use value::Value;

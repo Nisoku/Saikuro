@@ -19,9 +19,9 @@ use saikuro_core::{
     envelope::{Envelope, InvocationType},
     error::{ErrorDetail, SaikuroError},
     invocation::InvocationId,
-    log::{LogLevel, LogRecord, LogSink},
     ResponseEnvelope,
 };
+use saikuro_log::{LogLevel, LogRecord, LogSink, TracingSink, tracing_log_sink};
 use saikuro_exec::{mpsc, oneshot, timeout, ChannelCapacity};
 use tracing::{debug, instrument, warn};
 
@@ -57,61 +57,55 @@ impl Default for RouterConfig {
     }
 }
 
-//  Tracing-backed default log sink
-
-/// Construct a log sink that forwards [`LogRecord`]s into the `tracing`
-/// infrastructure at the matching level.
-///
-/// The logger `name` and `msg` are concatenated in the tracing event message
-/// since `tracing` macros require a literal `target:`.
-pub fn tracing_log_sink() -> LogSink {
-    Box::new(|record: LogRecord| {
-        // tracing macros need a string-literal target; we embed the name in
-        // the message instead so callers can still filter by it in log output.
-        let line = format!("[{}] {}", record.name, record.msg);
-        match record.level {
-            LogLevel::Trace => tracing::trace!("{}", line),
-            LogLevel::Debug => tracing::debug!("{}", line),
-            LogLevel::Info => tracing::info!("{}", line),
-            LogLevel::Warn => tracing::warn!("{}", line),
-            LogLevel::Error => tracing::error!("{}", line),
-        }
-    })
-}
-
 //  Router
 
 /// The central dispatch hub.
 ///
 /// `InvocationRouter` is cheap to clone :  all state is `Arc`-wrapped inside
 /// the registries it references.
-#[derive(Clone)]
-pub struct InvocationRouter {
+pub struct InvocationRouter<S: LogSink + Send + Sync + 'static = TracingSink> {
     providers: ProviderRegistry,
     streams: StreamStateStore,
     config: RouterConfig,
     /// Sink for `Log`-type envelopes.  Wrapped in `Arc` so `Clone` works.
-    log_sink: Arc<LogSink>,
+    log_sink: Arc<S>,
 }
 
-impl InvocationRouter {
+impl<S: LogSink + Send + Sync + 'static> Clone for InvocationRouter<S> {
+    fn clone(&self) -> Self {
+        Self {
+            providers: self.providers.clone(),
+            streams: self.streams.clone(),
+            config: self.config.clone(),
+            log_sink: self.log_sink.clone(),
+        }
+    }
+}
+
+impl InvocationRouter<TracingSink> {
     pub fn new(providers: ProviderRegistry, config: RouterConfig) -> Self {
         Self::with_log_sink(providers, config, tracing_log_sink())
     }
 
+    /// Create a router with the given providers and default config.
+    pub fn with_providers(providers: ProviderRegistry) -> Self {
+        Self::new(providers, RouterConfig::default())
+    }
+}
+
+impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     /// Create a router with a custom log sink.
-    pub fn with_log_sink(providers: ProviderRegistry, config: RouterConfig, sink: LogSink) -> Self {
-        Self {
+    pub fn with_log_sink<S2: LogSink + Send + Sync + 'static>(
+        providers: ProviderRegistry,
+        config: RouterConfig,
+        sink: S2,
+    ) -> InvocationRouter<S2> {
+        InvocationRouter {
             providers,
             streams: StreamStateStore::new(),
             config,
             log_sink: Arc::new(sink),
         }
-    }
-
-    /// Create a router with default config.
-    pub fn with_providers(providers: ProviderRegistry) -> Self {
-        Self::new(providers, RouterConfig::default())
     }
 
     // State store access
@@ -150,7 +144,7 @@ impl InvocationRouter {
                 // as a call and let the provider interpret the args.
                 self.dispatch_call(envelope).await
             }
-            InvocationType::Log => self.dispatch_log(envelope),
+            InvocationType::Log => self.dispatch_log(envelope).await,
             InvocationType::Announce => {
                 // Announce envelopes are handled by the connection layer before
                 // reaching the router.  If one leaks through here it is a no-op
@@ -343,7 +337,7 @@ impl InvocationRouter {
     ///
     /// Extracts the [`LogRecord`] from `args[0]`, forwards it to the log sink,
     /// and returns `ok_empty`.  Never touches a provider.
-    fn dispatch_log(&self, envelope: Envelope) -> ResponseEnvelope {
+    async fn dispatch_log(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
         // args[0] is the LogRecord as a Value::Map.
@@ -361,7 +355,7 @@ impl InvocationRouter {
 
         match record {
             Some(r) => {
-                (self.log_sink)(r);
+                self.log_sink.emit(&r).await;
             }
             None => {
                 warn!(%id, "log envelope has no valid LogRecord in args[0]; dropping");

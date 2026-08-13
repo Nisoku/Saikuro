@@ -1,54 +1,18 @@
-//! Structured log record types for the Saikuro log-transport protocol.
-//!
-//! When an adapter wants to forward structured logs to the runtime (rather than
-//! writing directly to its own stderr), it wraps a [`LogRecord`] in a standard
-//! [`Envelope`](crate::envelope::Envelope) with
-//! `invocation_type = InvocationType::Log` and places the serialised
-//! `LogRecord` as the first element of `args`.
-//!
-//! The runtime's router intercepts `Log` envelopes before they reach a
-//! provider and dispatches them to the configured [`LogSink`].
-
-use alloc::{boxed::Box, string::String};
+use alloc::string::String;
 use core::fmt;
+use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
-use crate::value::Value;
+use saikuro_core::error::SaikuroError;
+use saikuro_core::value::{Value, ValueMap};
+
+use crate::level::LogLevel;
 
 /// Maximum number of structured context fields a [`LogRecord`] can carry.
 pub const LOG_FIELDS_CAPACITY: usize = 16;
 
 /// Fixed-capacity map of structured context fields on [`LogRecord`].
 pub type LogFieldMap = heapless::FnvIndexMap<String, Value, LOG_FIELDS_CAPACITY>;
-
-//  Log level
-
-/// Severity level of a log record, ordered from least to most severe.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    strum::Display,
-    strum::EnumString,
-)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
-pub enum LogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
-//  Log record
 
 /// A structured log record forwarded from an adapter to the runtime log sink.
 ///
@@ -92,25 +56,23 @@ impl LogRecord {
 
     /// Add a structured field and return `self` for chaining.
     ///
-    /// Fails with [`crate::error::SaikuroError::CapacityExceeded`] if the
-    /// record is already at [`LOG_FIELDS_CAPACITY`] fields.
+    /// Fails with [`SaikuroError::CapacityExceeded`] if the record is already at
+    /// [`LOG_FIELDS_CAPACITY`] fields.
     pub fn with_field(
         mut self,
         key: impl Into<String>,
         value: impl Into<Value>,
-    ) -> Result<Self, crate::error::SaikuroError> {
+    ) -> Result<Self, SaikuroError> {
         let key = key.into();
         self.fields.insert(key.clone(), value.into()).map_err(|_| {
-            crate::error::SaikuroError::CapacityExceeded(format!(
-                "log field bag full at key '{key}'"
-            ))
+            SaikuroError::CapacityExceeded(format!("log field bag full at key '{key}'"))
         })?;
         Ok(self)
     }
 }
 
-/// Helper: extract a `Value::String` from a [`ValueMap`](crate::value::ValueMap) by key.
-fn take_string(map: &mut crate::value::ValueMap, key: &str) -> Option<String> {
+/// Helper: extract a `Value::String` from a [`ValueMap`] by key.
+fn take_string(map: &mut ValueMap, key: &str) -> Option<String> {
     match map.remove(key) {
         Some(Value::String(s)) => Some(s),
         _ => None,
@@ -127,7 +89,7 @@ impl TryFrom<Value> for LogRecord {
                 let level = map
                     .remove("level")
                     .and_then(|v| match v {
-                        Value::String(s) => LogLevel::try_from(s.as_str()).ok(),
+                        Value::String(s) => LogLevel::from_str(s.as_str()).ok(),
                         _ => None,
                     })
                     .unwrap_or(LogLevel::Info);
@@ -154,31 +116,6 @@ impl TryFrom<Value> for LogRecord {
 
 impl fmt::Display for LogRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{}] {} {} :  {}",
-            self.ts, self.level, self.name, self.msg
-        )
+        write!(f, "[{}] {} {} :  {}", self.ts, self.level, self.name, self.msg)
     }
-}
-
-//  Log sink
-
-/// A callable that receives log records forwarded by adapters.
-///
-/// Construct a concrete sink with [`stderr_log_sink`] (writes JSON lines to
-/// stderr) or build your own by implementing the same signature.
-///
-/// Higher-level crates (`saikuro-runtime`) provide a `tracing`-backed default.
-pub type LogSink = Box<dyn Fn(LogRecord) + Send + Sync + 'static>;
-
-/// A simple log sink that serialises each [`LogRecord`] as a JSON line and
-/// writes it to stderr.  Used when no richer sink is configured.
-#[cfg(any(feature = "std", feature = "std-no-os"))]
-pub fn stderr_log_sink() -> LogSink {
-    Box::new(|record: LogRecord| {
-        if let Ok(json) = serde_json::to_string(&record) {
-            std::eprintln!("{}", json);
-        }
-    })
 }

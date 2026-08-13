@@ -17,5 +17,5 @@ pub mod stream_state;
 
 pub use error::RouterError;
 pub use provider::{Provider, ProviderHandle, ProviderRegistry};
-pub use router::{tracing_log_sink, InvocationRouter, RouterConfig};
+pub use router::{InvocationRouter, RouterConfig};
 pub use stream_state::{ChannelState, StreamState, StreamStateStore};
