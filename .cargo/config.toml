@@ -1,33 +1,32 @@
 # Saikuro Cargo config
 #
-# WASM tests need wasm-bindgen-cli (cargo install wasm-bindgen-cli).
+# WASM tests need wasm-bindgen-cli (cargo install wasm-bindgen-cli):
 #   cargo test -p saikuro-tests --target wasm32-unknown-unknown
 #   wasm-pack test --headless --chrome Build/tests
 
-# getrandom 0.3 picks its backend at compile time with the `getrandom_backend`
-# cfg, so we set it per-target here.
+# getrandom 0.3 picks its backend at compile time via the `getrandom_backend`
+# cfg, so it's set per-target below.
 #
-# wasm32-unknown-unknown has no OS entropy, so we pin the `wasm_js` backend on
-# every build for it. saikuro-random's `wasm` engine enables the matching
-# cargo feature (threaded through adapters/rust, saikuro-runtime, and
-# saikuro-tests' wasm32 deps).
+# wasm32-unknown-unknown: no OS entropy, so pin the `wasm_js` backend.
+# saikuro-random's `wasm` engine enables the matching cargo feature (wired
+# through adapters/rust, saikuro-runtime, and saikuro-tests' wasm32 deps).
 #
-# The `no_std` engine (WASI preview1/preview2) relies on getrandom's built-in
-# WASI backend, selected automatically by the target triple -- no cfg needed.
+# WASI (preview1/preview2): the `no_std` engine uses getrandom's built-in WASI
+# backend, picked automatically from the target triple. No cfg needed.
 #
-# Bare-metal MCU targets no longer use getrandom at all: saikuro-random's
-# `embedded` engine takes entropy from an application-provided `EntropySource`
-# trait via `init_from`, so there is no `__getrandom_v03_custom` to link. The
-# `custom` cfgs below are retained only for any direct getrandom usage and are
-# inert for the embedded engine.
+# Bare-metal MCU targets don't use getrandom at all. saikuro-random's
+# `embedded` engine pulls entropy from an application-provided `EntropySource`
+# via `init_from`, so there's no `__getrandom_v03_custom` symbol to link. The
+# `custom` cfgs below only matter for direct getrandom usage and are inert for
+# the embedded engine.
 #
-# Host targets: leave the cfg alone and let getrandom use its normal OS backend.
+# Host targets: leave the cfg alone; getrandom uses the OS backend.
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 
-# Bare-metal targets (retained for direct getrandom usage; the embedded engine
-# uses the EntropySource trait instead):
+# Bare-metal targets (kept for direct getrandom usage; the embedded engine uses
+# EntropySource instead):
 #   riscv32imc-unknown-none-elf        ESP32-C3
 #   thumbv6m-none-eabi                 RP2040
 #   thumbv8m.main-none-eabihf          RP2350
