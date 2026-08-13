@@ -7,42 +7,59 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+path = "lib.rs"
+
 [features]
-default = ["tokio-runtime"]
-tokio-runtime = ["dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
-wasm-runtime = ["dep:tokio", "wasm-bindgen-futures", "fluvio-wasm-timer", "futures/std"]
-embassy-runtime = [
+default = ["std", "native"]
+std = []
+native = ["std", "dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
+no_std = [
+    "dep:embassy-executor",
+    "embassy-executor/alloc",
+    "embassy-executor/arch-spin",
     "dep:embassy-sync",
     "dep:embassy-time",
     "dep:embassy-futures",
     "futures/async-await",
 ]
-embassy-test = [
-    "embassy-runtime",
-    "embassy-time/std",
-    "embassy-time/generic-queue",
+wasm = [
+    "dep:embassy-executor",
+    "embassy-executor/alloc",
+    "embassy-executor/arch-wasm",
+    "dep:embassy-sync",
+    "dep:embassy-time",
+    "dep:embassy-futures",
+    "futures/async-await",
 ]
-net = ["dep:embassy-net"]
+embedded = [
+    "dep:embassy-executor",
+    "embassy-executor/arch-cortex-m",
+    "embassy-executor/task-arena-size-4096",
+    "dep:embassy-sync",
+    "dep:embassy-time",
+    "dep:embassy-futures",
+    "futures/async-await",
+]
+embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue"]
 
 [dependencies]
-tokio      = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 
 futures = { workspace = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-fluvio-wasm-timer = { workspace = true, optional = true }
 
-embassy-sync    = { workspace = true, optional = true }
-embassy-time    = { workspace = true, optional = true }
+embassy-executor = { workspace = true, optional = true }
+embassy-sync = { workspace = true, optional = true }
+embassy-time = { workspace = true, optional = true }
 embassy-futures = { workspace = true, optional = true }
-embassy-net     = { workspace = true, optional = true, features = [
+embassy-net = { workspace = true, optional = true, features = [
     "medium-ip",
     "proto-ipv4",
     "tcp",
     "udp",
 ] }
 
-[dev-dependencies]
-embassy-executor = { workspace = true }
-embassy-net-driver-channel = { workspace = true }
-futures-executor = { workspace = true }
+[target.'cfg(all(target_arch = "wasm32", feature = "wasm"))'.dependencies]
+wasm-bindgen-futures = { workspace = true }
+fluvio-wasm-timer = { workspace = true }
