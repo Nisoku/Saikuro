@@ -3,7 +3,7 @@ use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
     SCHEMA_TYPES_CAPACITY,
 };
-use saikuro_core::sync::RwLock;
+use saikuro_exec::sync::RwLock;
 use saikuro_core::RegistrationToken;
 
 use crate::validator::ValidationError;
@@ -97,8 +97,8 @@ impl SchemaRegistry {
 
     /// Register (or replace) a namespace.
     /// In production mode this returns an error rather than mutating state.
-    pub fn register(&self, registration: NamespaceRegistration) -> Result<(), RegistryError> {
-        let mut schemata = self.inner.write();
+    pub async fn register(&self, registration: NamespaceRegistration) -> Result<(), RegistryError> {
+        let mut schemata = self.inner.write().await;
         if schemata.mode == RegistryMode::Production {
             return Err(RegistryError::FrozenSchema(registration.namespace));
         }
@@ -121,16 +121,16 @@ impl SchemaRegistry {
     }
 
     /// Merge an entire [`Schema`] document into the registry.
-    pub fn merge_schema(
+    pub async fn merge_schema(
         &self,
         schema: Schema,
         provider_id: impl Into<String>,
     ) -> Result<(), RegistryError> {
-        self.merge_schema_with_token(schema, provider_id, RegistrationToken::new())
+        self.merge_schema_with_token(schema, provider_id, RegistrationToken::new()).await
     }
 
     /// Merge a schema document under an existing provider registration.
-    pub fn merge_schema_with_token(
+    pub async fn merge_schema_with_token(
         &self,
         schema: Schema,
         provider_id: impl Into<String>,
@@ -140,7 +140,7 @@ impl SchemaRegistry {
 
         // The whole merge happens under one write guard so a concurrent
         // `freeze()` cannot interleave between the type and namespace phases.
-        let mut schemata = self.inner.write();
+        let mut schemata = self.inner.write().await;
 
         if schemata.mode == RegistryMode::Production {
             let ns = schema.namespaces.keys().next().cloned().unwrap_or_default();
@@ -182,8 +182,8 @@ impl SchemaRegistry {
     }
 
     /// Remove namespaces owned by one specific provider registration.
-    pub fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
-        let mut schemata = self.inner.write();
+    pub async fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
+        let mut schemata = self.inner.write().await;
         if schemata.mode == RegistryMode::Production {
             return;
         }
@@ -196,10 +196,10 @@ impl SchemaRegistry {
 
     /// Look up the schema for a single function.
     /// `target` must be in `"namespace.function"` format.
-    pub fn lookup_function(&self, target: &str) -> Result<FunctionRef, RegistryError> {
+    pub async fn lookup_function(&self, target: &str) -> Result<FunctionRef, RegistryError> {
         let (ns_name, fn_name) = split_target(target)?;
 
-        let schemata = self.inner.read();
+        let schemata = self.inner.read().await;
         let entry = schemata
             .namespaces
             .get(ns_name)
@@ -221,7 +221,7 @@ impl SchemaRegistry {
     }
 
     /// Return the provider ID for the given namespace.
-    pub fn provider_for_namespace(&self, namespace: &str) -> Option<String> {
+    pub async fn provider_for_namespace(&self, namespace: &str) -> Option<String> {
         self.inner
             .read()
             .namespaces
@@ -230,19 +230,19 @@ impl SchemaRegistry {
     }
 
     /// Return `true` if the given namespace is registered.
-    pub fn has_namespace(&self, namespace: &str) -> bool {
-        self.inner.read().namespaces.contains_key(namespace)
+    pub async fn has_namespace(&self, namespace: &str) -> bool {
+        self.inner.read().await.namespaces.contains_key(namespace)
     }
 
     /// Return all registered namespace names (in key order).
-    pub fn namespace_names(&self) -> Vec<String> {
-        self.inner.read().namespaces.keys().cloned().collect()
+    pub async fn namespace_names(&self) -> Vec<String> {
+        self.inner.read().await.namespaces.keys().cloned().collect()
     }
 
     /// Export a snapshot of the full schema at this instant.
-    pub fn snapshot(&self) -> Result<Schema, RegistryError> {
+    pub async fn snapshot(&self) -> Result<Schema, RegistryError> {
         let mut schema = Schema::new();
-        let schemata = self.inner.read();
+        let schemata = self.inner.read().await;
         for (name, entry) in schemata.namespaces.iter() {
             schema
                 .namespaces
@@ -259,13 +259,13 @@ impl SchemaRegistry {
     }
 
     /// Freeze the registry, preventing any further schema changes.
-    pub fn freeze(&self) {
-        self.inner.write().mode = RegistryMode::Production;
+    pub async fn freeze(&self) {
+        self.inner.write().await.mode = RegistryMode::Production;
     }
 
     /// Return the current operating mode.
-    pub fn mode(&self) -> RegistryMode {
-        self.inner.read().mode
+    pub async fn mode(&self) -> RegistryMode {
+        self.inner.read().await.mode
     }
 }
 

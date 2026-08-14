@@ -30,6 +30,5 @@ saikuro-random = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
 strum = { workspace = true }
 heapless = { workspace = true }
-spin = { workspace = true }
 messagepack-serde = { workspace = true }
 portable-atomic = { workspace = true }

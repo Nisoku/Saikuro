@@ -1,8 +1,7 @@
 use alloc::{collections::BTreeMap, sync::Arc};
 use saikuro_core::invocation::InvocationId;
-use saikuro_core::sync::RwLock;
 use saikuro_core::ResponseEnvelope;
-use saikuro_exec::{mpsc, sync::Mutex};
+use saikuro_exec::{mpsc, sync::{Mutex, RwLock}};
 
 /// Result of attempting to deliver one frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,13 +149,13 @@ impl StreamStateStore {
         Self::default()
     }
 
-    pub fn insert_stream(
+    pub async fn insert_stream(
         &self,
         id: InvocationId,
         state: Arc<StreamState>,
         receiver: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.streams.write().insert(
+        self.streams.write().await.insert(
             id,
             StreamEntry {
                 state,
@@ -165,16 +164,16 @@ impl StreamStateStore {
         );
     }
 
-    pub fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.read().get(id).map(|entry| entry.state.clone())
+    pub async fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
+        self.streams.read().await.get(id).map(|entry| entry.state.clone())
     }
 
-    pub fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.write().remove(id).map(|entry| entry.state)
+    pub async fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
+        self.streams.write().await.remove(id).map(|entry| entry.state)
     }
 
-    pub fn remove_stream_if(&self, id: &InvocationId, state: &Arc<StreamState>) -> bool {
-        let mut streams = self.streams.write();
+    pub async fn remove_stream_if(&self, id: &InvocationId, state: &Arc<StreamState>) -> bool {
+        let mut streams = self.streams.write().await;
         if streams
             .get(id)
             .is_some_and(|entry| Arc::ptr_eq(&entry.state, state))
@@ -186,7 +185,7 @@ impl StreamStateStore {
         }
     }
 
-    pub fn take_stream_receiver(
+    pub async fn take_stream_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
@@ -196,7 +195,7 @@ impl StreamStateStore {
             .and_then(|entry| entry.receiver.take())
     }
 
-    pub fn insert_channel(
+    pub async fn insert_channel(
         &self,
         id: InvocationId,
         state: Arc<ChannelState>,
@@ -213,18 +212,18 @@ impl StreamStateStore {
         );
     }
 
-    pub fn get_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
+    pub async fn get_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
         self.channels
             .read()
             .get(id)
             .map(|entry| entry.state.clone())
     }
 
-    pub fn remove_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
+    pub async fn remove_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
         self.channels.write().remove(id).map(|entry| entry.state)
     }
 
-    pub fn remove_channel_if(&self, id: &InvocationId, state: &Arc<ChannelState>) -> bool {
+    pub async fn remove_channel_if(&self, id: &InvocationId, state: &Arc<ChannelState>) -> bool {
         let mut channels = self.channels.write();
         if channels
             .get(id)
@@ -237,7 +236,7 @@ impl StreamStateStore {
         }
     }
 
-    pub fn take_channel_inbound_receiver(
+    pub async fn take_channel_inbound_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
@@ -247,7 +246,7 @@ impl StreamStateStore {
             .and_then(|entry| entry.inbound_receiver.take())
     }
 
-    pub fn take_channel_outbound_receiver(
+    pub async fn take_channel_outbound_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {

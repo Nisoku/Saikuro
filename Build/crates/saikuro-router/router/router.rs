@@ -137,7 +137,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     async fn dispatch_call(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
-        let provider = match self.resolve_namespace(&envelope.target) {
+        let provider = match self.resolve_namespace(&envelope.target).await {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
         };
@@ -192,7 +192,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     async fn dispatch_cast(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
-        let provider = match self.resolve_namespace(&envelope.target) {
+        let provider = match self.resolve_namespace(&envelope.target).await {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
         };
@@ -217,18 +217,18 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     async fn dispatch_stream_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
-        let provider = match self.resolve_namespace(&envelope.target) {
+        let provider = match self.resolve_namespace(&envelope.target).await {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
         };
 
         let (item_tx, item_rx) = mpsc::channel(self.config.stream_channel_capacity);
         let state = StreamState::new(item_tx);
-        self.streams.insert_stream(id, state, item_rx);
+        self.streams.insert_stream(id, state, item_rx).await;
 
         // Send the open request; the provider will start sending items.
         if let Err(e) = provider.send_invocation(envelope, None).await {
-            self.streams.remove_stream(&id);
+            self.streams.remove_stream(&id).await;
             return error_response(id, e.into());
         }
 
@@ -248,7 +248,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = envelope.id;
 
         // If a channel with this id already exists, treat as data frame
-        if let Some(channel) = self.streams.get_channel(&id) {
+        if let Some(channel) = self.streams.get_channel(&id).await {
             // Map the Envelope to a ResponseEnvelope for channel data delivery
             let resp = ResponseEnvelope {
                 id,
@@ -260,11 +260,11 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             };
             match channel.deliver(resp, true).await {
                 DeliveryOutcome::Terminal => {
-                    self.streams.remove_channel_if(&id, &channel);
+                    self.streams.remove_channel_if(&id, &channel).await;
                     return ResponseEnvelope::ok_empty(id);
                 }
                 DeliveryOutcome::Closed => {
-                    self.streams.remove_channel_if(&id, &channel);
+                    self.streams.remove_channel_if(&id, &channel).await;
                     return error_response(id, RouterError::ChannelClosed(id.to_string()).into());
                 }
                 DeliveryOutcome::OutOfOrder => {
@@ -291,7 +291,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         }
 
         // Otherwise, open a new channel as before
-        let provider = match self.resolve_namespace(&envelope.target) {
+        let provider = match self.resolve_namespace(&envelope.target).await {
             Ok(p) => p,
             Err(e) => return error_response(id, e.into()),
         };
@@ -300,10 +300,10 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let (outbound_tx, outbound_rx) = mpsc::channel(self.config.channel_capacity);
         let state = ChannelState::new(inbound_tx, outbound_tx);
         self.streams
-            .insert_channel(id, state, inbound_rx, outbound_rx);
+            .insert_channel(id, state, inbound_rx, outbound_rx).await;
 
         if let Err(e) = provider.send_invocation(envelope, None).await {
-            self.streams.remove_channel(&id);
+            self.streams.remove_channel(&id).await;
             return error_response(id, e.into());
         }
 
@@ -393,12 +393,12 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = response.id;
         let state = self
             .streams
-            .get_channel(&id)
+            .get_channel(&id).await
             .ok_or_else(|| RouterError::ChannelNotFound(id.to_string()))?;
 
         match state.deliver(response, inbound).await {
             DeliveryOutcome::Closed => {
-                self.streams.remove_channel_if(&id, &state);
+                self.streams.remove_channel_if(&id, &state).await;
                 Err(RouterError::ChannelClosed(id.to_string()))
             }
             DeliveryOutcome::OutOfOrder => {
@@ -413,7 +413,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 Ok(())
             }
             DeliveryOutcome::Terminal => {
-                self.streams.remove_channel_if(&id, &state);
+                self.streams.remove_channel_if(&id, &state).await;
                 Ok(())
             }
             DeliveryOutcome::Delivered => Ok(()),
@@ -435,12 +435,12 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = response.id;
         let state = self
             .streams
-            .get_stream(&id)
+            .get_stream(&id).await
             .ok_or_else(|| RouterError::StreamNotFound(id.to_string()))?;
 
         match state.deliver(response).await {
             DeliveryOutcome::Closed => {
-                self.streams.remove_stream_if(&id, &state);
+                self.streams.remove_stream_if(&id, &state).await;
                 Err(RouterError::StreamClosed(id.to_string()))
             }
             DeliveryOutcome::OutOfOrder => {
@@ -455,7 +455,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 Ok(())
             }
             DeliveryOutcome::Terminal => {
-                self.streams.remove_stream_if(&id, &state);
+                self.streams.remove_stream_if(&id, &state).await;
                 Ok(())
             }
             DeliveryOutcome::Delivered => Ok(()),
@@ -463,13 +463,13 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Helpers
-    fn resolve_namespace(&self, target: &str) -> Result<crate::provider::ProviderHandle> {
+    async fn resolve_namespace(&self, target: &str) -> Result<crate::provider::ProviderHandle> {
         let ns =
             namespace_of(target).ok_or_else(|| RouterError::MalformedTarget(target.to_owned()))?;
 
         let handle = self
             .providers
-            .get(ns)
+            .get(ns).await
             .ok_or_else(|| RouterError::NoProvider(ns.to_owned()))?;
 
         if !handle.is_alive() {

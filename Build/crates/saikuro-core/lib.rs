@@ -15,9 +15,6 @@ pub use value::*;
 mod codec;
 pub use codec::*;
 
-mod sync;
-pub use sync::*;
-
 // Engine selection guard
 #[cfg(all(
     feature = "native",

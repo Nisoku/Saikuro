@@ -120,7 +120,7 @@ impl InvocationValidator {
     }
 
     /// Validate a single envelope.
-    pub fn validate(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    pub async fn validate(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         // 1. Protocol version.
         if envelope.version != PROTOCOL_VERSION {
             return Err(ValidationError::IncompatibleVersion {
@@ -133,7 +133,7 @@ impl InvocationValidator {
         self.check_structural(envelope)?;
 
         match envelope.invocation_type {
-            InvocationType::Batch => self.validate_batch(envelope),
+            InvocationType::Batch => self.validate_batch(envelope).await,
             InvocationType::Log | InvocationType::Announce => Ok(ValidationReport {
                 function_ref: crate::registry::FunctionRef {
                     namespace: String::new(),
@@ -151,7 +151,7 @@ impl InvocationValidator {
                     provider_id: String::new(),
                 },
             }),
-            _ => self.validate_single(envelope),
+            _ => self.validate_single(envelope).await,
         }
     }
 
@@ -181,9 +181,9 @@ impl InvocationValidator {
     }
 
     // Single-invocation validation
-    fn validate_single(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    async fn validate_single(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         // Schema lookup.
-        let func_ref = self.registry.lookup_function(&envelope.target)?;
+        let func_ref = self.registry.lookup_function(&envelope.target).await?;
 
         // Visibility.
         self.check_visibility(&envelope.target, &func_ref.schema.visibility)?;
@@ -197,14 +197,14 @@ impl InvocationValidator {
     }
 
     // Batch validation
-    fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    async fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         let items = envelope.batch_items.as_ref().ok_or_else(|| {
             ValidationError::MalformedEnvelope("batch envelope missing batch_items".into())
         })?;
 
         // Validate each item; collect the first error with its index.
         for (index, item) in items.iter().enumerate() {
-            self.validate(item)
+            self.validate(item).await
                 .map_err(|source| ValidationError::BatchItem {
                     index,
                     source: Box::new(source),
@@ -213,7 +213,7 @@ impl InvocationValidator {
 
         // For batch we return a synthetic report. The router will dispatch each
         // item individually and collect results.
-        let first_ref = self.registry.lookup_function(&items[0].target)?;
+        let first_ref = self.registry.lookup_function(&items[0].target).await?;
 
         Ok(ValidationReport {
             function_ref: first_ref,

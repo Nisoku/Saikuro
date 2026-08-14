@@ -2,7 +2,8 @@ use alloc::{
     borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec,
 };
 use async_trait::async_trait;
-use saikuro_core::{envelope::Envelope, sync::RwLock, RegistrationToken, ResponseEnvelope};
+use saikuro_core::{envelope::Envelope, RegistrationToken, ResponseEnvelope};
+use saikuro_exec::sync::RwLock;
 use saikuro_exec::{mpsc, oneshot};
 
 use crate::error::{Result, RouterError};
@@ -134,13 +135,13 @@ impl ProviderRegistry {
     }
 
     /// Register a provider handle for the given namespaces.
-    pub fn register(&self, handle: ProviderHandle) {
+    pub async fn register(&self, handle: ProviderHandle) {
         let provider_id = handle.id().to_owned();
         let registration_token = handle.registration_token();
         let provider_key = (provider_id.clone(), registration_token);
         let namespaces = handle.namespaces().to_vec();
 
-        let mut state = self.inner.write();
+        let mut state = self.inner.write().await;
 
         // A re-registering provider that dropped a namespace must release its route.
         let dropped: Vec<String> = state
@@ -183,8 +184,8 @@ impl ProviderRegistry {
     }
 
     /// Remove all namespaces owned by one specific provider registration.
-    pub fn deregister(&self, provider_id: &str, registration_token: RegistrationToken) {
-        let mut state = self.inner.write();
+    pub async fn deregister(&self, provider_id: &str, registration_token: RegistrationToken) {
+        let mut state = self.inner.write().await;
         let provider_key = (provider_id.to_owned(), registration_token);
         if let Some(namespaces) = state.by_provider.remove(&provider_key) {
             for ns in namespaces {
@@ -201,12 +202,12 @@ impl ProviderRegistry {
     }
 
     /// Look up the provider for a namespace.
-    pub fn get(&self, namespace: &str) -> Option<ProviderHandle> {
-        self.inner.read().by_namespace.get(namespace).cloned()
+    pub async fn get(&self, namespace: &str) -> Option<ProviderHandle> {
+        self.inner.read().await.by_namespace.get(namespace).cloned()
     }
 
     /// Return `true` if a live provider exists for the namespace.
-    pub fn has_live_provider(&self, namespace: &str) -> bool {
+    pub async fn has_live_provider(&self, namespace: &str) -> bool {
         self.inner
             .read()
             .by_namespace
