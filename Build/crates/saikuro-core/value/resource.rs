@@ -5,36 +5,26 @@ use serde::{Deserialize, Serialize};
 use crate::value::{Value, ValueMap};
 
 // ResourceHandle
-
 /// An opaque, serialisable reference to large or external data.
-///
-/// Created by a provider and returned to callers as the `result` of a
-/// `Resource`-type invocation.  Callers use the handle to retrieve,
-/// stream, or otherwise interact with the referenced data without
-/// transferring it inline.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourceHandle {
     /// Unique identifier for this resource instance.
-    ///
-    /// Typically a UUID v4.  Two handles with the same `id` refer to the
+    /// Two handles with the same `id` refer to the
     /// same underlying resource.
     pub id: String,
 
     /// MIME type of the resource content, if known.
-    ///
     /// Examples: `"application/octet-stream"`, `"image/png"`, `"text/csv"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
 
     /// Total size of the resource in bytes, if known.
-    ///
     /// `None` means the size is unknown or unbounded (e.g. a live stream).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
 
     /// An optional URI that can be used to access the resource directly.
-    ///
-    /// The URI scheme is provider-defined.  Common examples:
+    /// The URI scheme is provider-defined. Common examples:
     /// - `saikuro://res/<id>`: Saikuro-internal reference
     /// - `https://storage.example.com/blobs/<id>`: direct object-storage URL
     /// - `file:///var/data/<id>`: local filesystem path

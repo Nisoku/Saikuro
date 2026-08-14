@@ -115,7 +115,7 @@ fn parse_json_object_arg(
     }
 }
 
-//  C API helpers factor out the null-check / cast / error pattern
+// C API helpers factor out the null-check / cast / error pattern
 
 macro_rules! ok_or_ptr {
     ($expr:expr) => {

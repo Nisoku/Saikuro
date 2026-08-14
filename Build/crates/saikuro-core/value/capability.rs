@@ -11,7 +11,7 @@ pub const CAPABILITY_SET_CAPACITY: usize = 256;
 /// Fixed-capacity set of capability tokens held by a peer.
 pub type TokenSet = heapless::FnvIndexSet<CapabilityToken, CAPABILITY_SET_CAPACITY>;
 
-/// A single capability token:  a namespaced, human-readable permission string.
+/// A single capability token: a namespaced, human-readable permission string.
 ///
 /// By convention tokens are dot-separated: `"<namespace>.<permission>"`.
 /// The runtime treats them as opaque strings; no hierarchical wildcard
@@ -52,10 +52,6 @@ impl From<String> for CapabilityToken {
 }
 
 /// The full set of capability tokens granted to a peer.
-///
-/// During the connection handshake a peer presents its `CapabilitySet`.
-/// The runtime stores this and checks it against per-function requirements
-/// on every invocation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CapabilitySet {
     tokens: TokenSet,
@@ -68,9 +64,6 @@ impl CapabilitySet {
     }
 
     /// Construct a set from an iterator of tokens.
-    ///
-    /// Fails if the iterator yields more than [`CAPABILITY_SET_CAPACITY`]
-    /// distinct tokens.
     pub fn from_tokens(
         iter: impl IntoIterator<Item = CapabilityToken>,
     ) -> Result<Self, &'static str> {
@@ -93,7 +86,6 @@ impl CapabilitySet {
     }
 
     /// Return `true` if this set grants the given capability.
-    ///
     /// The wildcard token `"*"` grants every capability.
     pub fn grants(&self, required: &CapabilityToken) -> bool {
         self.tokens.contains(&CapabilityToken::new(WILDCARD_TOKEN))
@@ -106,9 +98,6 @@ impl CapabilitySet {
     }
 
     /// Add a token to the set.
-    ///
-    /// Fails (returning the token) if the set is already at
-    /// [`CAPABILITY_SET_CAPACITY`] distinct tokens.
     pub fn insert(&mut self, token: CapabilityToken) -> Result<bool, CapabilityToken> {
         self.tokens.insert(token)
     }

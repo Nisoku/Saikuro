@@ -101,8 +101,7 @@ pub type EncodeError = messagepack_serde::ser::Error<Infallible>;
 /// Decoding error produced by [`from_slice`].
 pub type DecodeError = messagepack_serde::de::Error<RError>;
 
-/// Serialize a value to MessagePack bytes using the rmp-serde-compatible
-/// encoding.
+/// Serialize a value to MessagePack bytes.
 pub fn to_vec<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, EncodeError> {
     messagepack_serde::ser::to_vec_with_config(value, RmpCompatible)
 }

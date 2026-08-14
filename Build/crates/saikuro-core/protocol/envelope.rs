@@ -47,17 +47,8 @@ pub enum InvocationType {
     /// Reference to an opaque external resource (large payload, file handle, …).
     Resource,
     /// Structured log record forwarded from an adapter to the runtime log sink.
-    ///
-    /// Log envelopes are never routed to a provider.  The runtime extracts the
-    /// [`LogRecord`](saikuro_log::LogRecord) from `args[0]` and passes it to the
-    /// configured log sink.  No response envelope is sent.
     Log,
     /// Schema announcement sent by a provider immediately after connecting.
-    ///
-    /// The serialised [`Schema`](crate::schema::Schema) is packed as a
-    /// MessagePack map in `args[0]`.  The runtime deserialises it and merges
-    /// the namespaces into the live schema registry, then returns `ok_empty`.
-    /// No provider is involved and no capability check is required.
     Announce,
 }
 
@@ -80,7 +71,7 @@ pub enum StreamControl {
 /// the runtime, or from the runtime to a provider adapter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Envelope {
-    /// Protocol version :  must equal [`PROTOCOL_VERSION`].
+    /// Protocol version: must equal [`PROTOCOL_VERSION`].
     pub version: u32,
 
     /// What kind of invocation this is.
@@ -88,16 +79,12 @@ pub struct Envelope {
     pub invocation_type: InvocationType,
 
     /// Unique identifier for this invocation.
-    ///
-    /// Callers generate this; casts still carry an ID so they can be
-    /// correlated in distributed traces even though no reply is sent.
     pub id: InvocationId,
 
     /// Fully-qualified target: `"<namespace>.<function>"`.
     pub target: String,
 
-    /// Positional arguments.  Type checking happens in the runtime against
-    /// the schema; adapters simply forward whatever the caller provided.
+    /// Positional arguments.
     #[serde(default)]
     pub args: Vec<Value>,
 
@@ -109,7 +96,7 @@ pub struct Envelope {
     )]
     pub meta: MetaMap,
 
-    /// Capability token presented by the caller.  Required when the target
+    /// Capability token presented by the caller. Required when the target
     /// function declares one or more `capabilities`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capability: Option<CapabilityToken>,
@@ -129,8 +116,7 @@ pub struct Envelope {
     pub seq: Option<u64>,
 }
 
-// Shared MessagePack serialization for wire types. The codec is no_std + alloc,
-// so these helpers exist on every build target.
+// Shared MessagePack serialization for wire types.
 macro_rules! impl_msgpack {
     ($ty:ty) => {
         impl $ty {
@@ -201,9 +187,6 @@ impl Envelope {
     }
 
     /// Construct a schema-announcement envelope.
-    ///
-    /// `schema_bytes` is the MessagePack-encoded [`Schema`](crate::schema::Schema)
-    /// stored as a raw `Bytes` value in `args[0]`.
     pub fn announce(schema_value: Value) -> Result<Self, saikuro_random::Error> {
         let mut envelope = Self::call("$saikuro.announce", vec![schema_value])?;
         envelope.invocation_type = InvocationType::Announce;
@@ -211,10 +194,6 @@ impl Envelope {
     }
 
     /// Construct a resource-access envelope.
-    ///
-    /// `target` is the provider function that manages the resource.
-    /// `args` are provider-specific arguments that identify or parameterise
-    /// the resource request (e.g. a resource ID, byte range, or query).
     pub fn resource(
         target: impl Into<String>,
         args: Vec<Value>,
@@ -236,9 +215,6 @@ impl Envelope {
 }
 
 /// Split a `"namespace.function"` target string into its two components.
-///
-/// Returns `None` when `target` contains no dot separator or when either
-/// component would be empty (e.g. `".fn"` or `"ns."`).
 pub fn split_target(target: &str) -> Option<(&str, &str)> {
     let dot = target.rfind('.')?;
     if dot == 0 || dot == target.len() - 1 {
@@ -248,8 +224,6 @@ pub fn split_target(target: &str) -> Option<(&str, &str)> {
 }
 
 /// The envelope carrying a response back to a caller.
-///
-/// Fields follow the spec exactly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseEnvelope {
     /// The ID from the originating [`Envelope`].
@@ -258,7 +232,7 @@ pub struct ResponseEnvelope {
     /// `true` if the invocation succeeded; `false` otherwise.
     pub ok: bool,
 
-    /// Successful return value.  `None` when `ok` is `false` or the function
+    /// Successful return value. `None` when `ok` is `false` or the function
     /// returns nothing meaningful (e.g. casts, pure side-effects).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<Value>,

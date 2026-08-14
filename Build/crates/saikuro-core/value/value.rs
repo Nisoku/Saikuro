@@ -2,26 +2,13 @@ use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 
 /// Maximum number of entries a [`Value::Map`] can hold.
-///
-/// Saikuro's wire format is schema-driven: argument lists, error detail bags,
-/// and log fields are all small by construction. This bound keeps `Value`
-/// embeddable without a heap-based map. Deserialising a map larger than this
-/// fails cleanly with a serde error rather than truncating.
 pub const VALUE_MAP_CAPACITY: usize = 64;
 
 /// Fixed-capacity map backing [`Value::Map`].
-///
-/// The map retains insertion order internally, but [`Value`] serializes map
-/// entries in key order and compares them by key so construction order does
-/// not affect protocol bytes or semantic equality.
 pub type ValueMap = heapless::FnvIndexMap<String, Value, VALUE_MAP_CAPACITY>;
 
 /// A dynamically-typed value that can appear in an invocation argument list,
 /// a return value, an error detail bag, or a schema default.
-///
-/// The set of variants is deliberately minimal:  it mirrors the MessagePack
-/// type system so serialisation is lossless:  while still providing the
-/// richness needed to express the full Saikuro type system.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum Value {
@@ -45,28 +32,13 @@ pub enum Value {
     String(String),
 
     /// Ordered sequence of values.
-    ///
-    /// **Must come before `Bytes`** in the enum so that during untagged
-    /// deserialisation a msgpack array is matched as `Array` before the
-    /// `serde_bytes`-annotated `Bytes` variant, which would otherwise
-    /// greedily consume any byte-sequence (including integer arrays).
     Array(Vec<Value>),
 
     /// Raw binary blob (resource handles, opaque payloads, …).
-    ///
-    /// The `serde_bytes` annotation ensures that msgpack `bin` wire type is
-    /// used instead of the default array-of-u8 encoding.  The variant is
-    /// placed *after* `Array` so that an integer-element array is matched by
-    /// `Array` first (correct), while a genuine `bin` blob fails the
-    /// `Vec<Value>` check and falls through to this variant (also correct).
     #[serde(with = "serde_bytes")]
     Bytes(Vec<u8>),
 
-    /// String-keyed mapping of values. A `Box<ValueMap>` breaks the recursive
-    /// `Value -> ValueMap -> Value` cycle: heapless maps are stored inline, so
-    /// without indirection `Value` would have infinite size. The `ValueMap` is
-    /// a fixed-capacity map. Serialization sorts entries by key to preserve
-    /// the canonical ordering previously provided by `BTreeMap`.
+    /// String-keyed mapping of values.
     Map(#[serde(serialize_with = "serialize_value_map")] Box<ValueMap>),
 }
 
@@ -84,11 +56,6 @@ where
 }
 
 /// Equality for [`Value`].
-///
-/// Implemented manually because the fixed-capacity map backing `Map` only
-/// implements `PartialEq` when the value type is `Eq`, which `Value` cannot be
-/// (it contains `f64`). Map equality is key-based and independent of insertion
-/// order.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

@@ -24,11 +24,9 @@ pub type TypeMap = heapless::FnvIndexMap<String, TypeDefinition, SCHEMA_TYPES_CA
 /// Fixed-capacity, insertion-ordered map of record fields.
 pub type FieldMap = heapless::FnvIndexMap<String, FieldDescriptor, RECORD_FIELDS_CAPACITY>;
 
-//  Primitive types
+// Primitive types
 
 /// A scalar type name used in function argument and return-type declarations.
-///
-/// Extended types (user-defined structs) are represented as `TypeRef`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PrimitiveType {
@@ -46,7 +44,7 @@ pub enum PrimitiveType {
     String,
     Bytes,
     /// Dynamic / untyped: the runtime will pass the value through without
-    /// checking its shape.  Use sparingly.
+    /// checking its shape. Use sparingly.
     Any,
     /// The function returns nothing (or the caller doesn't care about the value).
     Unit,
@@ -75,7 +73,7 @@ impl core::fmt::Display for PrimitiveType {
     }
 }
 
-//  Type descriptors
+// Type descriptors
 
 /// A type descriptor that can appear anywhere a type is needed in the schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,7 +124,7 @@ impl TypeDescriptor {
     }
 }
 
-//  Function schema
+// Function schema
 
 /// Visibility of a function to external callers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -191,9 +189,7 @@ fn default_unit() -> TypeDescriptor {
     TypeDescriptor::primitive(PrimitiveType::Unit)
 }
 
-//  Type definitions
-
-/// A named field within a user-defined record type.
+// Type definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldDescriptor {
     /// The type of this field.
@@ -218,8 +214,7 @@ pub enum TypeDefinition {
     Alias { inner: TypeDescriptor },
 }
 
-//  Namespace schema
-
+// Namespace schema
 /// Schema for a single namespace: a logical grouping of related functions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceSchema {
@@ -230,10 +225,7 @@ pub struct NamespaceSchema {
     pub doc: Option<String>,
 }
 
-//  Top-level schema
-
-/// The root schema document: a versioned description of all namespaces and
-/// types available in a Saikuro deployment.
+// Top-level schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schema {
     /// Must equal [`SCHEMA_VERSION`].
@@ -258,8 +250,6 @@ impl Schema {
     }
 
     /// Look up a function descriptor given a fully-qualified target string.
-    ///
-    /// Returns `None` if either the namespace or the function does not exist.
     pub fn lookup_function(&self, target: &str) -> Option<&FunctionSchema> {
         let dot = target.rfind('.')?;
         let ns = &target[..dot];

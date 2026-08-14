@@ -15,8 +15,6 @@ native = ["std", "saikuro-random/native"]
 no_std = ["saikuro-random/no_std"]
 wasm = ["saikuro-random/wasm"]
 embedded = ["saikuro-random/embedded"]
-custom = ["embedded"]
-drbg = ["embedded"]
 
 [lib]
 path = "lib.rs"

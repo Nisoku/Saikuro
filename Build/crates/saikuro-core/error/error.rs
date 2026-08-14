@@ -1,9 +1,9 @@
-use alloc::string::{String, ToString};
+use alloc::string::{ String, ToString };
 use core::fmt;
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 use thiserror::Error;
 
-use crate::io::{IoError, IoErrorKind};
+use crate::io::{ IoError, IoErrorKind };
 use crate::value::Value;
 
 /// Maximum number of structured context entries an [`ErrorDetail`] can carry.
@@ -103,13 +103,12 @@ impl ErrorDetail {
     }
 
     /// Add a detail entry and return `self` for chaining.
-    ///
     /// Fails with [`SaikuroError::CapacityExceeded`] if the detail bag is
     /// already at [`ERROR_DETAIL_CAPACITY`] entries.
     pub fn with_detail(
         mut self,
         key: impl Into<String>,
-        value: impl Into<Value>,
+        value: impl Into<Value>
     ) -> core::result::Result<Self, SaikuroError> {
         let key = key.into();
         self.details
@@ -128,94 +127,90 @@ impl fmt::Display for ErrorDetail {
 }
 
 /// The main Rust error type for all fallible Saikuro operations.
-///
-/// This is used internally by the runtime and its component crates.
-/// When an error crosses the wire it is first converted to an [`ErrorDetail`]
-/// via the [`From`] implementations below.
 #[derive(Debug, Error)]
 pub enum SaikuroError {
-    //  Schema
-    #[error("namespace not found: {0}")]
-    NamespaceNotFound(String),
+    // Schema
+    #[error("namespace not found: {0}")] NamespaceNotFound(String),
 
-    #[error("function not found: {0}")]
-    FunctionNotFound(String),
+    #[error("function not found: {0}")] FunctionNotFound(String),
 
-    #[error("invalid arguments for {target}: {reason}")]
-    InvalidArguments { target: String, reason: String },
+    #[error("invalid arguments for {target}: {reason}")] InvalidArguments {
+        target: String,
+        reason: String,
+    },
 
-    #[error("incompatible protocol version: expected {expected}, got {received}")]
-    IncompatibleVersion { expected: u32, received: u32 },
+    #[error(
+        "incompatible protocol version: expected {expected}, got {received}"
+    )] IncompatibleVersion {
+        expected: u32,
+        received: u32,
+    },
 
-    #[error("malformed envelope: {0}")]
-    MalformedEnvelope(String),
+    #[error("malformed envelope: {0}")] MalformedEnvelope(String),
 
-    //  Routing
-    #[error("no provider registered for namespace: {0}")]
-    NoProvider(String),
+    // Routing
+    #[error("no provider registered for namespace: {0}")] NoProvider(String),
 
-    #[error("provider unavailable for namespace: {0}")]
-    ProviderUnavailable(String),
+    #[error("provider unavailable for namespace: {0}")] ProviderUnavailable(String),
 
-    #[error("batch routing conflict: {0}")]
-    BatchRoutingConflict(String),
+    #[error("batch routing conflict: {0}")] BatchRoutingConflict(String),
 
-    //  Capability
-    #[error("capability denied: caller lacks '{required}' for '{target}'")]
-    CapabilityDenied { target: String, required: String },
+    // Capability
+    #[error("capability denied: caller lacks '{required}' for '{target}'")] CapabilityDenied {
+        target: String,
+        required: String,
+    },
 
     #[error("capability token invalid or expired")]
     CapabilityInvalid,
 
-    //  Transport
-    #[error("transport connection lost: {0}")]
-    ConnectionLost(String),
+    // Transport
+    #[error("transport connection lost: {0}")] ConnectionLost(String),
 
-    #[error("message too large: {size} bytes exceeds limit {limit}")]
-    MessageTooLarge { size: usize, limit: usize },
+    #[error("message too large: {size} bytes exceeds limit {limit}")] MessageTooLarge {
+        size: usize,
+        limit: usize,
+    },
 
-    #[error("operation timed out after {millis}ms")]
-    Timeout { millis: u64 },
+    #[error("operation timed out after {millis}ms")] Timeout {
+        millis: u64,
+    },
 
     #[error("buffer overflow on stream/channel")]
     BufferOverflow,
 
-    //  Provider
-    #[error("provider returned error: {0}")]
-    ProviderError(String),
+    // Provider
+    #[error("provider returned error: {0}")] ProviderError(String),
 
     #[error("provider panicked while handling invocation")]
     ProviderPanic,
 
-    //  Stream / channel
+    // Stream / channel
     #[error("stream already closed")]
     StreamClosed,
 
     #[error("channel closed by remote side")]
     ChannelClosed,
 
-    #[error("out-of-order sequence: expected {expected}, got {received}")]
-    OutOfOrder { expected: u64, received: u64 },
+    #[error("out-of-order sequence: expected {expected}, got {received}")] OutOfOrder {
+        expected: u64,
+        received: u64,
+    },
 
     //  Serialisation
-    #[error("msgpack encode error: {0}")]
-    MsgpackEncode(#[from] crate::msgpack::EncodeError),
+    #[error("msgpack encode error: {0}")] MsgpackEncode(#[from] crate::msgpack::EncodeError),
 
-    #[error("msgpack decode error: {0}")]
-    MsgpackDecode(#[from] crate::msgpack::DecodeError),
+    #[error("msgpack decode error: {0}")] MsgpackDecode(#[from] crate::msgpack::DecodeError),
 
     //  I/O
-    #[error("I/O error: {0}")]
-    Io(IoError),
+    #[error("I/O error: {0}")] Io(IoError),
 
-    /// A fixed-capacity map reached its compile-time limit
-    /// (e.g. [`crate::value::VALUE_MAP_CAPACITY`]).
+    /// A fixed-capacity map reached its compile-time limit.
     #[error("capacity exceeded: {0}")]
     CapacityExceeded(String),
 
     //  Catch-all
-    #[error("internal error: {0}")]
-    Internal(String),
+    #[error("internal error: {0}")] Internal(String),
 }
 
 impl From<SaikuroError> for ErrorDetail {
@@ -241,13 +236,14 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
             SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
-            SaikuroError::Io(e) => match e.kind {
-                IoErrorKind::TimedOut => ErrorCode::Timeout,
-                IoErrorKind::ConnectionReset
-                | IoErrorKind::ConnectionAborted
-                | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
-                _ => ErrorCode::Internal,
-            },
+            SaikuroError::Io(e) =>
+                match e.kind {
+                    IoErrorKind::TimedOut => ErrorCode::Timeout,
+                    | IoErrorKind::ConnectionReset
+                    | IoErrorKind::ConnectionAborted
+                    | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
+                    _ => ErrorCode::Internal,
+                }
             SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
         };
 
@@ -256,9 +252,6 @@ impl From<SaikuroError> for ErrorDetail {
 }
 
 /// Convert a host `std::io::Error` into the unified error type.
-///
-/// Only available when the `std` toolchain is present; on no_std targets
-/// I/O failures are constructed directly from [`IoError`].
 #[cfg(feature = "std")]
 impl From<std::io::Error> for SaikuroError {
     fn from(err: std::io::Error) -> Self {

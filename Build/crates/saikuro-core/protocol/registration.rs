@@ -12,8 +12,7 @@ pub struct RegistrationToken(u64);
 impl RegistrationToken {
     /// Allocate the next process-unique registration token.
     ///
-    /// Panics if all `u64` token values have been exhausted. The counter does
-    /// not wrap, so a token is never reused within a process.
+    /// Panics if all `u64` token values have been exhausted.
     pub fn new() -> Self {
         let value = NEXT_REGISTRATION_TOKEN
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {

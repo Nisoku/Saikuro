@@ -19,9 +19,6 @@ mod sync;
 pub use sync::*;
 
 // Engine selection guard
-// Exactly one engine feature must be enabled. The engine selects the
-// platform's entropy backend (via `saikuro-random`) and, for `native`, the
-// `std` toolchain. `std` is orthogonal and may only be combined with `native`.
 #[cfg(all(
     feature = "native",
     any(feature = "wasm", feature = "embedded", feature = "no_std")

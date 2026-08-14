@@ -7,7 +7,7 @@ use std::sync as imp;
 #[cfg(not(feature = "std"))]
 use spin as imp;
 
-/// A reader-writer lock.  `read`/`write` return guards that deref to the
+/// A reader-writer lock. `read`/`write` return guards that deref to the
 /// protected value.
 pub struct RwLock<T: ?Sized> {
     inner: imp::RwLock<T>,
@@ -23,7 +23,7 @@ pub struct RwLockWriteGuard<'a, T: ?Sized> {
     inner: imp::RwLockWriteGuard<'a, T>,
 }
 
-/// A mutual-exclusion lock.  `lock` returns a guard that derefs to the
+/// A mutual-exclusion lock. `lock` returns a guard that derefs to the
 /// protected value.
 pub struct Mutex<T: ?Sized> {
     inner: imp::Mutex<T>,
@@ -32,58 +32,6 @@ pub struct Mutex<T: ?Sized> {
 /// Guard acquired by [`Mutex::lock`].
 pub struct MutexGuard<'a, T: ?Sized> {
     inner: imp::MutexGuard<'a, T>,
-}
-
-// The std and spin backends disagree on whether lock acquisition can fail
-// (std returns `LockResult`, spin returns a guard directly).  These traits
-// normalize the two behind a single guard-returning API.
-
-trait RwLockAccess<T: ?Sized> {
-    fn read_guard(&self) -> imp::RwLockReadGuard<'_, T>;
-    fn write_guard(&self) -> imp::RwLockWriteGuard<'_, T>;
-}
-
-trait MutexAccess<T: ?Sized> {
-    fn lock_guard(&self) -> imp::MutexGuard<'_, T>;
-}
-
-#[cfg(feature = "std")]
-impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
-    fn read_guard(&self) -> imp::RwLockReadGuard<'_, T> {
-        self.read()
-            .expect("RwLock poisoned by a panicking guard holder")
-    }
-
-    fn write_guard(&self) -> imp::RwLockWriteGuard<'_, T> {
-        self.write()
-            .expect("RwLock poisoned by a panicking guard holder")
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
-    fn lock_guard(&self) -> imp::MutexGuard<'_, T> {
-        self.lock()
-            .expect("Mutex poisoned by a panicking guard holder")
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: ?Sized> RwLockAccess<T> for imp::RwLock<T> {
-    fn read_guard(&self) -> imp::RwLockReadGuard<'_, T> {
-        self.read()
-    }
-
-    fn write_guard(&self) -> imp::RwLockWriteGuard<'_, T> {
-        self.write()
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: ?Sized> MutexAccess<T> for imp::Mutex<T> {
-    fn lock_guard(&self) -> imp::MutexGuard<'_, T> {
-        self.lock()
-    }
 }
 
 impl<T> RwLock<T> {
@@ -104,16 +52,26 @@ impl<T: Default> Default for RwLock<T> {
 impl<T: ?Sized> RwLock<T> {
     /// Acquire the read guard.
     pub fn read(&self) -> RwLockReadGuard<'_, T> {
-        RwLockReadGuard {
-            inner: self.inner.read_guard(),
-        }
+        #[cfg(feature = "std")]
+        let inner = self
+            .inner
+            .read()
+            .expect("RwLock poisoned by a panicking guard holder");
+        #[cfg(not(feature = "std"))]
+        let inner = self.inner.read();
+        RwLockReadGuard { inner }
     }
 
     /// Acquire the write guard.
     pub fn write(&self) -> RwLockWriteGuard<'_, T> {
-        RwLockWriteGuard {
-            inner: self.inner.write_guard(),
-        }
+        #[cfg(feature = "std")]
+        let inner = self
+            .inner
+            .write()
+            .expect("RwLock poisoned by a panicking guard holder");
+        #[cfg(not(feature = "std"))]
+        let inner = self.inner.write();
+        RwLockWriteGuard { inner }
     }
 }
 
@@ -157,9 +115,14 @@ impl<T: Default> Default for Mutex<T> {
 impl<T: ?Sized> Mutex<T> {
     /// Acquire the guard.
     pub fn lock(&self) -> MutexGuard<'_, T> {
-        MutexGuard {
-            inner: self.inner.lock_guard(),
-        }
+        #[cfg(feature = "std")]
+        let inner = self
+            .inner
+            .lock()
+            .expect("Mutex poisoned by a panicking guard holder");
+        #[cfg(not(feature = "std"))]
+        let inner = self.inner.lock();
+        MutexGuard { inner }
     }
 }
 
@@ -194,6 +157,3 @@ impl<T: fmt::Debug> fmt::Debug for Mutex<T> {
             .finish()
     }
 }
-
-// The wrappers inherit `Send`/`Sync` from their inner locks: std locks are
-// `Send + Sync` when `T: Send`, spin locks likewise.  No manual impls needed.
