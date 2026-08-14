@@ -8,14 +8,18 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "schema", "validation"]
 
+[lib]
+path = "lib.rs"
+
 [features]
-default = ["std"]
-std = ["saikuro-core/std"]
-custom = ["saikuro-core/custom"]
-drbg = ["saikuro-core/embedded"]
+default = ["std", "native"]
+std = []
+native = ["std", "saikuro-core/native"]
+no_std = ["saikuro-core/no_std"]
+wasm = ["saikuro-core/wasm"]
+embedded = ["saikuro-core/embedded"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
 
 thiserror = { workspace = true }
-tracing = { workspace = true }

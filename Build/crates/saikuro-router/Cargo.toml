@@ -43,8 +43,6 @@ embedded = [
     "saikuro-log/embedded",
     "saikuro-log/null",
 ]
-custom = ["embedded"]
-drbg = ["embedded"]
 
 [dependencies]
 saikuro-core   = { path = "../saikuro-core", default-features = false }

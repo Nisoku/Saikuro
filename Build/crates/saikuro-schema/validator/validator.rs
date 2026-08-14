@@ -1,20 +1,3 @@
-//! Invocation validator.
-//!
-//! The validator sits between the transport layer and the router.  Every
-//! inbound [`Envelope`] passes through here before being dispatched:
-//!
-//! 1. Protocol version check.
-//! 2. Envelope structural integrity (required fields present, well-formed
-//!    target, batch items non-empty when type is Batch, …).
-//! 3. Schema lookup (does the target function exist?).
-//! 4. Argument arity and type checking.
-//! 5. Visibility enforcement (private/internal functions are not callable
-//!    from external peers).
-//! 6. Capability checking is delegated to [`CapabilityEngine`].
-//!
-//! All errors are returned as typed [`ValidationError`] values so the
-//! runtime can produce the right [`ErrorCode`] on the wire.
-
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
@@ -31,7 +14,7 @@ use thiserror::Error;
 
 use crate::registry::{FunctionRef, RegistryError, SchemaRegistry};
 
-//  Errors
+// Errors
 
 /// A validation failure.
 #[derive(Debug, Error)]
@@ -104,21 +87,14 @@ impl ValidationError {
     }
 }
 
-//  Report
-
-/// The result of a successful validation pass.  Carries the resolved function
-/// reference so the router doesn't need to look it up again.
+/// The result of a successful validation pass.
 #[derive(Debug)]
 pub struct ValidationReport {
     /// The fully resolved function and its owning provider.
     pub function_ref: FunctionRef,
 }
 
-//  Validator
-
 /// Stateless invocation validator.
-///
-/// This is `Clone`-cheap because the [`SchemaRegistry`] behind it is `Arc`-shared.
 #[derive(Clone)]
 pub struct InvocationValidator {
     registry: SchemaRegistry,
@@ -144,8 +120,6 @@ impl InvocationValidator {
     }
 
     /// Validate a single envelope.
-    ///
-    /// For [`InvocationType::Batch`] each item is validated recursively.
     pub fn validate(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         // 1. Protocol version.
         if envelope.version != PROTOCOL_VERSION {
@@ -155,14 +129,11 @@ impl InvocationValidator {
             });
         }
 
-        // 2. Envelope structure.
+        // Envelope structure.
         self.check_structural(envelope)?;
 
         match envelope.invocation_type {
             InvocationType::Batch => self.validate_batch(envelope),
-            // Log and Announce are system envelopes handled before schema lookup;
-            // they bypass function-level validation entirely.  Return a synthetic
-            // report that won't be used for capability checking.
             InvocationType::Log | InvocationType::Announce => Ok(ValidationReport {
                 function_ref: crate::registry::FunctionRef {
                     namespace: String::new(),
@@ -185,10 +156,7 @@ impl InvocationValidator {
     }
 
     // Structural checks
-
     fn check_structural(&self, envelope: &Envelope) -> Result<(), ValidationError> {
-        // Target must be "namespace.function":  except for system envelope types
-        // (Log, Announce, Batch) that use special targets or no target at all.
         let skip_target_check = matches!(
             envelope.invocation_type,
             InvocationType::Batch | InvocationType::Log | InvocationType::Announce
@@ -213,7 +181,6 @@ impl InvocationValidator {
     }
 
     // Single-invocation validation
-
     fn validate_single(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         // Schema lookup.
         let func_ref = self.registry.lookup_function(&envelope.target)?;
@@ -230,7 +197,6 @@ impl InvocationValidator {
     }
 
     // Batch validation
-
     fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
         let items = envelope.batch_items.as_ref().ok_or_else(|| {
             ValidationError::MalformedEnvelope("batch envelope missing batch_items".into())
@@ -245,9 +211,8 @@ impl InvocationValidator {
                 })?;
         }
 
-        // For batch we return a synthetic report.  The router will dispatch each
+        // For batch we return a synthetic report. The router will dispatch each
         // item individually and collect results.
-        // We use the first item's function ref as the representative report.
         let first_ref = self.registry.lookup_function(&items[0].target)?;
 
         Ok(ValidationReport {
@@ -256,7 +221,6 @@ impl InvocationValidator {
     }
 
     // Helpers
-
     fn check_visibility(
         &self,
         target: &str,
@@ -319,9 +283,6 @@ impl InvocationValidator {
     }
 
     /// Recursively check that `value` is compatible with `descriptor`.
-    ///
-    /// We apply structural subtype checking rather than exact nominal checking:
-    /// e.g. an `i32` value is accepted where `i64` is declared.
     fn check_value_type(
         &self,
         target: &str,
@@ -344,8 +305,6 @@ impl InvocationValidator {
 
             TypeDescriptor::Named { .. } => {
                 // Named types must be maps (record) or strings (enum variants).
-                // Full structural validation against the type definition is a
-                // future enhancement; for now we accept maps and strings.
                 match value {
                     Value::Map(_) | Value::String(_) => Ok(()),
                     Value::Null => Ok(()), // null is always acceptable for named types

@@ -1,25 +1,8 @@
-//! Capability enforcement engine.
-//!
-//! The capability engine is responsible for one thing: answering the question
-//! "does this peer hold all the capabilities required to invoke this function?".
-//!
-//! It is intentionally kept stateless and pure:  all state lives in the
-//! [`CapabilitySet`] that the caller presents.  The engine never issues tokens;
-//! that is the responsibility of the handshake layer (not yet in v1 scope).
-//!
-//! Sandbox mode:
-//! When `sandbox_mode` is enabled, even requests that pass capability checks
-//! are further restricted: the engine only exposes the subset of namespaces
-//! declared in the peer's sandbox schema.  Additionally, functions with
-//! [`Visibility::Internal`] visibility are treated as inaccessible:  only
-//! `Public` functions are reachable by sandboxed peers.
-
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::{
     capability::{CapabilitySet, CapabilityToken},
     schema::{FunctionSchema, Visibility},
 };
-use tracing::debug;
 
 use crate::registry::FunctionRef;
 
@@ -65,7 +48,7 @@ impl CapabilityEngine {
     /// `function_schema`.
     ///
     /// In sandbox mode, [`Visibility::Internal`] functions are always denied
-    /// regardless of capabilities:  they are not accessible to untrusted peers.
+    /// regardless of capabilities: they are not accessible to untrusted peers.
     ///
     /// Returns [`CapabilityOutcome::Granted`] if all requirements are met, or
     /// [`CapabilityOutcome::Denied`] with the first missing token otherwise.
@@ -76,7 +59,6 @@ impl CapabilityEngine {
     ) -> CapabilityOutcome {
         // In sandbox mode, Internal-visibility functions are inaccessible.
         if self.sandbox_mode && function_schema.visibility == Visibility::Internal {
-            debug!("sandbox: denying access to Internal function");
             return CapabilityOutcome::Denied {
                 missing: CapabilityToken::new("$sandbox.public_only"),
             };
@@ -84,10 +66,6 @@ impl CapabilityEngine {
 
         for required in &function_schema.capabilities {
             if !caller_caps.grants(required) {
-                debug!(
-                    missing = %required,
-                    "capability check failed"
-                );
                 return CapabilityOutcome::Denied {
                     missing: required.clone(),
                 };
@@ -106,7 +84,7 @@ impl CapabilityEngine {
     }
 
     /// Filter a list of function names down to only those visible and callable
-    /// with the given capability set.  Used to generate sandbox-restricted schemas.
+    /// with the given capability set.
     ///
     /// In sandbox mode this additionally excludes `Internal` functions.
     /// `Private` functions are always excluded.

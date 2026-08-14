@@ -1,20 +1,3 @@
-//! Schema registry:  the live, thread-safe store of all namespace schemas.
-//!
-//! The registry is the single source of truth for "what functions exist and
-//! how are they typed?".  It is shared (via `Arc` (not the browser)) across the runtime's
-//! components and updated atomically when new providers register or schemas
-//! are hot-reloaded.
-//!
-//! In **development mode** providers announce their schemas at connection time
-//! and the registry merges them in.  In **production mode** schemas are loaded
-//! from a frozen file at startup and providers cannot alter them.
-//!
-//! All state lives in a single `RwLock` from `saikuro-core::sync` so that the
-//! mode check and the mutations it guards are atomic (a registered namespace
-//! can never be half-applied against a changing mode).  The lock is held only
-//! for short map operations and never across an `await`.  Keys are ordered
-//! `BTreeMap`s for deterministic iteration on both host and MCU targets.
-
 use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
@@ -22,11 +5,9 @@ use saikuro_core::schema::{
 };
 use saikuro_core::sync::RwLock;
 use saikuro_core::RegistrationToken;
-use tracing::{debug, info, warn};
 
 use crate::validator::ValidationError;
 
-//  Modes
 
 /// Whether the registry accepts dynamic schema updates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,8 +18,7 @@ pub enum RegistryMode {
     Production,
 }
 
-//  Registration descriptor
-
+// Registration descriptor
 /// All information a provider submits when it registers a namespace.
 #[derive(Debug, Clone)]
 pub struct NamespaceRegistration {
@@ -52,8 +32,7 @@ pub struct NamespaceRegistration {
     pub registration_token: RegistrationToken,
 }
 
-//  Registry
-
+// Registry
 /// All registry state, guarded as a unit by [`SchemaRegistry`]'s lock.
 struct Schemata {
     /// Per-namespace schemas and their owning provider ID.
@@ -72,9 +51,6 @@ struct NamespaceEntry {
 }
 
 /// The live schema registry.
-///
-/// Reads are shared-lock `BTreeMap` lookups; writes (registrations, merges)
-/// go through the exclusive lock and are infrequent.
 #[derive(Clone)]
 pub struct SchemaRegistry {
     inner: Arc<RwLock<Schemata>>,
@@ -114,17 +90,12 @@ impl SchemaRegistry {
         for (type_name, type_def) in (*schema.types).into_iter() {
             schemata.types.insert(type_name, type_def);
         }
-        info!(
-            "schema registry frozen with {} namespace(s)",
-            schemata.namespaces.len()
-        );
         Self {
             inner: Arc::new(RwLock::new(schemata)),
         }
     }
 
     /// Register (or replace) a namespace.
-    ///
     /// In production mode this returns an error rather than mutating state.
     pub fn register(&self, registration: NamespaceRegistration) -> Result<(), RegistryError> {
         let mut schemata = self.inner.write();
@@ -138,12 +109,6 @@ impl SchemaRegistry {
         {
             return Err(RegistryError::SchemaCapacity);
         }
-        if schemata.namespaces.contains_key(&ns) {
-            warn!(namespace = %ns, "overwriting existing namespace schema");
-        } else {
-            debug!(namespace = %ns, provider = %registration.provider_id, "registering namespace");
-        }
-
         schemata.namespaces.insert(
             ns,
             NamespaceEntry {
@@ -156,9 +121,6 @@ impl SchemaRegistry {
     }
 
     /// Merge an entire [`Schema`] document into the registry.
-    ///
-    /// Types are added to the shared type library; namespaces are registered
-    /// under `provider_id`.
     pub fn merge_schema(
         &self,
         schema: Schema,
@@ -207,11 +169,6 @@ impl SchemaRegistry {
         }
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
             let ns = ns_name.clone();
-            if schemata.namespaces.contains_key(&ns) {
-                warn!(namespace = %ns, "overwriting existing namespace schema");
-            } else {
-                debug!(namespace = %ns, provider = %provider_id, "registering namespace");
-            }
             schemata.namespaces.insert(
                 ns,
                 NamespaceEntry {
@@ -225,9 +182,6 @@ impl SchemaRegistry {
     }
 
     /// Remove namespaces owned by one specific provider registration.
-    ///
-    /// A stale disconnect cannot remove schemas from a newer registration that
-    /// reused the same provider ID.
     pub fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
         let mut schemata = self.inner.write();
         if schemata.mode == RegistryMode::Production {
@@ -236,15 +190,11 @@ impl SchemaRegistry {
         schemata.namespaces.retain(|_ns, entry| {
             let keep =
                 entry.provider_id != provider_id || entry.registration_token != registration_token;
-            if !keep {
-                debug!(provider = %provider_id, "deregistered namespace on disconnect");
-            }
             keep
         });
     }
 
     /// Look up the schema for a single function.
-    ///
     /// `target` must be in `"namespace.function"` format.
     pub fn lookup_function(&self, target: &str) -> Result<FunctionRef, RegistryError> {
         let (ns_name, fn_name) = split_target(target)?;
@@ -290,11 +240,6 @@ impl SchemaRegistry {
     }
 
     /// Export a snapshot of the full schema at this instant.
-    ///
-    /// The registry stores its maps in unbounded `BTreeMap`s while the
-    /// exported [`Schema`] uses fixed-capacity heapless maps, so a registry
-    /// larger than the schema's capacity fails rather than truncating the
-    /// snapshot silently.
     pub fn snapshot(&self) -> Result<Schema, RegistryError> {
         let mut schema = Schema::new();
         let schemata = self.inner.read();
@@ -316,7 +261,6 @@ impl SchemaRegistry {
     /// Freeze the registry, preventing any further schema changes.
     pub fn freeze(&self) {
         self.inner.write().mode = RegistryMode::Production;
-        info!("schema registry frozen");
     }
 
     /// Return the current operating mode.
@@ -331,8 +275,6 @@ impl Default for SchemaRegistry {
     }
 }
 
-//  Resolved reference
-
 /// A fully-resolved reference to a function schema plus its owning provider.
 #[derive(Debug, Clone)]
 pub struct FunctionRef {
@@ -342,8 +284,7 @@ pub struct FunctionRef {
     pub provider_id: String,
 }
 
-//  Registry error
-
+// Registry error
 #[derive(Debug, thiserror::Error)]
 pub enum RegistryError {
     #[error("namespace not found: {0}")]
@@ -364,8 +305,6 @@ pub enum RegistryError {
     #[error("schema registry capacity exceeded")]
     SchemaCapacity,
 }
-
-//  Helpers
 
 /// Split a `"namespace.function"` target into its two components.
 fn split_target(target: &str) -> Result<(&str, &str), RegistryError> {
