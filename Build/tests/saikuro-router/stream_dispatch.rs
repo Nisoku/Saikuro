@@ -1,8 +1,8 @@
 //! Stream dispatch tests.
 
-use futures::{pin_mut, poll};
+use futures::{ pin_mut, poll };
 use saikuro_core::{
-    envelope::{Envelope, StreamControl},
+    envelope::{ Envelope, StreamControl },
     error::ErrorCode,
     invocation::InvocationId,
     value::Value,
@@ -10,12 +10,12 @@ use saikuro_core::{
 };
 use saikuro_router::provider::ProviderRegistry;
 use saikuro_router::router::InvocationRouter;
-use saikuro_router::stream_state::{DeliveryOutcome, StreamState};
+use saikuro_router::stream_state::{ DeliveryOutcome, StreamState };
 use std::task::Poll;
 
 mod common;
 
-//  Tests
+// Tests
 
 #[test]
 fn stream_open_returns_ok_empty() {
@@ -23,11 +23,15 @@ fn stream_open_returns_ok_empty() {
         let (registry, mut work_rx) = common::make_provider("events");
 
         // Consume work items (provider side).
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::stream_open("events.subscribe", vec![Value::String("topic".into())])
-            .expect("entropy available");
+        let env = Envelope::stream_open(
+            "events.subscribe",
+            vec![Value::String("topic".into())]
+        ).expect("entropy available");
         let resp = router.dispatch(env).await;
 
         assert!(resp.ok, "stream open should return ok");
@@ -48,7 +52,9 @@ fn route_stream_item_delivers_to_state() {
         let open_env = Envelope::stream_open("data.feed", vec![]).expect("entropy available");
         let stream_id = open_env.id;
 
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         let open_resp = router.dispatch(open_env).await;
         assert!(open_resp.ok);
@@ -69,7 +75,9 @@ fn route_stream_end_removes_state() {
         let open_env = Envelope::stream_open("fin.feed", vec![]).expect("entropy available");
         let stream_id = open_env.id;
 
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         router.dispatch(open_env).await;
 
@@ -119,7 +127,9 @@ fn multiple_streams_are_independent() {
         let (registry, mut work_rx) = common::make_provider("multi");
         let router = InvocationRouter::with_providers(registry);
 
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         // Open two streams.
         let env1 = Envelope::stream_open("multi.s1", vec![]).expect("entropy available");
@@ -156,7 +166,9 @@ fn out_of_order_item_is_dropped_not_panicked() {
         let (registry, mut work_rx) = common::make_provider("ooo");
         let router = InvocationRouter::with_providers(registry);
 
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         let env = Envelope::stream_open("ooo.feed", vec![]).expect("entropy available");
         let id = env.id;
@@ -179,7 +191,9 @@ fn stream_abort_control_removes_state() {
         let (registry, mut work_rx) = common::make_provider("abort");
         let router = InvocationRouter::with_providers(registry);
 
-        saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
+        saikuro_exec::spawn(async move {
+            while work_rx.recv().await.is_some() {}
+        });
 
         let env = Envelope::stream_open("abort.feed", vec![]).expect("entropy available");
         let id = env.id;
@@ -209,9 +223,7 @@ fn concurrent_stream_delivery_preserves_order_and_terminal_closure() {
     saikuro_exec::block_on(async {
         let id = InvocationId::new().expect("entropy available");
         let (tx, mut rx) = saikuro_exec::mpsc::channel(saikuro_exec::ChannelCapacity::MIN);
-        tx.send(ResponseEnvelope::ok_empty(id))
-            .await
-            .expect("receiver remains open");
+        tx.send(ResponseEnvelope::ok_empty(id)).await.expect("receiver remains open");
         let state = StreamState::new(tx);
 
         let first = state.deliver(ResponseEnvelope::stream_item(id, 0, Value::Int(0)));
@@ -224,21 +236,19 @@ fn concurrent_stream_delivery_preserves_order_and_terminal_closure() {
 
         assert!(rx.recv().await.is_some());
         assert_eq!(first.await, DeliveryOutcome::Delivered);
-        assert_eq!(rx.recv().await.and_then(|response| response.seq), Some(0));
+        assert_eq!(
+            rx.recv().await.and_then(|response| response.seq),
+            Some(0)
+        );
         assert_eq!(terminal.await, DeliveryOutcome::Terminal);
         let end = rx.recv().await.expect("terminal frame is delivered");
         assert_eq!(end.seq, Some(1));
         assert_eq!(end.stream_control, Some(StreamControl::End));
 
         assert_eq!(
-            state
-                .deliver(ResponseEnvelope::stream_item(id, 2, Value::Int(2)))
-                .await,
+            state.deliver(ResponseEnvelope::stream_item(id, 2, Value::Int(2))).await,
             DeliveryOutcome::Closed
         );
-        assert!(
-            rx.try_recv().is_err(),
-            "post-terminal frame was not delivered"
-        );
+        assert!(rx.try_recv().is_err(), "post-terminal frame was not delivered");
     })
 }

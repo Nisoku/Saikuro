@@ -8,20 +8,52 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "router", "rpc"]
 
+[lib]
+path = "lib.rs"
+
 [features]
-default = ["std"]
-std = ["saikuro-core/std", "saikuro-exec/tokio-runtime"]
-embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/embedded"]
+default = ["std", "native"]
+std = []
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-exec/native",
+    "saikuro-schema/native",
+    "saikuro-log/native",
+    "saikuro-log/tracing",
+]
+no_std = [
+    "saikuro-core/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-log/no_std",
+    "saikuro-log/null",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-schema/wasm",
+    "saikuro-log/wasm",
+    "saikuro-log/console",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-schema/embedded",
+    "saikuro-log/embedded",
+    "saikuro-log/null",
+]
+custom = ["embedded"]
+drbg = ["embedded"]
 
 [dependencies]
 saikuro-core   = { path = "../saikuro-core", default-features = false }
 saikuro-schema = { workspace = true, default-features = false }
 saikuro-exec   = { workspace = true, default-features = false }
-saikuro-log    = { workspace = true, default-features = false, features = ["tracing"] }
+saikuro-log    = { workspace = true, default-features = false }
 
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 saikuro-exec = { workspace = true }

@@ -1,5 +1,3 @@
-//! Per-stream and per-channel lifecycle state.
-
 use alloc::{collections::BTreeMap, sync::Arc};
 use saikuro_core::invocation::InvocationId;
 use saikuro_core::sync::RwLock;

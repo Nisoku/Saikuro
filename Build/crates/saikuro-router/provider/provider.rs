@@ -1,36 +1,19 @@
-//! Provider abstraction and registry.
-//!
-//! A **provider** is any entity that can handle invocations for one or more
-//! namespaces.  In practice it is a connected language adapter (Python,
-//! TypeScript, …) that has registered its schema and is listening for work.
-//!
-//! The [`ProviderRegistry`] maps namespace names to [`ProviderHandle`]s.
-//! Each handle wraps a MPSC sender so the router can dispatch work
-//! without blocking.
-
 use alloc::{
     borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec,
 };
 use async_trait::async_trait;
 use saikuro_core::{envelope::Envelope, sync::RwLock, RegistrationToken, ResponseEnvelope};
 use saikuro_exec::{mpsc, oneshot};
-use tracing::{debug, warn};
 
 use crate::error::{Result, RouterError};
 
 // Pending call tracker
-
 /// A one-shot channel waiting for the response to a single Call invocation.
 pub type PendingCallSender = oneshot::Sender<ResponseEnvelope>;
 pub type PendingCallReceiver = oneshot::Receiver<ResponseEnvelope>;
 
 // Provider trait
-
 /// An abstract provider that can receive invocations.
-///
-/// The `send_invocation` method is the only interface the router uses; concrete
-/// provider implementations may queue, dispatch, or transform the envelope in
-/// any way they choose.
 #[async_trait]
 pub trait Provider: Send + Sync + 'static {
     /// The unique identifier for this provider connection.
@@ -63,9 +46,6 @@ pub struct ProviderWorkItem {
 }
 
 /// A cheap, cloneable handle to a connected provider.
-///
-/// Internally holds a bounded MPSC sender; backpressure naturally propagates
-/// from here back to the caller when the provider's work queue is full.
 #[derive(Clone)]
 pub struct ProviderHandle {
     id: String,
@@ -134,13 +114,7 @@ impl Provider for ProviderHandle {
 }
 
 // ProviderRegistry
-
 /// Thread-safe registry mapping namespace names to provider handles.
-///
-/// Both indexes live behind a single [`RwLock`] so `register` and `deregister`
-/// keep them consistent atomically.  A namespace taken over by a new provider
-/// is removed from the old provider's record, and deregistration never removes
-/// a namespace that a later provider now owns.
 #[derive(Clone, Default)]
 pub struct ProviderRegistry {
     inner: Arc<RwLock<RegistryState>>,
@@ -160,12 +134,6 @@ impl ProviderRegistry {
     }
 
     /// Register a provider handle for the given namespaces.
-    ///
-    /// If a namespace already has a provider, the old one is replaced.  The
-    /// namespace is then removed from the old provider's record so a later
-    /// deregistration of the old provider cannot reclaim the new provider's
-    /// namespace.  Re-registering a provider with fewer namespaces releases
-    /// the routes it no longer owns (unless a newer provider took them over).
     pub fn register(&self, handle: ProviderHandle) {
         let provider_id = handle.id().to_owned();
         let registration_token = handle.registration_token();
@@ -174,10 +142,7 @@ impl ProviderRegistry {
 
         let mut state = self.inner.write();
 
-        // A re-registering provider that dropped a namespace must release its
-        // route.  Remove each previously-owned namespace that is absent from
-        // the new list, but only while it still points at this provider (a
-        // newer provider may have taken it over).
+        // A re-registering provider that dropped a namespace must release its route.
         let dropped: Vec<String> = state
             .by_provider
             .get(&provider_key)
@@ -197,14 +162,12 @@ impl ProviderRegistry {
                 .unwrap_or(false)
             {
                 state.by_namespace.remove(ns);
-                debug!(namespace = %ns, provider = %provider_id, "released dropped namespace route");
             }
         }
 
         for ns in &namespaces {
             match state.by_namespace.insert(ns.clone(), handle.clone()) {
                 Some(old) => {
-                    warn!(namespace = %ns, provider = %provider_id, "replacing existing namespace provider");
                     if old.id() != provider_id || old.registration_token() != registration_token {
                         let old_key = (old.id().to_owned(), old.registration_token());
                         if let Some(old_ns_list) = state.by_provider.get_mut(&old_key) {
@@ -213,7 +176,6 @@ impl ProviderRegistry {
                     }
                 }
                 None => {
-                    debug!(namespace = %ns, provider = %provider_id, "registering provider for namespace")
                 }
             }
         }
@@ -221,10 +183,6 @@ impl ProviderRegistry {
     }
 
     /// Remove all namespaces owned by one specific provider registration.
-    ///
-    /// A namespace is removed from the lookup index only while it still points
-    /// at this registration; namespaces taken over by a newer registration are
-    /// left alone even when it uses the same provider ID.
     pub fn deregister(&self, provider_id: &str, registration_token: RegistrationToken) {
         let mut state = self.inner.write();
         let provider_key = (provider_id.to_owned(), registration_token);
@@ -238,7 +196,6 @@ impl ProviderRegistry {
                 {
                     state.by_namespace.remove(&ns);
                 }
-                debug!(namespace = %ns, provider = %provider_id, "deregistered namespace provider");
             }
         }
     }

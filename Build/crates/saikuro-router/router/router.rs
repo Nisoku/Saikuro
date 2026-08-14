@@ -1,19 +1,5 @@
-//! Invocation router.
-//!
-//! The router is the central dispatch component.  After the validator has
-//! confirmed an envelope is well-formed and permitted, the router:
-//!
-//! 1. Resolves the target namespace to a provider handle.
-//! 2. For `Call`: allocates a one-shot channel, sends work to the provider,
-//!    and returns a future that completes when the response arrives.
-//! 3. For `Cast`: sends work to the provider and returns immediately.
-//! 4. For `Stream`/`Channel`: sets up the state tracking entry, sends the
-//!    open request to the provider, and returns the appropriate receiver.
-//! 5. For `Batch`: dispatches each item and collects all results.
-//! 6. For `Log`: extracts a [`LogRecord`] from `args[0]` and forwards it to
-//!    the configured log sink without routing to any provider.
-
-use alloc::{borrow::ToOwned, boxed::Box, string::ToString, sync::Arc, vec::Vec};
+//! Invocation router
+use alloc::{borrow::ToOwned, boxed::Box, format, string::ToString, sync::Arc, vec::Vec};
 use core::time::Duration;
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
@@ -21,14 +7,14 @@ use saikuro_core::{
     invocation::InvocationId,
     ResponseEnvelope,
 };
-use saikuro_log::{LogLevel, LogRecord, LogSink, TracingSink, tracing_log_sink};
+use saikuro_log::{LogLevel, LogRecord, LogSink};
 use saikuro_exec::{mpsc, oneshot, timeout, ChannelCapacity};
-use tracing::{debug, instrument, warn};
 
 use crate::{
     error::{Result, RouterError},
     provider::{Provider, ProviderRegistry},
     stream_state::{ChannelState, DeliveryOutcome, StreamState, StreamStateStore},
+    DefaultRouterSink,
 };
 
 //  Config
@@ -63,7 +49,7 @@ impl Default for RouterConfig {
 ///
 /// `InvocationRouter` is cheap to clone :  all state is `Arc`-wrapped inside
 /// the registries it references.
-pub struct InvocationRouter<S: LogSink + Send + Sync + 'static = TracingSink> {
+pub struct InvocationRouter<S: LogSink + Send + Sync + 'static = DefaultRouterSink> {
     providers: ProviderRegistry,
     streams: StreamStateStore,
     config: RouterConfig,
@@ -82,9 +68,9 @@ impl<S: LogSink + Send + Sync + 'static> Clone for InvocationRouter<S> {
     }
 }
 
-impl InvocationRouter<TracingSink> {
+impl InvocationRouter<DefaultRouterSink> {
     pub fn new(providers: ProviderRegistry, config: RouterConfig) -> Self {
-        Self::with_log_sink(providers, config, tracing_log_sink())
+        Self::with_log_sink(providers, config, default_sink())
     }
 
     /// Create a router with the given providers and default config.
@@ -109,29 +95,11 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // State store access
-
-    /// Access the shared [`StreamStateStore`] directly.
-    ///
-    /// Primarily useful in tests and the runtime server loop when it needs to
-    /// take receivers to forward stream/channel items to the connected adapter.
     pub fn streams(&self) -> &StreamStateStore {
         &self.streams
     }
 
-    // Public dispatch API
-
-    /// Dispatch an envelope and return the response.
-    ///
-    /// For `Cast` the response is always `ResponseEnvelope::ok_empty`.
-    /// For `Stream` / `Channel` the response carries the stream ID; items
-    /// arrive on the returned channel.
-    /// For `Log` the log record is forwarded to the sink and
-    /// `ResponseEnvelope::ok_empty` is returned (no provider is involved).
-    #[instrument(skip(self, envelope), fields(
-        id = %envelope.id,
-        target = %envelope.target,
-        invocation_type = %envelope.invocation_type,
-    ))]
+    /// Dispatch an envelope and return the response
     pub async fn dispatch(&self, envelope: Envelope) -> ResponseEnvelope {
         match envelope.invocation_type {
             InvocationType::Call => self.dispatch_call(envelope).await,
@@ -149,14 +117,23 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 // Announce envelopes are handled by the connection layer before
                 // reaching the router.  If one leaks through here it is a no-op
                 // so we don't panic but we do warn.
-                warn!(id = %envelope.id, "announce envelope reached router :  should be handled by ConnectionHandler");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!(
+                            "announce envelope reached router (id={}): should be handled by ConnectionHandler",
+                            envelope.id
+                        ),
+                    ))
+                    .await;
                 ResponseEnvelope::ok_empty(envelope.id)
             }
         }
     }
 
     // Call
-
     async fn dispatch_call(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
@@ -174,14 +151,32 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         match timeout(self.config.call_timeout, resp_rx).await {
             Ok(Ok(response)) => response,
             Ok(Err(_)) => {
-                warn!(%id, "provider dropped response sender without replying");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!("provider dropped response sender without replying (id={})", id),
+                    ))
+                    .await;
                 error_response(
                     id,
                     SaikuroError::ProviderUnavailable("response channel dropped".into()).into(),
                 )
             }
             Err(_) => {
-                warn!(%id, timeout_ms = self.config.call_timeout.as_millis(), "call timed out");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!(
+                            "call timed out (id={}, timeout_ms={})",
+                            id,
+                            self.config.call_timeout.as_millis()
+                        ),
+                    ))
+                    .await;
                 error_response(
                     id,
                     SaikuroError::Timeout {
@@ -194,7 +189,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Cast
-
     async fn dispatch_cast(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
@@ -205,7 +199,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
 
         // Fire-and-forget: we don't wait for any response.
         if let Err(e) = provider.send_invocation(envelope, None).await {
-            warn!(%id, "cast dispatch failed: {e}");
+            self.log_sink
+                .emit(&LogRecord::new(
+                    "",
+                    LogLevel::Warn,
+                    "saikuro.router",
+                    format!("cast dispatch failed (id={}): {e}", id),
+                ))
+                .await;
             // Still return ok_empty :  the caller opted out of responses.
         }
 
@@ -213,12 +214,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Stream
-
-    /// Open a server-to-client stream.
-    ///
-    /// Returns an `ok_empty` response immediately; items arrive on the
-    /// `mpsc::Receiver<ResponseEnvelope>` that callers subscribe to via the
-    /// runtime's stream subscription API.
     async fn dispatch_stream_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
@@ -237,12 +232,18 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             return error_response(id, e.into());
         }
 
-        debug!(%id, "stream opened");
+        self.log_sink
+            .emit(&LogRecord::new(
+                "",
+                LogLevel::Debug,
+                "saikuro.router",
+                format!("stream opened (id={})", id),
+            ))
+            .await;
         ResponseEnvelope::ok_empty(id)
     }
 
     // Channel
-
     async fn dispatch_channel_open(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
@@ -267,7 +268,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                     return error_response(id, RouterError::ChannelClosed(id.to_string()).into());
                 }
                 DeliveryOutcome::OutOfOrder => {
-                    warn!(%id, "out-of-order channel item dropped");
+                    self.log_sink
+                        .emit(&LogRecord::new(
+                            "",
+                            LogLevel::Warn,
+                            "saikuro.router",
+                            format!("out-of-order channel item dropped (id={})", id),
+                        ))
+                        .await;
                 }
                 DeliveryOutcome::Delivered => {}
             }
@@ -299,12 +307,18 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             return error_response(id, e.into());
         }
 
-        debug!(%id, "channel opened");
+        self.log_sink
+            .emit(&LogRecord::new(
+                "",
+                LogLevel::Debug,
+                "saikuro.router",
+                format!("channel opened (id={})", id),
+            ))
+            .await;
         ResponseEnvelope::ok_empty(id)
     }
 
     // Batch
-
     async fn dispatch_batch(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
         let items = match envelope.batch_items {
@@ -332,11 +346,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Log
-
-    /// Handle a `Log`-type envelope.
-    ///
-    /// Extracts the [`LogRecord`] from `args[0]`, forwards it to the log sink,
-    /// and returns `ok_empty`.  Never touches a provider.
     async fn dispatch_log(&self, envelope: Envelope) -> ResponseEnvelope {
         let id = envelope.id;
 
@@ -348,7 +357,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             .and_then(|v| match LogRecord::try_from(v) {
                 Ok(r) => Some(r),
                 Err(e) => {
-                    warn!(%id, error = %e, "failed to parse LogRecord from log envelope");
+                    self.log_sink
+                        .emit(&LogRecord::new(
+                            "",
+                            LogLevel::Warn,
+                            "saikuro.router",
+                            format!("failed to parse LogRecord from log envelope (id={}): {e}", id),
+                        ))
+                        .await;
                     None
                 }
             });
@@ -358,7 +374,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 self.log_sink.emit(&r).await;
             }
             None => {
-                warn!(%id, "log envelope has no valid LogRecord in args[0]; dropping");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!("log envelope has no valid LogRecord in args[0]; dropping (id={})", id),
+                    ))
+                    .await;
             }
         }
 
@@ -366,14 +389,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Stream item routing
-
-    /// Route an inbound channel item (client -> provider direction) to the
-    /// appropriate open channel's inbound queue.
-    ///
-    /// This is called when the client sends a follow-up message on an already-
-    /// opened channel (i.e. a `Channel`-type envelope whose ID matches an
-    /// existing channel state entry).
-    /// Route a channel item in the given direction.
     async fn route_channel_item(&self, response: ResponseEnvelope, inbound: bool) -> Result<()> {
         let id = response.id;
         let state = self
@@ -387,7 +402,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 Err(RouterError::ChannelClosed(id.to_string()))
             }
             DeliveryOutcome::OutOfOrder => {
-                warn!(%id, "out-of-order channel item dropped");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!("out-of-order channel item dropped (id={})", id),
+                    ))
+                    .await;
                 Ok(())
             }
             DeliveryOutcome::Terminal => {
@@ -404,9 +426,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
 
     /// Route an outbound channel item (provider -> client direction) to the
     /// appropriate open channel's outbound queue.
-    ///
-    /// Called by the provider adapter when it wants to push a message to the
-    /// client side of an open channel.
     pub async fn route_channel_outbound(&self, response: ResponseEnvelope) -> Result<()> {
         self.route_channel_item(response, false).await
     }
@@ -425,7 +444,14 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 Err(RouterError::StreamClosed(id.to_string()))
             }
             DeliveryOutcome::OutOfOrder => {
-                warn!(%id, "out-of-order stream item dropped");
+                self.log_sink
+                    .emit(&LogRecord::new(
+                        "",
+                        LogLevel::Warn,
+                        "saikuro.router",
+                        format!("out-of-order stream item dropped (id={})", id),
+                    ))
+                    .await;
                 Ok(())
             }
             DeliveryOutcome::Terminal => {
@@ -437,7 +463,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Helpers
-
     fn resolve_namespace(&self, target: &str) -> Result<crate::provider::ProviderHandle> {
         let ns =
             namespace_of(target).ok_or_else(|| RouterError::MalformedTarget(target.to_owned()))?;
@@ -456,7 +481,6 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
 }
 
 //  Helpers
-
 fn namespace_of(target: &str) -> Option<&str> {
     saikuro_core::envelope::split_target(target).map(|(ns, _)| ns)
 }
@@ -483,5 +507,20 @@ impl From<RouterError> for ErrorDetail {
             RouterError::SendError(_) => saikuro_core::error::ErrorCode::ProviderUnavailable,
         };
         ErrorDetail::new(code, err.to_string())
+    }
+}
+
+fn default_sink() -> DefaultRouterSink {
+    #[cfg(feature = "native")]
+    {
+        saikuro_log::TracingSink
+    }
+    #[cfg(feature = "wasm")]
+    {
+        saikuro_log::ConsoleSink
+    }
+    #[cfg(any(feature = "no_std", feature = "embedded"))]
+    {
+        saikuro_log::NullSink
     }
 }

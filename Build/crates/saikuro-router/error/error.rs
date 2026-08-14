@@ -1,5 +1,3 @@
-//! Router error type.
-
 use alloc::string::String;
 use thiserror::Error;
 
