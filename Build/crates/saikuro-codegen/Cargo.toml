@@ -8,9 +8,12 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "codegen", "bindings"]
 
+[lib]
+path = "lib.rs"
+
 [[bin]]
 name = "saikuro-codegen"
-path = "src/cli/saikuro-codegen.rs"
+path = "cli/main.rs"
 required-features = ["cli"]
 
 [features]

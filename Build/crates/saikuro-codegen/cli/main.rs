@@ -6,8 +6,11 @@ use std::{fs, path::PathBuf};
 
 use clap::Parser;
 use saikuro_codegen::{
-    c::CGenerator, cpp::CppGenerator, csharp::CSharpGenerator, generator::BindingGenerator,
-    python::PythonGenerator, rust::RustGenerator, typescript::TypeScriptGenerator,
+    language::{
+        c::CGenerator, cpp::CppGenerator, csharp::CSharpGenerator, python::PythonGenerator,
+        rust::RustGenerator, typescript::TypeScriptGenerator,
+    },
+    shared::generator::BindingGenerator,
 };
 use saikuro_core::schema::Schema;
 

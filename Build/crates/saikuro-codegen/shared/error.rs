@@ -1,5 +1,3 @@
-//! Codegen error type.
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]

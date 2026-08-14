@@ -7,7 +7,7 @@
 use saikuro_core::schema::{NamespaceSchema, Schema};
 use std::collections::{HashMap, HashSet};
 
-use crate::{
+use crate::shared::{
     error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
     to_pascal_case,
@@ -86,7 +86,7 @@ impl CppGenerator {
         let mut seen_methods: HashSet<String> = HashSet::new();
         seen_methods.insert(sanitize_ident(class_name));
         seen_methods.insert("client_".to_owned());
-        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
+        for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let method_name = sanitize_ident(fn_name);
             if !seen_methods.insert(method_name.clone()) {
                 return Err(CodegenError::Schema(format!(

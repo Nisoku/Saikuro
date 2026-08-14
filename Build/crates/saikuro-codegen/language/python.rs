@@ -9,7 +9,7 @@ use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };
 
-use crate::{
+use crate::shared::{
     error::Result,
     generator::{
         convert_type, generate_types_and_namespace_clients, generate_types_from_schema,
@@ -164,7 +164,7 @@ impl PythonGenerator {
         lines.push("        self._client = client".to_owned());
         lines.push(String::new());
 
-        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
+        for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let method = self.generate_method(ns_name, fn_name, fn_schema)?;
             lines.push(method);
         }

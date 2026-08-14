@@ -9,7 +9,7 @@ use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor,
 };
 
-use crate::{
+use crate::shared::{
     error::{CodegenError, Result},
     generator::{convert_type, BindingGenerator, GeneratorOutput, TypeConverter},
     to_pascal_case,
@@ -174,7 +174,7 @@ impl RustGenerator {
         ];
 
         let mut method_names = HashMap::new();
-        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
+        for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let method_name = ensure_unique_name(
                 &format!("method in namespace {ns_name}"),
                 fn_name,

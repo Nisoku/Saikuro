@@ -8,7 +8,7 @@
 use saikuro_core::schema::{NamespaceSchema, Schema};
 use std::collections::HashMap;
 
-use crate::{
+use crate::shared::{
     error::{CodegenError, Result},
     generator::{BindingGenerator, GeneratorOutput},
 };
@@ -118,7 +118,7 @@ impl CGenerator {
         ];
 
         let mut seen_names: HashMap<String, String> = HashMap::new();
-        for (fn_name, fn_schema) in crate::generator::namespace_public_functions(ns) {
+        for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             if let Some(previous_raw) = seen_names.get(&c_fn_name) {
                 return Err(CodegenError::Schema(format!(

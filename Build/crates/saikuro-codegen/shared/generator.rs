@@ -1,11 +1,9 @@
-//! Common generator traits and output types.
-
 use saikuro_core::schema::{
     FieldMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition,
     TypeDescriptor, Visibility,
 };
 
-use crate::error::Result;
+use crate::shared::error::Result;
 
 /// A single generated source file.
 #[derive(Debug, Clone)]
@@ -76,9 +74,6 @@ pub fn to_camel_case(s: &str) -> String {
 }
 
 /// Iterate over namespace functions sorted by name, filtering out private ones.
-///
-/// Every codegen backend needs this same loop.  Using this helper
-/// eliminates the duplicated iteration + filter pattern.
 pub fn namespace_public_functions(ns: &NamespaceSchema) -> Vec<(&str, &FunctionSchema)> {
     let mut fn_keys: Vec<_> = ns.functions.keys().collect();
     fn_keys.sort();
@@ -96,11 +91,6 @@ pub fn namespace_public_functions(ns: &NamespaceSchema) -> Vec<(&str, &FunctionS
 }
 
 /// Language-specific type name conversion.
-///
-/// Every codegen backend has a match over `TypeDescriptor` variants that
-/// produces a target-language type string.  This trait + [`convert_type`]
-/// eliminate that duplicated dispatcher; each backend only provides the
-/// per-variant mappings.
 pub trait TypeConverter {
     /// Map a Saikuro primitive type to the target-language type name.
     fn primitive_name(&self, t: &PrimitiveType) -> &'static str;
@@ -119,10 +109,6 @@ pub trait TypeConverter {
 }
 
 /// Convert a [`TypeDescriptor`] to a target-language type string.
-///
-/// This is the shared dispatcher that all backends use instead of
-/// writing their own `match` over the same variants.  Each backend
-/// implements [`TypeConverter`] to supply the language-specific mappings.
 pub fn convert_type(desc: &TypeDescriptor, conv: &impl TypeConverter) -> String {
     match desc {
         TypeDescriptor::Primitive { r#type } => conv.primitive_name(r#type).to_owned(),
@@ -138,11 +124,6 @@ pub fn convert_type(desc: &TypeDescriptor, conv: &impl TypeConverter) -> String 
 }
 
 /// Shared iteration + match over all schema types.
-///
-/// Every codegen backend iterates `schema.types` and dispatches on
-/// `TypeDefinition::{Record, Enum, Alias}`. This function captures that
-/// common skeleton; each backend provides language-specific generation
-/// for each variant via the three closures.
 pub fn generate_types_from_schema(
     schema: &Schema,
     header: Vec<String>,
@@ -171,12 +152,6 @@ pub fn generate_types_from_schema(
 }
 
 /// Shared namespace client file generation.
-///
-/// C#, Python, and TypeScript backends all follow the same pattern:
-/// 1. Add a types file to the output.
-/// 2. Iterate over schema namespaces, generating a client file per namespace.
-/// 3. Return a list of `(namespace_name, class_name)` pairs so the caller can
-///    build an umbrella/index file with the correct names.
 pub fn generate_types_and_namespace_clients(
     schema: &Schema,
     output: &mut GeneratorOutput,
