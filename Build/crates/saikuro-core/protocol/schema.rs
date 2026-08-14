@@ -1,10 +1,3 @@
-//! Schema definition types.
-//!
-//! These are the *data* types that describe the contract between providers
-//! and callers.  They are kept in `saikuro-core` so that any crate in the
-//! workspace can read schemas without depending on the heavier validation
-//! and registry machinery in `saikuro-schema`.
-
 use alloc::{boxed::Box, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 

@@ -1,12 +1,3 @@
-//! Dynamic value type used across the wire.
-//!
-//! Saikuro carries typed arguments on the wire, but the runtime must be able
-//! to handle values whose exact Rust type is not known at compile time.
-//! [`Value`] is the universal representation that can model every type in the
-//! Saikuro type system, round-trip through MessagePack without loss (bounded
-//! by [`VALUE_MAP_CAPACITY`] for map values), and be validated against a
-//! schema field descriptor.
-
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 

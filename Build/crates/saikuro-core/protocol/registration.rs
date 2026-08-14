@@ -1,5 +1,3 @@
-//! Process-unique provider registration identity.
-
 use portable_atomic::{AtomicU64, Ordering};
 
 static NEXT_REGISTRATION_TOKEN: AtomicU64 = AtomicU64::new(1);

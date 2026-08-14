@@ -9,12 +9,17 @@ repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 
 [features]
-default = ["std"]
-std = ["saikuro-random/native"]
-std-no-os = ["saikuro-random/wasm"]
-custom = ["saikuro-random/embedded"]
+default = ["std", "native"]
+std = []
+native = ["std", "saikuro-random/native"]
+no_std = ["saikuro-random/no_std"]
+wasm = ["saikuro-random/wasm"]
 embedded = ["saikuro-random/embedded"]
-wasi = ["saikuro-random/no_std"]
+custom = ["embedded"]
+drbg = ["embedded"]
+
+[lib]
+path = "lib.rs"
 
 [dependencies]
 serde = { workspace = true }

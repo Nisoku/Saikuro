@@ -1,10 +1,3 @@
-//! Globally-unique invocation identifiers.
-//!
-//! Every invocation :  whether a call, cast, stream open, or channel open :
-//! carries an [`InvocationId`]. Responses are correlated back to their
-//! originating invocation using this identifier. UUIDs v4 are used to ensure
-//! global uniqueness without coordination.
-
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -18,7 +11,7 @@ use uuid::Uuid;
 ///
 /// Internally this is a UUID v4 represented as a compact 16-byte array for
 /// efficient wire encoding via MessagePack. The `Display` and `Debug`
-/// implementations render it as the canonical hyphenated UUID string.
+/// implementations render it as a hyphenated UUID string.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct InvocationId(Uuid);
 

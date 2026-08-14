@@ -1,18 +1,9 @@
-//! Error types for the Saikuro system.
-//!
-//! Errors are modelled at two levels:
-//!
-//! 1. **[`SaikuroError`]** :  the Rust `Error`-implementing type
-//!    used throughout the runtime for fallible operations.
-//! 2. **[`ErrorDetail`]** :  the wire representation serialised into
-//!    [`ResponseEnvelope`] when an invocation fails.  This is what remote
-//!    adapters receive and surface to their callers.
-
 use alloc::string::{String, ToString};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::io::{IoError, IoErrorKind};
 use crate::value::Value;
 
 /// Maximum number of structured context entries an [`ErrorDetail`] can carry.
@@ -21,10 +12,7 @@ pub const ERROR_DETAIL_CAPACITY: usize = 16;
 /// Fixed-capacity map of structured context entries on [`ErrorDetail`].
 pub type DetailMap = heapless::FnvIndexMap<String, Value, ERROR_DETAIL_CAPACITY>;
 
-/// Machine-readable error codes transmitted on the wire.
-///
-/// Each variant maps to a distinct failure category so that adapters can
-/// handle them appropriately without string parsing.
+/// All error codes transmitted on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum ErrorCode {
@@ -217,9 +205,8 @@ pub enum SaikuroError {
     MsgpackDecode(#[from] crate::msgpack::DecodeError),
 
     //  I/O
-    #[cfg(any(feature = "std", feature = "std-no-os"))]
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(IoError),
 
     /// A fixed-capacity map reached its compile-time limit
     /// (e.g. [`crate::value::VALUE_MAP_CAPACITY`]).
@@ -254,12 +241,28 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
             SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
-            #[cfg(any(feature = "std", feature = "std-no-os"))]
-            SaikuroError::Io(_) => ErrorCode::Internal,
+            SaikuroError::Io(e) => match e.kind {
+                IoErrorKind::TimedOut => ErrorCode::Timeout,
+                IoErrorKind::ConnectionReset
+                | IoErrorKind::ConnectionAborted
+                | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
+                _ => ErrorCode::Internal,
+            },
             SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
         };
 
         ErrorDetail::new(code, err.to_string())
+    }
+}
+
+/// Convert a host `std::io::Error` into the unified error type.
+///
+/// Only available when the `std` toolchain is present; on no_std targets
+/// I/O failures are constructed directly from [`IoError`].
+#[cfg(feature = "std")]
+impl From<std::io::Error> for SaikuroError {
+    fn from(err: std::io::Error) -> Self {
+        SaikuroError::Io(err.into())
     }
 }
 

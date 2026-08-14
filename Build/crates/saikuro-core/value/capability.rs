@@ -1,14 +1,3 @@
-//! Capability tokens and sets.
-//!
-//! The Saikuro security system is built around capabilities: named, opaque
-//! tokens that function declarations require and callers must present.  The
-//! runtime validates tokens at invocation time; no token matching a required
-//! capability means the call is rejected with [`ErrorCode::CapabilityDenied`].
-//!
-//! A [`CapabilityToken`] is a string like `"math.basic"` or `"admin.write"`.
-//! A [`CapabilitySet`] is the collection of tokens held by a connected peer,
-//! issued during the handshake phase.
-
 use alloc::string::String;
 use core::fmt;
 use serde::{Deserialize, Serialize};
@@ -22,11 +11,12 @@ pub const CAPABILITY_SET_CAPACITY: usize = 256;
 /// Fixed-capacity set of capability tokens held by a peer.
 pub type TokenSet = heapless::FnvIndexSet<CapabilityToken, CAPABILITY_SET_CAPACITY>;
 
-/// A single capability token :  a namespaced, human-readable permission string.
+/// A single capability token:  a namespaced, human-readable permission string.
 ///
 /// By convention tokens are dot-separated: `"<namespace>.<permission>"`.
 /// The runtime treats them as opaque strings; no hierarchical wildcard
-/// expansion is performed in v1 (exact match only).
+/// expansion is performed yet (exact match only).
+/// TODO: Implement hierarchical wildcard expansion.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CapabilityToken(pub String);

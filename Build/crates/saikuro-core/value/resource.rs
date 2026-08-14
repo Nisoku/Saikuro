@@ -1,33 +1,3 @@
-//! Resource handle type.
-//!
-//! A [`ResourceHandle`] is an opaque reference to large or external data that
-//! is too expensive to inline in a regular response: a file on disk, a blob
-//! in object storage, a database cursor, etc.
-//!
-//! The handle carries enough metadata for the recipient to:
-//! - Identify the resource uniquely (`id`)
-//! - Know how large it is without fetching it (`size`)
-//! - Know its content type (`mime_type`)
-//! - Optionally open it via a well-known URI scheme (`uri`)
-//!
-//! Handles are opaque to the Saikuro runtime: the runtime routes the `Resource`
-//! envelope to the provider and returns whatever the provider placed in the
-//! response `result` field.  The adapter is responsible for presenting a typed
-//! [`ResourceHandle`] to its callers.
-//!
-//! # Wire format
-//!
-//! A `ResourceHandle` is serialised as a flat MessagePack map:
-//!
-//! ```json
-//! {
-//!   "id":        "<handle-uuid>",
-//!   "mime_type": "application/octet-stream",  // optional
-//!   "size":      12345,                         // optional, bytes
-//!   "uri":       "saikuro://res/<id>"           // optional
-//! }
-//! ```
-
 use alloc::{borrow::ToOwned, boxed::Box, string::String};
 use core::fmt;
 use serde::{Deserialize, Serialize};

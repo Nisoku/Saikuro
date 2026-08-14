@@ -1,18 +1,3 @@
-//! MessagePack codec
-//!
-//! All Saikuro wire encoding goes through this module so host, wasm, and MCU
-//! targets emit identical bytes. The underlying encoder is `messagepack-serde`,
-//! a `no_std` + alloc MessagePack serializer, so these helpers are available on
-//! every build target (the previous rmp-serde codec was std-only).
-//!
-//! Encoding always uses [`RmpCompatible`], which reproduces the reference
-//! rmp-serde byte format exactly: integers are minimized to the smallest
-//! representation that holds them and floats keep their native width.
-//! `messagepack-serde`'s default `LosslessMinimize` config downcasts `f64`
-//! values that fit exactly in `f32`, which would silently change the wire
-//! format for `Value::Float`; `RmpCompatible` restores rmp-serde's behavior.
-//! Tests in the workspace use rmp-serde as a reference implementation
-
 use alloc::vec::Vec;
 use core::convert::Infallible;
 use messagepack_serde::{

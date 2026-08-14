@@ -1,10 +1,3 @@
-//! Wire-level envelope types.
-//!
-//! Every message exchanged between a language adapter and the Saikuro runtime
-//! is wrapped in an [`Envelope`] or [`ResponseEnvelope`].  Envelopes are
-//! serialised to binary using MessagePack via `crate::msgpack` before transit;
-//! the types here are the canonical in-memory representation.
-
 use alloc::{string::String, vec::Vec};
 use serde::{
     ser::{SerializeMap, Serializer},
@@ -23,10 +16,6 @@ pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// Serialize the metadata map with keys sorted, so equivalent metadata always
 /// produces identical bytes regardless of the caller's insertion order.
-///
-/// `MetaMap` is an insertion-ordered `FnvIndexMap`, so serde would otherwise
-/// emit keys in insertion order and two semantically-equal envelopes could
-/// differ on the wire.
 fn serialize_meta<S>(meta: &MetaMap, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -41,9 +30,6 @@ where
 }
 
 /// The type of an outgoing invocation.
-///
-/// This is the primary discriminator that tells the runtime and the
-/// recipient adapter how to handle a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -92,8 +78,6 @@ pub enum StreamControl {
 
 /// The outbound envelope carrying a single invocation from an adapter to
 /// the runtime, or from the runtime to a provider adapter.
-///
-/// Fields follow the spec exactly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Envelope {
     /// Protocol version :  must equal [`PROTOCOL_VERSION`].
