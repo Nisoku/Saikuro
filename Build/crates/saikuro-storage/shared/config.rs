@@ -1,17 +1,7 @@
-//! Configuration for storage backends.
-
 use alloc::string::String;
 use core::time::Duration;
 
 /// Selects which storage backend implementation to use at runtime.
-///
-/// When [`BackendKind::InMemory`] (the default), [`StorageConfig::persistence`]
-/// determines the backend via the platform-aware dispatch in
-/// [`StorageBackend`](crate::traits::StorageBackend).
-///
-/// Set this explicitly to bypass the automatic dispatch and force a specific
-/// backend (returns an error if the backend is not available on the current
-/// platform/feature set).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackendKind {
     /// In-memory DashMap backend. Works everywhere.
@@ -29,7 +19,7 @@ pub enum BackendKind {
     Filesystem,
     /// Sled embedded database. Native only.
     Sled,
-    /// SQLite via `rusqlite`. Native only.
+    /// SQLite via `graphitesql`. Available on all engines.
     Sqlite,
 }
 
@@ -163,7 +153,7 @@ impl StorageConfig {
 }
 
 /// Bounded-size limits
-#[cfg(feature = "flash-storage")]
+#[cfg(feature = "flash")]
 pub mod limits {
     /// Maximum length of a namespace, in bytes. Encoded as `u8` in the
     /// on-flash record header.
@@ -187,7 +177,7 @@ pub mod limits {
 }
 
 /// Geometry and size limits for a flash-backed key-value store.
-#[cfg(feature = "flash-storage")]
+#[cfg(feature = "flash")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FlashConfig {
     /// Offset of the store's region inside the flash device. Must be aligned
@@ -205,7 +195,7 @@ pub struct FlashConfig {
     pub max_value_len: usize,
 }
 
-#[cfg(feature = "flash-storage")]
+#[cfg(feature = "flash")]
 impl FlashConfig {
     /// A 256 KiB region using the defaults for every field.
     pub const DEFAULT: Self = Self {

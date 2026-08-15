@@ -396,6 +396,58 @@ impl SaikuroError {
     }
 }
 
+impl SaikuroError {
+    /// Construct a [`SaikuroError::KeyNotFound`].
+    pub fn key_not_found(key: impl Into<String>) -> Self {
+        SaikuroError::KeyNotFound(key.into())
+    }
+
+    /// Construct a [`SaikuroError::NamespaceNotFound`].
+    pub fn namespace_not_found(namespace: impl Into<String>) -> Self {
+        SaikuroError::NamespaceNotFound(namespace.into())
+    }
+
+    /// Construct a [`SaikuroError::KeyAlreadyExists`].
+    pub fn key_already_exists(key: impl Into<String>) -> Self {
+        SaikuroError::KeyAlreadyExists(key.into())
+    }
+
+    /// Construct a [`SaikuroError::NamespaceAlreadyExists`].
+    pub fn namespace_already_exists(namespace: impl Into<String>) -> Self {
+        SaikuroError::NamespaceAlreadyExists(namespace.into())
+    }
+
+    /// Construct a [`SaikuroError::Serialization`].
+    pub fn serialization(msg: impl Into<String>) -> Self {
+        SaikuroError::Serialization(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::Deserialization`].
+    pub fn deserialization(msg: impl Into<String>) -> Self {
+        SaikuroError::Deserialization(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::Internal`].
+    pub fn internal(msg: impl Into<String>) -> Self {
+        SaikuroError::Internal(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::OperationNotSupported`].
+    pub fn not_supported(msg: impl Into<String>) -> Self {
+        SaikuroError::OperationNotSupported(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::BackendNotAvailable`].
+    pub fn backend_not_available(msg: impl Into<String>) -> Self {
+        SaikuroError::BackendNotAvailable(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::QuotaExceeded`].
+    pub fn quota_exceeded(msg: impl Into<String>) -> Self {
+        SaikuroError::QuotaExceeded(msg.into())
+    }
+}
+
 impl From<SaikuroError> for ErrorDetail {
     fn from(err: SaikuroError) -> Self {
         ErrorDetail::new(err.error_code(), err.to_string())

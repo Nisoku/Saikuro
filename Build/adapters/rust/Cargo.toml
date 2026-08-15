@@ -15,18 +15,18 @@ name = "saikuro-rust-schema"
 path = "src/cli/saikuro_rust_schema.rs"
 
 [features]
-default = ["tcp", "unix", "ws", "storage", "saikuro-exec/tokio-runtime"]
+default = ["tcp", "unix", "ws", "storage", "saikuro-exec/native"]
 tcp  = ["saikuro-transport/native-transport"]
 unix = ["saikuro-transport/native-transport"]
 ws   = ["saikuro-transport/native-ws"]
 wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport", "saikuro-random/wasm"]
 
 # Storage backends: platform-agnostic factory in storage module
-storage         = ["saikuro-storage/native-storage"]
-storage-fs      = ["saikuro-storage/fs-storage"]
-storage-sled    = ["saikuro-storage/sled-storage"]
-storage-sqlite  = ["saikuro-storage/sqlite-storage"]
-wasm-storage    = ["saikuro-storage/wasm-storage"]
+storage         = ["saikuro-storage/native"]
+storage-fs      = ["saikuro-storage/fs"]
+storage-sled    = ["saikuro-storage/sled"]
+storage-sqlite  = ["saikuro-storage/sqlite"]
+wasm-storage    = ["saikuro-storage/wasm"]
 
 [dependencies]
 saikuro-core      = { path = "../../crates/saikuro-core", default-features = false }

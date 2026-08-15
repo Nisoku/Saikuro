@@ -1,9 +1,3 @@
-//! IndexedDB-backed storage backend for WASM.
-//!
-//! Uses the browser's IndexedDB API to provide persistent key-value storage
-//! that survives page reloads. Enabled automatically when the `wasm-storage`
-//! feature is active on a `wasm32` target.
-
 use bytes::Bytes;
 use js_sys::Uint8Array;
 use std::cell::RefCell;
@@ -14,11 +8,9 @@ use web_sys::{
     IdbVersionChangeEvent,
 };
 
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
-    traits::{LocalKeyValueBackend, LocalStorageBackend},
-};
+use crate::config::StorageConfig;
+use crate::traits::{KeyValueBackend, StorageBackend};
+use saikuro_event::{Result, SaikuroError};
 
 const DB_NAME: &str = "SaikuroStorage";
 const STORE_NAME: &str = "kv_store";
@@ -83,15 +75,15 @@ fn bytes_to_js(val: &Bytes) -> JsValue {
 }
 
 async fn open_database(name: &str, version: u32) -> Result<IdbDatabase> {
-    let window = web_sys::window().ok_or_else(|| StorageError::internal("no window object"))?;
+    let window = web_sys::window().ok_or_else(|| SaikuroError::internal("no window object"))?;
     let factory: IdbFactory = window
         .indexed_db()
-        .map_err(|_| StorageError::internal("IndexedDB API call failed"))?
-        .ok_or_else(|| StorageError::internal("IndexedDB not available"))?;
+        .map_err(|_| SaikuroError::internal("IndexedDB API call failed"))?
+        .ok_or_else(|| SaikuroError::internal("IndexedDB not available"))?;
 
     let open_request = factory
         .open_with_u32(name, version)
-        .map_err(|e| StorageError::internal(format!("IndexedDB open call failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("IndexedDB open call failed: {e:?}")))?;
 
     // Install onupgradeneeded handler (fires when DB is created or version
     // changes). The handler receives an `IdbVersionChangeEvent` whose
@@ -118,7 +110,7 @@ async fn open_database(name: &str, version: u32) -> Result<IdbDatabase> {
 
     let result = idb_await(open_request.unchecked_ref::<IdbRequest>())
         .await
-        .map_err(|e| StorageError::internal(format!("IndexedDB open failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("IndexedDB open failed: {e:?}")))?;
 
     Ok(result.into())
 }
@@ -138,31 +130,31 @@ async fn tx(
 ) -> Result<(web_sys::IdbTransaction, IdbObjectStore)> {
     let transaction = db
         .transaction_with_str_and_mode(STORE_NAME, mode)
-        .map_err(|_| StorageError::internal("failed to create IndexedDB transaction"))?;
+        .map_err(|_| SaikuroError::internal("failed to create IndexedDB transaction"))?;
     let store = transaction
         .object_store(STORE_NAME)
-        .map_err(|_| StorageError::internal("failed to get object store"))?;
+        .map_err(|_| SaikuroError::internal("failed to get object store"))?;
     Ok((transaction, store))
 }
 
 fn store_get(store: &IdbObjectStore, key: &JsValue) -> Result<JsFuture> {
     let request = store
         .get(key)
-        .map_err(|_| StorageError::internal("IndexedDB get request failed"))?;
+        .map_err(|_| SaikuroError::internal("IndexedDB get request failed"))?;
     Ok(idb_await(&request))
 }
 
 fn store_put(store: &IdbObjectStore, key: &JsValue, value: &JsValue) -> Result<JsFuture> {
     let request = store
         .put_with_key(value, key)
-        .map_err(|_| StorageError::internal("IndexedDB put request failed"))?;
+        .map_err(|_| SaikuroError::internal("IndexedDB put request failed"))?;
     Ok(idb_await(&request))
 }
 
 fn store_delete(store: &IdbObjectStore, key: &JsValue) -> Result<JsFuture> {
     let request = store
         .delete(key)
-        .map_err(|_| StorageError::internal("IndexedDB delete request failed"))?;
+        .map_err(|_| SaikuroError::internal("IndexedDB delete request failed"))?;
     Ok(idb_await(&request))
 }
 
@@ -171,7 +163,7 @@ fn store_get_all_keys(store: &IdbObjectStore, query: Option<&JsValue>) -> Result
         Some(q) => store.get_all_keys_with_key(q),
         None => store.get_all_keys(),
     }
-    .map_err(|_| StorageError::internal("IndexedDB getAllKeys request failed"))?;
+    .map_err(|_| SaikuroError::internal("IndexedDB getAllKeys request failed"))?;
     Ok(idb_await(&request))
 }
 
@@ -183,7 +175,7 @@ fn prefix_range(prefix: &str) -> Result<IdbKeyRange> {
         s
     };
     IdbKeyRange::bound(&JsValue::from(prefix), &JsValue::from(&upper))
-        .map_err(|_| StorageError::internal("failed to create IDBKeyRange"))
+        .map_err(|_| SaikuroError::internal("failed to create IDBKeyRange"))
 }
 
 // IndexedDbStorage
@@ -223,7 +215,7 @@ impl Default for IndexedDbStorage {
     }
 }
 
-impl LocalKeyValueBackend for IndexedDbStorage {
+impl KeyValueBackend for IndexedDbStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
     }
@@ -233,7 +225,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
         let (_tx, store) = tx(&db, IdbTransactionMode::Readonly).await?;
         match store_get(&store, &JsValue::from(make_key(namespace, key)))?.await {
             Ok(val) => Ok(!val.is_undefined() && !val.is_null()),
-            Err(e) => Err(StorageError::internal(format!(
+            Err(e) => Err(SaikuroError::internal(format!(
                 "IndexedDB exists failed: {e:?}"
             ))),
         }
@@ -257,7 +249,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
             &bytes_to_js(&value),
         )?
         .await
-        .map_err(|e| StorageError::internal(format!("IndexedDB put failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("IndexedDB put failed: {e:?}")))?;
         Ok(())
     }
 
@@ -266,7 +258,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
         let (_tx, store) = tx(&db, IdbTransactionMode::Readwrite).await?;
         store_delete(&store, &JsValue::from(make_key(namespace, key)))?
             .await
-            .map_err(|e| StorageError::internal(format!("IndexedDB delete failed: {e:?}")))?;
+            .map_err(|e| SaikuroError::internal(format!("IndexedDB delete failed: {e:?}")))?;
         Ok(())
     }
 
@@ -277,7 +269,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
         let range = prefix_range(&prefix)?;
         let result = store_get_all_keys(&store, Some(&JsValue::from(range)))?
             .await
-            .map_err(|e| StorageError::internal(format!("IndexedDB list_keys failed: {e:?}")))?;
+            .map_err(|e| SaikuroError::internal(format!("IndexedDB list_keys failed: {e:?}")))?;
 
         let prefix_len = prefix.len();
         let keys: Vec<String> = result
@@ -295,7 +287,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
         let db = get_db().await?;
         let (_tx, store) = tx(&db, IdbTransactionMode::Readonly).await?;
         let result = store_get_all_keys(&store, None)?.await.map_err(|e| {
-            StorageError::internal(format!("IndexedDB list_namespaces failed: {e:?}"))
+            SaikuroError::internal(format!("IndexedDB list_namespaces failed: {e:?}"))
         })?;
 
         let mut namespaces: Vec<String> = result
@@ -321,9 +313,9 @@ impl LocalKeyValueBackend for IndexedDbStorage {
         let range = prefix_range(&make_key(namespace, ""))?;
         let request = store
             .delete(&JsValue::from(range))
-            .map_err(|_| StorageError::internal("IndexedDB range delete failed"))?;
+            .map_err(|_| SaikuroError::internal("IndexedDB range delete failed"))?;
         idb_await(&request).await.map_err(|e| {
-            StorageError::internal(format!("IndexedDB delete_namespace failed: {e:?}"))
+            SaikuroError::internal(format!("IndexedDB delete_namespace failed: {e:?}"))
         })?;
         Ok(())
     }
@@ -333,7 +325,7 @@ impl LocalKeyValueBackend for IndexedDbStorage {
     }
 }
 
-impl LocalStorageBackend for IndexedDbStorage {
+impl StorageBackend for IndexedDbStorage {
     fn supports_files(&self) -> bool {
         false
     }

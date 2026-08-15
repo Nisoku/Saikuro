@@ -1,15 +1,13 @@
-use async_trait::async_trait;
+
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
-    traits::{KeyValueBackend, StorageBackend},
-};
+use crate::config::StorageConfig;
+use crate::traits::{KeyValueBackend, StorageBackend};
+use saikuro_event::{Result, SaikuroError};
 
-/// Spawn blocking I/O, converting [`JoinError`] to [`StorageError`].
+/// Spawn blocking I/O, converting [`JoinError`] to [`SaikuroError`].
 async fn block<F, T>(f: F) -> Result<T>
 where
     F: FnOnce() -> Result<T> + Send + 'static,
@@ -17,13 +15,10 @@ where
 {
     spawn_blocking(f)
         .await
-        .map_err(|e| StorageError::internal(format!("blocking task failed: {e}")))?
+        .map_err(|e| SaikuroError::internal(format!("blocking task failed: {e}")))?
 }
 
 /// A sled-backed persistent key-value storage backend.
-///
-/// Each namespace maps to a sled [`Tree`] within a single database file.
-/// All I/O is dispatched to the blocking thread pool.
 pub struct SledStorage {
     config: StorageConfig,
     db: Arc<sled::Db>,
@@ -37,7 +32,7 @@ impl SledStorage {
 
     /// Open or create a sled database with a custom configuration.
     pub fn with_config(path: impl AsRef<std::path::Path>, config: StorageConfig) -> Result<Self> {
-        let db = sled::open(path).map_err(|e| StorageError::internal(format!("sled open: {e}")))?;
+        let db = sled::open(path).map_err(|e| SaikuroError::internal(format!("sled open: {e}")))?;
         Ok(Self {
             config,
             db: Arc::new(db),
@@ -49,7 +44,7 @@ impl SledStorage {
         let db = sled::Config::default()
             .temporary(true)
             .open()
-            .map_err(|e| StorageError::internal(format!("sled temporary: {e}")))?;
+            .map_err(|e| SaikuroError::internal(format!("sled temporary: {e}")))?;
         Ok(Self {
             config: StorageConfig::default(),
             db: Arc::new(db),
@@ -79,7 +74,7 @@ impl SledStorage {
     }
 }
 
-#[async_trait]
+
 impl KeyValueBackend for SledStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
@@ -92,9 +87,9 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             tree.contains_key(key.as_bytes())
-                .map_err(|e| StorageError::internal(format!("sled contains_key: {e}")))
+                .map_err(|e| SaikuroError::internal(format!("sled contains_key: {e}")))
         })
         .await
     }
@@ -106,11 +101,11 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             match tree.get(key.as_bytes()) {
                 Ok(Some(iv)) => Ok(Some(Bytes::from(iv.to_vec()))),
                 Ok(None) => Ok(None),
-                Err(e) => Err(StorageError::internal(format!("sled get: {e}"))),
+                Err(e) => Err(SaikuroError::internal(format!("sled get: {e}"))),
             }
         })
         .await
@@ -124,9 +119,9 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             tree.insert(key.as_bytes(), val)
-                .map_err(|e| StorageError::internal(format!("sled insert: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled insert: {e}")))?;
             Ok(())
         })
         .await
@@ -139,9 +134,9 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             tree.remove(key.as_bytes())
-                .map_err(|e| StorageError::internal(format!("sled remove: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled remove: {e}")))?;
             Ok(())
         })
         .await
@@ -153,7 +148,7 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             let keys: Vec<String> = tree
                 .iter()
                 .keys()
@@ -193,7 +188,7 @@ impl KeyValueBackend for SledStorage {
         let ns = self.apply_prefix(namespace);
         block(move || {
             db.open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled create tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled create tree: {e}")))?;
             Ok(())
         })
         .await
@@ -204,7 +199,7 @@ impl KeyValueBackend for SledStorage {
         let ns = self.apply_prefix(namespace);
         block(move || {
             db.drop_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled drop tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled drop tree: {e}")))?;
             Ok(())
         })
         .await
@@ -216,16 +211,16 @@ impl KeyValueBackend for SledStorage {
         block(move || {
             let tree = db
                 .open_tree(&ns)
-                .map_err(|e| StorageError::internal(format!("sled tree: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled tree: {e}")))?;
             tree.clear()
-                .map_err(|e| StorageError::internal(format!("sled clear: {e}")))?;
+                .map_err(|e| SaikuroError::internal(format!("sled clear: {e}")))?;
             Ok(())
         })
         .await
     }
 }
 
-#[async_trait]
+
 impl StorageBackend for SledStorage {
     fn supports_files(&self) -> bool {
         false

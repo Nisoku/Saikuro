@@ -1,62 +1,56 @@
-#![cfg(target_arch = "wasm32")]
-
 use bytes::Bytes;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    FileSystemCreateWritableOptions, FileSystemDirectoryHandle, FileSystemFileHandle,
-    FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSystemHandle,
-    FileSystemHandleKind, FileSystemRemoveOptions,
+    FileSystemCreateWritableOptions, FileSystemDirectoryHandle, FileSystemGetDirectoryOptions,
+    FileSystemGetFileOptions, FileSystemHandle, FileSystemHandleKind, FileSystemRemoveOptions,
 };
 
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
-    traits::{LocalFileBackend, LocalKeyValueBackend, LocalStorageBackend},
-};
+use crate::config::StorageConfig;
+use crate::traits::{FileBackend, KeyValueBackend, StorageBackend};
+use saikuro_event::{Result, SaikuroError};
 
-thread_local! {
-    static ROOT_HANDLE: RefCell<Option<FileSystemDirectoryHandle>> = const { RefCell::new(None) };
-}
+const ROOT_DIR_NAME: &str = "SaikuroStorage";
 
 fn promise_await(promise: ::js_sys::Promise) -> JsFuture {
     JsFuture::from(promise)
 }
 
-async fn pick_directory() -> Result<FileSystemDirectoryHandle> {
-    let window = web_sys::window().ok_or_else(|| StorageError::internal("no window object"))?;
-    let promise = js_sys::Reflect::get(&window, &JsValue::from_str("showDirectoryPicker"))
-        .map_err(|e| StorageError::internal(format!("showDirectoryPicker not available: {e:?}")))?;
-
-    let promise = promise
-        .dyn_into::<js_sys::Function>()
-        .map_err(|e| {
-            StorageError::internal(format!("showDirectoryPicker is not a function: {e:?}"))
-        })?
-        .call0(&window)
-        .map_err(|e| StorageError::internal(format!("showDirectoryPicker call failed: {e:?}")))?
-        .dyn_into::<js_sys::Promise>()
-        .map_err(|e| {
-            StorageError::internal(format!(
-                "showDirectoryPicker result is not a promise: {e:?}"
-            ))
-        })?;
-
-    let result = promise_await(promise).await.map_err(|e| {
-        StorageError::internal(format!("showDirectoryPicker promise failed: {e:?}"))
-    })?;
-
-    result.dyn_into::<FileSystemDirectoryHandle>().map_err(|e| {
-        StorageError::internal(format!(
-            "showDirectoryPicker result is not a directory handle: {e:?}"
-        ))
-    })
+thread_local! {
+    static ROOT_HANDLE: RefCell<Option<FileSystemDirectoryHandle>> = const { RefCell::new(None) };
 }
 
-async fn get_or_create_dir(
+async fn open_root() -> Result<FileSystemDirectoryHandle> {
+    let window = web_sys::window().ok_or_else(|| SaikuroError::internal("no window object"))?;
+    let storage = window.navigator().storage();
+    let promise = storage.get_directory();
+    let result = promise_await(promise)
+        .await
+        .map_err(|e| SaikuroError::internal(format!("OPFS getDirectory failed: {e:?}")))?;
+    let root: FileSystemDirectoryHandle = result.into();
+
+    let opts = FileSystemGetDirectoryOptions::new();
+    let promise = root.get_directory_handle_with_options(ROOT_DIR_NAME, &opts);
+    let app_dir = promise_await(promise).await.map_err(|e| {
+        SaikuroError::internal(format!(
+            "OPFS getDirectoryHandle({ROOT_DIR_NAME}) failed: {e:?}"
+        ))
+    })?;
+    Ok(app_dir.into())
+}
+
+async fn get_root() -> Result<FileSystemDirectoryHandle> {
+    if let Some(handle) = ROOT_HANDLE.with(|cell| cell.borrow().clone()) {
+        return Ok(handle);
+    }
+    let handle = open_root().await?;
+    ROOT_HANDLE.with(|cell| *cell.borrow_mut() = Some(handle.clone()));
+    Ok(handle)
+}
+
+async fn ensure_dir(
     parent: &FileSystemDirectoryHandle,
     name: &str,
 ) -> Result<FileSystemDirectoryHandle> {
@@ -65,49 +59,49 @@ async fn get_or_create_dir(
     let promise = parent.get_directory_handle_with_options(name, &opts);
     let result = promise_await(promise)
         .await
-        .map_err(|e| StorageError::internal(format!("getOrCreateDir({name}) failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS ensureDir({name}) failed: {e:?}")))?;
     Ok(result.into())
 }
 
 async fn get_or_create_file(
     parent: &FileSystemDirectoryHandle,
     name: &str,
-) -> Result<FileSystemFileHandle> {
+) -> Result<web_sys::FileSystemFileHandle> {
     let opts = FileSystemGetFileOptions::new();
     opts.set_create(true);
     let promise = parent.get_file_handle_with_options(name, &opts);
-    let result = promise_await(promise)
-        .await
-        .map_err(|e| StorageError::internal(format!("getOrCreateFile({name}) failed: {e:?}")))?;
+    let result = promise_await(promise).await.map_err(|e| {
+        SaikuroError::internal(format!("OPFS getOrCreateFile({name}) failed: {e:?}"))
+    })?;
     Ok(result.into())
 }
 
 async fn get_file(
     parent: &FileSystemDirectoryHandle,
     name: &str,
-) -> Result<Option<FileSystemFileHandle>> {
+) -> Result<Option<web_sys::FileSystemFileHandle>> {
     let opts = FileSystemGetFileOptions::new();
     let promise = parent.get_file_handle_with_options(name, &opts);
     match promise_await(promise).await {
         Ok(val) => {
-            let handle: FileSystemFileHandle = val.into();
+            let handle: web_sys::FileSystemFileHandle = val.into();
             Ok(Some(handle))
         }
         Err(_) => Ok(None),
     }
 }
 
-async fn read_file_from_handle(file: &FileSystemFileHandle) -> Result<Bytes> {
+async fn read_file_from_handle(file: &web_sys::FileSystemFileHandle) -> Result<Bytes> {
     let file_promise = file.get_file();
     let file_val = promise_await(file_promise)
         .await
-        .map_err(|e| StorageError::internal(format!("getFile failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS getFile failed: {e:?}")))?;
     let js_file: web_sys::File = file_val.into();
 
     let buf_promise = js_file.array_buffer();
     let buf_val = promise_await(buf_promise)
         .await
-        .map_err(|e| StorageError::internal(format!("arrayBuffer failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS arrayBuffer failed: {e:?}")))?;
     let buf: ArrayBuffer = buf_val.into();
     let uint8 = Uint8Array::new(&buf);
     let mut vec = vec![0u8; uint8.length() as usize];
@@ -115,62 +109,46 @@ async fn read_file_from_handle(file: &FileSystemFileHandle) -> Result<Bytes> {
     Ok(Bytes::from(vec))
 }
 
-async fn write_file_to_handle(file: &FileSystemFileHandle, data: &Bytes) -> Result<()> {
+async fn write_file_to_handle(file: &web_sys::FileSystemFileHandle, data: &Bytes) -> Result<()> {
     let writable_promise = file.create_writable();
     let writable_val = promise_await(writable_promise)
         .await
-        .map_err(|e| StorageError::internal(format!("createWritable failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS createWritable failed: {e:?}")))?;
     let writable: web_sys::FileSystemWritableFileStream = writable_val.into();
 
     let write_promise = writable
         .write_with_u8_array(data)
-        .map_err(|e| StorageError::internal(format!("write call failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS write call failed: {e:?}")))?;
     promise_await(write_promise)
         .await
-        .map_err(|e| StorageError::internal(format!("write failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS write failed: {e:?}")))?;
 
     promise_await(writable.close())
         .await
-        .map_err(|e| StorageError::internal(format!("close failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS close failed: {e:?}")))?;
 
     Ok(())
 }
 
-async fn append_file_to_handle(file: &FileSystemFileHandle, data: &Bytes) -> Result<()> {
-    // Get current file size to seek to end
-    let file_promise = file.get_file();
-    let file_val = promise_await(file_promise)
-        .await
-        .map_err(|e| StorageError::internal(format!("getFile(append) failed: {e:?}")))?;
-    let js_file: web_sys::File = file_val.into();
-    let file_size = js_file.size() as f64;
-
+async fn append_file_to_handle(file: &web_sys::FileSystemFileHandle, data: &Bytes) -> Result<()> {
     let create_opts = FileSystemCreateWritableOptions::new();
     create_opts.set_keep_existing_data(true);
     let writable_promise = file.create_writable_with_options(&create_opts);
-    let writable_val = promise_await(writable_promise)
-        .await
-        .map_err(|e| StorageError::internal(format!("createWritable(append) failed: {e:?}")))?;
+    let writable_val = promise_await(writable_promise).await.map_err(|e| {
+        SaikuroError::internal(format!("OPFS createWritable(append) failed: {e:?}"))
+    })?;
     let writable: web_sys::FileSystemWritableFileStream = writable_val.into();
-
-    // Seek to end of file
-    let seek_promise = writable
-        .seek_with_f64(file_size)
-        .map_err(|e| StorageError::internal(format!("seek(append) call failed: {e:?}")))?;
-    promise_await(seek_promise)
-        .await
-        .map_err(|e| StorageError::internal(format!("seek(append) failed: {e:?}")))?;
 
     let write_promise = writable
         .write_with_u8_array(data)
-        .map_err(|e| StorageError::internal(format!("write call(append) failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS write call(append) failed: {e:?}")))?;
     promise_await(write_promise)
         .await
-        .map_err(|e| StorageError::internal(format!("write(append) failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS write(append) failed: {e:?}")))?;
 
     promise_await(writable.close())
         .await
-        .map_err(|e| StorageError::internal(format!("close(append) failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS close(append) failed: {e:?}")))?;
 
     Ok(())
 }
@@ -179,7 +157,7 @@ async fn remove_entry(parent: &FileSystemDirectoryHandle, name: &str) -> Result<
     let promise = parent.remove_entry(name);
     promise_await(promise)
         .await
-        .map_err(|e| StorageError::internal(format!("removeEntry({name}) failed: {e:?}")))?;
+        .map_err(|e| SaikuroError::internal(format!("OPFS removeEntry({name}) failed: {e:?}")))?;
     Ok(())
 }
 
@@ -188,7 +166,7 @@ async fn remove_entry_recursive(parent: &FileSystemDirectoryHandle, name: &str) 
     opts.set_recursive(true);
     let promise = parent.remove_entry_with_options(name, &opts);
     promise_await(promise).await.map_err(|e| {
-        StorageError::internal(format!("removeEntry({name},recursive) failed: {e:?}"))
+        SaikuroError::internal(format!("OPFS removeEntry({name},recursive) failed: {e:?}"))
     })?;
     Ok(())
 }
@@ -201,10 +179,10 @@ async fn list_entry_names(
     loop {
         let promise = iter
             .next()
-            .map_err(|e| StorageError::internal(format!("iterator next() failed: {e:?}")))?;
+            .map_err(|e| SaikuroError::internal(format!("OPFS iterator next() failed: {e:?}")))?;
         let result = promise_await(promise)
             .await
-            .map_err(|e| StorageError::internal(format!("iterator promise failed: {e:?}")))?;
+            .map_err(|e| SaikuroError::internal(format!("OPFS iterator promise failed: {e:?}")))?;
 
         let done = js_sys::Reflect::get(&result, &JsValue::from_str("done"))
             .ok()
@@ -216,7 +194,7 @@ async fn list_entry_names(
         }
 
         let value = js_sys::Reflect::get(&result, &JsValue::from_str("value"))
-            .map_err(|_| StorageError::internal("missing value in iterator result"))?;
+            .map_err(|_| SaikuroError::internal("missing value in iterator result"))?;
 
         let arr = js_sys::Array::from(&value);
         let name = arr.get(0).as_string().unwrap_or_default();
@@ -256,41 +234,35 @@ fn strip_prefix(config: &StorageConfig, stored: &str) -> String {
     }
 }
 
-pub struct FsAccessStorage {
+pub struct OpfsStorage {
     config: StorageConfig,
-    root_handle: FileSystemDirectoryHandle,
 }
 
-impl FsAccessStorage {
-    pub async fn pick() -> Result<Self> {
-        let root_handle = pick_directory().await?;
-        Ok(Self {
-            config: StorageConfig::default(),
-            root_handle,
-        })
-    }
-
-    pub fn with_config(config: StorageConfig, root_handle: FileSystemDirectoryHandle) -> Self {
+impl OpfsStorage {
+    pub fn new() -> Self {
         Self {
-            config,
-            root_handle,
+            config: StorageConfig::default(),
         }
     }
 
+    pub fn with_config(config: StorageConfig) -> Self {
+        Self { config }
+    }
+
     async fn namespace_dir(&self, namespace: &str) -> Result<FileSystemDirectoryHandle> {
+        let root = get_root().await?;
         let prefixed = apply_prefix(&self.config, namespace);
-        get_or_create_dir(&self.root_handle, &prefixed).await
+        ensure_dir(&root, &prefixed).await
     }
 
     async fn namespace_dir_if_exists(
         &self,
         namespace: &str,
     ) -> Result<Option<FileSystemDirectoryHandle>> {
+        let root = get_root().await?;
         let prefixed = apply_prefix(&self.config, namespace);
         let opts = FileSystemGetDirectoryOptions::new();
-        let promise = self
-            .root_handle
-            .get_directory_handle_with_options(&prefixed, &opts);
+        let promise = root.get_directory_handle_with_options(&prefixed, &opts);
         match promise_await(promise).await {
             Ok(val) => Ok(Some(val.into())),
             Err(_) => Ok(None),
@@ -302,7 +274,7 @@ impl FsAccessStorage {
         dirs: &[&str],
         create: bool,
     ) -> Result<FileSystemDirectoryHandle> {
-        let mut current = self.root_handle.clone();
+        let mut current = get_root().await?;
         for &dir_name in dirs {
             if create {
                 let opts = FileSystemGetDirectoryOptions::new();
@@ -310,7 +282,7 @@ impl FsAccessStorage {
                 let promise = current.get_directory_handle_with_options(dir_name, &opts);
                 let result = promise_await(promise)
                     .await
-                    .map_err(|e| StorageError::internal(format!("navigateToDir failed: {e:?}")))?;
+                    .map_err(|e| SaikuroError::internal(format!("OPFS navigate failed: {e:?}")))?;
                 current = result.into();
             } else {
                 let opts = FileSystemGetDirectoryOptions::new();
@@ -320,7 +292,7 @@ impl FsAccessStorage {
                         current = val.into();
                     }
                     Err(_) => {
-                        return Err(StorageError::key_not_found(dirs.join("/")));
+                        return Err(SaikuroError::key_not_found(dirs.join("/")));
                     }
                 }
             }
@@ -329,7 +301,13 @@ impl FsAccessStorage {
     }
 }
 
-impl LocalKeyValueBackend for FsAccessStorage {
+impl Default for OpfsStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyValueBackend for OpfsStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
     }
@@ -386,7 +364,8 @@ impl LocalKeyValueBackend for FsAccessStorage {
     }
 
     async fn list_namespaces(&self) -> Result<Vec<String>> {
-        let entries = list_entry_names(&self.root_handle).await?;
+        let root = get_root().await?;
+        let entries = list_entry_names(&root).await?;
         let namespaces: Vec<String> = entries
             .into_iter()
             .filter(|(_, kind)| *kind == FileSystemHandleKind::Directory)
@@ -401,8 +380,9 @@ impl LocalKeyValueBackend for FsAccessStorage {
     }
 
     async fn delete_namespace(&self, namespace: &str) -> Result<()> {
+        let root = get_root().await?;
         let prefixed = apply_prefix(&self.config, namespace);
-        let _ = remove_entry_recursive(&self.root_handle, &prefixed).await;
+        let _ = remove_entry_recursive(&root, &prefixed).await;
         Ok(())
     }
 
@@ -411,13 +391,13 @@ impl LocalKeyValueBackend for FsAccessStorage {
     }
 }
 
-impl LocalFileBackend for FsAccessStorage {
+impl FileBackend for OpfsStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let (dirs, file_name) = navigate_path(path);
         let parent = self.navigate_to_dir(&dirs, false).await?;
         let file_handle = get_file(&parent, file_name)
             .await?
-            .ok_or_else(|| StorageError::key_not_found(path))?;
+            .ok_or_else(|| SaikuroError::key_not_found(path))?;
         read_file_from_handle(&file_handle).await
     }
 
@@ -456,11 +436,11 @@ impl LocalFileBackend for FsAccessStorage {
     }
 
     async fn list_dir(&self, path: &str) -> Result<Vec<String>> {
-        let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-        let dir = if parts.is_empty() {
-            self.root_handle.clone()
+        let (dirs, _) = navigate_path(path);
+        let dir = if dirs.is_empty() {
+            get_root().await?
         } else {
-            self.navigate_to_dir(&parts, false).await?
+            self.navigate_to_dir(&dirs, false).await?
         };
         let entries = list_entry_names(&dir).await?;
         let names: Vec<String> = entries.into_iter().map(|(name, _)| name).collect();
@@ -470,7 +450,7 @@ impl LocalFileBackend for FsAccessStorage {
     async fn create_dir(&self, path: &str) -> Result<()> {
         let (dirs, dir_name) = navigate_path(path);
         if dir_name.is_empty() {
-            return Err(StorageError::internal("cannot create root directory"));
+            return Err(SaikuroError::internal("cannot create root directory"));
         }
         let parent = self.navigate_to_dir(&dirs, true).await?;
         let opts = FileSystemGetDirectoryOptions::new();
@@ -478,14 +458,14 @@ impl LocalFileBackend for FsAccessStorage {
         let promise = parent.get_directory_handle_with_options(dir_name, &opts);
         promise_await(promise)
             .await
-            .map_err(|e| StorageError::internal(format!("createDir({path}) failed: {e:?}")))?;
+            .map_err(|e| SaikuroError::internal(format!("OPFS createDir({path}) failed: {e:?}")))?;
         Ok(())
     }
 
     async fn delete_dir(&self, path: &str) -> Result<()> {
         let (dirs, dir_name) = navigate_path(path);
         if dir_name.is_empty() {
-            return Err(StorageError::internal("cannot delete root directory"));
+            return Err(SaikuroError::internal("cannot delete root directory"));
         }
         let parent = match self.navigate_to_dir(&dirs, false).await {
             Ok(dir) => dir,
@@ -495,7 +475,7 @@ impl LocalFileBackend for FsAccessStorage {
     }
 }
 
-impl LocalStorageBackend for FsAccessStorage {
+impl StorageBackend for OpfsStorage {
     fn supports_files(&self) -> bool {
         true
     }
@@ -505,6 +485,7 @@ impl LocalStorageBackend for FsAccessStorage {
     }
 
     async fn close(&self) -> Result<()> {
+        ROOT_HANDLE.with(|cell| *cell.borrow_mut() = None);
         Ok(())
     }
 }

@@ -72,9 +72,3 @@ impl From<saikuro_transport::TransportError> for Error {
         Self::Transport(e.to_string())
     }
 }
-
-impl From<saikuro_storage::StorageError> for Error {
-    fn from(e: saikuro_storage::StorageError) -> Self {
-        Self::Storage(e.to_string())
-    }
-}

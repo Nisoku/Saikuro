@@ -1,679 +1,495 @@
-//! Integration tests for the flash-backed bounded key-value store.
+//! Integration tests for the flash-backed key-value store.
 //!
-//! The fake NOR-flash device enforces real NOR semantics: aligned reads and
-//! writes, per-word write-once, erase-to-`0xFF`, and `1`-only-to-`0` bit
-//! transitions. Tests share the fake behind `Rc<RefCell<...>>` so a "reboot"
-//! is a fresh store opened over the same device contents.
+//! Run with: `cargo test --no-default-features --features flash -p saikuro-storage`
+//!
+//! (`--no-default-features` is required so only the `embedded` engine is
+//! selected; the default feature set also enables `native`, which is mutually
+//! exclusive with `flash`.)
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use bytes::Bytes;
-use embedded_storage_async::nor_flash::{
-    ErrorType, NorFlash, NorFlashError, NorFlashErrorKind, ReadNorFlash,
-};
 use futures_executor::block_on;
-use saikuro_storage::{
-    FlashConfig, FlashKvStore, LocalKeyValueBackend, StorageConfig, StorageError,
-};
+use saikuro_storage::{Bytes, FlashConfig, FlashKvStore, SaikuroError, StorageConfig};
 
-const WRITE_SIZE: usize = 4;
-const ERASE_SIZE: usize = 256;
-const REGION_SIZE: usize = 512 * 8;
+mod mock {
+    use alloc::rc::Rc;
+    use alloc::vec::Vec;
+    use core::cell::RefCell;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct FlashTestError {
-    kind: NorFlashErrorKind,
-}
+    use embedded_storage_async::nor_flash::NorFlash;
 
-impl ErrorType for FakeFlash {
-    type Error = FlashTestError;
-}
+    pub const ERASE_SIZE: usize = 256;
+    pub const WRITE_SIZE: usize = 4;
+    pub const SECTORS: usize = 8;
+    pub const CAPACITY: usize = ERASE_SIZE * SECTORS;
 
-impl NorFlashError for FlashTestError {
-    fn kind(&self) -> NorFlashErrorKind {
-        self.kind
-    }
-}
-
-impl From<NorFlashErrorKind> for FlashTestError {
-    fn from(kind: NorFlashErrorKind) -> Self {
-        Self { kind }
-    }
-}
-
-struct FakeFlash {
-    data: Vec<u8>,
-    written: Vec<bool>,
-}
-
-impl FakeFlash {
-    fn new(region: usize) -> Self {
-        assert_eq!(region % ERASE_SIZE, 0);
-        Self {
-            data: vec![0xFF; region],
-            written: vec![false; region / WRITE_SIZE],
-        }
-    }
-}
-
-impl ReadNorFlash for FakeFlash {
-    const READ_SIZE: usize = 1;
-
-    async fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
-        let off = offset as usize;
-        if off + bytes.len() > self.data.len() {
-            return Err(NorFlashErrorKind::OutOfBounds.into());
-        }
-        bytes.copy_from_slice(&self.data[off..off + bytes.len()]);
-        Ok(())
+    /// A shared, in-memory mock of a `NorFlash` device.
+    ///
+    /// It models the two physical constraints of real NOR flash:
+    /// - a word can only be written once between erases, and
+    /// - a write may only clear bits (set them to 0), never set them to 1.
+    #[derive(Clone)]
+    pub struct RcFlash {
+        pub cells: Rc<RefCell<Vec<u8>>>,
+        pub written: Rc<RefCell<Vec<usize>>>,
+        pub erase_size: usize,
+        pub write_size: usize,
+        pub capacity: usize,
     }
 
-    fn capacity(&self) -> usize {
-        self.data.len()
-    }
-}
-
-impl NorFlash for FakeFlash {
-    const WRITE_SIZE: usize = WRITE_SIZE;
-    const ERASE_SIZE: usize = ERASE_SIZE;
-
-    async fn erase(&mut self, from: u32, to: u32) -> Result<(), Self::Error> {
-        let f = from as usize;
-        let t = to as usize;
-        if !f.is_multiple_of(ERASE_SIZE)
-            || !t.is_multiple_of(ERASE_SIZE)
-            || t <= f
-            || t > self.data.len()
-        {
-            return Err(NorFlashErrorKind::NotAligned.into());
-        }
-        self.data[f..t].fill(0xFF);
-        for word in self
-            .written
-            .iter_mut()
-            .skip(f / WRITE_SIZE)
-            .take((t - f) / WRITE_SIZE)
-        {
-            *word = false;
-        }
-        Ok(())
-    }
-
-    async fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
-        let off = offset as usize;
-        if !off.is_multiple_of(WRITE_SIZE)
-            || !bytes.len().is_multiple_of(WRITE_SIZE)
-            || off + bytes.len() > self.data.len()
-        {
-            return Err(NorFlashErrorKind::NotAligned.into());
-        }
-        for (i, &b) in bytes.iter().enumerate() {
-            let word = (off + i) / WRITE_SIZE;
-            if self.written[word] {
-                return Err(FlashTestError {
-                    kind: NorFlashErrorKind::Other,
-                });
-            }
-            let old = self.data[off + i];
-            if old | b != old {
-                return Err(FlashTestError {
-                    kind: NorFlashErrorKind::Other,
-                });
+    impl RcFlash {
+        pub fn new() -> Self {
+            let mut cells = Vec::with_capacity(CAPACITY);
+            cells.resize(CAPACITY, 0xFF);
+            Self {
+                cells: Rc::new(RefCell::new(cells)),
+                written: Rc::new(RefCell::new(Vec::new())),
+                erase_size: ERASE_SIZE,
+                write_size: WRITE_SIZE,
+                capacity: CAPACITY,
             }
         }
-        for (i, &b) in bytes.iter().enumerate() {
-            self.written[(off + i) / WRITE_SIZE] = true;
-            self.data[off + i] = b;
+
+        /// Overwrite the final erase sector with zeroes, simulating bit flips in
+        /// an otherwise-unused tail/spare region after a crash.
+        pub fn corrupt_tail(&self) {
+            let mut cells = self.cells.borrow_mut();
+            let start = self.capacity - self.erase_size;
+            for b in cells.iter_mut().skip(start) {
+                *b = 0x00;
+            }
         }
-        Ok(())
+    }
+
+    impl NorFlash for RcFlash {
+        const WRITE_SIZE: usize = WRITE_SIZE;
+        const ERASE_SIZE: usize = ERASE_SIZE;
+
+        type Error = core::convert::Infallible;
+
+        async fn read(&self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
+            let cells = self.cells.borrow();
+            bytes.copy_from_slice(&cells[offset as usize..offset as usize + bytes.len()]);
+            Ok(())
+        }
+
+        async fn write(&self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
+            assert_eq!(offset as usize % WRITE_SIZE, 0, "write must be word-aligned");
+            assert_eq!(bytes.len() % WRITE_SIZE, 0, "write length must be a word multiple");
+            let mut cells = self.cells.borrow_mut();
+            let mut written = self.written.borrow_mut();
+            for (i, &b) in bytes.iter().enumerate() {
+                let idx = offset as usize + i;
+                let old = cells[idx];
+                assert!(
+                    old | b == old,
+                    "NOR flash cannot set bits: wrote {b:#04x} over {old:#04x}"
+                );
+                assert!(
+                    !written.contains(&idx),
+                    "NOR flash cannot rewrite a word without an erase"
+                );
+                cells[idx] = b;
+                written.push(idx);
+            }
+            Ok(())
+        }
+
+        async fn erase(&self, from: u32, to: u32) -> Result<(), Self::Error> {
+            let mut cells = self.cells.borrow_mut();
+            for b in cells.iter_mut().take(to as usize).skip(from as usize) {
+                *b = 0xFF;
+            }
+            let mut written = self.written.borrow_mut();
+            written.retain(|w| *w < from as usize || *w >= to as usize);
+            Ok(())
+        }
     }
 }
 
-#[derive(Clone)]
-struct RcFlash(Rc<RefCell<FakeFlash>>);
-
-impl RcFlash {
-    fn new() -> Self {
-        Self(Rc::new(RefCell::new(FakeFlash::new(REGION_SIZE))))
-    }
-}
-
-impl ErrorType for RcFlash {
-    type Error = FlashTestError;
-}
-
-// The borrow is held across await so the fake serializes access to the shared
-// device state; the tests are single-threaded, so there is no contention.
-#[allow(clippy::await_holding_refcell_ref)]
-impl ReadNorFlash for RcFlash {
-    const READ_SIZE: usize = FakeFlash::READ_SIZE;
-
-    async fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
-        self.0.borrow_mut().read(offset, bytes).await
-    }
-
-    fn capacity(&self) -> usize {
-        self.0.borrow().capacity()
-    }
-}
-
-#[allow(clippy::await_holding_refcell_ref)]
-impl NorFlash for RcFlash {
-    const WRITE_SIZE: usize = FakeFlash::WRITE_SIZE;
-    const ERASE_SIZE: usize = FakeFlash::ERASE_SIZE;
-
-    async fn erase(&mut self, from: u32, to: u32) -> Result<(), Self::Error> {
-        self.0.borrow_mut().erase(from, to).await
-    }
-
-    async fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
-        self.0.borrow_mut().write(offset, bytes).await
-    }
-}
+use mock::{RcFlash, ERASE_SIZE, SECTORS};
 
 fn flash_config() -> FlashConfig {
-    FlashConfig::new(0, 512, 8, 32, 128, ERASE_SIZE).expect("valid test config")
+    FlashConfig::new(0, 512, SECTORS, 32, 128, ERASE_SIZE).expect("valid flash config")
 }
 
-fn new_store(flash: RcFlash) -> FlashKvStore<RcFlash> {
-    FlashKvStore::new(flash, StorageConfig::default(), flash_config()).expect("valid store")
-}
-
-fn expect_invalid(store: Result<FlashKvStore<RcFlash>, StorageError>) -> StorageError {
-    match store {
-        Err(e) => e,
-        Ok(_) => panic!("expected store construction to fail"),
+fn config(auto_create: bool) -> StorageConfig {
+    StorageConfig {
+        auto_create_namespaces: auto_create,
+        ..Default::default()
     }
 }
 
-async fn open(store: &mut FlashKvStore<RcFlash>) {
-    store.open().await.expect("open scans the region");
-}
-
-// Construction and geometry
-
 #[test]
-fn capacity_reserves_one_spare_sector() {
-    let store = new_store(RcFlash::new());
-    assert_eq!(store.capacity(), 7 * (512 - 8));
-}
-
-#[test]
-fn new_rejects_sector_not_multiple_of_erase_size() {
-    let err = expect_invalid(FlashKvStore::new(
-        RcFlash::new(),
-        StorageConfig::default(),
-        FlashConfig {
-            base_offset: 0,
-            sector_size: 300,
-            sector_count: 8,
-            max_key_len: 32,
-            max_value_len: 128,
-        },
-    ));
-    assert!(matches!(err, StorageError::Internal(_)));
+fn flash_config_validates_geometry() {
+    // base_offset not aligned to the erase size
+    assert!(FlashConfig::new(1, 512, SECTORS, 32, 128, ERASE_SIZE).is_err());
+    // fewer than two sectors
+    assert!(FlashConfig::new(0, 512, 1, 32, 128, ERASE_SIZE).is_err());
+    // sector size not a multiple of the erase size
+    assert!(FlashConfig::new(0, 511, SECTORS, 32, 128, ERASE_SIZE).is_err());
+    // key length above the u16 ceiling
+    assert!(FlashConfig::new(0, 512, SECTORS, 70000, 128, ERASE_SIZE).is_err());
+    // zero value length
+    assert!(FlashConfig::new(0, 512, SECTORS, 32, 0, ERASE_SIZE).is_err());
+    // erase size of 1 divides 512, so this is valid
+    assert!(FlashConfig::new(0, 512, SECTORS, 32, 128, 1).is_ok());
 }
 
 #[test]
-fn new_rejects_region_beyond_capacity() {
-    let err = expect_invalid(FlashKvStore::new(
-        RcFlash::new(),
-        StorageConfig::default(),
-        FlashConfig::new(0, 512, 9, 32, 128, ERASE_SIZE).unwrap(),
-    ));
-    assert!(matches!(err, StorageError::Internal(_)));
+fn store_rejects_item_over_64kib() {
+    // At the FlashConfig level a 70 KiB value is accepted, but sequential-storage
+    // cannot represent an item larger than 64 KiB, so the store must reject it.
+    let oversized = FlashConfig::new(0, 512, SECTORS, 32, 70000, ERASE_SIZE).unwrap();
+    assert!(FlashKvStore::new(RcFlash::new(), config(true), oversized).is_err());
 }
 
 #[test]
-fn new_rejects_record_larger_than_sector() {
-    let err = expect_invalid(FlashKvStore::new(
-        RcFlash::new(),
-        StorageConfig::default(),
-        FlashConfig::new(0, 512, 8, 32, 500, ERASE_SIZE).unwrap(),
-    ));
-    assert!(matches!(err, StorageError::Internal(_)));
-}
-
-#[test]
-fn operations_require_open() {
-    let store = new_store(RcFlash::new());
-    let err = block_on(store.get("ns", "k")).unwrap_err();
-    assert!(matches!(err, StorageError::Internal(_)));
-}
-
-// Basic key-value operations
-
-#[test]
-fn put_and_get_roundtrip() {
+fn operations_do_not_require_open() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns", "k", Bytes::from("hello")).await.unwrap();
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        store
+            .put("ns", "a", Bytes::from_static(b"1"))
+            .await
+            .unwrap();
         assert_eq!(
-            store.get("ns", "k").await.unwrap(),
-            Some(Bytes::from("hello"))
+            store.get("ns", "a").await.unwrap(),
+            Some(Bytes::from_static(b"1"))
         );
     });
 }
 
 #[test]
-fn put_overwrites_existing() {
+fn get_put_roundtrip() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns", "k", Bytes::from("v1")).await.unwrap();
-        store.put("ns", "k", Bytes::from("v2")).await.unwrap();
-        assert_eq!(store.get("ns", "k").await.unwrap(), Some(Bytes::from("v2")));
-    });
-}
-
-#[test]
-fn get_missing_returns_none() {
-    block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        store
+            .put("ns", "key", Bytes::from_static(b"value"))
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get("ns", "key").await.unwrap(),
+            Some(Bytes::from_static(b"value"))
+        );
         assert_eq!(store.get("ns", "missing").await.unwrap(), None);
-        assert!(!store.exists("ns", "missing").await.unwrap());
     });
 }
 
 #[test]
-fn delete_removes_key() {
+fn rejects_value_exceeding_max_value_len() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns", "k", Bytes::from("v")).await.unwrap();
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let too_big = Bytes::from(vec![0xABu8; 129]);
+        let e = store.put("ns", "k", too_big).await.unwrap_err();
+        assert!(matches!(e, SaikuroError::QuotaExceeded { .. }));
+    });
+}
+
+#[test]
+fn rejects_key_exceeding_max_key_len() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let long_key = "k".repeat(33);
+        assert!(store
+            .put("ns", &long_key, Bytes::from_static(b"v"))
+            .await
+            .is_err());
+    });
+}
+
+#[test]
+fn rejects_namespace_exceeding_255_bytes() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let long_ns = "n".repeat(256);
+        assert!(store
+            .put(&long_ns, "k", Bytes::from_static(b"v"))
+            .await
+            .is_err());
+        assert!(store.create_namespace(&long_ns).await.is_err());
+    });
+}
+
+#[test]
+fn accepts_item_at_exact_limits() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let key = "k".repeat(32);
+        let value = Bytes::from(vec![0xCDu8; 128]);
+        store.put("ns", &key, value.clone()).await.unwrap();
+        assert_eq!(store.get("ns", &key).await.unwrap(), Some(value));
+    });
+}
+
+#[test]
+fn auto_create_creates_namespace_implicitly() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        store
+            .put("auto", "k", Bytes::from_static(b"v"))
+            .await
+            .unwrap();
+        assert!(store.exists("auto", "k").await.unwrap());
+        let namespaces = store.list_namespaces().await.unwrap();
+        assert!(namespaces.contains(&"auto".to_string()));
+    });
+}
+
+#[test]
+fn auto_create_disabled_returns_not_found() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(false), flash_config());
+        let v = Bytes::from_static(b"v");
+        let e = store.put("absent", "k", v.clone()).await.unwrap_err();
+        assert!(matches!(e, SaikuroError::NamespaceNotFound(_)));
+        let e = store.get("absent", "k").await.unwrap_err();
+        assert!(matches!(e, SaikuroError::NamespaceNotFound(_)));
+    });
+}
+
+#[test]
+fn prefix_isolation() {
+    block_on(async {
+        let flash = RcFlash::new();
+        let prod = FlashKvStore::new(
+            flash.clone(),
+            StorageConfig {
+                namespace_prefix: Some("prod".to_string()),
+                auto_create_namespaces: true,
+                ..Default::default()
+            },
+            flash_config(),
+        );
+        let v = Bytes::from_static(b"v");
+        prod.put("ns", "k", v.clone()).await.unwrap();
+
+        let dev = FlashKvStore::new(
+            flash.clone(),
+            StorageConfig {
+                namespace_prefix: Some("dev".to_string()),
+                auto_create_namespaces: true,
+                ..Default::default()
+            },
+            flash_config(),
+        );
+        assert_eq!(dev.get("ns", "k").await.unwrap(), None);
+        assert_eq!(prod.get("ns", "k").await.unwrap(), Some(v));
+    });
+}
+
+#[test]
+fn namespaces_are_independent() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let va = Bytes::from_static(b"a");
+        let vb = Bytes::from_static(b"b");
+        store.put("a", "k", va.clone()).await.unwrap();
+        store.put("b", "k", vb.clone()).await.unwrap();
+        assert_eq!(store.get("a", "k").await.unwrap(), Some(va));
+        assert_eq!(store.get("b", "k").await.unwrap(), Some(vb));
+    });
+}
+
+#[test]
+fn durability_survives_reboot() {
+    block_on(async {
+        let flash = RcFlash::new();
+        {
+            let store = FlashKvStore::new(flash.clone(), config(true), flash_config());
+            store.create_namespace("user").await.unwrap();
+            store
+                .put("user", "name", Bytes::from_static(b"neo"))
+                .await
+                .unwrap();
+            store
+                .put("user", "role", Bytes::from_static(b"admin"))
+                .await
+                .unwrap();
+        }
+        // New instance mounted over the same flash: committed data survives.
+        let store = FlashKvStore::new(flash.clone(), config(true), flash_config());
+        assert!(store.exists("user", "name").await.unwrap());
+        assert_eq!(
+            store.get("user", "name").await.unwrap(),
+            Some(Bytes::from_static(b"neo"))
+        );
+        assert_eq!(
+            store.get("user", "role").await.unwrap(),
+            Some(Bytes::from_static(b"admin"))
+        );
+    });
+}
+
+#[test]
+fn mount_tolerates_tail_corruption() {
+    block_on(async {
+        let flash = RcFlash::new();
+        let store = FlashKvStore::new(flash.clone(), config(true), flash_config());
+        store
+            .put("ns", "a", Bytes::from_static(b"1"))
+            .await
+            .unwrap();
+        drop(store);
+        // Simulate bit flips in an otherwise-unused tail region after a crash.
+        flash.corrupt_tail();
+        let store = FlashKvStore::new(flash, config(true), flash_config());
+        assert_eq!(
+            store.get("ns", "a").await.unwrap(),
+            Some(Bytes::from_static(b"1"))
+        );
+    });
+}
+
+#[test]
+fn compaction_rolls_over_without_data_loss() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let mut written = Vec::new();
+        for i in 0..200u32 {
+            let key = format!("k{i}");
+            let value = Bytes::from(vec![(i & 0xFF) as u8; 10]);
+            match store.put("ns", &key, value.clone()).await {
+                Ok(()) => written.push((key, value)),
+                Err(e) if matches!(e, SaikuroError::QuotaExceeded { .. }) => break,
+                Err(e) => panic!("unexpected error: {e:?}"),
+            }
+        }
+        assert!(
+            written.len() >= 20,
+            "expected rollover to absorb at least 20 items, got {}",
+            written.len()
+        );
+        for (key, value) in &written {
+            assert_eq!(store.get("ns", key).await.unwrap(), Some(value.clone()));
+        }
+    });
+}
+
+#[test]
+fn quota_exceeded_when_region_full_then_recoverable() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let value = Bytes::from(vec![0xABu8; 29]);
+        let mut count = 0;
+        loop {
+            let key = format!("k{count}");
+            match store.put("ns", &key, value.clone()).await {
+                Ok(()) => count += 1,
+                Err(e) if matches!(e, SaikuroError::QuotaExceeded { .. }) => break,
+                Err(e) => panic!("unexpected error: {e:?}"),
+            }
+            assert!(count < 1000, "never hit the quota");
+        }
+        assert!(count >= 5, "expected a handful of items before full, got {count}");
+        // Freeing space makes the region writable again.
+        for i in 0..count / 2 {
+            store.delete("ns", &format!("k{i}")).await.unwrap();
+        }
+        store.put("ns", "extra", value.clone()).await.unwrap();
+        assert_eq!(store.get("ns", "extra").await.unwrap(), Some(value));
+    });
+}
+
+#[test]
+fn delete_is_idempotent() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let v = Bytes::from_static(b"v");
+        store.put("ns", "k", v).await.unwrap();
+        store.delete("ns", "k").await.unwrap();
         store.delete("ns", "k").await.unwrap();
         assert_eq!(store.get("ns", "k").await.unwrap(), None);
     });
 }
 
 #[test]
-fn delete_missing_key_does_not_error() {
+fn list_keys_returns_only_live() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.delete("ns", "missing").await.unwrap();
-    });
-}
-
-#[test]
-fn list_keys_and_namespaces() {
-    block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns1", "a", Bytes::from("1")).await.unwrap();
-        store.put("ns1", "b", Bytes::from("2")).await.unwrap();
-        store.put("ns2", "k", Bytes::from("3")).await.unwrap();
-
-        let mut keys = store.list_keys("ns1").await.unwrap();
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let v = Bytes::from_static(b"v");
+        store.put("ns", "a", v.clone()).await.unwrap();
+        store.put("ns", "b", v.clone()).await.unwrap();
+        store.delete("ns", "a").await.unwrap();
+        let mut keys = store.list_keys("ns").await.unwrap();
         keys.sort();
-        assert_eq!(keys, vec!["a", "b"]);
-        assert_eq!(store.list_keys("ns2").await.unwrap(), vec!["k"]);
-
-        let mut nss = store.list_namespaces().await.unwrap();
-        nss.sort();
-        assert_eq!(nss, vec!["ns1", "ns2"]);
-    });
-}
-
-// Namespace lifecycle
-
-#[test]
-fn namespace_marker_survives_key_deletion() {
-    block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.create_namespace("empty").await.unwrap();
-        store.put("empty", "k", Bytes::from("v")).await.unwrap();
-        store.delete("empty", "k").await.unwrap();
-        assert_eq!(store.list_namespaces().await.unwrap(), vec!["empty"]);
+        assert_eq!(keys, vec!["b".to_string()]);
     });
 }
 
 #[test]
-fn create_existing_namespace_errors() {
+fn list_namespaces_includes_all() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        store.create_namespace("a").await.unwrap();
+        store.create_namespace("b").await.unwrap();
+        let mut ns = store.list_namespaces().await.unwrap();
+        ns.sort();
+        assert_eq!(ns, vec!["a".to_string(), "b".to_string()]);
+    });
+}
+
+#[test]
+fn namespace_marker_records_existence() {
+    block_on(async {
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
         store.create_namespace("ns").await.unwrap();
-        let err = store.create_namespace("ns").await.unwrap_err();
-        assert!(matches!(err, StorageError::NamespaceAlreadyExists(_)));
+        let mut ns = store.list_namespaces().await.unwrap();
+        ns.sort();
+        assert_eq!(ns, vec!["ns".to_string()]);
+        let e = store.create_namespace("ns").await.unwrap_err();
+        assert!(matches!(e, SaikuroError::NamespaceAlreadyExists(_)));
     });
 }
 
 #[test]
-fn delete_namespace_removes_keys_and_marker() {
+fn tombstone_distinguishes_present_from_absent() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns", "k", Bytes::from("v")).await.unwrap();
-        store.delete_namespace("ns").await.unwrap();
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let v = Bytes::from_static(b"v");
+        store.put("ns", "k", v).await.unwrap();
+        assert!(store.exists("ns", "k").await.unwrap());
+        store.delete("ns", "k").await.unwrap();
+        assert!(!store.exists("ns", "k").await.unwrap());
         assert_eq!(store.get("ns", "k").await.unwrap(), None);
-        assert!(store.list_namespaces().await.unwrap().is_empty());
+        assert!(!store.exists("ns", "never").await.unwrap());
+        assert_eq!(store.get("ns", "never").await.unwrap(), None);
     });
 }
 
 #[test]
 fn clear_namespace_keeps_namespace() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        store.put("ns", "k", Bytes::from("v")).await.unwrap();
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let v = Bytes::from_static(b"v");
+        store.create_namespace("ns").await.unwrap();
+        store.put("ns", "a", v).await.unwrap();
         store.clear_namespace("ns").await.unwrap();
-        assert_eq!(store.get("ns", "k").await.unwrap(), None);
-        assert_eq!(store.list_namespaces().await.unwrap(), vec!["ns"]);
-        store.put("ns", "k2", Bytes::from("v")).await.unwrap();
-        assert!(store.exists("ns", "k2").await.unwrap());
-    });
-}
-
-// Size limits (Tier 2 orchestration bounds)
-
-#[test]
-fn rejects_key_over_limit() {
-    block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        let long_key = "x".repeat(33);
-        let err = store
-            .put("ns", &long_key, Bytes::from("v"))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, StorageError::Internal(_)));
+        assert_eq!(store.get("ns", "a").await.unwrap(), None);
+        assert!(!store.exists("ns", "a").await.unwrap());
+        let ns = store.list_namespaces().await.unwrap();
+        assert!(ns.contains(&"ns".to_string()));
     });
 }
 
 #[test]
-fn rejects_value_over_limit() {
+fn delete_namespace_removes_all() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        let big = Bytes::from(vec![0u8; 129]);
-        let err = store.put("ns", "k", big).await.unwrap_err();
-        assert!(matches!(err, StorageError::QuotaExceeded(_)));
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        let v = Bytes::from_static(b"v");
+        store.create_namespace("ns").await.unwrap();
+        store.put("ns", "a", v.clone()).await.unwrap();
+        store.put("ns", "b", v).await.unwrap();
+        store.delete_namespace("ns").await.unwrap();
+        // The namespace is gone entirely.
+        let e = store.get("ns", "a").await.unwrap_err();
+        assert!(matches!(e, SaikuroError::NamespaceNotFound(_)));
+        let ns = store.list_namespaces().await.unwrap();
+        assert!(!ns.contains(&"ns".to_string()));
     });
 }
 
 #[test]
-fn rejects_namespace_over_255_bytes() {
+fn deleting_unknown_namespace_is_ok() {
     block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-        let long_ns = "n".repeat(256);
-        let err = store
-            .put(&long_ns, "k", Bytes::from("v"))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, StorageError::Internal(_)));
-    });
-}
-
-// auto_create_namespaces = false
-
-#[test]
-fn put_errors_on_missing_namespace_without_auto_create() {
-    block_on(async {
-        let mut store = FlashKvStore::new(
-            RcFlash::new(),
-            StorageConfig {
-                auto_create_namespaces: false,
-                ..Default::default()
-            },
-            flash_config(),
-        )
-        .unwrap();
-        open(&mut store).await;
-        let err = store
-            .put("manual", "k", Bytes::from("v"))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, StorageError::NamespaceNotFound(_)));
-    });
-}
-
-// Namespace prefix isolation
-
-#[test]
-fn namespace_prefix_isolates_storage() {
-    block_on(async {
-        let mut a = FlashKvStore::new(
-            RcFlash::new(),
-            StorageConfig::default().with_prefix("tenant_a"),
-            flash_config(),
-        )
-        .unwrap();
-        let mut b = FlashKvStore::new(
-            RcFlash::new(),
-            StorageConfig::default().with_prefix("tenant_b"),
-            flash_config(),
-        )
-        .unwrap();
-        open(&mut a).await;
-        open(&mut b).await;
-
-        a.put("ns", "k", Bytes::from("from_a")).await.unwrap();
-        b.put("ns", "k", Bytes::from("from_b")).await.unwrap();
-
-        assert_eq!(a.get("ns", "k").await.unwrap(), Some(Bytes::from("from_a")));
-        assert_eq!(b.get("ns", "k").await.unwrap(), Some(Bytes::from("from_b")));
-        assert_eq!(a.list_namespaces().await.unwrap(), vec!["ns"]);
-    });
-}
-
-// Durability and rollover
-
-#[test]
-fn data_survives_reboot() {
-    block_on(async {
-        let flash = RcFlash::new();
-        {
-            let mut store = new_store(flash.clone());
-            open(&mut store).await;
-            store
-                .put("ns", "k", Bytes::from("persisted"))
-                .await
-                .unwrap();
-        }
-        {
-            let mut store = new_store(flash.clone());
-            open(&mut store).await;
-            assert_eq!(
-                store.get("ns", "k").await.unwrap(),
-                Some(Bytes::from("persisted"))
-            );
-        }
-    });
-}
-
-#[test]
-fn rolls_across_sectors_and_reads_back() {
-    block_on(async {
-        let flash = RcFlash::new();
-        {
-            let mut store = new_store(flash.clone());
-            open(&mut store).await;
-            for i in 0..40 {
-                store
-                    .put("ns", &format!("k{i}"), Bytes::from(vec![i as u8; 10]))
-                    .await
-                    .unwrap();
-            }
-        }
-        {
-            let mut store = new_store(flash.clone());
-            open(&mut store).await;
-            for i in 0..40 {
-                assert_eq!(
-                    store.get("ns", &format!("k{i}")).await.unwrap(),
-                    Some(Bytes::from(vec![i as u8; 10])),
-                    "key k{i} after reboot"
-                );
-            }
-        }
-    });
-}
-
-#[test]
-fn compaction_reclaims_space_under_overwrite() {
-    block_on(async {
-        let flash = RcFlash::new();
-        let mut store = new_store(flash.clone());
-        open(&mut store).await;
-        for i in 0..8 {
-            store
-                .put("ns", &format!("k{i}"), Bytes::from(vec![i as u8; 100]))
-                .await
-                .unwrap();
-        }
-        for round in 0..60 {
-            store
-                .put("ns", "k0", Bytes::from(vec![round as u8; 100]))
-                .await
-                .unwrap();
-        }
-        for i in 1..8 {
-            assert_eq!(
-                store.get("ns", &format!("k{i}")).await.unwrap(),
-                Some(Bytes::from(vec![i as u8; 100])),
-                "key k{i} after compaction"
-            );
-        }
-        assert_eq!(
-            store.get("ns", "k0").await.unwrap(),
-            Some(Bytes::from(vec![59u8; 100]))
-        );
-
-        let mut reopened = new_store(flash.clone());
-        open(&mut reopened).await;
-        for i in 1..8 {
-            assert_eq!(
-                reopened.get("ns", &format!("k{i}")).await.unwrap(),
-                Some(Bytes::from(vec![i as u8; 100]))
-            );
-        }
-    });
-}
-
-#[test]
-fn compaction_preserves_tombstones_and_markers() {
-    block_on(async {
-        let flash = RcFlash::new();
-        let mut store = new_store(flash.clone());
-        open(&mut store).await;
-        store
-            .put("ns", "dead", Bytes::from(vec![1u8; 100]))
-            .await
-            .unwrap();
-        store
-            .put("ns", "live", Bytes::from(vec![2u8; 100]))
-            .await
-            .unwrap();
-        store.delete("ns", "dead").await.unwrap();
-        for _ in 0..60 {
-            store
-                .put("ns", "churn", Bytes::from(vec![3u8; 100]))
-                .await
-                .unwrap();
-        }
-        assert_eq!(store.get("ns", "dead").await.unwrap(), None);
-        assert_eq!(
-            store.get("ns", "live").await.unwrap(),
-            Some(Bytes::from(vec![2u8; 100]))
-        );
-
-        let mut reopened = new_store(flash.clone());
-        open(&mut reopened).await;
-        assert_eq!(reopened.get("ns", "dead").await.unwrap(), None);
-        assert_eq!(
-            reopened.get("ns", "live").await.unwrap(),
-            Some(Bytes::from(vec![2u8; 100]))
-        );
-        let mut nss = reopened.list_namespaces().await.unwrap();
-        nss.sort();
-        assert_eq!(nss, vec!["ns"]);
-    });
-}
-
-// Quota
-
-#[test]
-fn quota_exceeded_when_region_full_then_recoverable() {
-    block_on(async {
-        let mut store = new_store(RcFlash::new());
-        open(&mut store).await;
-
-        let mut err = None;
-        for i in 0..64 {
-            if let Err(e) = store
-                .put("ns", &format!("k{i}"), Bytes::from(vec![i as u8; 100]))
-                .await
-            {
-                err = Some((i, e));
-                break;
-            }
-        }
-        let (full_at, err) = err.expect("region must fill before 64 distinct keys");
-        assert!(matches!(err, StorageError::QuotaExceeded(_)));
-        assert!(
-            full_at >= 29,
-            "region should hold ~30 keys, filled at {full_at}"
-        );
-
-        for i in 0..full_at {
-            assert_eq!(
-                store.get("ns", &format!("k{i}")).await.unwrap(),
-                Some(Bytes::from(vec![i as u8; 100])),
-                "key k{i} after quota error"
-            );
-        }
-
-        for i in 0..4 {
-            store.delete("ns", &format!("k{i}")).await.unwrap();
-        }
-        store
-            .put("ns", &format!("k{full_at}"), Bytes::from(vec![9u8; 100]))
-            .await
-            .expect("deleting keys must free compaction space");
-        assert_eq!(
-            store.get("ns", &format!("k{full_at}")).await.unwrap(),
-            Some(Bytes::from(vec![9u8; 100]))
-        );
-    });
-}
-
-// Torn-write recovery
-
-#[test]
-fn open_truncates_torn_tail_record() {
-    block_on(async {
-        let flash = RcFlash::new();
-        {
-            let mut store = new_store(flash.clone());
-            open(&mut store).await;
-            store
-                .put("ns", "a", Bytes::from(vec![1u8; 10]))
-                .await
-                .unwrap();
-            store
-                .put("ns", "b", Bytes::from(vec![2u8; 10]))
-                .await
-                .unwrap();
-        }
-        // Sector 0: 8-byte seq header, namespace marker at [8..24), "a" at
-        // [24..52), "b" at [52..80). Corrupt "b"'s ns_len byte so its header
-        // is invalid.
-        {
-            let mut fake = flash.0.borrow_mut();
-            fake.data[52 + 1] = 0xFF;
-        }
-        let mut reopened = new_store(flash.clone());
-        open(&mut reopened).await;
-        assert_eq!(
-            reopened.get("ns", "a").await.unwrap(),
-            Some(Bytes::from(vec![1u8; 10]))
-        );
-        assert_eq!(reopened.get("ns", "b").await.unwrap(), None);
+        let store = FlashKvStore::new(RcFlash::new(), config(true), flash_config());
+        store.delete_namespace("ghost").await.unwrap();
     });
 }

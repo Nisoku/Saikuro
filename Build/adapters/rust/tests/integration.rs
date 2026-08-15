@@ -7,6 +7,7 @@ use saikuro_core::{
     envelope::{Envelope, InvocationType},
     ResponseEnvelope,
 };
+use saikuro_storage::KeyValueBackend;
 use serde_json::json;
 
 // Helpers

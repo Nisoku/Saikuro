@@ -1,11 +1,3 @@
-// Pure helper functions shared by webstorage, opfs, and indexeddb backends.
-// These are re-exported from the wasm32-gated webstorage module so the
-// impl_web_storage! macro can reach them via $crate::webstorage::*.
-//
-// The functions are `pub` (doc-hidden) rather than `pub(crate)` so the
-// crate's integration tests can exercise them; on native they are otherwise
-// only referenced from the wasm32-gated backends.
-
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;

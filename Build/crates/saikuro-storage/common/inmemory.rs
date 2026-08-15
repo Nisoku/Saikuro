@@ -1,19 +1,12 @@
-//! In-memory storage backend using DashMap.
-//!
-//! This is the reference implementation and the default backend for
-//! Saikuro's ephemeral storage needs.
-
 use alloc::sync::Arc;
-use async_trait::async_trait;
+
 use bytes::Bytes;
 use dashmap::DashMap;
 use tracing::debug;
 
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
-    traits::{KeyValueBackend, StorageBackend},
-};
+use crate::config::StorageConfig;
+use crate::traits::{KeyValueBackend, StorageBackend};
+use saikuro_event::{Result, SaikuroError};
 
 /// An in-memory namespace containing key-value pairs.
 type NamespaceStore = DashMap<String, Bytes>;
@@ -37,7 +30,7 @@ impl InMemoryStorage {
     pub fn with_config(config: StorageConfig) -> Self {
         let namespaces = DashMap::new();
 
-        if config.cleanup != super::config::CleanupPolicy::Never {
+        if config.cleanup != crate::config::CleanupPolicy::Never {
             debug!("in-memory backend does not enforce cleanup (TTL/Age/LRU); configured cleanup settings are ignored");
         }
         debug!(
@@ -77,7 +70,7 @@ impl InMemoryStorage {
         self.namespaces
             .get(&key)
             .map(|ns| ns.clone())
-            .ok_or_else(|| StorageError::namespace_not_found(namespace))
+            .ok_or_else(|| SaikuroError::namespace_not_found(namespace))
     }
 
     /// Get or create a namespace (write operations).
@@ -102,7 +95,7 @@ impl Default for InMemoryStorage {
     }
 }
 
-#[async_trait]
+
 impl KeyValueBackend for InMemoryStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
@@ -115,7 +108,7 @@ impl KeyValueBackend for InMemoryStorage {
                 if self.config.auto_create_namespaces {
                     return Ok(false);
                 }
-                return Err(StorageError::namespace_not_found(namespace));
+                return Err(SaikuroError::namespace_not_found(namespace));
             }
         };
         Ok(ns.contains_key(key))
@@ -128,7 +121,7 @@ impl KeyValueBackend for InMemoryStorage {
                 if self.config.auto_create_namespaces {
                     return Ok(None);
                 }
-                return Err(StorageError::namespace_not_found(namespace));
+                return Err(SaikuroError::namespace_not_found(namespace));
             }
         };
         Ok(ns.get(key).map(|v| v.clone()))
@@ -156,7 +149,7 @@ impl KeyValueBackend for InMemoryStorage {
                 if self.config.auto_create_namespaces {
                     return Ok(vec![]);
                 }
-                return Err(StorageError::namespace_not_found(namespace));
+                return Err(SaikuroError::namespace_not_found(namespace));
             }
         };
         Ok(ns.iter().map(|entry| entry.key().clone()).collect())
@@ -174,7 +167,7 @@ impl KeyValueBackend for InMemoryStorage {
         use dashmap::mapref::entry::Entry;
         let key = self.apply_prefix(namespace);
         match self.namespaces.entry(key) {
-            Entry::Occupied(_) => Err(StorageError::NamespaceAlreadyExists(namespace.to_owned())),
+            Entry::Occupied(_) => Err(SaikuroError::NamespaceAlreadyExists(namespace.to_owned())),
             Entry::Vacant(e) => {
                 e.insert(Arc::new(NamespaceStore::new()));
                 Ok(())
@@ -198,7 +191,7 @@ impl KeyValueBackend for InMemoryStorage {
     }
 }
 
-#[async_trait]
+
 impl StorageBackend for InMemoryStorage {
     fn supports_files(&self) -> bool {
         false

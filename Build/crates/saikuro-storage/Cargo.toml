@@ -8,54 +8,86 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 
+[lib]
+path = "lib.rs"
+
 [features]
-default = ["std", "native-storage"]
-std = []
-native-storage = [
+default = ["std", "native", "inmemory"]
+std = ["saikuro-event/std"]
+
+# Engine features.
+native   = [
     "std",
-    "inmemory",
-    "local-storage",
-    "session-storage",
+    "dep:graphitesql",
+    "graphitesql/std",
+    "graphitesql/fts5",
+    "dep:tokio",
     "saikuro-core/std",
-    "saikuro-exec/tokio-runtime",
+    "saikuro-exec/native",
+    "saikuro-event/native",
 ]
-inmemory = ["std", "dashmap"]
-local-storage = ["inmemory"]
-session-storage = ["inmemory"]
-fs-storage = ["std", "dep:tokio", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
-sled-storage = ["std", "dep:tokio", "dep:sled", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
-sqlite-storage = ["std", "dep:tokio", "dep:rusqlite", "saikuro-core/std", "saikuro-exec/tokio-runtime"]
-wasm-storage = [
-    "std",
-    "inmemory",
-    "local-storage",
-    "session-storage",
-    "saikuro-core/std-no-os",
-    "saikuro-exec/wasm-runtime",
+no_std   = [
+    "sqlite",
+    "saikuro-core/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-event/no_std",
+]
+wasm     = [
+    "sqlite",
+    "graphitesql/wasm",
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:js-sys",
     "dep:web-sys",
+    "saikuro-core/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-event/wasm",
 ]
-fs-access = ["wasm-storage"]
-flash-storage = ["dep:embedded-storage-async"]
+embedded = [
+    "sqlite",
+    "dep:embedded-storage-async",
+    "saikuro-core/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-event/embedded",
+]
+
+wasi-component = ["no_std", "dep:wasi", "dep:wit-bindgen"]
+wasi-preview1  = ["no_std"]
+wasi-kv        = ["no_std"]
+
+inmemory = ["std", "dashmap"]
+fs    = ["native", "dep:tokio", "saikuro-core/std"]
+sled  = ["native", "dep:tokio", "dep:sled", "saikuro-core/std"]
+sqlite = ["dep:graphitesql", "graphitesql/fts5"]
+flash = [
+    "embedded",
+    "dep:embedded-storage-async",
+    "dep:sequential-storage",
+    "saikuro-event/embedded",
+    "saikuro-core/embedded",
+    "saikuro-exec/embedded",
+]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
 
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
 bytes = { workspace = true }
-async-trait = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
 dashmap = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["sync", "rt", "rt-multi-thread"] }
 sled = { workspace = true, optional = true }
-rusqlite = { workspace = true, optional = true }
+spin = { workspace = true }
+graphitesql = { workspace = true, optional = true }
+wit-bindgen = { workspace = true, optional = true }
+wasi = { workspace = true, optional = true }
 embedded-storage-async = { workspace = true, optional = true }
+sequential-storage = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true, optional = true }
@@ -93,7 +125,7 @@ web-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-saikuro-exec = { workspace = true, features = ["tokio-runtime"] }
+saikuro-exec = { workspace = true, features = ["native"] }
 tracing-subscriber = { workspace = true }
 futures-executor = { workspace = true }
 embedded-storage-async = { workspace = true }

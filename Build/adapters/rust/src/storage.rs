@@ -1,108 +1,237 @@
-use saikuro_storage::traits::StorageBackend;
-use saikuro_storage::{BackendKind, PersistenceMode, StorageConfig};
+use bytes::Bytes;
+use saikuro_storage::traits::{FileBackend, KeyValueBackend, Result as KvResult, StorageBackend};
+use saikuro_storage::{BackendKind, InMemoryStorage, PersistenceMode, StorageConfig};
 
-use crate::error::Error;
-use crate::error::Result;
+#[cfg(feature = "storage-fs")]
+use saikuro_storage::FilesystemStorage;
+#[cfg(feature = "storage-sled")]
+use saikuro_storage::SledStorage;
+#[cfg(feature = "storage-sqlite")]
+use saikuro_storage::SqliteStorage;
 
-/// Create a storage backend based on the given configuration.
-///
-/// When [`StorageConfig::backend`] is [`BackendKind::InMemory`] (the default),
-/// the platform- and persistence-aware dispatch table below is used:
-///
-/// | `persistence`      | native                          | wasm32 (with `wasm-storage`)  |
-/// |--------------------|---------------------------------|-------------------------------|
-/// | `Transient`        | `InMemoryStorage`               | `InMemoryStorage`             |
-/// | `BestEffort`       | `InMemoryStorage`               | `LocalStorage`                |
-/// | `Durable`          | error (no durable backend selected) | `IndexedDbStorage`        |
-///
-/// Set [`StorageConfig::backend`] to a specific [`BackendKind`] variant
-/// to bypass the table and force a particular implementation.  A backend
-/// that is not compiled into the binary (e.g. `Filesystem` without the
-/// `storage-fs` feature) returns `Err` at runtime.
-pub async fn create_storage(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    // Explicit backend kind overrides
-    match config.backend {
-        BackendKind::Filesystem => {
-            return create_filesystem(config).await;
+use crate::error::{Error, Result};
+
+/// A concrete storage backend chosen at runtime from [`StorageConfig`].
+pub enum Storage {
+    InMemory(InMemoryStorage),
+    #[cfg(feature = "storage-fs")]
+    Filesystem(FilesystemStorage),
+    #[cfg(feature = "storage-sled")]
+    Sled(SledStorage),
+    #[cfg(feature = "storage-sqlite")]
+    Sqlite(SqliteStorage),
+}
+
+impl KeyValueBackend for Storage {
+    fn config(&self) -> &StorageConfig {
+        match self {
+            Storage::InMemory(b) => b.config(),
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.config(),
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.config(),
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.config(),
         }
-        BackendKind::Sled => {
-            return create_sled(config).await;
-        }
-        BackendKind::Sqlite => {
-            return create_sqlite(config).await;
-        }
-        BackendKind::WebStorage => {
-            return create_web_storage(config).await;
-        }
-        BackendKind::IndexedDb => {
-            return create_indexeddb(config).await;
-        }
-        BackendKind::Opfs => {
-            return create_opfs(config).await;
-        }
-        BackendKind::FsAccess => {
-            return create_fs_access(config).await;
-        }
-        BackendKind::InMemory => { /* fall through to persistence-based dispatch */ }
     }
 
-    // InMemory (default): persistence-mode-based dispatch
-    match config.persistence {
-        PersistenceMode::Transient => {
-            let storage = saikuro_storage::InMemoryStorage::with_config(config.clone());
-            Ok(Box::new(storage))
+    async fn exists(&self, namespace: &str, key: &str) -> KvResult<bool> {
+        match self {
+            Storage::InMemory(b) => b.exists(namespace, key).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.exists(namespace, key).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.exists(namespace, key).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.exists(namespace, key).await,
         }
+    }
 
-        PersistenceMode::BestEffort => {
-            // wasm32 with wasm-storage -> LocalStorage (persists across page reload)
-            #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
-            {
-                let storage = saikuro_storage::LocalStorage::with_config(config.clone());
-                return Ok(Box::new(storage));
-            }
-
-            // Fallback: in-memory (native, or wasm32 without wasm-storage)
-            #[cfg(not(all(target_arch = "wasm32", feature = "wasm-storage")))]
-            {
-                let storage = saikuro_storage::InMemoryStorage::with_config(config.clone());
-                Ok(Box::new(storage))
-            }
+    async fn get(&self, namespace: &str, key: &str) -> KvResult<Option<Bytes>> {
+        match self {
+            Storage::InMemory(b) => b.get(namespace, key).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.get(namespace, key).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.get(namespace, key).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.get(namespace, key).await,
         }
+    }
 
-        PersistenceMode::Durable => {
-            // wasm32 with wasm-storage -> IndexedDB (survives page reload + clear)
-            #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
-            {
-                let storage = saikuro_storage::IndexedDbStorage::with_config(config.clone());
-                return Ok(Box::new(storage));
-            }
+    async fn put(&self, namespace: &str, key: &str, value: Bytes) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.put(namespace, key, value).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.put(namespace, key, value).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.put(namespace, key, value).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.put(namespace, key, value).await,
+        }
+    }
 
-            // Not available with the default backend selection. the caller
-            // should set `BackendKind::Filesystem` (or `Sled`, `Sqlite`) explicitly.
-            #[cfg(not(all(target_arch = "wasm32", feature = "wasm-storage")))]
-            {
-                Err(Error::Storage(
-                    "no durable storage backend selected; set `config.backend` to \
-                     `BackendKind::Filesystem`, `Sled`, or `Sqlite` on native, \
-                     or enable the 'wasm-storage' feature on wasm32"
-                        .into(),
-                ))
-            }
+    async fn delete(&self, namespace: &str, key: &str) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.delete(namespace, key).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.delete(namespace, key).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.delete(namespace, key).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.delete(namespace, key).await,
+        }
+    }
+
+    async fn list_keys(&self, namespace: &str) -> KvResult<Vec<String>> {
+        match self {
+            Storage::InMemory(b) => b.list_keys(namespace).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.list_keys(namespace).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.list_keys(namespace).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.list_keys(namespace).await,
+        }
+    }
+
+    async fn list_namespaces(&self) -> KvResult<Vec<String>> {
+        match self {
+            Storage::InMemory(b) => b.list_namespaces().await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.list_namespaces().await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.list_namespaces().await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.list_namespaces().await,
+        }
+    }
+
+    async fn create_namespace(&self, namespace: &str) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.create_namespace(namespace).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.create_namespace(namespace).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.create_namespace(namespace).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.create_namespace(namespace).await,
+        }
+    }
+
+    async fn delete_namespace(&self, namespace: &str) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.delete_namespace(namespace).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.delete_namespace(namespace).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.delete_namespace(namespace).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.delete_namespace(namespace).await,
+        }
+    }
+
+    async fn clear_namespace(&self, namespace: &str) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.clear_namespace(namespace).await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.clear_namespace(namespace).await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.clear_namespace(namespace).await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.clear_namespace(namespace).await,
         }
     }
 }
 
-// Platform helper factories
+impl StorageBackend for Storage {
+    fn supports_files(&self) -> bool {
+        match self {
+            Storage::InMemory(_) => false,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(_) => true,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(_) => false,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(_) => false,
+        }
+    }
 
-async fn create_filesystem(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+    fn as_file_backend(&self) -> Option<&dyn FileBackend> {
+        match self {
+            Storage::InMemory(_) => None,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => Some(b),
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(_) => None,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(_) => None,
+        }
+    }
+
+    async fn flush(&self) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.flush().await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.flush().await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.flush().await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.flush().await,
+        }
+    }
+
+    async fn close(&self) -> KvResult<()> {
+        match self {
+            Storage::InMemory(b) => b.close().await,
+            #[cfg(feature = "storage-fs")]
+            Storage::Filesystem(b) => b.close().await,
+            #[cfg(feature = "storage-sled")]
+            Storage::Sled(b) => b.close().await,
+            #[cfg(feature = "storage-sqlite")]
+            Storage::Sqlite(b) => b.close().await,
+        }
+    }
+}
+
+/// Create a storage backend based on the given configuration.
+pub async fn create_storage(config: &StorageConfig) -> Result<Storage> {
+    match config.backend {
+        BackendKind::Filesystem => return create_filesystem(config).await,
+        BackendKind::Sled => return create_sled(config).await,
+        BackendKind::Sqlite => return create_sqlite(config).await,
+        BackendKind::WebStorage
+        | BackendKind::IndexedDb
+        | BackendKind::Opfs
+        | BackendKind::FsAccess => {
+            return Err(Error::Storage(
+                "browser/wasm storage backends are not available from the native factory".into(),
+            ));
+        }
+        BackendKind::InMemory => { /* fall through to persistence-based dispatch */ }
+    }
+
+    match config.persistence {
+        PersistenceMode::Transient | PersistenceMode::BestEffort => Ok(Storage::InMemory(
+            InMemoryStorage::with_config(config.clone()),
+        )),
+        PersistenceMode::Durable => Err(Error::Storage(
+            "no durable storage backend selected; set `config.backend` to \
+             `BackendKind::Filesystem`, `Sled`, or `Sqlite` on native"
+                .into(),
+        )),
+    }
+}
+
+async fn create_filesystem(_config: &StorageConfig) -> Result<Storage> {
     #[cfg(feature = "storage-fs")]
     {
         let path = _config
             .storage_path
             .clone()
             .unwrap_or_else(|| std::path::PathBuf::from("./saikuro_data"));
-        let storage = saikuro_storage::FilesystemStorage::with_config(path, _config.clone());
-        Ok(Box::new(storage))
+        let storage = FilesystemStorage::with_config(path, _config.clone());
+        Ok(Storage::Filesystem(storage))
     }
     #[cfg(not(feature = "storage-fs"))]
     {
@@ -112,15 +241,15 @@ async fn create_filesystem(_config: &StorageConfig) -> Result<Box<dyn StorageBac
     }
 }
 
-async fn create_sled(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_sled(_config: &StorageConfig) -> Result<Storage> {
     #[cfg(feature = "storage-sled")]
     {
         let path = _config
             .storage_path
             .clone()
             .unwrap_or_else(|| std::path::PathBuf::from("./saikuro_sled"));
-        let storage = saikuro_storage::SledStorage::with_config(path, _config.clone())?;
-        Ok(Box::new(storage))
+        let storage = SledStorage::with_config(path, _config.clone())?;
+        Ok(Storage::Sled(storage))
     }
     #[cfg(not(feature = "storage-sled"))]
     {
@@ -130,15 +259,15 @@ async fn create_sled(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>>
     }
 }
 
-async fn create_sqlite(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
+async fn create_sqlite(_config: &StorageConfig) -> Result<Storage> {
     #[cfg(feature = "storage-sqlite")]
     {
         let path = _config
             .storage_path
             .clone()
-            .unwrap_or_else(|| std::path::PathBuf::from("./saikuro.sqlite"));
-        let storage = saikuro_storage::SqliteStorage::with_config(path, _config.clone())?;
-        Ok(Box::new(storage))
+            .unwrap_or_else(|| std::path::PathBuf::from("./saikuro_sqlite"));
+        let storage = SqliteStorage::with_config(path, _config.clone())?;
+        Ok(Storage::Sqlite(storage))
     }
     #[cfg(not(feature = "storage-sqlite"))]
     {
@@ -148,45 +277,7 @@ async fn create_sqlite(_config: &StorageConfig) -> Result<Box<dyn StorageBackend
     }
 }
 
-async fn create_web_storage(config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    let storage = saikuro_storage::LocalStorage::with_config(config.clone());
-    Ok(Box::new(storage))
-}
-
-async fn create_indexeddb(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
-    {
-        let storage = saikuro_storage::IndexedDbStorage::with_config(_config.clone());
-        return Ok(Box::new(storage));
-    }
-    Err(Error::Storage(
-        "IndexedDB backend is only available on wasm32 with the 'wasm-storage' feature".into(),
-    ))
-}
-
-async fn create_opfs(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
-    {
-        let storage = saikuro_storage::OpfsStorage::with_config(_config.clone());
-        return Ok(Box::new(storage));
-    }
-    Err(Error::Storage(
-        "OPFS backend is only available on wasm32 with the 'wasm-storage' feature".into(),
-    ))
-}
-
-async fn create_fs_access(_config: &StorageConfig) -> Result<Box<dyn StorageBackend>> {
-    #[cfg(all(target_arch = "wasm32", feature = "wasm-storage"))]
-    {
-        let storage = saikuro_storage::FsAccessStorage::pick(_config.clone()).await?;
-        return Ok(Box::new(storage));
-    }
-    Err(Error::Storage(
-        "FS Access backend is only available on wasm32 with the 'wasm-storage' feature".into(),
-    ))
-}
-
 /// Create a transient (in-memory) storage backend.
-pub fn create_transient_storage() -> Box<dyn StorageBackend> {
-    Box::new(saikuro_storage::InMemoryStorage::new())
+pub fn create_transient_storage() -> Storage {
+    Storage::InMemory(InMemoryStorage::new())
 }

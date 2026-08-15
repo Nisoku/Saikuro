@@ -1,20 +1,11 @@
-// Re-export pure helpers from the unconditionally-compiled util module
-// so that the impl_web_storage! macro (which uses $crate::webstorage::*)
-// continues to work.
-#[allow(unused_imports)]
-pub(crate) use crate::util::{
-    apply_prefix, decode_bytes, encode_bytes, key_prefix, make_key, strip_prefix,
-    NAMESPACE_SEPARATOR,
-};
-
 use bytes::Bytes;
 
 use crate::util;
 
-use super::error::{Result, StorageError};
+use saikuro_event::{Result, SaikuroError};
 
 pub(crate) fn window() -> Result<web_sys::Window> {
-    web_sys::window().ok_or_else(|| StorageError::internal("no window object"))
+    web_sys::window().ok_or_else(|| SaikuroError::internal("no window object"))
 }
 
 pub(crate) fn get_all_keys(storage: &web_sys::Storage) -> Vec<String> {
@@ -65,7 +56,7 @@ pub(crate) fn storage_get(storage: &web_sys::Storage, key: &str) -> Result<Optio
     match storage.get_item(key) {
         Ok(Some(val)) => Ok(Some(util::decode_bytes(&val))),
         Ok(None) => Ok(None),
-        Err(e) => Err(StorageError::internal(format!(
+        Err(e) => Err(SaikuroError::internal(format!(
             "web storage get_item failed: {e:?}"
         ))),
     }
@@ -75,7 +66,7 @@ pub(crate) fn storage_set(storage: &web_sys::Storage, key: &str, value: &Bytes) 
     let encoded = util::encode_bytes(value);
     storage
         .set_item(key, &encoded)
-        .map_err(|e| StorageError::internal(format!("web storage set_item failed: {e:?}")))
+        .map_err(|e| SaikuroError::internal(format!("web storage set_item failed: {e:?}")))
 }
 
 pub(crate) fn storage_remove(storage: &web_sys::Storage, key: &str) {

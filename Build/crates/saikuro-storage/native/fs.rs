@@ -1,15 +1,12 @@
-use async_trait::async_trait;
 use bytes::Bytes;
 use std::path::{Component, Path, PathBuf};
 use tokio::task::spawn_blocking;
 
-use super::{
-    config::StorageConfig,
-    error::{Result, StorageError},
-    traits::{FileBackend, KeyValueBackend, StorageBackend},
-};
+use crate::config::StorageConfig;
+use crate::traits::{FileBackend, KeyValueBackend, StorageBackend};
+use saikuro_event::{Result, SaikuroError};
 
-/// Spawn blocking I/O, converting [`JoinError`] to [`StorageError`].
+/// Spawn blocking I/O, converting [`JoinError`] to [`SaikuroError`].
 async fn block<F, T>(f: F) -> Result<T>
 where
     F: FnOnce() -> Result<T> + Send + 'static,
@@ -17,13 +14,10 @@ where
 {
     spawn_blocking(f)
         .await
-        .map_err(|e| StorageError::internal(format!("blocking task failed: {e}")))?
+        .map_err(|e| SaikuroError::internal(format!("blocking task failed: {e}")))?
 }
 
 /// A filesystem-backed storage backend for native targets.
-///
-/// Stores key-value data under `{base_dir}/kv/namespaces/{ns}/{key}` and
-/// file data under `{base_dir}/files/{path}`.
 pub struct FilesystemStorage {
     config: StorageConfig,
     kv_root: PathBuf,
@@ -54,17 +48,15 @@ impl FilesystemStorage {
     }
 }
 
-// -- helpers run on the blocking pool --
-
 fn exists(path: &Path) -> Result<bool> {
-    path.try_exists().map_err(StorageError::from)
+    path.try_exists().map_err(SaikuroError::from)
 }
 
 fn read_bytes(path: &Path) -> Result<Option<Bytes>> {
     match std::fs::read(path) {
         Ok(data) => Ok(Some(Bytes::from(data))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(StorageError::from(e)),
+        Err(e) => Err(SaikuroError::from(e)),
     }
 }
 
@@ -93,7 +85,7 @@ fn delete(path: &Path) -> Result<()> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(StorageError::from(e)),
+        Err(e) => Err(SaikuroError::from(e)),
     }
 }
 
@@ -127,7 +119,7 @@ fn remove_dir(path: &Path) -> Result<()> {
     match std::fs::remove_dir_all(path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(StorageError::from(e)),
+        Err(e) => Err(SaikuroError::from(e)),
     }
 }
 
@@ -150,13 +142,13 @@ fn clear_dir(path: &Path) -> Result<()> {
 fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
     let rel = Path::new(rel);
     if rel.is_absolute() {
-        return Err(StorageError::internal(format!(
+        return Err(SaikuroError::internal(format!(
             "path must not be absolute: {rel:?}"
         )));
     }
     for comp in rel.components() {
         if matches!(comp, Component::ParentDir) {
-            return Err(StorageError::internal(format!(
+            return Err(SaikuroError::internal(format!(
                 "path must not contain '..': {rel:?}"
             )));
         }
@@ -178,7 +170,7 @@ fn strip_ns_prefix(prefix: &Option<String>, name: &str) -> String {
     }
 }
 
-#[async_trait]
+
 impl KeyValueBackend for FilesystemStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
@@ -229,7 +221,7 @@ impl KeyValueBackend for FilesystemStorage {
         block(move || match std::fs::create_dir_all(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                Err(StorageError::namespace_already_exists(&ns))
+                Err(SaikuroError::namespace_already_exists(&ns))
             }
             Err(e) => Err(e.into()),
         })
@@ -247,14 +239,14 @@ impl KeyValueBackend for FilesystemStorage {
     }
 }
 
-#[async_trait]
+
 impl FileBackend for FilesystemStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let full = safe_join(&self.files_root, path)?;
         let path_owned = path.to_owned();
         block(move || read_bytes(&full))
             .await?
-            .ok_or_else(|| StorageError::key_not_found(path_owned))
+            .ok_or_else(|| SaikuroError::key_not_found(path_owned))
     }
 
     async fn write_file(&self, path: &str, content: Bytes) -> Result<()> {
@@ -299,7 +291,7 @@ impl FileBackend for FilesystemStorage {
     }
 }
 
-#[async_trait]
+
 impl StorageBackend for FilesystemStorage {
     fn supports_files(&self) -> bool {
         true

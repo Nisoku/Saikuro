@@ -24,4 +24,7 @@ pub use transport::InMemoryTransport;
 pub use value::Value;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
-pub use storage::{create_storage, create_transient_storage};
+pub use saikuro_storage::traits::{FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend};
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
+pub use storage::{create_storage, create_transient_storage, Storage};
