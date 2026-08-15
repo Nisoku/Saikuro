@@ -116,6 +116,7 @@ sled = "0.34"
 graphitesql = "0.1.6"
 wit-bindgen = "0.46"
 wasi = "0.14"
+wasip1 = "0.14"
 
 # Futures
 futures-executor = "0.3"

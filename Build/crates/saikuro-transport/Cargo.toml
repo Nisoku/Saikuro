@@ -1,6 +1,6 @@
 [package]
 name = "saikuro-transport"
-description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, and WebSocket backends"
+description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, WASI, and WebSocket backends"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,38 +9,53 @@ repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 
 [features]
-default = ["std", "native-transport"]
+default = ["std", "native", "tcp", "ws"]
 std = []
-embassy = ["saikuro-exec/embassy-runtime", "saikuro-core/embedded"]
-embedded-io = ["dep:embedded-io-async"]
-native-transport = ["std", "saikuro-exec/tokio-runtime", "saikuro-core/std"]
-ws-transport = []
-wasm-runtime = [
+native = [
     "std",
-    "saikuro-core/std-no-os",
-    "saikuro-exec/wasm-runtime",
-    "saikuro-random/wasm",
+    "saikuro-core/native",
+    "saikuro-net/native",
+    "saikuro-exec/native",
+    "dep:tokio-tungstenite",
 ]
-native-ws = ["ws-transport", "std", "saikuro-exec/tokio-runtime", "saikuro-core/std", "tokio-tungstenite"]
+no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std"]
+wasm = ["saikuro-core/wasm", "saikuro-net/wasm", "saikuro-exec/wasm"]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-net/embedded",
+    "saikuro-exec/embedded",
+    "dep:embedded-io-async",
+    "dep:embassy-sync",
+]
+
+tcp = []
+unix = []
+ws = []
+wasm-host = ["wasm"]
+wasi-tcp = ["no_std", "saikuro-exec/no_std", "dep:embedded-io-async"]
+wasi-host = ["no_std", "saikuro-exec/no_std", "wasi-tcp"]
+wasi-preview2 = ["dep:wasi"]
+wasi-preview1 = []
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
-
-serde       = { workspace = true }
-bytes       = { workspace = true }
+saikuro-net = { path = "../saikuro-net", default-features = false }
+saikuro-exec = { path = "../saikuro-exec", default-features = false }
+saikuro-random = { path = "../saikuro-random", default-features = false }
+serde = { workspace = true }
+bytes = { workspace = true, default-features = false, features = ["alloc"] }
 async-trait = { workspace = true }
-futures     = { workspace = true }
+futures = { workspace = true, default-features = false, features = ["async-await", "alloc"] }
 pin-project-lite = { workspace = true }
-thiserror   = { workspace = true }
-tracing     = { workspace = true }
-saikuro-exec = { workspace = true, default-features = false }
-saikuro-random = { workspace = true, default-features = false }
+thiserror = { workspace = true }
+tracing = { workspace = true, default-features = false, features = ["log", "attributes"] }
 embedded-io-async = { workspace = true, optional = true }
+embassy-sync = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(all(target_arch = "wasm32", feature = "wasm"))'.dependencies]
 send_wrapper = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
@@ -56,6 +71,10 @@ web-sys = { workspace = true, features = [
     "BinaryType",
 ] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasi = { workspace = true, optional = true }
+wasip1 = { workspace = true, optional = true }
+
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
-futures = { workspace = true, features = ["executor"] }
+futures = { workspace = true, default-features = false, features = ["async-await", "alloc", "executor"] }

@@ -1,127 +1,142 @@
-//! Saikuro Transport
-//!
-//! This crate defines the [`Transport`] trait and provides concrete
-//! implementations:
-//!
-//! | Backend            | Feature flag         | Platforms         |
-//! |--------------------|---------------------|-------------------|
-//! | [`memory`]         | always on           | native + wasm32   |
-//! | [`unix`]           | `native-transport`  | Unix only         |
-//! | [`tcp`]            | `native-transport`  | native only       |
-//! | [`websocket`]      | `native-ws`/wasm32  | native + wasm32   |
-//! | [`wasm_host`]      | always on (wasm32)  | wasm32 only       |
-//!
-//! The crate is `no_std` + `alloc` without the `std` feature; the in-memory
-//! transport, selector, traits, and error types compile for bare-metal MCU
-//! targets.  Native backends (Unix/TCP/WebSocket) require `std`.
+//! Pluggable, backend-agnostic transports for Saikuro.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate alloc;
 
-pub mod error;
-pub mod framing;
-pub mod memory;
-pub mod selector;
-pub mod traits;
+#[cfg(not(any(
+    feature = "native",
+    feature = "no_std",
+    feature = "wasm",
+    feature = "embedded"
+)))]
+compile_error!(
+    "saikuro-transport: enable exactly one engine feature: native, no_std, wasm, or embedded"
+);
 
-#[cfg(feature = "embedded-io")]
-pub mod embedded_io;
-
-#[cfg(all(feature = "native-transport", not(target_arch = "wasm32")))]
-pub mod tcp;
-
-#[cfg(all(
-    feature = "native-transport",
-    not(target_arch = "wasm32"),
-    target_family = "unix"
+#[cfg(any(
+    all(feature = "native", feature = "no_std"),
+    all(feature = "native", feature = "wasm"),
+    all(feature = "native", feature = "embedded"),
+    all(feature = "no_std", feature = "wasm"),
+    all(feature = "no_std", feature = "embedded"),
+    all(feature = "wasm", feature = "embedded")
 ))]
-pub mod unix;
+compile_error!(
+    "saikuro-transport: enable exactly one engine feature (native, no_std, wasm, embedded), not more"
+);
 
-#[cfg(all(
-    feature = "ws-transport",
-    any(feature = "native-ws", target_arch = "wasm32")
-))]
-pub mod websocket;
+#[cfg(all(feature = "no_std", feature = "std"))]
+compile_error!(
+    "saikuro-transport: the no_std engine cannot be combined with the std toolchain feature"
+);
 
-#[cfg(target_arch = "wasm32")]
-pub mod wasm_host;
+pub mod shared;
 
-pub use error::TransportError;
-pub use memory::MemoryTransport;
-pub use selector::{TransportConfig, TransportKind, TransportSelector};
-pub use traits::{Transport, TransportReceiver, TransportSender};
+#[cfg(feature = "native")]
+pub mod native;
 
-#[cfg(feature = "embedded-io")]
-pub use embedded_io::{
-    EmbeddedIoReceiver, EmbeddedIoSender, EmbeddedIoTransport, LocalTransportReceiver,
-    LocalTransportSender,
+#[cfg(feature = "embedded")]
+pub mod embedded;
+
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
+#[cfg(feature = "no_std")]
+pub mod wasi;
+
+pub use shared::error::TransportError;
+pub use shared::memory::MemoryTransport;
+pub use shared::selector::{TransportConfig, TransportKind, TransportSelector};
+pub use shared::traits::{
+    LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
+    LocalTransportSender, Transport, TransportConnector, TransportListener, TransportReceiver,
+    TransportSender,
+};
+pub use shared::host::{
+    HostPipeFactory, HostPipeRecv, HostPipeSend, Role, WasmHostConnector, WasmHostListener,
+    WasmHostTransport,
 };
 
-#[cfg(all(feature = "native-transport", not(target_arch = "wasm32")))]
-pub use tcp::TcpTransport;
+#[cfg(all(feature = "native", feature = "tcp"))]
+pub use native::tcp::TcpTransport;
+#[cfg(all(feature = "native", feature = "unix", target_family = "unix"))]
+pub use native::unix::UnixTransport;
+#[cfg(all(feature = "native", feature = "ws"))]
+pub use native::websocket::{WebSocketTransport, WsTransportListener};
 
-#[cfg(all(
-    feature = "native-transport",
-    not(target_arch = "wasm32"),
-    target_family = "unix"
-))]
-pub use unix::UnixTransport;
+#[cfg(all(feature = "embedded", feature = "tcp"))]
+pub use embedded::tcp::TcpTransport;
+#[cfg(feature = "embedded")]
+pub use embedded::io_transport::{EmbeddedIoReceiver, EmbeddedIoSender, EmbeddedIoTransport};
 
-#[cfg(all(
-    feature = "ws-transport",
-    any(feature = "native-ws", target_arch = "wasm32")
-))]
-pub use websocket::WebSocketTransport;
+#[cfg(all(feature = "wasm", feature = "ws"))]
+pub use wasm::websocket::WebSocketTransport;
+#[cfg(all(feature = "wasm", feature = "wasm-host"))]
+pub use wasm::host_browser::{BroadcastChannelPipe, WasmHost};
 
-#[cfg(all(feature = "native-ws", not(target_arch = "wasm32")))]
-pub use websocket::WsTransportListener;
+#[cfg(all(feature = "no_std", feature = "wasi-tcp"))]
+pub use wasi::tcp::{WasiTcpConnector, WasiTcpListener, WasiTcpTransport};
+#[cfg(all(feature = "no_std", feature = "wasi-host"))]
+pub use wasi::host::{WasiHost, WasiHostConnector, WasiHostListener};
 
-#[cfg(target_arch = "wasm32")]
-pub use wasm_host::WasmHostTransport;
-
-/// Maximum allowed frame size (16 MiB). Frames larger than this are rejected
+/// Maximum allowed frame size (16 MiB).  Frames larger than this are rejected
 /// to prevent memory exhaustion from malformed or malicious peers.
 pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
 
-/// Implements [`TransportSender`] for a sender type whose `inner` field
-/// implements `Sink<Bytes>`.  `$addr_field` is the struct field (logged with
-/// `Debug` on every send/close).
+/// Default capacity of internal transport channels.
+pub const DEFAULT_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
+
+/// Implements [`TransportSender`] for a native transport's sending half.
+///
+/// The target struct must have an `inner` field that is an `futures`
+/// `SplitSink` over `bytes::Bytes` whose `Error` is [`TransportError`].
 #[macro_export]
 macro_rules! impl_native_sender {
-    ($sender:ty, $addr_field:ident, $transport:literal) => {
+    ($ty:ty, $addr:ident, $desc:literal) => {
         #[async_trait::async_trait]
-        impl $crate::traits::TransportSender for $sender {
-            async fn send(&mut self, frame: bytes::Bytes) -> $crate::error::Result<()> {
-                tracing::trace!($addr_field = ?self.$addr_field, bytes = frame.len(), concat!($transport, " send"));
+        impl $crate::shared::traits::TransportSender for $ty {
+            async fn send(&mut self, frame: ::bytes::Bytes) -> $crate::shared::error::Result<()> {
+                tracing::trace!($addr = ?self.$addr, bytes = frame.len(), concat!($desc, " send"));
                 futures::SinkExt::send(&mut self.inner, frame).await
             }
 
-            async fn close(&mut self) -> $crate::error::Result<()> {
-                tracing::debug!($addr_field = ?self.$addr_field, concat!($transport, " sender closing"));
+            async fn close(&mut self) -> $crate::shared::error::Result<()> {
+                tracing::debug!($addr = ?self.$addr, concat!($desc, " sender closing"));
                 futures::SinkExt::close(&mut self.inner).await
             }
         }
     };
 }
 
-/// Implements [`TransportReceiver`] for a receiver type whose `inner` field
-/// implements `Stream<Item = io::Result<Bytes>>`.
+/// Implements [`TransportReceiver`] for a native transport's receiving half.
+///
+/// The target struct must have an `inner` field that is an `futures`
+/// `SplitStream` whose `Item` is `Result<bytes::Bytes, TransportError>`.
 #[macro_export]
 macro_rules! impl_native_receiver {
-    ($receiver:ty, $addr_field:ident, $transport:literal) => {
+    ($ty:ty, $addr:ident, $desc:literal) => {
         #[async_trait::async_trait]
-        impl $crate::traits::TransportReceiver for $receiver {
-            async fn recv(&mut self) -> $crate::error::Result<Option<bytes::Bytes>> {
+        impl $crate::shared::traits::TransportReceiver for $ty {
+            async fn recv(
+                &mut self,
+            ) -> $crate::shared::error::Result<Option<::bytes::Bytes>> {
                 match futures::StreamExt::next(&mut self.inner).await {
                     Some(Ok(bytes)) => {
-                        tracing::trace!($addr_field = ?self.$addr_field, bytes = bytes.len(), concat!($transport, " recv"));
+                        tracing::trace!(
+                            $addr = ?self.$addr,
+                            bytes = bytes.len(),
+                            concat!($desc, " recv")
+                        );
                         Ok(Some(bytes))
                     }
-                    Some(Err(e)) => Err($crate::error::TransportError::from(e)),
+                    Some(Err(e)) => Err(e),
                     None => {
-                        tracing::debug!($addr_field = ?self.$addr_field, concat!($transport, " connection closed by peer"));
+                        tracing::debug!(
+                            $addr = ?self.$addr,
+                            concat!($desc, " connection closed by peer")
+                        );
                         Ok(None)
                     }
                 }
@@ -129,10 +144,3 @@ macro_rules! impl_native_receiver {
         }
     };
 }
-
-/// Default channel capacity for in-memory transports.
-///
-/// This bounds memory usage and provides backpressure: if the receiver is
-/// slow the sender's `send` call will yield until space frees up.
-pub const DEFAULT_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
-    saikuro_exec::ChannelCapacity::MAX;

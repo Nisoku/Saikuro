@@ -1,28 +1,17 @@
-//! TCP transport (native only).
-//!
-//! Provides a reliable, ordered, backpressure-capable byte stream over TCP
-//! using the length-prefixed framing codec from [`crate::framing`].
-
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use saikuro_exec::net::{TcpListener, TcpStream};
+use saikuro_net::net::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 use tracing::debug;
 
-use crate::{
+use crate::shared::{
     error::Result,
     framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
 
-// Transport
-
 /// A TCP transport connection.
-///
-/// Wraps a connected [`TcpStream`] with length-prefix framing.
-/// Use [`TcpConnector`] to establish outgoing connections and
-/// [`TcpTransportListener`] to accept incoming ones.
 pub struct TcpTransport {
     framed: FramedStream<TcpStream>,
     peer_addr: SocketAddr,
@@ -67,7 +56,6 @@ impl Transport for TcpTransport {
 }
 
 // Sender / Receiver
-
 pub struct TcpSender {
     inner: futures::stream::SplitSink<FramedStream<TcpStream>, Bytes>,
     peer_addr: SocketAddr,
@@ -81,8 +69,6 @@ pub struct TcpReceiver {
 }
 
 impl_native_receiver!(TcpReceiver, peer_addr, "tcp");
-
-// Connector
 
 /// Establishes outgoing TCP connections.
 pub struct TcpConnector {
@@ -105,8 +91,6 @@ impl TransportConnector for TcpConnector {
         TcpTransport::new(stream)
     }
 }
-
-// Listener
 
 /// Accepts incoming TCP connections.
 pub struct TcpTransportListener {
@@ -135,8 +119,8 @@ impl TransportListener for TcpTransportListener {
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
         match self.inner.accept().await {
-            Ok((stream, peer)) => {
-                debug!(%peer, "tcp accepted connection");
+            Ok((stream, _peer)) => {
+                debug!(peer = %_peer, "tcp accepted connection");
                 Ok(Some(TcpTransport::new(stream)?))
             }
             Err(e) => Err(e.into()),

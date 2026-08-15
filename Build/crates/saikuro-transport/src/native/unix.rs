@@ -1,24 +1,15 @@
-//! Unix domain socket transport (Unix + native only).
-//!
-//! On the same physical machine a Unix domain socket is faster than TCP
-//! because it skips the TCP stack entirely.  It uses the same
-//! length-prefixed framing as the TCP transport.
-//! This only works when the target OS is a Unix family OS. (yes, not you Windows >:( )
-
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use saikuro_exec::net::{UnixListener, UnixStream};
+use saikuro_net::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
-use crate::{
+use crate::shared::{
     error::Result,
     framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
-
-// Transport
 
 /// A Unix domain socket transport connection.
 pub struct UnixTransport {
@@ -61,7 +52,6 @@ impl Transport for UnixTransport {
 }
 
 // Sender / Receiver
-
 pub struct UnixSender {
     inner: futures::stream::SplitSink<FramedStream<UnixStream>, Bytes>,
     path: PathBuf,
@@ -75,8 +65,6 @@ pub struct UnixReceiver {
 }
 
 impl_native_receiver!(UnixReceiver, path, "unix");
-
-// Connector
 
 /// Establishes outgoing Unix socket connections.
 pub struct UnixConnector {
@@ -101,8 +89,6 @@ impl TransportConnector for UnixConnector {
         Ok(UnixTransport::new(stream, self.path.clone()))
     }
 }
-
-// Listener
 
 /// Accepts incoming Unix domain socket connections.
 pub struct UnixTransportListener {

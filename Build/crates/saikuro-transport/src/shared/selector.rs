@@ -1,20 +1,3 @@
-//! Transport selector:  automatic best-transport choice plus manual overrides.
-//!
-//! Rather than forcing callers to know which transport to use, the
-//! [`TransportSelector`] inspects the target address and the current platform
-//! and picks the most efficient backend automatically.
-//!
-//! | Condition                                     | Chosen transport  |
-//! ---------------------------------------------------------------------
-//! | Target is the same process                    | In-memory         |
-//! | Target is on the same machine (Unix)          | Unix socket       |
-//! | Target is on the same machine (non-Unix)      | TCP loopback      |
-//! | Target is remote, WASM context                | BroadcastChannel  |
-//! | Target is remote, native context              | TCP               |
-//!
-//! The user can override any of these choices by supplying an explicit
-//! [`TransportConfig`].
-
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 use serde::{Deserialize, Serialize};

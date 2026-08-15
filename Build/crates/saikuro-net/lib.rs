@@ -3,7 +3,7 @@
 
 //! Networking and IO facade for Saikuro.
 
-// Exactly one engine must be selected
+// Exactly one engine must be selected.
 #[cfg(any(
     all(feature = "native", any(feature = "no_std", feature = "wasm", feature = "embedded")),
     all(feature = "no_std", any(feature = "native", feature = "wasm", feature = "embedded")),
@@ -18,25 +18,12 @@ compile_error!("exactly one engine must be enabled: native | no_std | wasm | emb
 #[cfg(all(feature = "std", feature = "no_std"))]
 compile_error!("the no_std engine cannot be combined with the std toolchain");
 
-mod shared;
-pub use shared::*;
-
-#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
-mod base;
-#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
-pub use base::*;
-
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
-pub use native::*;
-
-#[cfg(feature = "wasm")]
-mod wasm;
-#[cfg(feature = "wasm")]
-pub use wasm::*;
+pub use native::{net, io};
 
 #[cfg(feature = "embedded")]
 mod embedded;
 #[cfg(feature = "embedded")]
-pub use embedded::*;
+pub use embedded::{net, io};
