@@ -27,7 +27,8 @@ use saikuro_schema::{
 use saikuro_transport::traits::Transport;
 use tracing::{debug, info};
 
-use crate::{config::RuntimeConfig, connection::ConnectionHandler, error::Result};
+use crate::{config::RuntimeConfig, connection::ConnectionHandler};
+use saikuro_event::Result;
 
 /// A cheap, `Clone`-able handle to a running [`SaikuroRuntime`].
 ///
@@ -118,7 +119,7 @@ impl RuntimeHandle {
             Err(e) => {
                 return ResponseEnvelope::err(
                     envelope.id,
-                    saikuro_core::error::ErrorDetail::new(e.error_code(), e.to_string()),
+                    saikuro_event::ErrorDetail::new(e.error_code(), e.to_string()),
                 );
             }
         };
@@ -131,8 +132,8 @@ impl RuntimeHandle {
         {
             return ResponseEnvelope::err(
                 envelope.id,
-                saikuro_core::error::ErrorDetail::new(
-                    saikuro_core::error::ErrorCode::CapabilityDenied,
+                    saikuro_event::ErrorDetail::new(
+                    saikuro_event::ErrorCode::CapabilityDenied,
                     format!("missing capability '{missing}' for '{}'", envelope.target),
                 ),
             );

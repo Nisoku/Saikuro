@@ -5,87 +5,13 @@ use alloc::{
 };
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::ErrorCode,
     schema::{ArgumentDescriptor, PrimitiveType, TypeDescriptor, Visibility},
-    value::Value,
     PROTOCOL_VERSION,
 };
-use thiserror::Error;
 
-use crate::registry::{FunctionRef, RegistryError, SchemaRegistry};
+use saikuro_event::{SaikuroError, Value};
 
-// Errors
-
-/// A validation failure.
-#[derive(Debug, Error)]
-pub enum ValidationError {
-    #[error("incompatible protocol version: expected {expected}, got {received}")]
-    IncompatibleVersion { expected: u32, received: u32 },
-
-    #[error("malformed envelope: {0}")]
-    MalformedEnvelope(String),
-
-    #[error("schema error: {0}")]
-    Schema(Box<RegistryError>),
-
-    #[error("wrong number of arguments: expected {expected}, got {received}")]
-    ArgumentArity { expected: usize, received: usize },
-
-    #[error("argument '{name}' (position {position}): expected {expected}, got {received}")]
-    ArgumentType {
-        name: String,
-        position: usize,
-        expected: String,
-        received: String,
-    },
-
-    #[error("function '{target}' is {visibility:?} and cannot be called by this peer")]
-    VisibilityDenied {
-        target: String,
-        visibility: Visibility,
-    },
-
-    #[error("batch envelope has no items field")]
-    MissingBatch,
-
-    #[error("batch envelope has an empty items list")]
-    EmptyBatch,
-
-    #[error("batch item at index {index}: {source}")]
-    BatchItem {
-        index: usize,
-        #[source]
-        source: Box<ValidationError>,
-    },
-}
-
-impl From<RegistryError> for ValidationError {
-    fn from(e: RegistryError) -> Self {
-        ValidationError::Schema(Box::new(e))
-    }
-}
-
-impl ValidationError {
-    /// Map this error to the appropriate wire [`ErrorCode`].
-    pub fn error_code(&self) -> ErrorCode {
-        match self {
-            Self::IncompatibleVersion { .. } => ErrorCode::IncompatibleVersion,
-            Self::MalformedEnvelope(_) => ErrorCode::MalformedEnvelope,
-            Self::Schema(e) => match e.as_ref() {
-                RegistryError::NamespaceNotFound(_) => ErrorCode::NamespaceNotFound,
-                RegistryError::FunctionNotFound(_) => ErrorCode::FunctionNotFound,
-                RegistryError::MalformedTarget(_) => ErrorCode::MalformedEnvelope,
-                RegistryError::FrozenSchema(_) => ErrorCode::Internal,
-                RegistryError::Validation(_) => ErrorCode::InvalidArguments,
-                RegistryError::SchemaCapacity => ErrorCode::Internal,
-            },
-            Self::ArgumentArity { .. } | Self::ArgumentType { .. } => ErrorCode::InvalidArguments,
-            Self::VisibilityDenied { .. } => ErrorCode::CapabilityDenied,
-            Self::MissingBatch | Self::EmptyBatch => ErrorCode::MalformedEnvelope,
-            Self::BatchItem { source, .. } => source.error_code(),
-        }
-    }
-}
+use crate::registry::{FunctionRef, SchemaRegistry};
 
 /// The result of a successful validation pass.
 #[derive(Debug)]
@@ -120,10 +46,10 @@ impl InvocationValidator {
     }
 
     /// Validate a single envelope.
-    pub async fn validate(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    pub async fn validate(&self, envelope: &Envelope) -> Result<ValidationReport, SaikuroError> {
         // 1. Protocol version.
         if envelope.version != PROTOCOL_VERSION {
-            return Err(ValidationError::IncompatibleVersion {
+            return Err(SaikuroError::IncompatibleVersion {
                 expected: PROTOCOL_VERSION,
                 received: envelope.version,
             });
@@ -156,13 +82,13 @@ impl InvocationValidator {
     }
 
     // Structural checks
-    fn check_structural(&self, envelope: &Envelope) -> Result<(), ValidationError> {
+    fn check_structural(&self, envelope: &Envelope) -> Result<(), SaikuroError> {
         let skip_target_check = matches!(
             envelope.invocation_type,
             InvocationType::Batch | InvocationType::Log | InvocationType::Announce
         );
         if !skip_target_check && !envelope.target.contains('.') {
-            return Err(ValidationError::MalformedEnvelope(format!(
+            return Err(SaikuroError::MalformedEnvelope(format!(
                 "target '{}' must be in 'namespace.function' format",
                 envelope.target
             )));
@@ -171,8 +97,8 @@ impl InvocationValidator {
         // Batch-specific: must have items, must not have a target.
         if envelope.invocation_type == InvocationType::Batch {
             match &envelope.batch_items {
-                None => return Err(ValidationError::MissingBatch),
-                Some(items) if items.is_empty() => return Err(ValidationError::EmptyBatch),
+                None => return Err(SaikuroError::MissingBatch),
+                Some(items) if items.is_empty() => return Err(SaikuroError::EmptyBatch),
                 _ => {}
             }
         }
@@ -181,7 +107,7 @@ impl InvocationValidator {
     }
 
     // Single-invocation validation
-    async fn validate_single(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    async fn validate_single(&self, envelope: &Envelope) -> Result<ValidationReport, SaikuroError> {
         // Schema lookup.
         let func_ref = self.registry.lookup_function(&envelope.target).await?;
 
@@ -197,17 +123,17 @@ impl InvocationValidator {
     }
 
     // Batch validation
-    async fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, ValidationError> {
+    async fn validate_batch(&self, envelope: &Envelope) -> Result<ValidationReport, SaikuroError> {
         let items = envelope.batch_items.as_ref().ok_or_else(|| {
-            ValidationError::MalformedEnvelope("batch envelope missing batch_items".into())
+            SaikuroError::MalformedEnvelope("batch envelope missing batch_items".into())
         })?;
 
         // Validate each item; collect the first error with its index.
         for (index, item) in items.iter().enumerate() {
             self.validate(item).await
-                .map_err(|source| ValidationError::BatchItem {
+                .map_err(|source| SaikuroError::BatchItemFailed {
                     index,
-                    source: Box::new(source),
+                    reason: source.to_string(),
                 })?;
         }
 
@@ -225,17 +151,17 @@ impl InvocationValidator {
         &self,
         target: &str,
         visibility: &Visibility,
-    ) -> Result<(), ValidationError> {
+    ) -> Result<(), SaikuroError> {
         match visibility {
             Visibility::Public => Ok(()),
             Visibility::Internal if self.allow_internal => Ok(()),
-            Visibility::Internal => Err(ValidationError::VisibilityDenied {
+            Visibility::Internal => Err(SaikuroError::VisibilityDenied {
                 target: target.to_owned(),
-                visibility: Visibility::Internal,
+                visibility: format!("{visibility:?}"),
             }),
-            Visibility::Private => Err(ValidationError::VisibilityDenied {
+            Visibility::Private => Err(SaikuroError::VisibilityDenied {
                 target: target.to_owned(),
-                visibility: Visibility::Private,
+                visibility: format!("{visibility:?}"),
             }),
         }
     }
@@ -245,7 +171,7 @@ impl InvocationValidator {
         target: &str,
         declared: &[ArgumentDescriptor],
         provided: &[Value],
-    ) -> Result<(), ValidationError> {
+    ) -> Result<(), SaikuroError> {
         // Count required args (those without defaults and not optional).
         let required_count = declared
             .iter()
@@ -253,14 +179,14 @@ impl InvocationValidator {
             .count();
 
         if provided.len() < required_count {
-            return Err(ValidationError::ArgumentArity {
+            return Err(SaikuroError::ArgumentArity {
                 expected: required_count,
                 received: provided.len(),
             });
         }
 
         if provided.len() > declared.len() {
-            return Err(ValidationError::ArgumentArity {
+            return Err(SaikuroError::ArgumentArity {
                 expected: declared.len(),
                 received: provided.len(),
             });
@@ -290,8 +216,8 @@ impl InvocationValidator {
         name: &str,
         descriptor: &TypeDescriptor,
         value: &Value,
-    ) -> Result<(), ValidationError> {
-        let type_error = |expected: &str| ValidationError::ArgumentType {
+    ) -> Result<(), SaikuroError> {
+        let type_error = |expected: &str| SaikuroError::ArgumentType {
             name: name.to_owned(),
             position,
             expected: expected.to_owned(),
@@ -339,7 +265,7 @@ impl InvocationValidator {
             // Stream and Channel types appear only in return-type positions;
             // they cannot appear in argument lists.
             TypeDescriptor::Stream { .. } | TypeDescriptor::Channel { .. } => {
-                Err(ValidationError::MalformedEnvelope(
+                Err(SaikuroError::MalformedEnvelope(
                     "stream/channel types are not valid argument types".to_owned(),
                 ))
             }
@@ -353,7 +279,7 @@ impl InvocationValidator {
         name: &str,
         prim: &PrimitiveType,
         value: &Value,
-    ) -> Result<(), ValidationError> {
+    ) -> Result<(), SaikuroError> {
         let ok = match prim {
             PrimitiveType::Bool => value.as_bool().is_some(),
             PrimitiveType::I8 | PrimitiveType::I16 | PrimitiveType::I32 | PrimitiveType::I64 => {
@@ -372,7 +298,7 @@ impl InvocationValidator {
         if ok {
             Ok(())
         } else {
-            Err(ValidationError::ArgumentType {
+            Err(SaikuroError::ArgumentType {
                 name: name.to_owned(),
                 position,
                 expected: prim.to_string(),

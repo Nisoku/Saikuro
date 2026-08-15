@@ -4,9 +4,8 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::{
-    capability::CapabilityToken, invocation::InvocationId, value::Value, PROTOCOL_VERSION,
-};
+use crate::{capability::CapabilityToken, invocation::InvocationId, PROTOCOL_VERSION};
+use saikuro_event::Value;
 
 /// Maximum number of key/value metadata entries an [`Envelope`] can carry.
 pub const ENVELOPE_META_CAPACITY: usize = 16;
@@ -121,12 +120,12 @@ macro_rules! impl_msgpack {
     ($ty:ty) => {
         impl $ty {
             /// Serialise this envelope to MessagePack bytes.
-            pub fn to_msgpack(&self) -> Result<Vec<u8>, crate::msgpack::EncodeError> {
+            pub fn to_msgpack(&self) -> Result<Vec<u8>, saikuro_event::EncodeError> {
                 crate::msgpack::to_vec(self)
             }
 
             /// Deserialise from MessagePack bytes.
-            pub fn from_msgpack(bytes: &[u8]) -> Result<Self, crate::msgpack::DecodeError> {
+            pub fn from_msgpack(bytes: &[u8]) -> Result<Self, saikuro_event::DecodeError> {
                 crate::msgpack::from_slice(bytes)
             }
         }
@@ -141,7 +140,7 @@ impl Envelope {
     pub fn call(
         target: impl Into<String>,
         args: Vec<Value>,
-    ) -> Result<Self, saikuro_random::Error> {
+    ) -> Result<Self, saikuro_event::SaikuroError> {
         Ok(Self {
             version: PROTOCOL_VERSION,
             invocation_type: InvocationType::Call,
@@ -160,7 +159,7 @@ impl Envelope {
     pub fn cast(
         target: impl Into<String>,
         args: Vec<Value>,
-    ) -> Result<Self, saikuro_random::Error> {
+    ) -> Result<Self, saikuro_event::SaikuroError> {
         let mut envelope = Self::call(target, args)?;
         envelope.invocation_type = InvocationType::Cast;
         Ok(envelope)
@@ -170,7 +169,7 @@ impl Envelope {
     pub fn stream_open(
         target: impl Into<String>,
         args: Vec<Value>,
-    ) -> Result<Self, saikuro_random::Error> {
+    ) -> Result<Self, saikuro_event::SaikuroError> {
         let mut envelope = Self::call(target, args)?;
         envelope.invocation_type = InvocationType::Stream;
         Ok(envelope)
@@ -180,14 +179,14 @@ impl Envelope {
     pub fn channel_open(
         target: impl Into<String>,
         args: Vec<Value>,
-    ) -> Result<Self, saikuro_random::Error> {
+    ) -> Result<Self, saikuro_event::SaikuroError> {
         let mut envelope = Self::call(target, args)?;
         envelope.invocation_type = InvocationType::Channel;
         Ok(envelope)
     }
 
     /// Construct a schema-announcement envelope.
-    pub fn announce(schema_value: Value) -> Result<Self, saikuro_random::Error> {
+    pub fn announce(schema_value: Value) -> Result<Self, saikuro_event::SaikuroError> {
         let mut envelope = Self::call("$saikuro.announce", vec![schema_value])?;
         envelope.invocation_type = InvocationType::Announce;
         Ok(envelope)
@@ -197,7 +196,7 @@ impl Envelope {
     pub fn resource(
         target: impl Into<String>,
         args: Vec<Value>,
-    ) -> Result<Self, saikuro_random::Error> {
+    ) -> Result<Self, saikuro_event::SaikuroError> {
         let mut envelope = Self::call(target, args)?;
         envelope.invocation_type = InvocationType::Resource;
         Ok(envelope)
@@ -239,7 +238,7 @@ pub struct ResponseEnvelope {
 
     /// Error detail present when `ok` is `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<crate::error::ErrorDetail>,
+    pub error: Option<saikuro_event::ErrorDetail>,
 
     /// For streaming responses: the sequence number of this item.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -276,7 +275,7 @@ impl ResponseEnvelope {
     }
 
     /// Construct an error response.
-    pub fn err(id: InvocationId, detail: crate::error::ErrorDetail) -> Self {
+    pub fn err(id: InvocationId, detail: saikuro_event::ErrorDetail) -> Self {
         Self {
             id,
             ok: false,

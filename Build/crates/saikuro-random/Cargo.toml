@@ -14,9 +14,9 @@ path = "lib.rs"
 [features]
 default = ["std", "native"]
 std = ["rand_core/std"]
-native = ["std", "getrandom", "getrandom/std"]
-no_std = ["getrandom"]
-wasm = ["getrandom", "getrandom/wasm_js"]
+native = ["std", "getrandom", "getrandom/std", "saikuro-event/getrandom"]
+no_std = ["getrandom", "saikuro-event/getrandom"]
+wasm = ["getrandom", "getrandom/wasm_js", "saikuro-event/getrandom"]
 embedded = []
 
 [dependencies]
@@ -25,6 +25,7 @@ chacha20 = { workspace = true }
 portable-atomic = { workspace = true }
 rand_core = { workspace = true }
 uuid = { workspace = true }
+saikuro-event = { workspace = true, default-features = false }
 
 [dev-dependencies]
 chacha20 = { workspace = true }

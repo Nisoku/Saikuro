@@ -1,24 +1,20 @@
 [package]
-name = "saikuro-log"
-description = "Logging types and sinks for Saikuro"
+name = "saikuro-event"
+description = "Unified error taxonomy, structured logging, and value types for Saikuro"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-keywords = ["ipc", "cross-language", "saikuro", "logging", "log"]
-
-[lib]
-path = "lib.rs"
+keywords = ["ipc", "cross-language", "saikuro", "error", "logging"]
 
 [features]
 default = ["std", "native", "stderr", "null", "filter"]
 std = []
-native = ["std", "saikuro-core/native"]
-no_std = ["saikuro-core/no_std"]
-wasm = ["saikuro-core/wasm"]
-embedded = ["dep:embedded-io-async", "dep:spin", "saikuro-core/embedded"]
-
+native = ["std"]
+no_std = []
+wasm = []
+embedded = ["dep:embedded-io-async", "dep:spin"]
 stderr = ["native"]
 tracing = ["native", "dep:tracing"]
 console = ["wasm", "dep:web-sys"]
@@ -27,12 +23,18 @@ collector = ["dep:spin"]
 null = []
 filter = []
 
+[lib]
+path = "lib.rs"
+
 [dependencies]
-saikuro-core = { workspace = true, default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true, default-features = false, features = ["alloc"] }
+serde_bytes = { workspace = true }
 heapless = { workspace = true }
+thiserror = { workspace = true, default-features = false }
 strum = { workspace = true }
+messagepack-serde = { workspace = true }
+getrandom = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = ["console"] }
 embedded-io-async = { workspace = true, optional = true }

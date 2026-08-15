@@ -70,7 +70,7 @@ impl InvocationId {
     ///
     /// Returns an error when the configured entropy backend is unavailable.
     #[inline]
-    pub fn new() -> Result<Self, saikuro_random::Error> {
+    pub fn new() -> Result<Self, saikuro_event::SaikuroError> {
         saikuro_random::uuid_v4().map(Self)
     }
 

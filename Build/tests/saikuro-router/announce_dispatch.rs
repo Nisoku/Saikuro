@@ -160,7 +160,7 @@ fn announce_in_production_mode_returns_error() {
         // The registry rejects with FrozenSchema; the handler maps that to Internal.
         assert_eq!(
             err.code,
-            saikuro_core::error::ErrorCode::Internal,
+            saikuro_event::ErrorCode::Internal,
             "expected Internal error code for frozen registry, got {:?}",
             err.code
         );
@@ -200,7 +200,7 @@ fn announce_with_invalid_schema_returns_error() {
         let err = resp.error.expect("error detail");
         assert_eq!(
             err.code,
-            saikuro_core::error::ErrorCode::MalformedEnvelope,
+            saikuro_event::ErrorCode::MalformedEnvelope,
             "expected MalformedEnvelope for bad args[0], got {:?}",
             err.code
         );
@@ -233,7 +233,7 @@ fn announce_with_no_args_returns_error() {
         let err = resp.error.expect("error detail");
         assert_eq!(
             err.code,
-            saikuro_core::error::ErrorCode::MalformedEnvelope,
+            saikuro_event::ErrorCode::MalformedEnvelope,
             "expected MalformedEnvelope for empty args, got {:?}",
             err.code
         );

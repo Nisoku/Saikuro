@@ -3,9 +3,6 @@
 #[macro_use]
 extern crate alloc;
 
-mod error;
-pub use error::*;
-
 mod protocol;
 pub use protocol::*;
 

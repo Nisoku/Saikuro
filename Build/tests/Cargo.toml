@@ -15,6 +15,7 @@ saikuro-core      = { workspace = true }
 saikuro-schema    = { workspace = true }
 saikuro-router    = { workspace = true }
 saikuro-codegen   = { workspace = true }
+saikuro-event      = { workspace = true }
 saikuro           = { workspace = true }
 saikuro-exec      = { workspace = true }
 

@@ -6,7 +6,7 @@ use saikuro_core::{envelope::Envelope, RegistrationToken, ResponseEnvelope};
 use saikuro_exec::sync::RwLock;
 use saikuro_exec::{mpsc, oneshot};
 
-use crate::error::{Result, RouterError};
+use saikuro_event::{Result, SaikuroError};
 
 // Pending call tracker
 /// A one-shot channel waiting for the response to a single Call invocation.
@@ -106,7 +106,7 @@ impl Provider for ProviderHandle {
                 response_tx,
             })
             .await
-            .map_err(|_| RouterError::ProviderUnavailable(self.id.clone()))
+            .map_err(|_| SaikuroError::ProviderUnavailable(self.id.clone()))
     }
 
     fn is_alive(&self) -> bool {

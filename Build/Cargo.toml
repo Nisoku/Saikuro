@@ -2,19 +2,18 @@
 resolver = "2"
 members = [
     "crates/saikuro-core",
+    "crates/saikuro-event",
     "crates/saikuro-schema",
-    "crates/saikuro-storage",
     "crates/saikuro-transport",
+    "crates/saikuro-storage",
     "crates/saikuro-router",
     "crates/saikuro-runtime",
     "crates/saikuro-exec",
     "crates/saikuro-net",
-    "crates/saikuro-log",
     "crates/saikuro-random",
     "crates/saikuro-codegen",
     "adapters/c",
     "adapters/rust",
-    "tests",
 ]
 
 [workspace.package]
@@ -131,5 +130,5 @@ saikuro-runtime = { path = "crates/saikuro-runtime", default-features = false }
 saikuro-codegen = { path = "crates/saikuro-codegen" }
 saikuro-exec = { path = "crates/saikuro-exec", default-features = false }
 saikuro-random = { path = "crates/saikuro-random", default-features = false }
-saikuro-log = { path = "crates/saikuro-log", default-features = false }
+saikuro-event = { path = "crates/saikuro-event", default-features = false }
 saikuro = { path = "adapters/rust", default-features = false }

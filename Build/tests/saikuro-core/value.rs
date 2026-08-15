@@ -3,7 +3,7 @@ use saikuro_core::schema::{
     FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
     TypeDescriptor, TypeMap, Visibility,
 };
-use saikuro_core::value::{Value, ValueMap};
+use saikuro_event::{Value, ValueMap};
 
 /// Regression: Schema -> msgpack bytes -> Value -> msgpack bytes -> Schema must round-trip.
 #[test]

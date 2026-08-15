@@ -14,13 +14,14 @@ path = "lib.rs"
 [features]
 default = ["std", "native"]
 std = []
-native = ["std", "saikuro-core/native", "saikuro-exec/native"]
-no_std = ["saikuro-core/no_std", "saikuro-exec/no_std"]
-wasm = ["saikuro-core/wasm", "saikuro-exec/wasm"]
-embedded = ["saikuro-core/embedded", "saikuro-exec/embedded"]
+native = ["std", "saikuro-core/native", "saikuro-exec/native", "saikuro-event/native"]
+no_std = ["saikuro-core/no_std", "saikuro-exec/no_std", "saikuro-event/no_std"]
+wasm = ["saikuro-core/wasm", "saikuro-exec/wasm", "saikuro-event/wasm"]
+embedded = ["saikuro-core/embedded", "saikuro-exec/embedded", "saikuro-event/embedded"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
 saikuro-exec = { path = "../saikuro-exec", default-features = false }
+saikuro-event = { workspace = true, default-features = false }
 
 thiserror = { workspace = true }

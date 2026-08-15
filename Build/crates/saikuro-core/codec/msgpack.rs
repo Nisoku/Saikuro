@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
-use core::convert::Infallible;
 use messagepack_serde::{
-    messagepack_core::{encode::int::EncodeMinimizeInt, io::IoWrite, io::RError, Encode},
+    messagepack_core::{encode::int::EncodeMinimizeInt, io::IoWrite, Encode},
     ser::NumEncoder,
 };
 use serde::{Deserialize, Serialize};
+use saikuro_event::{DecodeError, EncodeError};
 
 /// Encodes numbers exactly like rmp-serde
 struct RmpCompatible;
@@ -94,12 +94,6 @@ impl<W: IoWrite> NumEncoder<W> for RmpCompatible {
         v.encode(writer)
     }
 }
-
-/// Encoding error produced by [`to_vec`].
-pub type EncodeError = messagepack_serde::ser::Error<Infallible>;
-
-/// Decoding error produced by [`from_slice`].
-pub type DecodeError = messagepack_serde::de::Error<RError>;
 
 /// Serialize a value to MessagePack bytes.
 pub fn to_vec<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, EncodeError> {

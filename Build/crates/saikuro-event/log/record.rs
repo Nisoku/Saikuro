@@ -3,21 +3,12 @@ use core::fmt;
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
-use saikuro_core::error::SaikuroError;
-use saikuro_core::value::{Value, ValueMap};
-
 use crate::level::LogLevel;
-
-/// Maximum number of structured context fields a [`LogRecord`] can carry.
-pub const LOG_FIELDS_CAPACITY: usize = 16;
-
-/// Fixed-capacity map of structured context fields on [`LogRecord`].
-pub type LogFieldMap = heapless::FnvIndexMap<String, Value, LOG_FIELDS_CAPACITY>;
+use crate::value::{Value, ValueMap};
+use crate::ContextMap;
+use crate::SaikuroError;
 
 /// A structured log record forwarded from an adapter to the runtime log sink.
-///
-/// The `fields` map holds any additional key/value context the emitting logger
-/// attached (e.g. `err`, `id`, `duration_ms`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogRecord {
     /// ISO-8601 timestamp string (e.g. `"2026-01-01T00:00:00.000Z"`).
@@ -33,8 +24,8 @@ pub struct LogRecord {
     pub msg: String,
 
     /// Additional structured context fields.
-    #[serde(default, skip_serializing_if = "LogFieldMap::is_empty")]
-    pub fields: LogFieldMap,
+    #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
+    pub fields: ContextMap,
 }
 
 impl LogRecord {
@@ -50,15 +41,15 @@ impl LogRecord {
             level,
             name: name.into(),
             msg: msg.into(),
-            fields: LogFieldMap::new(),
+            fields: ContextMap::new(),
         }
     }
 
     /// Add a structured field and return `self` for chaining.
     ///
     /// Fails with [`SaikuroError::CapacityExceeded`] if the record is already at
-    /// [`LOG_FIELDS_CAPACITY`] fields.
-    pub fn with_field(
+    /// capacity fields.
+    pub fn with_context(
         mut self,
         key: impl Into<String>,
         value: impl Into<Value>,
@@ -95,7 +86,7 @@ impl TryFrom<Value> for LogRecord {
                     .unwrap_or(LogLevel::Info);
                 let name = take_string(&mut map, "name").unwrap_or_default();
                 let msg = take_string(&mut map, "msg").unwrap_or_default();
-                let mut fields = LogFieldMap::new();
+                let mut fields = ContextMap::new();
                 for (k, v) in map.into_iter() {
                     fields
                         .insert(k, v)

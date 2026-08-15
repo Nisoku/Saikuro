@@ -2,6 +2,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 use crate::capability::CapabilityToken;
+use saikuro_event::Value;
 
 /// The protocol version this schema was compiled against.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -130,12 +131,11 @@ impl TypeDescriptor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
-    /// Callable by any peer that has the required capabilities.
-    #[default]
+    /// Callable by any namespace, including external callers.
     Public,
-    /// Callable only by peers in the same cluster/process group.
+    /// Callable only by functions within the same root schema.
     Internal,
-    /// Not exposed at all; exists only for documentation purposes.
+    /// Callable only by code compiled into the same binary.
     Private,
 }
 
@@ -151,7 +151,7 @@ pub struct ArgumentDescriptor {
     pub optional: bool,
     /// Default value used when the argument is omitted.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default: Option<crate::value::Value>,
+    pub default: Option<Value>,
     /// Human-readable documentation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,

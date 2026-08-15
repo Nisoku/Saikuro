@@ -6,7 +6,7 @@ use saikuro_core::schema::{
 use saikuro_exec::sync::RwLock;
 use saikuro_core::RegistrationToken;
 
-use crate::validator::ValidationError;
+use saikuro_event::SaikuroError;
 
 
 /// Whether the registry accepts dynamic schema updates.
@@ -97,17 +97,17 @@ impl SchemaRegistry {
 
     /// Register (or replace) a namespace.
     /// In production mode this returns an error rather than mutating state.
-    pub async fn register(&self, registration: NamespaceRegistration) -> Result<(), RegistryError> {
+    pub async fn register(&self, registration: NamespaceRegistration) -> Result<(), SaikuroError> {
         let mut schemata = self.inner.write().await;
         if schemata.mode == RegistryMode::Production {
-            return Err(RegistryError::FrozenSchema(registration.namespace));
+            return Err(SaikuroError::FrozenSchema(registration.namespace));
         }
 
         let ns = registration.namespace.clone();
         if !schemata.namespaces.contains_key(&ns)
             && schemata.namespaces.len() == SCHEMA_NAMESPACES_CAPACITY
         {
-            return Err(RegistryError::SchemaCapacity);
+            return Err(SaikuroError::SchemaCapacity);
         }
         schemata.namespaces.insert(
             ns,
@@ -125,7 +125,7 @@ impl SchemaRegistry {
         &self,
         schema: Schema,
         provider_id: impl Into<String>,
-    ) -> Result<(), RegistryError> {
+    ) -> Result<(), SaikuroError> {
         self.merge_schema_with_token(schema, provider_id, RegistrationToken::new()).await
     }
 
@@ -135,7 +135,7 @@ impl SchemaRegistry {
         schema: Schema,
         provider_id: impl Into<String>,
         registration_token: RegistrationToken,
-    ) -> Result<(), RegistryError> {
+    ) -> Result<(), SaikuroError> {
         let provider_id = provider_id.into();
 
         // The whole merge happens under one write guard so a concurrent
@@ -144,7 +144,7 @@ impl SchemaRegistry {
 
         if schemata.mode == RegistryMode::Production {
             let ns = schema.namespaces.keys().next().cloned().unwrap_or_default();
-            return Err(RegistryError::FrozenSchema(ns));
+            return Err(SaikuroError::FrozenSchema(ns));
         }
 
         let new_namespaces = schema
@@ -160,7 +160,7 @@ impl SchemaRegistry {
         if schemata.namespaces.len() + new_namespaces > SCHEMA_NAMESPACES_CAPACITY
             || schemata.types.len() + new_types > SCHEMA_TYPES_CAPACITY
         {
-            return Err(RegistryError::SchemaCapacity);
+            return Err(SaikuroError::SchemaCapacity);
         }
 
         // Merge types first (functions may reference them).
@@ -196,20 +196,20 @@ impl SchemaRegistry {
 
     /// Look up the schema for a single function.
     /// `target` must be in `"namespace.function"` format.
-    pub async fn lookup_function(&self, target: &str) -> Result<FunctionRef, RegistryError> {
+    pub async fn lookup_function(&self, target: &str) -> Result<FunctionRef, SaikuroError> {
         let (ns_name, fn_name) = split_target(target)?;
 
         let schemata = self.inner.read().await;
         let entry = schemata
             .namespaces
             .get(ns_name)
-            .ok_or_else(|| RegistryError::NamespaceNotFound(ns_name.to_owned()))?;
+            .ok_or_else(|| SaikuroError::NamespaceNotFound(ns_name.to_owned()))?;
 
         let fn_schema = entry
             .schema
             .functions
             .get(fn_name)
-            .ok_or_else(|| RegistryError::FunctionNotFound(target.to_owned()))?
+            .ok_or_else(|| SaikuroError::FunctionNotFound(target.to_owned()))?
             .clone();
 
         Ok(FunctionRef {
@@ -240,20 +240,20 @@ impl SchemaRegistry {
     }
 
     /// Export a snapshot of the full schema at this instant.
-    pub async fn snapshot(&self) -> Result<Schema, RegistryError> {
+    pub async fn snapshot(&self) -> Result<Schema, SaikuroError> {
         let mut schema = Schema::new();
         let schemata = self.inner.read().await;
         for (name, entry) in schemata.namespaces.iter() {
             schema
                 .namespaces
                 .insert(name.clone(), entry.schema.clone())
-                .map_err(|_| RegistryError::SchemaCapacity)?;
+                .map_err(|_| SaikuroError::SchemaCapacity)?;
         }
         for (name, type_def) in schemata.types.iter() {
             schema
                 .types
                 .insert(name.clone(), type_def.clone())
-                .map_err(|_| RegistryError::SchemaCapacity)?;
+                .map_err(|_| SaikuroError::SchemaCapacity)?;
         }
         Ok(schema)
     }
@@ -284,30 +284,8 @@ pub struct FunctionRef {
     pub provider_id: String,
 }
 
-// Registry error
-#[derive(Debug, thiserror::Error)]
-pub enum RegistryError {
-    #[error("namespace not found: {0}")]
-    NamespaceNotFound(String),
-
-    #[error("function not found: {0}")]
-    FunctionNotFound(String),
-
-    #[error("malformed target '{0}': must be 'namespace.function'")]
-    MalformedTarget(String),
-
-    #[error("schema is frozen; cannot register namespace '{0}' in production mode")]
-    FrozenSchema(String),
-
-    #[error("validation error: {0}")]
-    Validation(#[from] ValidationError),
-
-    #[error("schema registry capacity exceeded")]
-    SchemaCapacity,
-}
-
 /// Split a `"namespace.function"` target into its two components.
-fn split_target(target: &str) -> Result<(&str, &str), RegistryError> {
+fn split_target(target: &str) -> Result<(&str, &str), SaikuroError> {
     saikuro_core::split_target(target)
-        .ok_or_else(|| RegistryError::MalformedTarget(target.to_owned()))
+        .ok_or_else(|| SaikuroError::MalformedTarget(target.to_owned()))
 }

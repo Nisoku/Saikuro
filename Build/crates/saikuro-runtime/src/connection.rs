@@ -42,12 +42,11 @@ use futures::future::FutureExt;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
-    error::ErrorDetail,
     invocation::InvocationId,
     schema::Schema,
-    value::Value,
     RegistrationToken, ResponseEnvelope,
 };
+use saikuro_event::{ErrorDetail, Value};
 use saikuro_exec::{mpsc, oneshot, spawn};
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -266,7 +265,7 @@ where
                     ResponseEnvelope::err(
                         id,
                         ErrorDetail::new(
-                            saikuro_core::error::ErrorCode::CapabilityDenied,
+                            saikuro_event::ErrorCode::CapabilityDenied,
                             format!("caller lacks '{}' to invoke '{}'", missing, envelope.target),
                         ),
                     ),
@@ -296,7 +295,7 @@ where
                 Err(Some(Box::new(ResponseEnvelope::err(
                     id,
                     ErrorDetail::new(
-                        saikuro_core::error::ErrorCode::MalformedEnvelope,
+                        saikuro_event::ErrorCode::MalformedEnvelope,
                         format!("msgpack decode error: {e}"),
                     ),
                 ))))
@@ -313,7 +312,7 @@ where
     ) -> bool {
         if frame.len() > self.max_message_size {
             let err = ErrorDetail::new(
-                saikuro_core::error::ErrorCode::MessageTooLarge,
+                saikuro_event::ErrorCode::MessageTooLarge,
                 format!(
                     "frame {} bytes exceeds limit {} bytes",
                     frame.len(),
@@ -412,7 +411,7 @@ where
                         ResponseEnvelope::err(
                             id,
                             ErrorDetail::new(
-                                saikuro_core::error::ErrorCode::Internal,
+                                saikuro_event::ErrorCode::Internal,
                                 format!("schema merge error: {e}"),
                             ),
                         )
@@ -424,7 +423,7 @@ where
                 ResponseEnvelope::err(
                     id,
                     ErrorDetail::new(
-                        saikuro_core::error::ErrorCode::MalformedEnvelope,
+                        saikuro_event::ErrorCode::MalformedEnvelope,
                         "announce envelope must carry a Schema in args[0]".to_owned(),
                     ),
                 )
@@ -469,7 +468,7 @@ where
                             let _ = tx.send(ResponseEnvelope::err(
                                 item.envelope.id,
                                 ErrorDetail::new(
-                                    saikuro_core::error::ErrorCode::Internal,
+                                    saikuro_event::ErrorCode::Internal,
                                     format!("encode error: {e}"),
                                 ),
                             ));

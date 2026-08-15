@@ -1,6 +1,7 @@
 use saikuro_core::schema::{PrimitiveType, Schema, TypeDefinition, TypeDescriptor};
 use saikuro_core::RegistrationToken;
-use saikuro_schema::registry::{RegistryError, SchemaRegistry};
+use saikuro_event::SaikuroError;
+use saikuro_schema::registry::SchemaRegistry;
 
 #[test]
 fn frozen_registry_rejects_type_only_merge() {
@@ -18,7 +19,7 @@ fn frozen_registry_rejects_type_only_merge() {
 
     assert!(matches!(
         registry.merge_schema(update, "provider"),
-        Err(RegistryError::FrozenSchema(_))
+        Err(SaikuroError::FrozenSchema(_))
     ));
     assert!(registry.snapshot().expect("snapshot").types.is_empty());
 }

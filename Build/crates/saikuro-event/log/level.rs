@@ -1,5 +1,3 @@
-//! Severity levels for log records.
-
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 

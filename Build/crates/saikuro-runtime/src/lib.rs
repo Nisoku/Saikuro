@@ -4,11 +4,9 @@
 
 pub mod config;
 pub mod connection;
-pub mod error;
 pub mod handle;
 pub mod runtime;
 
 pub use config::RuntimeConfig;
-pub use error::RuntimeError;
 pub use handle::RuntimeHandle;
 pub use runtime::SaikuroRuntime;

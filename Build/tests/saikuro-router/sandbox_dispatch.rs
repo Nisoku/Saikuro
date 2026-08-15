@@ -364,7 +364,7 @@ fn sandbox_handler_denies_internal_function_invocation() {
         let err = resp.error.expect("error detail must be present");
         assert_eq!(
             err.code,
-            saikuro_core::error::ErrorCode::CapabilityDenied,
+            saikuro_event::ErrorCode::CapabilityDenied,
             "expected CapabilityDenied, got {:?}",
             err.code
         );

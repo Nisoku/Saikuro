@@ -1,5 +1,3 @@
-//! A bounded in-memory collector sink.
-
 use alloc::vec::Vec;
 use spin::Mutex;
 

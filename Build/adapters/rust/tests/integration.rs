@@ -314,7 +314,7 @@ fn resource_roundtrip_with_simulated_runtime() {
             assert_eq!(env.target, "files.open");
 
             let response =
-                ResponseEnvelope::ok(env.id, saikuro_core::value::Value::String("ok".into()));
+                ResponseEnvelope::ok(env.id, saikuro_event::Value::String("ok".into()));
             runtime_side
                 .send(bytes::Bytes::from(
                     response.to_msgpack().expect("encode response"),
@@ -353,7 +353,7 @@ fn stream_roundtrip_with_simulated_runtime() {
             assert_eq!(env.target, "events.watch");
 
             let item1 =
-                ResponseEnvelope::stream_item(env.id, 0, saikuro_core::value::Value::Int(1));
+                ResponseEnvelope::stream_item(env.id, 0, saikuro_event::Value::Int(1));
             runtime_side
                 .send(bytes::Bytes::from(
                     item1.to_msgpack().expect("encode item1"),
@@ -362,7 +362,7 @@ fn stream_roundtrip_with_simulated_runtime() {
                 .expect("send item1");
 
             let item2 =
-                ResponseEnvelope::stream_item(env.id, 1, saikuro_core::value::Value::Int(2));
+                ResponseEnvelope::stream_item(env.id, 1, saikuro_event::Value::Int(2));
             runtime_side
                 .send(bytes::Bytes::from(
                     item2.to_msgpack().expect("encode item2"),
@@ -428,7 +428,7 @@ fn channel_send_receive_and_close_with_simulated_runtime() {
             let outbound = ResponseEnvelope::stream_item(
                 open_env.id,
                 0,
-                saikuro_core::value::Value::String("pong".into()),
+                saikuro_event::Value::String("pong".into()),
             );
             runtime_side
                 .send(bytes::Bytes::from(
@@ -555,7 +555,7 @@ fn client_acknowledges_announce_on_connect() {
             invocation_type: InvocationType::Announce,
             id: announce_id,
             target: "$announce".into(),
-            args: vec![saikuro_core::value::Value::Null],
+            args: vec![saikuro_event::Value::Null],
             meta: Default::default(),
             capability: None,
             batch_items: None,
@@ -591,8 +591,8 @@ fn envelope_roundtrip_msgpack_preserves_fields() {
         let original = Envelope::call(
             "math.add",
             vec![
-                saikuro_core::value::Value::Int(1),
-                saikuro_core::value::Value::Int(2),
+                saikuro_event::Value::Int(1),
+                saikuro_event::Value::Int(2),
             ],
         )
         .expect("entropy available");

@@ -1,6 +1,7 @@
 use saikuro_core::envelope::{Envelope, InvocationType};
+use saikuro_event::SaikuroError;
 use saikuro_schema::registry::SchemaRegistry;
-use saikuro_schema::validator::{InvocationValidator, ValidationError};
+use saikuro_schema::validator::InvocationValidator;
 
 #[test]
 fn batch_with_empty_items_returns_empty_batch_error() {
@@ -13,5 +14,5 @@ fn batch_with_empty_items_returns_empty_batch_error() {
     batch.batch_items = Some(vec![]);
 
     let result = validator.validate(&batch);
-    assert!(matches!(result, Err(ValidationError::EmptyBatch)));
+    assert!(matches!(result, Err(SaikuroError::EmptyBatch)));
 }

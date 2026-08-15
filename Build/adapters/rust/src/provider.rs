@@ -348,7 +348,7 @@ async fn dispatch_batch(
     handlers: &HashMap<String, HandlerEntry>,
     transport: &mut dyn AdapterTransport,
 ) {
-    use saikuro_core::value::Value as CoreValue;
+    use saikuro_event::Value as CoreValue;
 
     let id = envelope.id;
     let items = match envelope.batch_items {

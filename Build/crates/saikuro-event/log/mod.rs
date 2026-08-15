@@ -1,12 +1,15 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs)]
+pub mod level;
+pub mod record;
+pub mod sink;
 
-//! Logging types and sinks for Saikuro.
+#[cfg(feature = "collector")]
+pub mod ring;
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std;
+pub use level::*;
+pub use record::*;
+pub use sink::*;
+#[cfg(feature = "collector")]
+pub use ring::*;
 
 #[cfg(any(
     all(feature = "native", any(feature = "no_std", feature = "wasm", feature = "embedded")),
@@ -21,14 +24,6 @@ compile_error!("the no_std engine cannot be combined with the std toolchain");
 
 #[cfg(not(any(feature = "native", feature = "no_std", feature = "wasm", feature = "embedded")))]
 compile_error!("exactly one engine must be selected: native | no_std | wasm | embedded");
-
-mod shared;
-pub use shared::*;
-
-#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
-mod base;
-#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
-pub use base::*;
 
 #[cfg(feature = "native")]
 mod native;

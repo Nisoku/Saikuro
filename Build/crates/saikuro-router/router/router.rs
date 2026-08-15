@@ -3,15 +3,13 @@ use alloc::{borrow::ToOwned, boxed::Box, format, string::ToString, sync::Arc, ve
 use core::time::Duration;
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::{ErrorDetail, SaikuroError},
     invocation::InvocationId,
     ResponseEnvelope,
 };
-use saikuro_log::{LogLevel, LogRecord, LogSink};
+use saikuro_event::{ErrorDetail, LogLevel, LogRecord, LogSink, Result, SaikuroError};
 use saikuro_exec::{mpsc, oneshot, timeout, ChannelCapacity};
 
 use crate::{
-    error::{Result, RouterError},
     provider::{Provider, ProviderRegistry},
     stream_state::{ChannelState, DeliveryOutcome, StreamState, StreamStateStore},
     DefaultRouterSink,
@@ -265,7 +263,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                 }
                 DeliveryOutcome::Closed => {
                     self.streams.remove_channel_if(&id, &channel).await;
-                    return error_response(id, RouterError::ChannelClosed(id.to_string()).into());
+                    return error_response(id, SaikuroError::ChannelClosed.into());
                 }
                 DeliveryOutcome::OutOfOrder => {
                     self.log_sink
@@ -336,13 +334,13 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             let response = Box::pin(self.dispatch(item)).await;
             // Represent each sub-response as its result value (or Null on error).
             results.push(if response.ok {
-                response.result.unwrap_or(saikuro_core::value::Value::Null)
+                response.result.unwrap_or(saikuro_event::Value::Null)
             } else {
-                saikuro_core::value::Value::Null
+                saikuro_event::Value::Null
             });
         }
 
-        ResponseEnvelope::ok(id, saikuro_core::value::Value::Array(results))
+        ResponseEnvelope::ok(id, saikuro_event::Value::Array(results))
     }
 
     // Log
@@ -394,12 +392,12 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let state = self
             .streams
             .get_channel(&id).await
-            .ok_or_else(|| RouterError::ChannelNotFound(id.to_string()))?;
+            .ok_or_else(|| SaikuroError::ChannelNotFound(id.to_string()))?;
 
         match state.deliver(response, inbound).await {
             DeliveryOutcome::Closed => {
                 self.streams.remove_channel_if(&id, &state).await;
-                Err(RouterError::ChannelClosed(id.to_string()))
+                Err(SaikuroError::ChannelClosed)
             }
             DeliveryOutcome::OutOfOrder => {
                 self.log_sink
@@ -436,12 +434,12 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let state = self
             .streams
             .get_stream(&id).await
-            .ok_or_else(|| RouterError::StreamNotFound(id.to_string()))?;
+            .ok_or_else(|| SaikuroError::StreamNotFound(id.to_string()))?;
 
         match state.deliver(response).await {
             DeliveryOutcome::Closed => {
                 self.streams.remove_stream_if(&id, &state).await;
-                Err(RouterError::StreamClosed(id.to_string()))
+                Err(SaikuroError::StreamClosed)
             }
             DeliveryOutcome::OutOfOrder => {
                 self.log_sink
@@ -465,15 +463,15 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     // Helpers
     async fn resolve_namespace(&self, target: &str) -> Result<crate::provider::ProviderHandle> {
         let ns =
-            namespace_of(target).ok_or_else(|| RouterError::MalformedTarget(target.to_owned()))?;
+            namespace_of(target).ok_or_else(|| SaikuroError::MalformedTarget(target.to_owned()))?;
 
         let handle = self
             .providers
             .get(ns).await
-            .ok_or_else(|| RouterError::NoProvider(ns.to_owned()))?;
+            .ok_or_else(|| SaikuroError::NoProvider(ns.to_owned()))?;
 
         if !handle.is_alive() {
-            return Err(RouterError::ProviderUnavailable(handle.id().to_owned()));
+            return Err(SaikuroError::ProviderUnavailable(handle.id().to_owned()));
         }
 
         Ok(handle)
@@ -489,38 +487,18 @@ fn error_response(id: InvocationId, detail: ErrorDetail) -> ResponseEnvelope {
     ResponseEnvelope::err(id, detail)
 }
 
-// Allow RouterError to convert into ErrorDetail
-impl From<RouterError> for ErrorDetail {
-    fn from(err: RouterError) -> Self {
-        let code = match &err {
-            RouterError::NoProvider(_) => saikuro_core::error::ErrorCode::NoProvider,
-            RouterError::ProviderUnavailable(_) => {
-                saikuro_core::error::ErrorCode::ProviderUnavailable
-            }
-            RouterError::MalformedTarget(_) => saikuro_core::error::ErrorCode::MalformedEnvelope,
-            RouterError::StreamNotFound(_) | RouterError::ChannelNotFound(_) => {
-                saikuro_core::error::ErrorCode::StreamClosed
-            }
-            RouterError::StreamClosed(_) => saikuro_core::error::ErrorCode::StreamClosed,
-            RouterError::ChannelClosed(_) => saikuro_core::error::ErrorCode::ChannelClosed,
-            RouterError::BatchItemFailed { .. } => saikuro_core::error::ErrorCode::ProviderError,
-            RouterError::SendError(_) => saikuro_core::error::ErrorCode::ProviderUnavailable,
-        };
-        ErrorDetail::new(code, err.to_string())
-    }
-}
 
 fn default_sink() -> DefaultRouterSink {
     #[cfg(feature = "native")]
     {
-        saikuro_log::TracingSink
+        saikuro_event::TracingSink
     }
     #[cfg(feature = "wasm")]
     {
-        saikuro_log::ConsoleSink
+        saikuro_event::ConsoleSink
     }
     #[cfg(any(feature = "no_std", feature = "embedded"))]
     {
-        saikuro_log::NullSink
+        saikuro_event::NullSink
     }
 }

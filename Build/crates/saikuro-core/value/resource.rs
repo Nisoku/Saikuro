@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned, boxed::Box, string::String};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
-use crate::value::{Value, ValueMap};
+use saikuro_event::{Value, ValueMap};
 
 // ResourceHandle
 /// An opaque, serialisable reference to large or external data.

@@ -3,23 +3,21 @@
 
 extern crate alloc;
 
-pub mod error;
 pub mod provider;
 pub mod router;
 pub mod stream_state;
 
-pub use error::RouterError;
 pub use provider::{Provider, ProviderHandle, ProviderRegistry};
 pub use router::{InvocationRouter, RouterConfig};
 pub use stream_state::{ChannelState, StreamState, StreamStateStore};
 
 //  Default log sink per engine.
 #[cfg(feature = "native")]
-pub type DefaultRouterSink = saikuro_log::TracingSink;
+pub type DefaultRouterSink = saikuro_event::TracingSink;
 #[cfg(feature = "wasm")]
-pub type DefaultRouterSink = saikuro_log::ConsoleSink;
+pub type DefaultRouterSink = saikuro_event::ConsoleSink;
 #[cfg(any(feature = "no_std", feature = "embedded"))]
-pub type DefaultRouterSink = saikuro_log::NullSink;
+pub type DefaultRouterSink = saikuro_event::NullSink;
 
 //  Compilation guard: exactly one engine backend must be selected.
 #[cfg(not(any(

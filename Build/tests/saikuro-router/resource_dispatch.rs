@@ -338,7 +338,7 @@ fn resource_handle_from_value_rejects_non_map() {
 /// `ResourceHandle::from_value` returns `None` for a map that has no `id` field.
 #[test]
 fn resource_handle_from_value_rejects_missing_id() {
-    use saikuro_core::value::ValueMap;
+    use saikuro_event::ValueMap;
     let mut map = ValueMap::new();
     map.insert("size".to_owned(), Value::Int(100)).ok();
     let v = Value::Map(Box::new(map));

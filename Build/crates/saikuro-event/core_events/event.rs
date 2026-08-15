@@ -6,11 +6,13 @@ use thiserror::Error;
 use crate::io::{ IoError, IoErrorKind };
 use crate::value::Value;
 
-/// Maximum number of structured context entries an [`ErrorDetail`] can carry.
-pub const ERROR_DETAIL_CAPACITY: usize = 16;
+/// Maximum number of structured context entries an [`ErrorDetail`] or
+/// [`LogRecord`] can carry.
+pub const CONTEXT_CAPACITY: usize = 16;
 
-/// Fixed-capacity map of structured context entries on [`ErrorDetail`].
-pub type DetailMap = heapless::FnvIndexMap<String, Value, ERROR_DETAIL_CAPACITY>;
+/// Fixed-capacity map of structured context entries on [`ErrorDetail`] and
+/// [`LogRecord`].
+pub type ContextMap = heapless::FnvIndexMap<String, Value, CONTEXT_CAPACITY>;
 
 /// All error codes transmitted on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +68,50 @@ pub enum ErrorCode {
     /// Out-of-order sequence number detected on an ordered stream.
     OutOfOrder,
 
+    //  Storage errors
+    /// A key does not exist in the namespace.
+    KeyNotFound,
+    /// The key already exists and the operation required it to be absent.
+    KeyAlreadyExists,
+    /// The namespace already exists and the operation required it to be absent.
+    NamespaceAlreadyExists,
+    /// The requested storage backend is not available on this target.
+    BackendNotAvailable,
+    /// The storage backend does not implement the requested operation.
+    OperationNotSupported,
+    /// The operation would exceed a configured storage or rate quota.
+    QuotaExceeded,
+    /// A value could not be serialized.
+    Serialization,
+    /// A value could not be deserialized.
+    Deserialization,
+
+    //  Additional transport errors
+    /// The transport connection was refused by the remote endpoint.
+    ConnectionRefused,
+    /// A send over the transport failed.
+    SendFailed,
+    /// A receive over the transport failed.
+    ReceiveFailed,
+    /// The byte stream could not be framed into a message.
+    FramingError,
+    /// The transport is not supported on this target.
+    TransportNotSupported,
+
+    //  Additional routing errors
+    /// A routing target was malformed (expected `namespace.function`).
+    MalformedTarget,
+    /// An entropy or DRBG operation failed.
+    Entropy,
+    /// The named stream does not exist.
+    StreamNotFound,
+    /// The named channel does not exist.
+    ChannelNotFound,
+    /// A send to a stream or channel failed.
+    SendError,
+    /// A batch item failed to dispatch.
+    BatchItemFailed,
+
     //  Catch-all
     /// An error category not covered by the above codes.
     Internal,
@@ -88,8 +134,8 @@ pub struct ErrorDetail {
     pub message: String,
 
     /// Optional structured context (stack traces, field paths, …).
-    #[serde(default, skip_serializing_if = "DetailMap::is_empty")]
-    pub details: DetailMap,
+    #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
+    pub details: ContextMap,
 }
 
 impl ErrorDetail {
@@ -98,14 +144,14 @@ impl ErrorDetail {
         Self {
             code,
             message: message.into(),
-            details: DetailMap::new(),
+            details: ContextMap::new(),
         }
     }
 
-    /// Add a detail entry and return `self` for chaining.
-    /// Fails with [`SaikuroError::CapacityExceeded`] if the detail bag is
-    /// already at [`ERROR_DETAIL_CAPACITY`] entries.
-    pub fn with_detail(
+    /// Add a context entry and return `self` for chaining.
+    /// Fails with [`SaikuroError::CapacityExceeded`] if the context bag is
+    /// already at [`CONTEXT_CAPACITY`] entries.
+    pub fn with_context(
         mut self,
         key: impl Into<String>,
         value: impl Into<Value>
@@ -147,6 +193,34 @@ pub enum SaikuroError {
     },
 
     #[error("malformed envelope: {0}")] MalformedEnvelope(String),
+
+    #[error("schema is frozen; updates are rejected: {0}")] FrozenSchema(String),
+
+    #[error("schema capacity exceeded")]
+    SchemaCapacity,
+
+    #[error("batch envelope missing batch_items")]
+    MissingBatch,
+
+    #[error("batch envelope has no items")]
+    EmptyBatch,
+
+    #[error("visibility '{visibility}' denied for {target}")] VisibilityDenied {
+        target: String,
+        visibility: String,
+    },
+
+    #[error("argument count mismatch: expected {expected}, got {received}")] ArgumentArity {
+        expected: usize,
+        received: usize,
+    },
+
+    #[error("argument '{name}' (#{position}) expected {expected}, got {received}")] ArgumentType {
+        name: String,
+        position: usize,
+        expected: String,
+        received: String,
+    },
 
     // Routing
     #[error("no provider registered for namespace: {0}")] NoProvider(String),
@@ -197,10 +271,56 @@ pub enum SaikuroError {
         received: u64,
     },
 
-    //  Serialisation
-    #[error("msgpack encode error: {0}")] MsgpackEncode(#[from] crate::msgpack::EncodeError),
+    //  Storage
+    #[error("key not found: {0}")] KeyNotFound(String),
 
-    #[error("msgpack decode error: {0}")] MsgpackDecode(#[from] crate::msgpack::DecodeError),
+    #[error("key already exists: {0}")] KeyAlreadyExists(String),
+
+    #[error("namespace already exists: {0}")] NamespaceAlreadyExists(String),
+
+    #[error("storage backend not available: {0}")] BackendNotAvailable(String),
+
+    #[error("operation not supported by backend: {0}")] OperationNotSupported(String),
+
+    #[error("quota exceeded: {0}")] QuotaExceeded(String),
+
+    #[error("serialization error: {0}")] Serialization(String),
+
+    #[error("deserialization error: {0}")] Deserialization(String),
+
+    //  Additional transport
+    #[error("connection refused: {0}")] ConnectionRefused(String),
+
+    #[error("transport send failed: {0}")] SendFailed(String),
+
+    #[error("transport receive failed: {0}")] ReceiveFailed(String),
+
+    #[error("framing error: {0}")] FramingError(String),
+
+    #[error("transport not supported on this platform")]
+    TransportNotSupported,
+
+    //  Additional routing
+    #[error("malformed target '{0}': must be 'namespace.function'")] MalformedTarget(String),
+
+    #[error("stream not found: {0}")] StreamNotFound(String),
+
+    #[error("channel not found: {0}")] ChannelNotFound(String),
+
+    #[error("send error: {0}")] SendError(String),
+
+    #[error("batch item {index} failed: {reason}")] BatchItemFailed {
+        index: usize,
+        reason: String,
+    },
+
+    //  Entropy
+    #[error("entropy error: {0}")] Entropy(String),
+
+    //  Serialisation
+    #[error("msgpack encode error: {0}")] MsgpackEncode(#[from] crate::codec::EncodeError),
+
+    #[error("msgpack decode error: {0}")] MsgpackDecode(#[from] crate::codec::DecodeError),
 
     //  I/O
     #[error("I/O error: {0}")] Io(IoError),
@@ -213,9 +333,10 @@ pub enum SaikuroError {
     #[error("internal error: {0}")] Internal(String),
 }
 
-impl From<SaikuroError> for ErrorDetail {
-    fn from(err: SaikuroError) -> Self {
-        let code = match &err {
+impl SaikuroError {
+    /// The wire [`ErrorCode`] this error serialises as.
+    pub fn error_code(&self) -> ErrorCode {
+        match self {
             SaikuroError::NamespaceNotFound(_) => ErrorCode::NamespaceNotFound,
             SaikuroError::FunctionNotFound(_) => ErrorCode::FunctionNotFound,
             SaikuroError::InvalidArguments { .. } => ErrorCode::InvalidArguments,
@@ -235,6 +356,25 @@ impl From<SaikuroError> for ErrorDetail {
             SaikuroError::StreamClosed => ErrorCode::StreamClosed,
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
+            SaikuroError::KeyNotFound(_) => ErrorCode::KeyNotFound,
+            SaikuroError::KeyAlreadyExists(_) => ErrorCode::KeyAlreadyExists,
+            SaikuroError::NamespaceAlreadyExists(_) => ErrorCode::NamespaceAlreadyExists,
+            SaikuroError::BackendNotAvailable(_) => ErrorCode::BackendNotAvailable,
+            SaikuroError::OperationNotSupported(_) => ErrorCode::OperationNotSupported,
+            SaikuroError::QuotaExceeded(_) => ErrorCode::QuotaExceeded,
+            SaikuroError::Serialization(_) => ErrorCode::Serialization,
+            SaikuroError::Deserialization(_) => ErrorCode::Deserialization,
+            SaikuroError::ConnectionRefused(_) => ErrorCode::ConnectionRefused,
+            SaikuroError::SendFailed(_) => ErrorCode::SendFailed,
+            SaikuroError::ReceiveFailed(_) => ErrorCode::ReceiveFailed,
+            SaikuroError::FramingError(_) => ErrorCode::FramingError,
+            SaikuroError::TransportNotSupported => ErrorCode::TransportNotSupported,
+            SaikuroError::MalformedTarget(_) => ErrorCode::MalformedTarget,
+            SaikuroError::StreamNotFound(_) => ErrorCode::StreamNotFound,
+            SaikuroError::ChannelNotFound(_) => ErrorCode::ChannelNotFound,
+            SaikuroError::SendError(_) => ErrorCode::SendError,
+            SaikuroError::BatchItemFailed { .. } => ErrorCode::BatchItemFailed,
+            SaikuroError::Entropy(_) => ErrorCode::Entropy,
             SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
             SaikuroError::Io(e) =>
                 match e.kind {
@@ -244,10 +384,21 @@ impl From<SaikuroError> for ErrorDetail {
                     | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
                     _ => ErrorCode::Internal,
                 }
+            SaikuroError::FrozenSchema(_) => ErrorCode::Internal,
+            SaikuroError::SchemaCapacity => ErrorCode::CapacityExceeded,
+            SaikuroError::MissingBatch => ErrorCode::MalformedEnvelope,
+            SaikuroError::EmptyBatch => ErrorCode::MalformedEnvelope,
+            SaikuroError::VisibilityDenied { .. } => ErrorCode::CapabilityDenied,
+            SaikuroError::ArgumentArity { .. } => ErrorCode::InvalidArguments,
+            SaikuroError::ArgumentType { .. } => ErrorCode::InvalidArguments,
             SaikuroError::CapacityExceeded(_) | SaikuroError::Internal(_) => ErrorCode::Internal,
-        };
+        }
+    }
+}
 
-        ErrorDetail::new(code, err.to_string())
+impl From<SaikuroError> for ErrorDetail {
+    fn from(err: SaikuroError) -> Self {
+        ErrorDetail::new(err.error_code(), err.to_string())
     }
 }
 
@@ -256,6 +407,14 @@ impl From<SaikuroError> for ErrorDetail {
 impl From<std::io::Error> for SaikuroError {
     fn from(err: std::io::Error) -> Self {
         SaikuroError::Io(err.into())
+    }
+}
+
+/// Convert a `getrandom` backend failure into the unified error type.
+#[cfg(feature = "getrandom")]
+impl From<getrandom::Error> for SaikuroError {
+    fn from(err: getrandom::Error) -> Self {
+        SaikuroError::Entropy(format!("entropy backend failed: {err}"))
     }
 }
 

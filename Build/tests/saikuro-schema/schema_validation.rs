@@ -2,16 +2,15 @@
 
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::ErrorCode,
     schema::{
         ArgumentDescriptor, FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType,
         TypeDescriptor, Visibility,
     },
-    value::Value,
 };
+use saikuro_event::{ErrorCode, SaikuroError, Value};
 use saikuro_schema::{
     registry::{NamespaceRegistration, SchemaRegistry},
-    validator::{InvocationValidator, ValidationError},
+    validator::InvocationValidator,
 };
 
 // Helpers
@@ -136,7 +135,7 @@ fn wrong_arity_fails_validation() {
     // too few args
     let env_few = Envelope::call("math.add", vec![Value::Int(1)]).expect("entropy available");
     let err = validator.validate(&env_few).unwrap_err();
-    assert!(matches!(err, ValidationError::ArgumentArity { .. }));
+    assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
     assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
 
     // too many args
@@ -146,7 +145,7 @@ fn wrong_arity_fails_validation() {
     )
     .expect("entropy available");
     let err = validator.validate(&env_many).unwrap_err();
-    assert!(matches!(err, ValidationError::ArgumentArity { .. }));
+    assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
 }
 
 #[test]
@@ -162,7 +161,7 @@ fn wrong_type_fails_validation() {
     .expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::ArgumentType { .. }),
+        matches!(err, SaikuroError::ArgumentType { .. }),
         "expected ArgumentType, got {err:?}"
     );
     assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
@@ -176,7 +175,7 @@ fn internal_visibility_denied_for_external_callers() {
     let env = Envelope::call("math.internal_op", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::VisibilityDenied { .. }),
+        matches!(err, SaikuroError::VisibilityDenied { .. }),
         "expected VisibilityDenied, got {err:?}"
     );
     assert_eq!(err.error_code(), ErrorCode::CapabilityDenied);
@@ -190,7 +189,7 @@ fn private_function_denied_for_external_callers() {
     let env = Envelope::call("math.secret", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::VisibilityDenied { .. }),
+        matches!(err, SaikuroError::VisibilityDenied { .. }),
         "expected VisibilityDenied for private fn, got {err:?}"
     );
 }
@@ -207,7 +206,7 @@ fn batch_with_no_items_fails() {
 
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::MissingBatch),
+        matches!(err, SaikuroError::MissingBatch),
         "expected MissingBatch, got {err:?}"
     );
     assert_eq!(err.error_code(), ErrorCode::MalformedEnvelope);
@@ -224,7 +223,7 @@ fn batch_with_empty_items_fails() {
     env.batch_items = Some(vec![]);
 
     let err = validator.validate(&env).unwrap_err();
-    assert!(matches!(err, ValidationError::EmptyBatch));
+    assert!(matches!(err, SaikuroError::EmptyBatch));
 }
 
 #[test]
@@ -235,7 +234,7 @@ fn malformed_target_without_dot_fails() {
     let env = Envelope::call("nofunctionpart", vec![]).expect("entropy available");
     let err = validator.validate(&env).unwrap_err();
     assert!(
-        matches!(err, ValidationError::MalformedEnvelope(_)),
+        matches!(err, SaikuroError::MalformedEnvelope(_)),
         "expected MalformedEnvelope, got {err:?}"
     );
 }

@@ -49,7 +49,7 @@ pub enum Error {
 
     /// The configured entropy source could not generate an invocation ID.
     #[error("entropy error: {0}")]
-    Entropy(#[from] saikuro_random::Error),
+    Entropy(#[from] saikuro_event::SaikuroError),
 }
 
 impl Error {
