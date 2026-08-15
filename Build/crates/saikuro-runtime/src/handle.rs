@@ -1,33 +1,28 @@
-//! [`RuntimeHandle`]:  the cheap, cloneable interface to a running Saikuro
-//! runtime that async tasks and adapters interact with.
-//!
-//! The handle exposes the full high-level API:
-//! - Schema registration / lookup
-//! - Provider registration / deregistration
-//! - Dispatching invocations programmatically (for in-process providers)
-//! - Connecting transports and spawning connection handlers
+use alloc::string::String;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
+use spin::RwLock;
 use saikuro_core::{
     capability::CapabilitySet, envelope::Envelope, schema::Schema, RegistrationToken,
     ResponseEnvelope,
 };
 use saikuro_exec::mpsc;
 use saikuro_router::{
-    provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
+    provider::{ProviderHandle, ProviderWorkItem},
     router::InvocationRouter,
 };
 use saikuro_schema::{
     capability_engine::CapabilityEngine,
+    provider::ProviderRegistry,
     registry::{NamespaceRegistration, SchemaRegistry},
     validator::InvocationValidator,
 };
-use saikuro_transport::traits::Transport;
 use tracing::{debug, info};
 
-use crate::{config::RuntimeConfig, connection::ConnectionHandler};
+use crate::config::RuntimeConfig;
+use crate::connection::ConnectionHandler;
+use crate::transport_adapter::RuntimeTransport;
 use saikuro_event::Result;
 
 /// A cheap, `Clone`-able handle to a running [`SaikuroRuntime`].
@@ -151,7 +146,7 @@ impl RuntimeHandle {
     ///
     /// `peer_caps` are the capabilities granted to this peer; they are checked
     /// on every invocation it sends.
-    pub fn accept_transport<T: Transport>(
+    pub fn accept_transport<T: RuntimeTransport>(
         &self,
         transport: T,
         peer_id: impl Into<String>,
@@ -192,8 +187,8 @@ impl RuntimeHandle {
         handler: F,
     ) -> RegistrationToken
     where
-        F: Fn(Envelope) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = ResponseEnvelope> + Send + 'static,
+        F: Fn(Envelope) -> Fut + 'static,
+        Fut: core::future::Future<Output = ResponseEnvelope> + 'static,
     {
         let provider_id = provider_id.into();
         let registration_token = RegistrationToken::new();

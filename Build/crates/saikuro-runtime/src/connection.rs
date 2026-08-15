@@ -1,43 +1,9 @@
-//! Connection handler:  one instance per connected adapter peer.
-//!
-//! Each time an adapter connects over any transport backend a
-//! [`ConnectionHandler`] is spawned.  It owns the transport halves and
-//! drives the read loop: receive a frame -> decode envelope -> validate ->
-//! capability-check -> route -> encode response -> send back.
-//!
-//! ## Dual-role connections
-//!
-//! A single transport connection can act in **two roles simultaneously**:
-//!
-//! - **Client role**: the peer sends `Envelope` frames (requests to the
-//!   runtime).  The runtime validates, capability-checks, routes, and replies
-//!   with a `ResponseEnvelope`.
-//!
-//! - **Provider role**: after sending an `Announce` envelope, the peer becomes
-//!   a provider for its declared namespaces.  When the runtime needs to call
-//!   one of those functions, it forwards the `Envelope` to the peer over the
-//!   wire and waits for a `ResponseEnvelope` reply.
-//!
-//! The handler distinguishes the two frame types by the presence of the `ok`
-//! field: `ResponseEnvelope` always serialises an `ok` boolean; `Envelope`
-//! serialises a `type` field instead.  We use a peek-decode strategy to
-//! classify incoming frames.
-//!
-//! ## System envelopes
-//!
-//! - `Announce`: merges the declared [`Schema`] into the live registry AND
-//!   registers a wire-forwarding [`ProviderHandle`] so that subsequent calls
-//!   from any client are forwarded to this peer.  In **sandbox mode**, after
-//!   the ok response, a second unsolicited `Announce` frame carrying the
-//!   capability-filtered schema snapshot is pushed back to the peer.
-//!
-//! - `Log`: forwarded directly to the router's log sink.
-//!
-//! Connections are fully independent; a crash in one handler does not
-//! affect others.
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 use bytes::Bytes;
-use dashmap::DashMap;
 use futures::future::FutureExt;
 use saikuro_core::{
     capability::CapabilitySet,
@@ -57,16 +23,17 @@ use saikuro_schema::{
     registry::SchemaRegistry,
     validator::InvocationValidator,
 };
-use saikuro_transport::traits::{TransportReceiver, TransportSender};
 use serde::Serialize;
-use std::sync::Arc;
+use spin::Mutex;
 use tracing::{debug, error, info, instrument, warn};
+
+use crate::transport_adapter::{RuntimeReceiver, RuntimeSender};
 
 //  Pending call map
 
 /// Tracks in-flight `Call` invocations forwarded to a wire-connected provider.
 /// Maps `InvocationId -> oneshot::Sender<ResponseEnvelope>`.
-type PendingCalls = Arc<DashMap<InvocationId, oneshot::Sender<ResponseEnvelope>>>;
+type PendingCalls = Arc<Mutex<BTreeMap<InvocationId, oneshot::Sender<ResponseEnvelope>>>>;
 
 /// Encode a serializable value as MessagePack `Bytes`.
 fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
@@ -81,8 +48,8 @@ fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
 /// compiles cleanly on wasm32 targets.
 pub struct ConnectionHandler<S, R>
 where
-    S: TransportSender,
-    R: TransportReceiver,
+    S: RuntimeSender + 'static,
+    R: RuntimeReceiver + 'static,
 {
     pub peer_id: String,
     /// Identity of this connection's provider registration.
@@ -103,16 +70,10 @@ where
 
 impl<S, R> ConnectionHandler<S, R>
 where
-    S: TransportSender,
-    R: TransportReceiver,
+    S: RuntimeSender + 'static,
+    R: RuntimeReceiver + 'static,
 {
     /// Build a handler in **sandbox mode**.
-    ///
-    /// In sandbox mode every [`Announce`](InvocationType::Announce) processed by
-    /// this handler causes a capability-filtered schema snapshot to be pushed
-    /// back to the peer immediately after the `ok` response.  This lets the peer
-    /// discover exactly which functions it is allowed to call without trial and
-    /// error.
     pub fn sandboxed(mut self) -> Self {
         self.capability_engine = CapabilityEngine::sandboxed();
         self
@@ -126,25 +87,18 @@ where
 
 impl<S, R> ConnectionHandler<S, R>
 where
-    S: TransportSender,
-    R: TransportReceiver,
+    S: RuntimeSender + 'static,
+    R: RuntimeReceiver + 'static,
 {
     /// Run the receive loop until the connection is closed or an unrecoverable
     /// error occurs.
-    ///
-    /// The loop classifies each incoming frame:
-    /// - If the frame decodes as a `ResponseEnvelope` (has an `ok` field) AND
-    ///   matches a pending forwarded call, the response is delivered to the
-    ///   caller's oneshot receiver.
-    /// - Otherwise the frame is treated as a new `Envelope` from the peer and
-    ///   goes through the normal validate -> route -> reply pipeline.
     #[instrument(skip(self), fields(peer = %self.peer_id))]
     pub async fn run(mut self) {
         info!(peer = %self.peer_id, "connection established");
 
         // Shared pending-call map: ForwardTask writes response_tx into this;
         // the recv loop reads it when a ResponseEnvelope arrives from the peer.
-        let pending: PendingCalls = Arc::new(DashMap::new());
+        let pending: PendingCalls = Arc::new(Mutex::new(BTreeMap::new()));
 
         // Channel through which the ForwardTask sends frames TO the peer.
         // The recv loop serialises all outbound writes through `self.sender`.
@@ -332,13 +286,8 @@ where
         }
 
         // Try to decode as ResponseEnvelope first.
-        // ResponseEnvelope has `ok`, `id`, and optionally
-        // `result`/`error`/`seq`/`stream_control`.
-        // Envelope has `type` (the discriminant) as a required field.
-        // We can tell them apart by attempting ResponseEnvelope decode and
-        // checking if the resulting `id` matches any pending call.
         if let Ok(resp) = saikuro_core::msgpack::from_slice::<ResponseEnvelope>(&frame) {
-            if let Some((_, sender)) = pending.remove(&resp.id) {
+            if let Some(sender) = pending.lock().remove(&resp.id) {
                 let _ = sender.send(resp);
                 return true;
             }
@@ -364,12 +313,7 @@ where
         true
     }
 
-    /// Handle a schema-announcement envelope (§6.1 development mode).
-    ///
-    /// Deserialises the [`Schema`] from `args[0]`, merges it into the live
-    /// schema registry, **and** registers a wire-forwarding [`ProviderHandle`]
-    /// for each declared namespace so that the runtime can route calls to this
-    /// peer.  Returns `ok_empty` on success, an error response on any failure.
+    /// Handle a schema-announcement envelope.
     fn handle_announce(
         &self,
         envelope: Envelope,
@@ -433,11 +377,6 @@ where
 
     /// Create and register a [`ProviderHandle`] that forwards invocations to
     /// the connected peer over the wire.
-    ///
-    /// Work items arrive via `work_rx`; the forwarder task encodes the
-    /// `Envelope` as a MessagePack frame, sends it to the peer, and records the
-    /// `response_tx` oneshot in `pending` so the recv loop can deliver the
-    /// reply when it arrives.
     fn register_wire_provider(
         &self,
         namespaces: Vec<String>,
@@ -481,13 +420,13 @@ where
                 // pending entry; remove it if the send fails to preserve the
                 // original orphan-prevention behavior.
                 if let Some(resp_tx) = item.response_tx {
-                    pending_clone.insert(item.envelope.id, resp_tx);
+                    pending_clone.lock().insert(item.envelope.id, resp_tx);
                 }
 
                 // Send the frame to the peer (via the connection handler's sender).
                 if forward_tx_clone.send(frame).await.is_err() {
                     warn!(peer = %peer_id, "forward channel closed; provider disconnected");
-                    pending_clone.remove(&item.envelope.id);
+                    pending_clone.lock().remove(&item.envelope.id);
                     break;
                 }
             }

@@ -1,10 +1,3 @@
-//! Length-prefixed framing tests for stream transports.
-//!
-//! Covers the no_std [`LengthPrefixedCodec`] directly and the native
-//! [`FramedStream`] adapter over an in-memory duplex stream and over real
-//! TCP.  The native adapter is not available on wasm32 (no
-//! `native-transport` feature there), so this file is native-only.
-
 #![cfg(not(target_arch = "wasm32"))]
 
 use bytes::{BufMut, Bytes, BytesMut};

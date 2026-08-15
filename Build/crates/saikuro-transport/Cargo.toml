@@ -46,7 +46,7 @@ saikuro-net = { path = "../saikuro-net", default-features = false }
 saikuro-exec = { path = "../saikuro-exec", default-features = false }
 saikuro-random = { path = "../saikuro-random", default-features = false }
 serde = { workspace = true }
-bytes = { workspace = true, default-features = false, features = ["alloc"] }
+bytes = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 futures = { workspace = true, default-features = false, features = ["async-await", "alloc"] }
 pin-project-lite = { workspace = true }

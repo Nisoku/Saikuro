@@ -8,6 +8,19 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(any(
+    all(feature = "native", feature = "no_std"),
+    all(feature = "native", feature = "wasm"),
+    all(feature = "native", feature = "embedded"),
+    all(feature = "no_std", feature = "wasm"),
+    all(feature = "no_std", feature = "embedded"),
+    all(feature = "wasm", feature = "embedded"),
+))]
+compile_error!("saikuro-event: enable exactly one engine (native / no_std / wasm / embedded)");
+
+#[cfg(all(feature = "no_std", feature = "std"))]
+compile_error!("saikuro-event: the no_std engine cannot be combined with the std toolchain");
+
 mod value;
 pub use value::*;
 

@@ -39,8 +39,10 @@ cache/
 
 node_modules/
 dist/
-bin/
-obj/
+Build/adapters/csharp/Saikuro/src/bin
+Build/adapters/csharp/Saikuro/src/obj/
+Build/adapters/csharp/tools/extractor/bin
+Build/adapters/csharp/tools/extractor/obj
 .pytest_cache/
 __pycache__/
 .ruff_cache/
