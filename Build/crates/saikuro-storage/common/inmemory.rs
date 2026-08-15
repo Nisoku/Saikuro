@@ -95,7 +95,6 @@ impl Default for InMemoryStorage {
     }
 }
 
-
 impl KeyValueBackend for InMemoryStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
@@ -190,7 +189,6 @@ impl KeyValueBackend for InMemoryStorage {
         Ok(())
     }
 }
-
 
 impl StorageBackend for InMemoryStorage {
     fn supports_files(&self) -> bool {

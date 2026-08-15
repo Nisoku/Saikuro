@@ -6,8 +6,8 @@ use bytes::Bytes;
 use saikuro_transport::shared::error::Result;
 use saikuro_transport::shared::host::{HostPipeFactory, Role, WasmHostTransport};
 use saikuro_transport::shared::traits::{
-    LocalTransport, LocalTransportListener, LocalTransportReceiver, LocalTransportSender, Transport,
-    TransportListener, TransportReceiver, TransportSender,
+    LocalTransport, LocalTransportListener, LocalTransportReceiver, LocalTransportSender,
+    Transport, TransportListener, TransportReceiver, TransportSender,
 };
 
 macro_rules! define_runtime_traits {
@@ -112,7 +112,6 @@ impl<T: TransportListener> RuntimeListener for T {
         T::close(self).await
     }
 }
-
 
 #[cfg(not(feature = "native"))]
 pub struct LocalRuntimeSender<S: LocalTransportSender>(S);

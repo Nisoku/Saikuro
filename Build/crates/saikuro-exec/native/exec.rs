@@ -117,7 +117,9 @@ impl<T> Future for JoinHandle<T> {
         let this = self.get_mut();
         match Pin::new(&mut this.inner).poll(cx) {
             core::task::Poll::Ready(Ok(v)) => core::task::Poll::Ready(Ok(v)),
-            core::task::Poll::Ready(Err(e)) => core::task::Poll::Ready(Err(JoinError::from_tokio(e))),
+            core::task::Poll::Ready(Err(e)) => {
+                core::task::Poll::Ready(Err(JoinError::from_tokio(e)))
+            }
             core::task::Poll::Pending => core::task::Poll::Pending,
         }
     }
@@ -150,4 +152,3 @@ where
 pub async fn yield_now() {
     tokio::task::yield_now().await;
 }
-

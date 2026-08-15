@@ -1,9 +1,9 @@
-use alloc::string::{ String, ToString };
+use alloc::string::{String, ToString};
 use core::fmt;
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::io::{ IoError, IoErrorKind };
+use crate::io::{IoError, IoErrorKind};
 use crate::value::Value;
 
 /// Maximum number of structured context entries an [`ErrorDetail`] or
@@ -154,7 +154,7 @@ impl ErrorDetail {
     pub fn with_context(
         mut self,
         key: impl Into<String>,
-        value: impl Into<Value>
+        value: impl Into<Value>,
     ) -> core::result::Result<Self, SaikuroError> {
         let key = key.into();
         self.details
@@ -176,25 +176,23 @@ impl fmt::Display for ErrorDetail {
 #[derive(Debug, Error)]
 pub enum SaikuroError {
     // Schema
-    #[error("namespace not found: {0}")] NamespaceNotFound(String),
+    #[error("namespace not found: {0}")]
+    NamespaceNotFound(String),
 
-    #[error("function not found: {0}")] FunctionNotFound(String),
+    #[error("function not found: {0}")]
+    FunctionNotFound(String),
 
-    #[error("invalid arguments for {target}: {reason}")] InvalidArguments {
-        target: String,
-        reason: String,
-    },
+    #[error("invalid arguments for {target}: {reason}")]
+    InvalidArguments { target: String, reason: String },
 
-    #[error(
-        "incompatible protocol version: expected {expected}, got {received}"
-    )] IncompatibleVersion {
-        expected: u32,
-        received: u32,
-    },
+    #[error("incompatible protocol version: expected {expected}, got {received}")]
+    IncompatibleVersion { expected: u32, received: u32 },
 
-    #[error("malformed envelope: {0}")] MalformedEnvelope(String),
+    #[error("malformed envelope: {0}")]
+    MalformedEnvelope(String),
 
-    #[error("schema is frozen; updates are rejected: {0}")] FrozenSchema(String),
+    #[error("schema is frozen; updates are rejected: {0}")]
+    FrozenSchema(String),
 
     #[error("schema capacity exceeded")]
     SchemaCapacity,
@@ -205,17 +203,14 @@ pub enum SaikuroError {
     #[error("batch envelope has no items")]
     EmptyBatch,
 
-    #[error("visibility '{visibility}' denied for {target}")] VisibilityDenied {
-        target: String,
-        visibility: String,
-    },
+    #[error("visibility '{visibility}' denied for {target}")]
+    VisibilityDenied { target: String, visibility: String },
 
-    #[error("argument count mismatch: expected {expected}, got {received}")] ArgumentArity {
-        expected: usize,
-        received: usize,
-    },
+    #[error("argument count mismatch: expected {expected}, got {received}")]
+    ArgumentArity { expected: usize, received: usize },
 
-    #[error("argument '{name}' (#{position}) expected {expected}, got {received}")] ArgumentType {
+    #[error("argument '{name}' (#{position}) expected {expected}, got {received}")]
+    ArgumentType {
         name: String,
         position: usize,
         expected: String,
@@ -223,38 +218,38 @@ pub enum SaikuroError {
     },
 
     // Routing
-    #[error("no provider registered for namespace: {0}")] NoProvider(String),
+    #[error("no provider registered for namespace: {0}")]
+    NoProvider(String),
 
-    #[error("provider unavailable for namespace: {0}")] ProviderUnavailable(String),
+    #[error("provider unavailable for namespace: {0}")]
+    ProviderUnavailable(String),
 
-    #[error("batch routing conflict: {0}")] BatchRoutingConflict(String),
+    #[error("batch routing conflict: {0}")]
+    BatchRoutingConflict(String),
 
     // Capability
-    #[error("capability denied: caller lacks '{required}' for '{target}'")] CapabilityDenied {
-        target: String,
-        required: String,
-    },
+    #[error("capability denied: caller lacks '{required}' for '{target}'")]
+    CapabilityDenied { target: String, required: String },
 
     #[error("capability token invalid or expired")]
     CapabilityInvalid,
 
     // Transport
-    #[error("transport connection lost: {0}")] ConnectionLost(String),
+    #[error("transport connection lost: {0}")]
+    ConnectionLost(String),
 
-    #[error("message too large: {size} bytes exceeds limit {limit}")] MessageTooLarge {
-        size: usize,
-        limit: usize,
-    },
+    #[error("message too large: {size} bytes exceeds limit {limit}")]
+    MessageTooLarge { size: usize, limit: usize },
 
-    #[error("operation timed out after {millis}ms")] Timeout {
-        millis: u64,
-    },
+    #[error("operation timed out after {millis}ms")]
+    Timeout { millis: u64 },
 
     #[error("buffer overflow on stream/channel")]
     BufferOverflow,
 
     // Provider
-    #[error("provider returned error: {0}")] ProviderError(String),
+    #[error("provider returned error: {0}")]
+    ProviderError(String),
 
     #[error("provider panicked while handling invocation")]
     ProviderPanic,
@@ -266,71 +261,88 @@ pub enum SaikuroError {
     #[error("channel closed by remote side")]
     ChannelClosed,
 
-    #[error("out-of-order sequence: expected {expected}, got {received}")] OutOfOrder {
-        expected: u64,
-        received: u64,
-    },
+    #[error("out-of-order sequence: expected {expected}, got {received}")]
+    OutOfOrder { expected: u64, received: u64 },
 
     //  Storage
-    #[error("key not found: {0}")] KeyNotFound(String),
+    #[error("key not found: {0}")]
+    KeyNotFound(String),
 
-    #[error("key already exists: {0}")] KeyAlreadyExists(String),
+    #[error("key already exists: {0}")]
+    KeyAlreadyExists(String),
 
-    #[error("namespace already exists: {0}")] NamespaceAlreadyExists(String),
+    #[error("namespace already exists: {0}")]
+    NamespaceAlreadyExists(String),
 
-    #[error("storage backend not available: {0}")] BackendNotAvailable(String),
+    #[error("storage backend not available: {0}")]
+    BackendNotAvailable(String),
 
-    #[error("operation not supported by backend: {0}")] OperationNotSupported(String),
+    #[error("operation not supported by backend: {0}")]
+    OperationNotSupported(String),
 
-    #[error("quota exceeded: {0}")] QuotaExceeded(String),
+    #[error("quota exceeded: {0}")]
+    QuotaExceeded(String),
 
-    #[error("serialization error: {0}")] Serialization(String),
+    #[error("serialization error: {0}")]
+    Serialization(String),
 
-    #[error("deserialization error: {0}")] Deserialization(String),
+    #[error("deserialization error: {0}")]
+    Deserialization(String),
 
     //  Additional transport
-    #[error("connection refused: {0}")] ConnectionRefused(String),
+    #[error("connection refused: {0}")]
+    ConnectionRefused(String),
 
-    #[error("transport send failed: {0}")] SendFailed(String),
+    #[error("transport send failed: {0}")]
+    SendFailed(String),
 
-    #[error("transport receive failed: {0}")] ReceiveFailed(String),
+    #[error("transport receive failed: {0}")]
+    ReceiveFailed(String),
 
-    #[error("framing error: {0}")] FramingError(String),
+    #[error("framing error: {0}")]
+    FramingError(String),
 
     #[error("transport not supported on this platform")]
     TransportNotSupported,
 
     //  Additional routing
-    #[error("malformed target '{0}': must be 'namespace.function'")] MalformedTarget(String),
+    #[error("malformed target '{0}': must be 'namespace.function'")]
+    MalformedTarget(String),
 
-    #[error("stream not found: {0}")] StreamNotFound(String),
+    #[error("stream not found: {0}")]
+    StreamNotFound(String),
 
-    #[error("channel not found: {0}")] ChannelNotFound(String),
+    #[error("channel not found: {0}")]
+    ChannelNotFound(String),
 
-    #[error("send error: {0}")] SendError(String),
+    #[error("send error: {0}")]
+    SendError(String),
 
-    #[error("batch item {index} failed: {reason}")] BatchItemFailed {
-        index: usize,
-        reason: String,
-    },
+    #[error("batch item {index} failed: {reason}")]
+    BatchItemFailed { index: usize, reason: String },
 
     //  Entropy
-    #[error("entropy error: {0}")] Entropy(String),
+    #[error("entropy error: {0}")]
+    Entropy(String),
 
     //  Serialisation
-    #[error("msgpack encode error: {0}")] MsgpackEncode(#[from] crate::codec::EncodeError),
+    #[error("msgpack encode error: {0}")]
+    MsgpackEncode(#[from] crate::codec::EncodeError),
 
-    #[error("msgpack decode error: {0}")] MsgpackDecode(#[from] crate::codec::DecodeError),
+    #[error("msgpack decode error: {0}")]
+    MsgpackDecode(#[from] crate::codec::DecodeError),
 
     //  I/O
-    #[error("I/O error: {0}")] Io(IoError),
+    #[error("I/O error: {0}")]
+    Io(IoError),
 
     /// A fixed-capacity map reached its compile-time limit.
     #[error("capacity exceeded: {0}")]
     CapacityExceeded(String),
 
     //  Catch-all
-    #[error("internal error: {0}")] Internal(String),
+    #[error("internal error: {0}")]
+    Internal(String),
 }
 
 impl SaikuroError {
@@ -376,14 +388,13 @@ impl SaikuroError {
             SaikuroError::BatchItemFailed { .. } => ErrorCode::BatchItemFailed,
             SaikuroError::Entropy(_) => ErrorCode::Entropy,
             SaikuroError::MsgpackEncode(_) | SaikuroError::MsgpackDecode(_) => ErrorCode::Internal,
-            SaikuroError::Io(e) =>
-                match e.kind {
-                    IoErrorKind::TimedOut => ErrorCode::Timeout,
-                    | IoErrorKind::ConnectionReset
-                    | IoErrorKind::ConnectionAborted
-                    | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
-                    _ => ErrorCode::Internal,
-                }
+            SaikuroError::Io(e) => match e.kind {
+                IoErrorKind::TimedOut => ErrorCode::Timeout,
+                IoErrorKind::ConnectionReset
+                | IoErrorKind::ConnectionAborted
+                | IoErrorKind::ConnectionRefused => ErrorCode::ConnectionLost,
+                _ => ErrorCode::Internal,
+            },
             SaikuroError::FrozenSchema(_) => ErrorCode::Internal,
             SaikuroError::SchemaCapacity => ErrorCode::CapacityExceeded,
             SaikuroError::MissingBatch => ErrorCode::MalformedEnvelope,

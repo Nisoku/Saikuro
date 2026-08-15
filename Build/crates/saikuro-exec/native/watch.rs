@@ -4,68 +4,67 @@ use core::task::{Context, Poll};
 
 use crate::shared::watch::{RecvError, SendError};
 
-    pub fn channel<T: Clone>(initial: T) -> (Sender<T>, Receiver<T>) {
-        let (tx, rx) = tokio::sync::watch::channel(initial);
-        (Sender { inner: tx }, Receiver { inner: rx })
-    }
+pub fn channel<T: Clone>(initial: T) -> (Sender<T>, Receiver<T>) {
+    let (tx, rx) = tokio::sync::watch::channel(initial);
+    (Sender { inner: tx }, Receiver { inner: rx })
+}
 
-    pub struct Sender<T> {
-        inner: tokio::sync::watch::Sender<T>,
-    }
+pub struct Sender<T> {
+    inner: tokio::sync::watch::Sender<T>,
+}
 
-    impl<T> Clone for Sender<T> {
-        fn clone(&self) -> Self {
-            Sender {
-                inner: self.inner.clone(),
-            }
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Sender {
+            inner: self.inner.clone(),
         }
     }
+}
 
-    impl<T: Clone> Sender<T> {
-        pub fn send(&self, value: T) -> Result<(), SendError<T>> {
-            self.inner
-                .send(value)
-                .map_err(|e| SendError(e.into_inner()))
+impl<T: Clone> Sender<T> {
+    pub fn send(&self, value: T) -> Result<(), SendError<T>> {
+        self.inner
+            .send(value)
+            .map_err(|e| SendError(e.into_inner()))
+    }
+}
+
+pub struct Receiver<T> {
+    inner: tokio::sync::watch::Receiver<T>,
+}
+
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        Receiver {
+            inner: self.inner.clone(),
         }
     }
+}
 
-    pub struct Receiver<T> {
-        inner: tokio::sync::watch::Receiver<T>,
+impl<T: Clone> Receiver<T> {
+    pub fn borrow(&self) -> T {
+        self.inner.borrow()
     }
 
-    impl<T> Clone for Receiver<T> {
-        fn clone(&self) -> Self {
-            Receiver {
-                inner: self.inner.clone(),
-            }
+    pub fn changed(&mut self) -> ChangedFuture<'_, T> {
+        ChangedFuture { receiver: self }
+    }
+}
+
+pub struct ChangedFuture<'a, T> {
+    receiver: &'a mut Receiver<T>,
+}
+
+impl<T: Clone> Future for ChangedFuture<'_, T> {
+    type Output = Result<(), RecvError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut fut = this.receiver.inner.changed();
+        match Pin::new(&mut fut).poll(cx) {
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
+            Poll::Ready(Err(_)) => Poll::Ready(Err(RecvError)),
+            Poll::Pending => Poll::Pending,
         }
     }
-
-    impl<T: Clone> Receiver<T> {
-        pub fn borrow(&self) -> T {
-            self.inner.borrow()
-        }
-
-        pub fn changed(&mut self) -> ChangedFuture<'_, T> {
-            ChangedFuture { receiver: self }
-        }
-    }
-
-    pub struct ChangedFuture<'a, T> {
-        receiver: &'a mut Receiver<T>,
-    }
-
-    impl<T: Clone> Future for ChangedFuture<'_, T> {
-        type Output = Result<(), RecvError>;
-
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let this = self.get_mut();
-            let mut fut = this.receiver.inner.changed();
-            match Pin::new(&mut fut).poll(cx) {
-                Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-                Poll::Ready(Err(_)) => Poll::Ready(Err(RecvError)),
-                Poll::Pending => Poll::Pending,
-            }
-        }
-    }
-
+}

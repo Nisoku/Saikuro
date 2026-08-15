@@ -2,7 +2,6 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use spin::RwLock;
 use saikuro_core::{
     capability::CapabilitySet, envelope::Envelope, schema::Schema, RegistrationToken,
     ResponseEnvelope,
@@ -18,6 +17,7 @@ use saikuro_schema::{
     registry::{NamespaceRegistration, SchemaRegistry},
     validator::InvocationValidator,
 };
+use spin::RwLock;
 use tracing::{debug, info};
 
 use crate::config::RuntimeConfig;
@@ -127,7 +127,7 @@ impl RuntimeHandle {
         {
             return ResponseEnvelope::err(
                 envelope.id,
-                    saikuro_event::ErrorDetail::new(
+                saikuro_event::ErrorDetail::new(
                     saikuro_event::ErrorCode::CapabilityDenied,
                     format!("missing capability '{missing}' for '{}'", envelope.target),
                 ),

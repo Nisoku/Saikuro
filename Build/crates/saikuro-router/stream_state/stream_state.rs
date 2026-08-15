@@ -1,7 +1,10 @@
 use alloc::{collections::BTreeMap, sync::Arc};
 use saikuro_core::invocation::InvocationId;
 use saikuro_core::ResponseEnvelope;
-use saikuro_exec::{mpsc, sync::{Mutex, RwLock}};
+use saikuro_exec::{
+    mpsc,
+    sync::{Mutex, RwLock},
+};
 
 /// Result of attempting to deliver one frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,11 +168,19 @@ impl StreamStateStore {
     }
 
     pub async fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.read().await.get(id).map(|entry| entry.state.clone())
+        self.streams
+            .read()
+            .await
+            .get(id)
+            .map(|entry| entry.state.clone())
     }
 
     pub async fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
-        self.streams.write().await.remove(id).map(|entry| entry.state)
+        self.streams
+            .write()
+            .await
+            .remove(id)
+            .map(|entry| entry.state)
     }
 
     pub async fn remove_stream_if(&self, id: &InvocationId, state: &Arc<StreamState>) -> bool {

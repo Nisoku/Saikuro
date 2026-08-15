@@ -1,5 +1,5 @@
-pub mod shared;
 pub mod language;
+pub mod shared;
 
 pub use shared::error::CodegenError;
 pub use shared::generator::{

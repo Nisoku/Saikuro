@@ -12,7 +12,10 @@ pub fn start(channel: String) {
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
     saikuro_exec::spawn(async move {
         runtime
-            .serve(vec![HostPipeListener::<BroadcastChannelPipe>::new(channel)], shutdown_rx)
+            .serve(
+                vec![HostPipeListener::<BroadcastChannelPipe>::new(channel)],
+                shutdown_rx,
+            )
             .await;
     });
 }

@@ -1,5 +1,5 @@
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use core::time::Duration;
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
 use saikuro_exec::ChannelCapacity;
 use saikuro_router::router::RouterConfig;

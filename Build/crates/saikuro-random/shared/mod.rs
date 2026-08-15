@@ -27,15 +27,15 @@ pub trait EntropySource {
     fn try_fill(&self, dest: &mut [u8]) -> Result<(), SaikuroError>;
 }
 
-
 /// Generate keystream block `index` for the given key and nonce.
 fn keystream_block(
     key: &[u8; KEY_LEN],
     nonce: &[u8; NONCE_LEN],
     index: u64,
 ) -> Result<[u8; BLOCK_LEN], SaikuroError> {
-    let mut cipher =
-        XChaCha20::new_from_slices(key, nonce).map_err(|_| SaikuroError::Entropy(format!("DRBG seed must be at least {SEED_LEN} bytes")))?;
+    let mut cipher = XChaCha20::new_from_slices(key, nonce).map_err(|_| {
+        SaikuroError::Entropy(format!("DRBG seed must be at least {SEED_LEN} bytes"))
+    })?;
     // chacha20 seeks by byte offset, not by block index.
     let pos = index
         .checked_mul(BLOCK_LEN as u64)
@@ -63,7 +63,9 @@ impl Drbg {
     /// anything past that is ignored.
     pub fn from_seed(seed: &[u8]) -> Result<Self, SaikuroError> {
         if seed.len() < SEED_LEN {
-            return Err(SaikuroError::Entropy(format!("DRBG seed must be at least {SEED_LEN} bytes")));
+            return Err(SaikuroError::Entropy(format!(
+                "DRBG seed must be at least {SEED_LEN} bytes"
+            )));
         }
         let mut key = [0u8; KEY_LEN];
         let mut nonce = [0u8; NONCE_LEN];
@@ -171,14 +173,18 @@ static SEED: [AtomicU64; SEED_WORDS] = [
 /// Seed the process-wide DRBG from `seed`.
 pub fn seed_from_slice(seed: &[u8]) -> Result<(), SaikuroError> {
     if seed.len() < SEED_LEN {
-        return Err(SaikuroError::Entropy(format!("DRBG seed must be at least {SEED_LEN} bytes")));
+        return Err(SaikuroError::Entropy(format!(
+            "DRBG seed must be at least {SEED_LEN} bytes"
+        )));
     }
     if SEEDED.load(Ordering::Acquire)
         || INITIALIZING
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
     {
-        return Err(SaikuroError::Entropy(format!("DRBG has already been seeded")));
+        return Err(SaikuroError::Entropy(format!(
+            "DRBG has already been seeded"
+        )));
     }
     for (i, word) in SEED.iter().enumerate() {
         let mut bytes = [0u8; 8];
@@ -233,7 +239,9 @@ pub fn fill(dest: &mut [u8]) -> Result<(), SaikuroError> {
     if !is_seeded() {
         crate::try_auto_seed()?;
         if !is_seeded() {
-            return Err(SaikuroError::Entropy(format!("DRBG used before being seeded")));
+            return Err(SaikuroError::Entropy(format!(
+                "DRBG used before being seeded"
+            )));
         }
     }
     let (key, nonce) = read_seed();

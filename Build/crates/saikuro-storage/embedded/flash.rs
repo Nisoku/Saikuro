@@ -83,11 +83,8 @@ impl<F: NorFlash> FlashKvStore<F> {
             SaikuroError::internal("invalid sequential-storage region (alignment or size)")
         })?;
 
-        let inner = MapStorage::<Vec<u8>, F, Cache<Vec<u8>>>::new(
-            flash,
-            map_config,
-            Cache::new_uncached(),
-        );
+        let inner =
+            MapStorage::<Vec<u8>, F, Cache<Vec<u8>>>::new(flash, map_config, Cache::new_uncached());
 
         Ok(Self {
             config,
@@ -242,10 +239,7 @@ where
 
         let mut inner = self.inner.borrow_mut();
         let mut buf = self.scratch_buf();
-        let mut iter = inner
-            .fetch_all_items(&mut buf)
-            .await
-            .map_err(map_err)?;
+        let mut iter = inner.fetch_all_items(&mut buf).await.map_err(map_err)?;
 
         let mut out: Vec<String> = Vec::new();
         while let Some((k, v)) = iter
@@ -266,10 +260,7 @@ where
     async fn list_namespaces(&self) -> Result<Vec<String>> {
         let mut inner = self.inner.borrow_mut();
         let mut buf = self.scratch_buf();
-        let mut iter = inner
-            .fetch_all_items(&mut buf)
-            .await
-            .map_err(map_err)?;
+        let mut iter = inner.fetch_all_items(&mut buf).await.map_err(map_err)?;
 
         let mut live: BTreeSet<String> = BTreeSet::new();
         while let Some((k, v)) = iter
@@ -309,7 +300,9 @@ where
             .await
             .map_err(map_err)?;
         if existing.is_some() {
-            return Err(SaikuroError::namespace_already_exists(namespace.to_string()));
+            return Err(SaikuroError::namespace_already_exists(
+                namespace.to_string(),
+            ));
         }
         inner
             .store_item(&mut buf, &marker, &Some(Vec::new()))
@@ -327,10 +320,7 @@ where
 
         let mut to_tombstone: Vec<Vec<u8>> = Vec::new();
         {
-            let mut iter = inner
-                .fetch_all_items(&mut buf)
-                .await
-                .map_err(map_err)?;
+            let mut iter = inner.fetch_all_items(&mut buf).await.map_err(map_err)?;
             while let Some((k, v)) = iter
                 .next::<Option<Vec<u8>>>(&mut buf)
                 .await
@@ -369,10 +359,7 @@ where
 
         let mut to_tombstone: Vec<Vec<u8>> = Vec::new();
         {
-            let mut iter = inner
-                .fetch_all_items(&mut buf)
-                .await
-                .map_err(map_err)?;
+            let mut iter = inner.fetch_all_items(&mut buf).await.map_err(map_err)?;
             while let Some((k, v)) = iter
                 .next::<Option<Vec<u8>>>(&mut buf)
                 .await
@@ -448,16 +435,14 @@ fn parse_key(k: &[u8]) -> Option<(u8, &str, &str)> {
 fn map_err<E: core::fmt::Debug>(e: SsError<E>) -> SaikuroError {
     use SsError::*;
     match e {
-        Storage { value } => {
-            SaikuroError::internal(format!("flash I/O error: {value:?}"))
-        }
+        Storage { value } => SaikuroError::internal(format!("flash I/O error: {value:?}")),
         FullStorage => SaikuroError::quota_exceeded("flash region is full"),
         Corrupted { .. } => SaikuroError::internal("flash region is corrupted"),
         LogicBug { .. } => SaikuroError::internal("flash storage logic bug"),
         BufferTooBig => SaikuroError::internal("scratch buffer too large"),
-        BufferTooSmall(n) => SaikuroError::internal(format!(
-            "scratch buffer too small (need {n} bytes)"
-        )),
+        BufferTooSmall(n) => {
+            SaikuroError::internal(format!("scratch buffer too small (need {n} bytes)"))
+        }
         SerializationError(_) => SaikuroError::internal("serialization error"),
         ItemTooBig => SaikuroError::internal("item exceeds the 64 KiB flash limit"),
         _ => SaikuroError::internal("unknown flash storage error"),

@@ -1,2 +1,2 @@
-pub mod net;
 pub mod io;
+pub mod net;

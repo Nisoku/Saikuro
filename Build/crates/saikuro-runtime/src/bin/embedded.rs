@@ -12,7 +12,9 @@ mod board {
     use saikuro_net::net::Stack;
 
     pub fn stack() -> &'static Stack<'static> {
-        compile_error!("provide `crate::board::stack() -> &'static Stack<'static>` in the firmware");
+        compile_error!(
+            "provide `crate::board::stack() -> &'static Stack<'static>` in the firmware"
+        );
     }
 
     pub fn endpoint() -> saikuro_net::net::IpEndpoint {
@@ -28,6 +30,9 @@ async fn main() {
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
 
     runtime
-        .serve(vec![TcpTransportListener::new(stack, board::endpoint())], shutdown_rx)
+        .serve(
+            vec![TcpTransportListener::new(stack, board::endpoint())],
+            shutdown_rx,
+        )
         .await;
 }

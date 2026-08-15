@@ -105,13 +105,12 @@ impl RuntimeBuilder {
 }
 
 pub fn block_on<F: Future + 'static>(fut: F) -> F::Output {
-    let slot: Arc<JoinResultSlot<Option<F::Output>>> = Arc::new(CriticalSectionMutex::new(
-        RefCell::new(JoinSlot {
+    let slot: Arc<JoinResultSlot<Option<F::Output>>> =
+        Arc::new(CriticalSectionMutex::new(RefCell::new(JoinSlot {
             value: None,
             closed: false,
             wakers: MultiWakerRegistration::new(),
-        }),
-    ));
+        })));
     let task_slot = slot.clone();
     let token = global_executor().spawn(async move {
         let result = fut.await;
@@ -134,13 +133,12 @@ where
     F: Future + 'static,
     F::Output: 'static,
 {
-    let slot: Arc<JoinResultSlot<Option<F::Output>>> = Arc::new(CriticalSectionMutex::new(
-        RefCell::new(JoinSlot {
+    let slot: Arc<JoinResultSlot<Option<F::Output>>> =
+        Arc::new(CriticalSectionMutex::new(RefCell::new(JoinSlot {
             value: None,
             closed: false,
             wakers: MultiWakerRegistration::new(),
-        }),
-    ));
+        })));
     let task_slot = slot.clone();
     let token = global_executor().spawn(async move {
         let result = fut.await;

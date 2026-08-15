@@ -107,6 +107,10 @@ impl TryFrom<Value> for LogRecord {
 
 impl fmt::Display for LogRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}] {} {} :  {}", self.ts, self.level, self.name, self.msg)
+        write!(
+            f,
+            "[{}] {} {} :  {}",
+            self.ts, self.level, self.name, self.msg
+        )
     }
 }

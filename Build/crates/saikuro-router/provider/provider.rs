@@ -176,8 +176,7 @@ impl ProviderRegistry {
                         }
                     }
                 }
-                None => {
-                }
+                None => {}
             }
         }
         state.by_provider.insert(provider_key, namespaces);

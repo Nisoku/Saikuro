@@ -70,7 +70,12 @@ struct Args {
     mode: CliMode,
 
     /// Minimum log level to emit.
-    #[arg(long, value_name = "LEVEL", default_value = "info", env = "SAIKURO_LOG")]
+    #[arg(
+        long,
+        value_name = "LEVEL",
+        default_value = "info",
+        env = "SAIKURO_LOG"
+    )]
     log_level: String,
 
     /// Emit logs as newline-delimited JSON instead of human-readable text.
@@ -150,7 +155,9 @@ async fn async_main() -> Result<()> {
                 info!(addr = %listener.local_addr(), "TCP listener ready");
                 let rt = runtime.clone();
                 let mut rx = shutdown_rx.clone();
-                serve_tasks.push(spawn(async move { rt.serve(vec![listener], rx).await; }));
+                serve_tasks.push(spawn(async move {
+                    rt.serve(vec![listener], rx).await;
+                }));
             }
             Err(e) => {
                 error!(addr = %addr, error = %e, "failed to bind TCP listener");
@@ -169,7 +176,9 @@ async fn async_main() -> Result<()> {
                 info!(addr = %listener.local_addr(), "WebSocket listener ready");
                 let rt = runtime.clone();
                 let mut rx = shutdown_rx.clone();
-                serve_tasks.push(spawn(async move { rt.serve(vec![listener], rx).await; }));
+                serve_tasks.push(spawn(async move {
+                    rt.serve(vec![listener], rx).await;
+                }));
             }
             Err(e) => {
                 error!(addr = %addr, error = %e, "failed to bind WebSocket listener");
@@ -187,7 +196,9 @@ async fn async_main() -> Result<()> {
                 info!(path = %unix_path.display(), "Unix socket listener ready");
                 let rt = runtime.clone();
                 let mut rx = shutdown_rx.clone();
-                serve_tasks.push(spawn(async move { rt.serve(vec![listener], rx).await; }));
+                serve_tasks.push(spawn(async move {
+                    rt.serve(vec![listener], rx).await;
+                }));
             }
             Err(e) => {
                 error!(path = %unix_path.display(), error = %e, "failed to bind Unix listener");

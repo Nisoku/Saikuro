@@ -314,8 +314,7 @@ fn resource_roundtrip_with_simulated_runtime() {
             assert_eq!(env.invocation_type, InvocationType::Resource);
             assert_eq!(env.target, "files.open");
 
-            let response =
-                ResponseEnvelope::ok(env.id, saikuro_event::Value::String("ok".into()));
+            let response = ResponseEnvelope::ok(env.id, saikuro_event::Value::String("ok".into()));
             runtime_side
                 .send(bytes::Bytes::from(
                     response.to_msgpack().expect("encode response"),
@@ -353,8 +352,7 @@ fn stream_roundtrip_with_simulated_runtime() {
             assert_eq!(env.invocation_type, InvocationType::Stream);
             assert_eq!(env.target, "events.watch");
 
-            let item1 =
-                ResponseEnvelope::stream_item(env.id, 0, saikuro_event::Value::Int(1));
+            let item1 = ResponseEnvelope::stream_item(env.id, 0, saikuro_event::Value::Int(1));
             runtime_side
                 .send(bytes::Bytes::from(
                     item1.to_msgpack().expect("encode item1"),
@@ -362,8 +360,7 @@ fn stream_roundtrip_with_simulated_runtime() {
                 .await
                 .expect("send item1");
 
-            let item2 =
-                ResponseEnvelope::stream_item(env.id, 1, saikuro_event::Value::Int(2));
+            let item2 = ResponseEnvelope::stream_item(env.id, 1, saikuro_event::Value::Int(2));
             runtime_side
                 .send(bytes::Bytes::from(
                     item2.to_msgpack().expect("encode item2"),
@@ -591,10 +588,7 @@ fn envelope_roundtrip_msgpack_preserves_fields() {
     saikuro_exec::block_on(async {
         let original = Envelope::call(
             "math.add",
-            vec![
-                saikuro_event::Value::Int(1),
-                saikuro_event::Value::Int(2),
-            ],
+            vec![saikuro_event::Value::Int(1), saikuro_event::Value::Int(2)],
         )
         .expect("entropy available");
 

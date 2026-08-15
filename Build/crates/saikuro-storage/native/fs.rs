@@ -170,7 +170,6 @@ fn strip_ns_prefix(prefix: &Option<String>, name: &str) -> String {
     }
 }
 
-
 impl KeyValueBackend for FilesystemStorage {
     fn config(&self) -> &StorageConfig {
         &self.config
@@ -239,7 +238,6 @@ impl KeyValueBackend for FilesystemStorage {
     }
 }
 
-
 impl FileBackend for FilesystemStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let full = safe_join(&self.files_root, path)?;
@@ -290,7 +288,6 @@ impl FileBackend for FilesystemStorage {
         block(move || remove_dir(&full)).await
     }
 }
-
 
 impl StorageBackend for FilesystemStorage {
     fn supports_files(&self) -> bool {

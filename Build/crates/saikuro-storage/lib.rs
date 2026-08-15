@@ -24,16 +24,16 @@ compile_error!("the native engine requires the std toolchain");
 #[cfg(all(feature = "no_std", feature = "std"))]
 compile_error!("the no_std engine must not be combined with the std toolchain");
 
-pub mod shared;
 pub mod common;
-#[cfg(feature = "native")]
-pub mod native;
 #[cfg(feature = "embedded")]
 pub mod embedded;
-#[cfg(feature = "wasm")]
-pub mod wasm;
+#[cfg(feature = "native")]
+pub mod native;
+pub mod shared;
 #[cfg(any(feature = "wasi-preview1", feature = "wasi-component"))]
 pub mod wasi;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 /// Generates a web-storage-backed key-value backend.
 #[macro_export]
@@ -93,23 +93,14 @@ macro_rules! impl_web_storage {
                 }
             }
 
-            async fn get(
-                &self,
-                namespace: &str,
-                key: &str,
-            ) -> $crate::Result<Option<Bytes>> {
+            async fn get(&self, namespace: &str, key: &str) -> $crate::Result<Option<Bytes>> {
                 let storage = self.storage()?;
                 let prefixed_ns = $crate::util::apply_prefix(&self.config, namespace);
                 let full_key = $crate::util::make_key(&prefixed_ns, key);
                 $crate::webstorage::storage_get(&storage, &full_key)
             }
 
-            async fn put(
-                &self,
-                namespace: &str,
-                key: &str,
-                value: Bytes,
-            ) -> $crate::Result<()> {
+            async fn put(&self, namespace: &str, key: &str, value: Bytes) -> $crate::Result<()> {
                 let storage = self.storage()?;
                 let prefixed_ns = $crate::util::apply_prefix(&self.config, namespace);
                 let full_key = $crate::util::make_key(&prefixed_ns, key);
@@ -168,18 +159,16 @@ macro_rules! impl_web_storage {
     };
 }
 
-pub use shared::config::{BackendKind, CleanupPolicy, PersistenceMode, StorageConfig};
 #[cfg(feature = "flash")]
 pub use shared::config::FlashConfig;
+pub use shared::config::{BackendKind, CleanupPolicy, PersistenceMode, StorageConfig};
 
 pub use saikuro_event::{Result, SaikuroError};
 
 /// Raw byte buffer used by every key-value and file backend.
 pub use bytes::Bytes;
 
-pub use shared::traits::{
-    FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend,
-};
+pub use shared::traits::{FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend};
 
 pub use shared::config;
 pub use shared::traits;
@@ -204,12 +193,12 @@ pub use wasm::fs_access::FsAccessStorage;
 pub use wasm::opfs::OpfsStorage;
 
 // Root aliases for the wasm submodules referenced by `impl_web_storage!`.
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub use wasm::{fs_access, indexeddb, opfs, webstorage};
 #[cfg(feature = "wasm")]
 pub use wasm::local_storage;
 #[cfg(feature = "wasm")]
 pub use wasm::session_storage;
+#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+pub use wasm::{fs_access, indexeddb, opfs, webstorage};
 
 #[cfg(feature = "fs")]
 pub use native::fs::FilesystemStorage;

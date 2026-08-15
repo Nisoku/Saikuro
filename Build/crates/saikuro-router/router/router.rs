@@ -154,7 +154,10 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                         "",
                         LogLevel::Warn,
                         "saikuro.router",
-                        format!("provider dropped response sender without replying (id={})", id),
+                        format!(
+                            "provider dropped response sender without replying (id={})",
+                            id
+                        ),
                     ))
                     .await;
                 error_response(
@@ -298,7 +301,8 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let (outbound_tx, outbound_rx) = mpsc::channel(self.config.channel_capacity);
         let state = ChannelState::new(inbound_tx, outbound_tx);
         self.streams
-            .insert_channel(id, state, inbound_rx, outbound_rx).await;
+            .insert_channel(id, state, inbound_rx, outbound_rx)
+            .await;
 
         if let Err(e) = provider.send_invocation(envelope, None).await {
             self.streams.remove_channel(&id).await;
@@ -360,7 +364,10 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                             "",
                             LogLevel::Warn,
                             "saikuro.router",
-                            format!("failed to parse LogRecord from log envelope (id={}): {e}", id),
+                            format!(
+                                "failed to parse LogRecord from log envelope (id={}): {e}",
+                                id
+                            ),
                         ))
                         .await;
                     None
@@ -377,7 +384,10 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                         "",
                         LogLevel::Warn,
                         "saikuro.router",
-                        format!("log envelope has no valid LogRecord in args[0]; dropping (id={})", id),
+                        format!(
+                            "log envelope has no valid LogRecord in args[0]; dropping (id={})",
+                            id
+                        ),
                     ))
                     .await;
             }
@@ -391,7 +401,8 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = response.id;
         let state = self
             .streams
-            .get_channel(&id).await
+            .get_channel(&id)
+            .await
             .ok_or_else(|| SaikuroError::ChannelNotFound(id.to_string()))?;
 
         match state.deliver(response, inbound).await {
@@ -433,7 +444,8 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = response.id;
         let state = self
             .streams
-            .get_stream(&id).await
+            .get_stream(&id)
+            .await
             .ok_or_else(|| SaikuroError::StreamNotFound(id.to_string()))?;
 
         match state.deliver(response).await {
@@ -467,7 +479,8 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
 
         let handle = self
             .providers
-            .get(ns).await
+            .get(ns)
+            .await
             .ok_or_else(|| SaikuroError::NoProvider(ns.to_owned()))?;
 
         if !handle.is_alive() {
@@ -486,7 +499,6 @@ fn namespace_of(target: &str) -> Option<&str> {
 fn error_response(id: InvocationId, detail: ErrorDetail) -> ResponseEnvelope {
     ResponseEnvelope::err(id, detail)
 }
-
 
 fn default_sink() -> DefaultRouterSink {
     #[cfg(feature = "native")]

@@ -17,16 +17,19 @@ pub use codec::*;
     feature = "native",
     any(feature = "wasm", feature = "embedded", feature = "no_std")
 ))]
-compile_error!("saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled");
+compile_error!(
+    "saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled"
+);
 
-#[cfg(all(
-    feature = "wasm",
-    any(feature = "embedded", feature = "no_std")
-))]
-compile_error!("saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled");
+#[cfg(all(feature = "wasm", any(feature = "embedded", feature = "no_std")))]
+compile_error!(
+    "saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled"
+);
 
 #[cfg(all(feature = "embedded", feature = "no_std"))]
-compile_error!("saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled");
+compile_error!(
+    "saikuro-core: only one engine feature (native/wasm/embedded/no_std) may be enabled"
+);
 
 #[cfg(not(any(
     feature = "native",

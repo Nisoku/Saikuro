@@ -1,7 +1,7 @@
+mod codec;
 mod event;
 mod io;
-mod codec;
 
+pub use codec::*;
 pub use event::*;
 pub use io::*;
-pub use codec::*;

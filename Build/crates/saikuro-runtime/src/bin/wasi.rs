@@ -29,11 +29,15 @@ pub extern "C" fn _start() -> i32 {
 
         let tcp_task = {
             let rt = runtime.clone();
-            saikuro_exec::spawn(async move { rt.serve(vec![tcp], rx1).await; })
+            saikuro_exec::spawn(async move {
+                rt.serve(vec![tcp], rx1).await;
+            })
         };
         let pipe_task = {
             let rt = runtime.clone();
-            saikuro_exec::spawn(async move { rt.serve(vec![pipe], rx2).await; })
+            saikuro_exec::spawn(async move {
+                rt.serve(vec![pipe], rx2).await;
+            })
         };
 
         let _ = tcp_task.await;

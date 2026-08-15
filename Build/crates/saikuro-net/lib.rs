@@ -5,9 +5,18 @@
 
 // Exactly one engine must be selected.
 #[cfg(any(
-    all(feature = "native", any(feature = "no_std", feature = "wasm", feature = "embedded")),
-    all(feature = "no_std", any(feature = "native", feature = "wasm", feature = "embedded")),
-    all(feature = "wasm", any(feature = "native", feature = "no_std", feature = "embedded")),
+    all(
+        feature = "native",
+        any(feature = "no_std", feature = "wasm", feature = "embedded")
+    ),
+    all(
+        feature = "no_std",
+        any(feature = "native", feature = "wasm", feature = "embedded")
+    ),
+    all(
+        feature = "wasm",
+        any(feature = "native", feature = "no_std", feature = "embedded")
+    ),
     all(
         feature = "embedded",
         any(feature = "native", feature = "no_std", feature = "wasm")
@@ -21,9 +30,9 @@ compile_error!("the no_std engine cannot be combined with the std toolchain");
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
-pub use native::{net, io};
+pub use native::{io, net};
 
 #[cfg(feature = "embedded")]
 mod embedded;
 #[cfg(feature = "embedded")]
-pub use embedded::{net, io};
+pub use embedded::{io, net};

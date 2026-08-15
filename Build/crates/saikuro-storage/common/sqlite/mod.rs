@@ -64,7 +64,10 @@ fn strip_prefix(config: &StorageConfig, stored: &str) -> String {
 
 fn ns_key_params(namespace: &str, key: &str) -> Params {
     Params {
-        positional: vec![Value::Text(namespace.to_owned()), Value::Text(key.to_owned())],
+        positional: vec![
+            Value::Text(namespace.to_owned()),
+            Value::Text(key.to_owned()),
+        ],
         named: Vec::new(),
     }
 }

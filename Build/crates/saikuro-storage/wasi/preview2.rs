@@ -164,10 +164,9 @@ impl WasiFileStore {
     /// The first preopened directory is the store root.
     fn root(&self) -> Result<Descriptor> {
         let (descriptors, _) = filesystem::preopens().map_err(map_fs_err)?;
-        descriptors
-            .into_iter()
-            .next()
-            .ok_or_else(|| SaikuroError::backend_unavailable("wasi:filesystem has no preopened directory"))
+        descriptors.into_iter().next().ok_or_else(|| {
+            SaikuroError::backend_unavailable("wasi:filesystem has no preopened directory")
+        })
     }
 }
 

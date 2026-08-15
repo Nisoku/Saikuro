@@ -3,8 +3,8 @@ use messagepack_serde::{
     messagepack_core::{encode::int::EncodeMinimizeInt, io::IoWrite, Encode},
     ser::NumEncoder,
 };
-use serde::{Deserialize, Serialize};
 use saikuro_event::{DecodeError, EncodeError};
+use serde::{Deserialize, Serialize};
 
 /// Encodes numbers exactly like rmp-serde
 struct RmpCompatible;

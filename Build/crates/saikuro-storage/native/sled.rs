@@ -1,4 +1,3 @@
-
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::task::spawn_blocking;
@@ -73,7 +72,6 @@ impl SledStorage {
         }
     }
 }
-
 
 impl KeyValueBackend for SledStorage {
     fn config(&self) -> &StorageConfig {
@@ -219,7 +217,6 @@ impl KeyValueBackend for SledStorage {
         .await
     }
 }
-
 
 impl StorageBackend for SledStorage {
     fn supports_files(&self) -> bool {

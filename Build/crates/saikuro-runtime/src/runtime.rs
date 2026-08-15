@@ -7,7 +7,9 @@ use saikuro_core::capability::CapabilitySet;
 use saikuro_core::schema::Schema;
 use saikuro_exec::{sleep, spawn, timeout, watch};
 use saikuro_router::provider::ProviderRegistry;
-use saikuro_schema::{capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator};
+use saikuro_schema::{
+    capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
+};
 use spin::RwLock;
 use tracing::{error, info};
 
@@ -109,10 +111,7 @@ impl SaikuroRuntime {
         if let Some(bytes) = schema_bytes {
             match serde_json::from_slice::<Schema>(bytes) {
                 Ok(schema) => {
-                    if let Err(e) = runtime
-                        .schema_registry
-                        .merge_schema(schema, "static")
-                    {
+                    if let Err(e) = runtime.schema_registry.merge_schema(schema, "static") {
                         error!(error = %e, "failed to merge static schema");
                     }
                 }

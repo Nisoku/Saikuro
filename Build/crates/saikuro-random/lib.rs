@@ -4,9 +4,18 @@
 //! Randomness and entropy facade for Saikuro.
 
 #[cfg(any(
-    all(feature = "native", any(feature = "no_std", feature = "wasm", feature = "embedded")),
-    all(feature = "no_std", any(feature = "native", feature = "wasm", feature = "embedded")),
-    all(feature = "wasm", any(feature = "native", feature = "no_std", feature = "embedded")),
+    all(
+        feature = "native",
+        any(feature = "no_std", feature = "wasm", feature = "embedded")
+    ),
+    all(
+        feature = "no_std",
+        any(feature = "native", feature = "wasm", feature = "embedded")
+    ),
+    all(
+        feature = "wasm",
+        any(feature = "native", feature = "no_std", feature = "embedded")
+    ),
     all(
         feature = "embedded",
         any(feature = "native", feature = "no_std", feature = "wasm")
