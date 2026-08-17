@@ -8,3 +8,8 @@ pub mod preview2;
 pub mod tcp;
 #[cfg(feature = "ws-wasi")]
 pub mod websocket;
+
+#[cfg(feature = "wasi-host")]
+pub use host::{WasiHostRecv, WasiHostSend, WasiPipe};
+#[cfg(feature = "wasi-tcp")]
+pub use tcp::{WasiTcpConnector, WasiTcpListener, WasiTcpTransport};

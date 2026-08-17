@@ -39,10 +39,7 @@ impl rand_core_06::RngCore for WsRng {
         getrandom::fill(dest).expect("ws rng: getrandom failed on WASI")
     }
 
-    fn try_fill_bytes(
-        &mut self,
-        dest: &mut [u8],
-    ) -> core::result::Result<(), rand_core_06::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> core::result::Result<(), rand_core_06::Error> {
         match getrandom::fill(dest) {
             Ok(()) => Ok(()),
             Err(_) => Err(rand_core_06::Error::from(
@@ -164,9 +161,7 @@ impl Transport for WebSocketTransport {
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let s = self.state.clone();
         (
-            WebSocketSender {
-                state: s.clone(),
-            },
+            WebSocketSender { state: s.clone() },
             WebSocketReceiver { state: s },
         )
     }

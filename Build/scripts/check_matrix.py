@@ -165,14 +165,23 @@ def run_combo(crate: str, combo: Combo, verbose: bool) -> dict:
     warn_count = sum(
         1 for line in lines if line.startswith("warning") and "generated" not in line
     )
-    # Capture the diagnostic lines so they can be shown after the run instead
-    # of being discarded; `error`/`warning` headlines plus their `note:`/`help:`
-    #/`-->` context lines.
-    diags = [
-        line
-        for line in lines
-        if line.strip().startswith(("error", "warning", "note:", "help:", "-->"))
-    ]
+    # Capture whole diagnostic blocks (headline + the `-->`, source-snippet and
+    # underline lines that follow) so the full error is preserved for display
+    # and for the JSON report instead of being discarded.
+    diags = []
+    in_diag = False
+    for line in lines:
+        s = line.strip()
+        if s.startswith(("error", "warning", "note:", "help:", "-->")):
+            in_diag = True
+            diags.append(line)
+        elif in_diag:
+            if s == "":
+                in_diag = False
+            elif s.startswith(("|", "=", "^", "*")) or line[:1] in (" ", "\t"):
+                diags.append(line)
+            else:
+                in_diag = False
     passed = proc.returncode == 0 and err_count == 0
 
     if verbose and not passed:
@@ -233,6 +242,10 @@ def main() -> int:
                 f"  [{status}] {r['name']:<22} target={r['target']:<20} "
                 f"errs={r['errors']:<3} warns={r['warnings']:<3} {r['seconds']}s"
             )
+            if (not r["passed"] or r["warnings"]) and r["diags"]:
+                tag = "FAIL" if not r["passed"] else "WARN"
+                for line in r["diags"]:
+                    print(f"      [{tag}] {line}")
             results.append({**r, "crate": crate})
 
     total = len(results)

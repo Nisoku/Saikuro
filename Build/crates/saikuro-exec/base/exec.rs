@@ -211,7 +211,9 @@ pub fn pump() {}
 fn static_executor() -> &'static mut ArchExecutor {
     static mut EXECUTOR: Option<ArchExecutor> = None;
     #[cfg(feature = "no_std")]
-    let ex = unsafe { (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut())) };
+    let ex = unsafe {
+        (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut()))
+    };
     #[cfg(feature = "wasm")]
     let ex = unsafe { (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(ArchExecutor::new) };
     // SAFETY: `EXECUTOR` is a `static mut` holding the sole executor instance; we

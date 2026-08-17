@@ -34,30 +34,6 @@ pub trait AsyncByteWrite {
     async fn flush(&mut self) -> Result<()>;
 }
 
-#[cfg(feature = "embedded")]
-impl<R: embedded_io_async::Read> AsyncByteRead for R {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.read(buf)
-            .await
-            .map_err(|e| TransportError::ConnectionLost(alloc::format!("{:?}", e)))
-    }
-}
-
-#[cfg(feature = "embedded")]
-impl<W: embedded_io_async::Write> AsyncByteWrite for W {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        self.write(buf)
-            .await
-            .map_err(|e| TransportError::ConnectionLost(alloc::format!("{:?}", e)))
-    }
-
-    async fn flush(&mut self) -> Result<()> {
-        embedded_io_async::Write::flush(self)
-            .await
-            .map_err(|e| TransportError::ConnectionLost(alloc::format!("{:?}", e)))
-    }
-}
-
 /// Read exactly `buf.len()` bytes, or fail if the peer closes first.
 async fn read_exact<R: AsyncByteRead>(reader: &mut R, buf: &mut [u8]) -> Result<()> {
     let mut filled = 0;
