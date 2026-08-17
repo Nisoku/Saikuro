@@ -24,9 +24,9 @@ impl WebSocketTransport {
     pub async fn connect(url: impl Into<String>) -> Result<Self> {
         let url = url.into();
         debug!(%url, "websocket connecting");
-        let (ws, _response) = connect_async(&url)
-            .await
-            .map_err(|e| TransportError::ConnectionRefused(format!("ws connect to {url} failed: {e}")))?;
+        let (ws, _response) = connect_async(&url).await.map_err(|e| {
+            TransportError::ConnectionRefused(format!("ws connect to {url} failed: {e}"))
+        })?;
         Ok(Self { inner: ws, url })
     }
 
@@ -126,7 +126,7 @@ impl TransportSender for WebSocketSender {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
         trace!(url = %self.url, bytes = frame.len(), "ws send");
         self.inner
-            .send(Message::Binary(frame.to_vec()))
+            .send(Message::Binary(frame))
             .await
             .map_err(|e| TransportError::SendFailed(e.to_string()))
     }
@@ -153,7 +153,7 @@ impl TransportReceiver for WebSocketReceiver {
             match self.inner.next().await {
                 Some(Ok(Message::Binary(data))) => {
                     trace!(url = %self.url, bytes = data.len(), "ws recv binary");
-                    return Ok(Some(Bytes::from(data)));
+                    return Ok(Some(data));
                 }
                 Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {
                     continue;

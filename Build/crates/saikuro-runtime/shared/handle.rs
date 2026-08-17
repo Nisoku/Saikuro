@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -8,12 +8,11 @@ use saikuro_core::{
 };
 use saikuro_exec::mpsc;
 use saikuro_router::{
-    provider::{ProviderHandle, ProviderWorkItem},
+    provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::InvocationRouter,
 };
 use saikuro_schema::{
     capability_engine::CapabilityEngine,
-    provider::ProviderRegistry,
     registry::{NamespaceRegistration, SchemaRegistry},
     validator::InvocationValidator,
 };
@@ -41,14 +40,19 @@ impl RuntimeHandle {
     // Schema
 
     /// Register or merge a schema document from a newly-connected provider.
-    pub fn register_schema(&self, schema: Schema, provider_id: impl Into<String>) -> Result<()> {
+    pub async fn register_schema(
+        &self,
+        schema: Schema,
+        provider_id: impl Into<String>,
+    ) -> Result<()> {
         self.schema_registry
             .merge_schema(schema, provider_id)
+            .await
             .map_err(Into::into)
     }
 
     /// Register or merge a schema under an existing provider registration.
-    pub fn register_schema_with_token(
+    pub async fn register_schema_with_token(
         &self,
         schema: Schema,
         provider_id: impl Into<String>,
@@ -56,42 +60,50 @@ impl RuntimeHandle {
     ) -> Result<()> {
         self.schema_registry
             .merge_schema_with_token(schema, provider_id, registration_token)
+            .await
             .map_err(Into::into)
     }
 
     /// Register a single namespace from a provider.
-    pub fn register_namespace(&self, reg: NamespaceRegistration) -> Result<()> {
-        self.schema_registry.register(reg).map_err(Into::into)
+    pub async fn register_namespace(&self, reg: NamespaceRegistration) -> Result<()> {
+        self.schema_registry.register(reg).await.map_err(Into::into)
     }
 
     /// Deregister all schemas owned by a provider (called on disconnect).
-    pub fn deregister_provider_schema(
+    pub async fn deregister_provider_schema(
         &self,
         provider_id: &str,
         registration_token: RegistrationToken,
     ) {
         self.schema_registry
-            .deregister_provider(provider_id, registration_token);
+            .deregister_provider(provider_id, registration_token)
+            .await;
     }
 
     /// Export a snapshot of the current schema state.
-    pub fn schema_snapshot(&self) -> Result<Schema> {
-        self.schema_registry.snapshot().map_err(Into::into)
+    pub async fn schema_snapshot(&self) -> Result<Schema> {
+        self.schema_registry.snapshot().await.map_err(Into::into)
     }
 
     // Providers
 
     /// Register a provider handle so the router can dispatch to it.
-    pub fn register_provider(&self, handle: ProviderHandle) {
-        self.provider_registry.register(handle);
+    pub async fn register_provider(&self, handle: ProviderHandle) {
+        self.provider_registry.register(handle).await;
     }
 
     /// Deregister one provider generation from routing and schema ownership.
-    pub fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
+    pub async fn deregister_provider(
+        &self,
+        provider_id: &str,
+        registration_token: RegistrationToken,
+    ) {
         self.provider_registry
-            .deregister(provider_id, registration_token);
+            .deregister(provider_id, registration_token)
+            .await;
         self.schema_registry
-            .deregister_provider(provider_id, registration_token);
+            .deregister_provider(provider_id, registration_token)
+            .await;
     }
 
     // Dispatch
@@ -109,7 +121,7 @@ impl RuntimeHandle {
         let router = self.build_router();
 
         // Validate
-        let validation = match validator.validate(&envelope) {
+        let validation = match validator.validate(&envelope).await {
             Ok(r) => r,
             Err(e) => {
                 return ResponseEnvelope::err(
@@ -146,7 +158,7 @@ impl RuntimeHandle {
     ///
     /// `peer_caps` are the capabilities granted to this peer; they are checked
     /// on every invocation it sends.
-    pub fn accept_transport<T: RuntimeTransport>(
+    pub fn accept_transport<T: RuntimeTransport + 'static>(
         &self,
         transport: T,
         peer_id: impl Into<String>,
@@ -180,15 +192,15 @@ impl RuntimeHandle {
     /// [`ResponseEnvelope`].  It runs in a spawned task for each invocation.
     ///
     /// This is the primary API for writing Rust-native providers.
-    pub fn register_fn_provider<F, Fut>(
+    pub async fn register_fn_provider<F, Fut>(
         &self,
         provider_id: impl Into<String>,
         namespaces: Vec<String>,
         handler: F,
     ) -> RegistrationToken
     where
-        F: Fn(Envelope) -> Fut + 'static,
-        Fut: core::future::Future<Output = ResponseEnvelope> + 'static,
+        F: Fn(Envelope) -> Fut + Send + Sync + 'static,
+        Fut: core::future::Future<Output = ResponseEnvelope> + Send + 'static,
     {
         let provider_id = provider_id.into();
         let registration_token = RegistrationToken::new();
@@ -201,7 +213,7 @@ impl RuntimeHandle {
             namespaces.clone(),
             work_tx,
         );
-        self.provider_registry.register(handle);
+        self.provider_registry.register(handle).await;
 
         let handler = Arc::new(handler);
 

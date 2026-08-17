@@ -13,7 +13,7 @@ default = ["std", "native", "stderr", "null", "filter"]
 std = []
 native = ["std"]
 no_std = []
-wasm = []
+wasm = ["dep:wasm-bindgen"]
 embedded = ["dep:embedded-io-async", "dep:spin"]
 stderr = ["native"]
 tracing = ["native", "dep:tracing"]
@@ -36,6 +36,7 @@ strum = { workspace = true }
 messagepack-serde = { workspace = true }
 getrandom = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = ["console"] }
 embedded-io-async = { workspace = true, optional = true }
 spin = { workspace = true, optional = true }

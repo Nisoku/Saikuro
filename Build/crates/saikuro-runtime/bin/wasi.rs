@@ -1,6 +1,8 @@
 #![cfg(feature = "no_std")]
 #![no_std]
+#![no_main]
 
+#[macro_use]
 extern crate alloc;
 
 use alloc::sync::Arc;
@@ -14,16 +16,20 @@ use saikuro_transport::wasi::tcp::WasiTcpListener;
 /// WASI command entry point. Returns a process exit code.
 #[no_mangle]
 pub extern "C" fn _start() -> i32 {
-    let runtime = Arc::new(SaikuroRuntime::builder().build());
-    let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+    #[cfg(all(not(feature = "std"), not(feature = "embedded")))]
+    saikuro_runtime::init_heap();
 
-    let tcp = match WasiTcpListener::new("0.0.0.0:7700") {
-        Ok(listener) => LocalRuntimeListener::new(listener),
-        Err(_) => return 1,
-    };
+    let builder = SaikuroRuntime::builder();
+    let (_shutdown_tx, shutdown_rx) = watch::channel(false);
     let pipe = HostPipeListener::<WasiPipe>::new("saikuro");
 
     saikuro_exec::block_on(async move {
+        let tcp = match WasiTcpListener::new("0.0.0.0:7700") {
+            Ok(listener) => LocalRuntimeListener::new(listener),
+            Err(_) => return,
+        };
+
+        let runtime = Arc::new(builder.build().await);
         let mut rx1 = shutdown_rx.clone();
         let mut rx2 = shutdown_rx.clone();
 

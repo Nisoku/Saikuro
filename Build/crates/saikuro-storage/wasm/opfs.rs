@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use bytes::Bytes;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
@@ -391,6 +392,7 @@ impl KeyValueBackend for OpfsStorage {
     }
 }
 
+#[async_trait(?Send)]
 impl FileBackend for OpfsStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let (dirs, file_name) = navigate_path(path);

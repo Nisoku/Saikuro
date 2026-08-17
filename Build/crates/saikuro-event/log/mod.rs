@@ -1,5 +1,8 @@
+/// Log severity levels.
 pub mod level;
+/// A single structured log record and its fields.
 pub mod record;
+/// The [`LogSink`](sink::LogSink) trait and built-in sink implementations.
 pub mod sink;
 
 #[cfg(feature = "collector")]

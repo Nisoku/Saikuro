@@ -1,6 +1,7 @@
 //! Pluggable, backend-agnostic transports for Saikuro.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(async_fn_in_trait)]
 
 #[macro_use]
 extern crate alloc;
@@ -32,10 +33,32 @@ compile_error!(
     "saikuro-transport: the no_std engine cannot be combined with the std toolchain feature"
 );
 
+#[cfg(all(feature = "wasm", feature = "ws", not(feature = "std")))]
+compile_error!(
+    "saikuro-transport: browser wasm (no_std) has no WebSocket socket API; use WASI \
+     (wasm32-wasip1/wasip2) with the `ws-wasi` feature for wasm-no_std WebSocket clients, \
+     or enable `std` on the wasm engine."
+);
+
 pub mod shared;
 
 #[cfg(feature = "native")]
 pub mod native;
+#[cfg(all(feature = "native", feature = "tcp"))]
+pub use native::tcp;
+#[cfg(all(feature = "native", feature = "unix"))]
+pub use native::unix;
+#[cfg(all(feature = "native", feature = "ws"))]
+pub use native::websocket;
+
+/// Transport selection and configuration types.
+#[cfg(any(
+    feature = "native",
+    feature = "no_std",
+    feature = "wasm",
+    feature = "embedded"
+))]
+pub use shared::selector;
 
 #[cfg(feature = "embedded")]
 pub mod embedded;
@@ -47,16 +70,16 @@ pub mod wasm;
 pub mod wasi;
 
 pub use shared::error::TransportError;
+pub use shared::host::{
+    HostPipeFactory, HostPipeRecv, HostPipeSend, Role, WasmHostConnector, WasmHostListener,
+    WasmHostTransport,
+};
 pub use shared::memory::MemoryTransport;
 pub use shared::selector::{TransportConfig, TransportKind, TransportSelector};
 pub use shared::traits::{
     LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
     LocalTransportSender, Transport, TransportConnector, TransportListener, TransportReceiver,
     TransportSender,
-};
-pub use shared::host::{
-    HostPipeFactory, HostPipeRecv, HostPipeSend, Role, WasmHostConnector, WasmHostListener,
-    WasmHostTransport,
 };
 
 #[cfg(all(feature = "native", feature = "tcp"))]
@@ -66,32 +89,33 @@ pub use native::unix::UnixTransport;
 #[cfg(all(feature = "native", feature = "ws"))]
 pub use native::websocket::{WebSocketTransport, WsTransportListener};
 
-#[cfg(all(feature = "embedded", feature = "tcp"))]
-pub use embedded::tcp::TcpTransport;
 #[cfg(feature = "embedded")]
 pub use embedded::io_transport::{EmbeddedIoReceiver, EmbeddedIoSender, EmbeddedIoTransport};
+#[cfg(all(feature = "embedded", feature = "tcp"))]
+pub use embedded::tcp::TcpTransport;
 
-#[cfg(all(feature = "wasm", feature = "ws"))]
-pub use wasm::websocket::WebSocketTransport;
 #[cfg(all(feature = "wasm", feature = "wasm-host"))]
 pub use wasm::host_browser::{BroadcastChannelPipe, WasmHost};
+#[cfg(all(feature = "wasm", feature = "ws", feature = "std"))]
+pub use wasm::websocket::WebSocketTransport;
 
+#[cfg(all(feature = "no_std", feature = "ws-wasi"))]
+pub use wasi::websocket;
+
+#[cfg(all(feature = "no_std", feature = "wasi-host"))]
+pub use wasi::host::{WasiHostRecv, WasiHostSend, WasiPipe};
 #[cfg(all(feature = "no_std", feature = "wasi-tcp"))]
 pub use wasi::tcp::{WasiTcpConnector, WasiTcpListener, WasiTcpTransport};
-#[cfg(all(feature = "no_std", feature = "wasi-host"))]
-pub use wasi::host::{WasiHost, WasiHostConnector, WasiHostListener};
 
 /// Maximum allowed frame size (16 MiB).  Frames larger than this are rejected
 /// to prevent memory exhaustion from malformed or malicious peers.
 pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
 
 /// Default capacity of internal transport channels.
-pub const DEFAULT_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
+pub const DEFAULT_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
+    saikuro_exec::ChannelCapacity::MAX;
 
 /// Implements [`TransportSender`] for a native transport's sending half.
-///
-/// The target struct must have an `inner` field that is an `futures`
-/// `SplitSink` over `bytes::Bytes` whose `Error` is [`TransportError`].
 #[macro_export]
 macro_rules! impl_native_sender {
     ($ty:ty, $addr:ident, $desc:literal) => {
@@ -99,21 +123,18 @@ macro_rules! impl_native_sender {
         impl $crate::shared::traits::TransportSender for $ty {
             async fn send(&mut self, frame: ::bytes::Bytes) -> $crate::shared::error::Result<()> {
                 tracing::trace!($addr = ?self.$addr, bytes = frame.len(), concat!($desc, " send"));
-                futures::SinkExt::send(&mut self.inner, frame).await
+                $crate::shared::framing::write_frame(&mut self.inner, &frame).await
             }
 
             async fn close(&mut self) -> $crate::shared::error::Result<()> {
                 tracing::debug!($addr = ?self.$addr, concat!($desc, " sender closing"));
-                futures::SinkExt::close(&mut self.inner).await
+                $crate::shared::framing::AsyncByteWrite::flush(&mut self.inner).await
             }
         }
     };
 }
 
 /// Implements [`TransportReceiver`] for a native transport's receiving half.
-///
-/// The target struct must have an `inner` field that is an `futures`
-/// `SplitStream` whose `Item` is `Result<bytes::Bytes, TransportError>`.
 #[macro_export]
 macro_rules! impl_native_receiver {
     ($ty:ty, $addr:ident, $desc:literal) => {
@@ -122,23 +143,22 @@ macro_rules! impl_native_receiver {
             async fn recv(
                 &mut self,
             ) -> $crate::shared::error::Result<Option<::bytes::Bytes>> {
-                match futures::StreamExt::next(&mut self.inner).await {
-                    Some(Ok(bytes)) => {
-                        tracing::trace!(
-                            $addr = ?self.$addr,
-                            bytes = bytes.len(),
-                            concat!($desc, " recv")
-                        );
-                        Ok(Some(bytes))
+                match $crate::shared::framing::read_frame(&mut self.inner).await {
+                    Ok(bytes) => {
+                        match &bytes {
+                            Some(b) => tracing::trace!(
+                                $addr = ?self.$addr,
+                                bytes = b.len(),
+                                concat!($desc, " recv")
+                            ),
+                            None => tracing::debug!(
+                                $addr = ?self.$addr,
+                                concat!($desc, " connection closed by peer")
+                            ),
+                        }
+                        Ok(bytes)
                     }
-                    Some(Err(e)) => Err(e),
-                    None => {
-                        tracing::debug!(
-                            $addr = ?self.$addr,
-                            concat!($desc, " connection closed by peer")
-                        );
-                        Ok(None)
-                    }
+                    Err(e) => Err(e),
                 }
             }
         }

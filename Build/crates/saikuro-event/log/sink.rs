@@ -2,6 +2,7 @@ use crate::level::LogLevel;
 use crate::record::LogRecord;
 
 /// A destination for [`LogRecord`]s.
+#[allow(async_fn_in_trait)]
 pub trait LogSink {
     /// Emit a single log record.
     async fn emit(&self, record: &LogRecord);

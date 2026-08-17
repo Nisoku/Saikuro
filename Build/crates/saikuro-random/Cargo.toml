@@ -14,10 +14,10 @@ path = "lib.rs"
 [features]
 default = ["std", "native"]
 std = ["rand_core/std"]
-native = ["std", "getrandom", "getrandom/std", "saikuro-event/getrandom"]
-no_std = ["getrandom", "saikuro-event/getrandom"]
-wasm = ["getrandom", "getrandom/wasm_js", "saikuro-event/getrandom"]
-embedded = []
+native = ["std", "getrandom", "getrandom/std", "saikuro-event/getrandom", "saikuro-event/native"]
+no_std = ["getrandom", "saikuro-event/getrandom", "saikuro-event/no_std"]
+wasm = ["getrandom", "getrandom/wasm_js", "saikuro-event/getrandom", "saikuro-event/wasm"]
+embedded = ["saikuro-event/embedded"]
 
 [dependencies]
 getrandom = { workspace = true, optional = true }

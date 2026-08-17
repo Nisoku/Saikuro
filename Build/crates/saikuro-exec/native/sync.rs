@@ -1,4 +1,3 @@
-use core::future::Future;
 use core::ops::{Deref, DerefMut};
 
 pub struct Mutex<T> {

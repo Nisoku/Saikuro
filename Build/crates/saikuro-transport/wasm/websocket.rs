@@ -34,7 +34,8 @@ impl WebSocketTransport {
         ws.set_binary_type(BinaryType::Arraybuffer);
 
         let (tx, rx) = oneshot::channel::<Result<()>>();
-        let shared: Rc<RefCell<Option<oneshot::Sender<Result<()>>>> = Rc::new(RefCell::new(Some(tx)));
+        let shared: Rc<RefCell<Option<oneshot::Sender<Result<()>>>>> =
+            Rc::new(RefCell::new(Some(tx)));
 
         let open_shared = Rc::clone(&shared);
         let onopen = Closure::<dyn FnMut(Event)>::new(move |_: Event| {
@@ -153,7 +154,7 @@ pub struct WebSocketSender {
     url: String,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl TransportSender for WebSocketSender {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
         use js_sys::{ArrayBuffer, Uint8Array};
@@ -201,7 +202,7 @@ impl Drop for WebSocketReceiver {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl TransportReceiver for WebSocketReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
         match self.rx.recv().await {

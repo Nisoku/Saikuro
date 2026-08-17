@@ -25,6 +25,11 @@ pub struct Sender<T> {
 
 impl<T> Sender<T> {
     pub fn send(self, value: T) -> Result<(), T> {
+        self.try_send(value)
+    }
+
+    /// Send a value without consuming the sender.
+    pub fn try_send(&self, value: T) -> Result<(), T> {
         self.inner.state.lock(|s| {
             let mut data = s.borrow_mut();
             if !data.receiver_alive {
@@ -38,11 +43,11 @@ impl<T> Sender<T> {
                 }
                 State::Ready(v) => {
                     data.channel = State::Ready(v);
-                    core::unreachable!("oneshot sender cannot send twice");
+                    return Err(value);
                 }
                 State::Closed => {
                     data.channel = State::Closed;
-                    core::unreachable!("oneshot sender cannot send on a closed channel");
+                    return Err(value);
                 }
             }
             Ok(())
@@ -104,6 +109,13 @@ impl<T> Future for Receiver<T> {
                 }
             }
         })
+    }
+}
+
+impl<T> Receiver<T> {
+    /// Receive the single value, consuming the receiver.
+    pub fn recv(self) -> Receiver<T> {
+        self
     }
 }
 

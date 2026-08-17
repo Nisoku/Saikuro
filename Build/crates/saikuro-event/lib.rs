@@ -3,7 +3,7 @@
 
 //! Unified error taxonomy, structured logging, and dynamically-typed value
 //! types for Saikuro.
-#[cfg(not(feature = "std"))]
+#[macro_use]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
@@ -21,11 +21,19 @@ compile_error!("saikuro-event: enable exactly one engine (native / no_std / wasm
 #[cfg(all(feature = "no_std", feature = "std"))]
 compile_error!("saikuro-event: the no_std engine cannot be combined with the std toolchain");
 
-mod value;
+/// Dynamically-typed value types used across the Saikuro wire protocol.
+pub mod value;
 pub use value::*;
 
 mod core_events;
 pub use core_events::*;
 
+/// Structured logging primitives and [`LogSink`](log::sink::LogSink) implementations.
 pub mod log;
 pub use log::*;
+
+#[cfg(all(feature = "native", feature = "tracing"))]
+pub use log::tracing::TracingSink;
+
+#[cfg(feature = "console")]
+pub use log::console::ConsoleSink;

@@ -1,8 +1,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-
+use async_trait::async_trait;
 use bytes::Bytes;
-
 use wasi::filesystem::{
     self, Descriptor, DescriptorFlags, DirectoryEntry, Error as FsError, OpenFlags, PathFlags,
 };
@@ -176,6 +175,7 @@ impl Default for WasiFileStore {
     }
 }
 
+#[async_trait(?Send)]
 impl FileBackend for WasiFileStore {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let root = self.root()?;

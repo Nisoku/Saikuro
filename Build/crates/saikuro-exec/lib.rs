@@ -47,6 +47,11 @@ mod wasm;
 #[cfg(feature = "wasm")]
 pub use wasm::*;
 
+#[cfg(feature = "no_std")]
+mod no_std;
+#[cfg(feature = "no_std")]
+pub use no_std::*;
+
 #[cfg(feature = "embedded")]
 mod embedded;
 #[cfg(feature = "embedded")]

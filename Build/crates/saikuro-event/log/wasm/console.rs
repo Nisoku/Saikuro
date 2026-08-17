@@ -9,8 +9,15 @@ pub struct ConsoleSink;
 
 impl LogSink for ConsoleSink {
     async fn emit(&self, record: &LogRecord) {
-        if let Ok(json) = serde_json::to_string(record) {
-            web_sys::console::log_1(&JsValue::from_str(&json));
+        #[cfg(feature = "console")]
+        {
+            if let Ok(json) = serde_json::to_string(record) {
+                web_sys::console::log_1(&JsValue::from_str(&json));
+            }
+        }
+        #[cfg(not(feature = "console"))]
+        {
+            let _ = record;
         }
     }
 }

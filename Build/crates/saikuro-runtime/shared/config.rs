@@ -41,6 +41,11 @@ pub struct RuntimeConfig {
     /// Enable structured JSON logging via `tracing-subscriber`.
     #[serde(default)]
     pub json_logs: bool,
+
+    /// Baked-in schema bytes supplied by an engine entry point (native `--schema`,
+    /// or the embedded/wasm/WASI baked schema). Not part of the serialised config.
+    #[serde(skip)]
+    pub schema_bytes: Option<&'static [u8]>,
 }
 
 impl RuntimeConfig {
@@ -63,6 +68,7 @@ impl Default for RuntimeConfig {
             max_message_size: default_max_message_size(),
             stream_buffer_capacity: default_stream_capacity(),
             json_logs: false,
+            schema_bytes: None,
         }
     }
 }

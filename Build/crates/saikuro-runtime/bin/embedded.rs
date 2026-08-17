@@ -2,10 +2,8 @@
 
 extern crate alloc;
 
-use saikuro_exec::watch;
-use saikuro_net::net::Stack;
-use saikuro_runtime::SaikuroRuntime;
-use saikuro_transport::embedded::tcp::TcpTransportListener;
+use saikuro_exec::start_runner;
+use saikuro_runtime::embedded::run;
 
 /// Host-provided board support.
 mod board {
@@ -23,16 +21,7 @@ mod board {
 }
 
 #[embassy_executor::main]
-async fn main() {
-    let stack = board::stack();
-    let runtime = SaikuroRuntime::builder().build();
-
-    let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-
-    runtime
-        .serve(
-            vec![TcpTransportListener::new(stack, board::endpoint())],
-            shutdown_rx,
-        )
-        .await;
+async fn main(spawner: embassy_executor::Spawner) {
+    start_runner(spawner);
+    run(board::stack(), board::endpoint()).await;
 }

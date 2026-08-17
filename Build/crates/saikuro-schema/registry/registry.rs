@@ -3,11 +3,10 @@ use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
     SCHEMA_TYPES_CAPACITY,
 };
-use saikuro_exec::sync::RwLock;
 use saikuro_core::RegistrationToken;
+use saikuro_exec::sync::RwLock;
 
 use saikuro_event::SaikuroError;
-
 
 /// Whether the registry accepts dynamic schema updates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +125,8 @@ impl SchemaRegistry {
         schema: Schema,
         provider_id: impl Into<String>,
     ) -> Result<(), SaikuroError> {
-        self.merge_schema_with_token(schema, provider_id, RegistrationToken::new()).await
+        self.merge_schema_with_token(schema, provider_id, RegistrationToken::new())
+            .await
     }
 
     /// Merge a schema document under an existing provider registration.
@@ -182,15 +182,17 @@ impl SchemaRegistry {
     }
 
     /// Remove namespaces owned by one specific provider registration.
-    pub async fn deregister_provider(&self, provider_id: &str, registration_token: RegistrationToken) {
+    pub async fn deregister_provider(
+        &self,
+        provider_id: &str,
+        registration_token: RegistrationToken,
+    ) {
         let mut schemata = self.inner.write().await;
         if schemata.mode == RegistryMode::Production {
             return;
         }
         schemata.namespaces.retain(|_ns, entry| {
-            let keep =
-                entry.provider_id != provider_id || entry.registration_token != registration_token;
-            keep
+            entry.provider_id != provider_id || entry.registration_token != registration_token
         });
     }
 
@@ -224,6 +226,7 @@ impl SchemaRegistry {
     pub async fn provider_for_namespace(&self, namespace: &str) -> Option<String> {
         self.inner
             .read()
+            .await
             .namespaces
             .get(namespace)
             .map(|e| e.provider_id.clone())
@@ -278,9 +281,13 @@ impl Default for SchemaRegistry {
 /// A fully-resolved reference to a function schema plus its owning provider.
 #[derive(Debug, Clone)]
 pub struct FunctionRef {
+    /// Namespace that owns the function.
     pub namespace: String,
+    /// Function name within the namespace.
     pub function: String,
+    /// Resolved function schema.
     pub schema: FunctionSchema,
+    /// Provider that registered the namespace.
     pub provider_id: String,
 }
 

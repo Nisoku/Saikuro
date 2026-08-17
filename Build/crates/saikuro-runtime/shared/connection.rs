@@ -1,5 +1,7 @@
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -148,9 +150,11 @@ where
 
         // Clean up: deregister any provider the peer announced.
         self.provider_registry
-            .deregister(&self.peer_id, self.registration_token);
+            .deregister(&self.peer_id, self.registration_token)
+            .await;
         self.schema_registry
-            .deregister_provider(&self.peer_id, self.registration_token);
+            .deregister_provider(&self.peer_id, self.registration_token)
+            .await;
 
         info!(peer = %self.peer_id, "connection handler exiting");
     }
@@ -180,11 +184,11 @@ where
         // 2. Handle system envelopes before schema validation.
         match envelope.invocation_type {
             InvocationType::Announce => {
-                let response = self.handle_announce(envelope, pending, forward_tx);
+                let response = self.handle_announce(envelope, pending, forward_tx).await;
                 // If sandbox mode is on and the announce succeeded, build the
                 // filtered schema to push back to the peer.
                 let sandbox_schema = if self.capability_engine.is_sandboxed() && response.ok {
-                    self.build_filtered_schema()
+                    self.build_filtered_schema().await
                 } else {
                     None
                 };
@@ -198,7 +202,7 @@ where
         }
 
         // 3. Validate the envelope against the schema.
-        let validation = match self.validator.validate(&envelope) {
+        let validation = match self.validator.validate(&envelope).await {
             Ok(report) => report,
             Err(e) => {
                 return Some((
@@ -314,7 +318,7 @@ where
     }
 
     /// Handle a schema-announcement envelope.
-    fn handle_announce(
+    async fn handle_announce(
         &self,
         envelope: Envelope,
         pending: &PendingCalls,
@@ -332,11 +336,11 @@ where
                 let ns_count = s.namespaces.len();
                 let namespaces: Vec<String> = s.namespaces.keys().cloned().collect();
 
-                match self.schema_registry.merge_schema_with_token(
-                    s,
-                    &self.peer_id,
-                    self.registration_token,
-                ) {
+                match self
+                    .schema_registry
+                    .merge_schema_with_token(s, &self.peer_id, self.registration_token)
+                    .await
+                {
                     Ok(()) => {
                         info!(
                             peer = %self.peer_id,
@@ -346,7 +350,8 @@ where
 
                         // Register a wire-forwarding provider handle so the
                         // router can dispatch calls to this peer.
-                        self.register_wire_provider(namespaces, pending, forward_tx);
+                        self.register_wire_provider(namespaces, pending, forward_tx)
+                            .await;
 
                         ResponseEnvelope::ok_empty(id)
                     }
@@ -377,7 +382,7 @@ where
 
     /// Create and register a [`ProviderHandle`] that forwards invocations to
     /// the connected peer over the wire.
-    fn register_wire_provider(
+    async fn register_wire_provider(
         &self,
         namespaces: Vec<String>,
         pending: &PendingCalls,
@@ -391,7 +396,7 @@ where
             namespaces,
             work_tx,
         );
-        self.provider_registry.register(handle);
+        self.provider_registry.register(handle).await;
 
         let pending_clone = pending.clone();
         let forward_tx_clone = forward_tx.clone();
@@ -438,8 +443,8 @@ where
     ///
     /// Only namespaces and functions visible to `peer_capabilities` (and not
     /// `Internal` or `Private`) are included.
-    fn build_filtered_schema(&self) -> Option<Schema> {
-        let full = match self.schema_registry.snapshot() {
+    async fn build_filtered_schema(&self) -> Option<Schema> {
+        let full = match self.schema_registry.snapshot().await {
             Ok(schema) => schema,
             Err(e) => {
                 error!(peer = %self.peer_id, error = %e, "schema snapshot capacity exceeded");

@@ -19,7 +19,8 @@ default = ["tcp", "unix", "ws", "storage", "saikuro-exec/native"]
 tcp  = ["saikuro-transport/tcp"]
 unix = ["saikuro-transport/unix"]
 ws   = ["saikuro-transport/ws"]
-wasm = ["saikuro-transport/wasm", "saikuro-transport/wasm-host", "saikuro-random/wasm"]
+ws-wasi = ["saikuro-transport/ws-wasi"]
+wasm = ["saikuro-transport/wasm", "saikuro-transport/wasm-host", "saikuro-random/wasm", "saikuro-transport/ws"]
 
 # Storage backends: platform-agnostic factory in storage module
 storage         = ["saikuro-storage/native"]

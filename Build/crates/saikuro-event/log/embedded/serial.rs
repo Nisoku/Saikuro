@@ -1,4 +1,3 @@
-use core::fmt::Write as _;
 use embedded_io_async::Write;
 use heapless::String as HString;
 use spin::Mutex;

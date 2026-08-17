@@ -80,41 +80,78 @@ pub struct MemorySender {
     label: String,
 }
 
-#[async_trait]
-impl TransportSender for MemorySender {
-    async fn send(&mut self, frame: Bytes) -> Result<()> {
-        trace!(label = %self.label, bytes = frame.len(), "memory send");
-        self.inner.send(frame).await.map_err(|_| {
-            TransportError::ConnectionLost(format!(
-                "in-memory receiver dropped for '{}'",
-                self.label
-            ))
-        })
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        // Dropping the sender closes the channel; the receiver will see None.
-        // There is nothing explicit to do here:  the sender will be dropped
-        // when this struct is dropped.
-        trace!(label = %self.label, "memory sender closing");
-        Ok(())
-    }
-}
-
 /// Receiving half of a [`MemoryTransport`].
 pub struct MemoryReceiver {
     inner: mpsc::Receiver<Bytes>,
     label: String,
 }
 
-#[async_trait]
-impl TransportReceiver for MemoryReceiver {
-    async fn recv(&mut self) -> Result<Option<Bytes>> {
-        let result = self.inner.recv().await;
-        match &result {
-            Some(bytes) => trace!(label = %self.label, bytes = bytes.len(), "memory recv"),
-            None => trace!(label = %self.label, "memory channel closed"),
+#[cfg(feature = "native")]
+mod send_impls {
+    use super::*;
+
+    #[async_trait]
+    impl TransportSender for MemorySender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            trace!(label = %self.label, bytes = frame.len(), "memory send");
+            self.inner.send(frame).await.map_err(|_| {
+                TransportError::ConnectionLost(format!(
+                    "in-memory receiver dropped for '{}'",
+                    self.label
+                ))
+            })
         }
-        Ok(result)
+
+        async fn close(&mut self) -> Result<()> {
+            trace!(label = %self.label, "memory sender closing");
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl TransportReceiver for MemoryReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            let result = self.inner.recv().await;
+            match &result {
+                Some(bytes) => trace!(label = %self.label, bytes = bytes.len(), "memory recv"),
+                None => trace!(label = %self.label, "memory channel closed"),
+            }
+            Ok(result)
+        }
+    }
+}
+
+#[cfg(not(feature = "native"))]
+mod nosend_impls {
+    use super::*;
+
+    #[async_trait(?Send)]
+    impl TransportSender for MemorySender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            trace!(label = %self.label, bytes = frame.len(), "memory send");
+            self.inner.send(frame).await.map_err(|_| {
+                TransportError::ConnectionLost(format!(
+                    "in-memory receiver dropped for '{}'",
+                    self.label
+                ))
+            })
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            trace!(label = %self.label, "memory sender closing");
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TransportReceiver for MemoryReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            let result = self.inner.recv().await;
+            match &result {
+                Some(bytes) => trace!(label = %self.label, bytes = bytes.len(), "memory recv"),
+                None => trace!(label = %self.label, "memory channel closed"),
+            }
+            Ok(result)
+        }
     }
 }

@@ -6,7 +6,7 @@ pub struct OsEntropy;
 
 impl EntropySource for OsEntropy {
     fn try_fill(&self, dest: &mut [u8]) -> Result<(), SaikuroError> {
-        getrandom::fill(dest).map_err(|e| SaikuroError::from(e))
+        getrandom::fill(dest).map_err(SaikuroError::from)
     }
 }
 

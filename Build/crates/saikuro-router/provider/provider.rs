@@ -11,6 +11,7 @@ use saikuro_event::{Result, SaikuroError};
 // Pending call tracker
 /// A one-shot channel waiting for the response to a single Call invocation.
 pub type PendingCallSender = oneshot::Sender<ResponseEnvelope>;
+/// Receiver half of a pending `Call` response channel.
 pub type PendingCallReceiver = oneshot::Receiver<ResponseEnvelope>;
 
 // Provider trait
@@ -42,7 +43,9 @@ pub trait Provider: Send + Sync + 'static {
 
 /// Work item sent through the provider's dispatch channel.
 pub struct ProviderWorkItem {
+    /// Invocation envelope to deliver to the provider.
     pub envelope: Envelope,
+    /// Optional oneshot sender used to complete a `Call` invocation.
     pub response_tx: Option<PendingCallSender>,
 }
 
@@ -56,6 +59,7 @@ pub struct ProviderHandle {
 }
 
 impl ProviderHandle {
+    /// Build a provider handle with a freshly generated registration token.
     pub fn new(
         id: impl Into<String>,
         namespaces: Vec<String>,
@@ -116,9 +120,17 @@ impl Provider for ProviderHandle {
 
 // ProviderRegistry
 /// Thread-safe registry mapping namespace names to provider handles.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ProviderRegistry {
     inner: Arc<RwLock<RegistryState>>,
+}
+
+impl Default for ProviderRegistry {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(RegistryState::default())),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -130,6 +142,7 @@ struct RegistryState {
 }
 
 impl ProviderRegistry {
+    /// Create an empty provider registry.
     pub fn new() -> Self {
         Self::default()
     }
@@ -168,15 +181,16 @@ impl ProviderRegistry {
 
         for ns in &namespaces {
             match state.by_namespace.insert(ns.clone(), handle.clone()) {
-                Some(old) => {
-                    if old.id() != provider_id || old.registration_token() != registration_token {
-                        let old_key = (old.id().to_owned(), old.registration_token());
-                        if let Some(old_ns_list) = state.by_provider.get_mut(&old_key) {
-                            old_ns_list.retain(|n| n != ns);
-                        }
+                Some(old)
+                    if old.id() != provider_id
+                        || old.registration_token() != registration_token =>
+                {
+                    let old_key = (old.id().to_owned(), old.registration_token());
+                    if let Some(old_ns_list) = state.by_provider.get_mut(&old_key) {
+                        old_ns_list.retain(|n| n != ns);
                     }
                 }
-                None => {}
+                _ => {}
             }
         }
         state.by_provider.insert(provider_key, namespaces);
@@ -209,6 +223,7 @@ impl ProviderRegistry {
     pub async fn has_live_provider(&self, namespace: &str) -> bool {
         self.inner
             .read()
+            .await
             .by_namespace
             .get(namespace)
             .map(|h| h.is_alive())

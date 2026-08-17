@@ -132,6 +132,7 @@ impl TypeDescriptor {
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     /// Callable by any namespace, including external callers.
+    #[default]
     Public,
     /// Callable only by functions within the same root schema.
     Internal,

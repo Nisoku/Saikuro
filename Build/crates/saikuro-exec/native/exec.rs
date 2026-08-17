@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 
 use tokio::runtime::{Builder, Runtime as TokioRuntime};
@@ -77,7 +78,7 @@ impl RuntimeBuilder {
         self
     }
 
-    pub fn build(self) -> Runtime {
+    pub fn build(mut self) -> Runtime {
         Runtime {
             inner: self
                 .inner
@@ -85,6 +86,12 @@ impl RuntimeBuilder {
                 .expect("saikuro-exec: failed to build tokio runtime"),
         }
     }
+}
+
+/// A handle to a spawned task. Awaiting it yields the task's output or a
+/// [`JoinError`] if the task was cancelled or panicked.
+pub struct JoinHandle<T> {
+    inner: TokioJoinHandle<T>,
 }
 
 pub fn spawn<F>(fut: F) -> JoinHandle<F::Output>
@@ -95,6 +102,11 @@ where
     JoinHandle {
         inner: tokio::spawn(fut),
     }
+}
+
+/// Run a future to completion on a dedicated multi-threaded tokio runtime.
+pub fn block_on<F: Future>(fut: F) -> F::Output {
+    Runtime::new().block_on(fut)
 }
 
 impl<T> JoinHandle<T> {

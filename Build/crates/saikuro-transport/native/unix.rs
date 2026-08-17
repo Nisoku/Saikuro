@@ -1,29 +1,25 @@
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
-use bytes::Bytes;
+use saikuro_net::io::{split, ReadHalf, WriteHalf};
 use saikuro_net::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use crate::shared::{
     error::Result,
-    framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
 
 /// A Unix domain socket transport connection.
 pub struct UnixTransport {
-    framed: FramedStream<UnixStream>,
+    stream: UnixStream,
     path: PathBuf,
 }
 
 impl UnixTransport {
     /// Wrap an already-connected [`UnixStream`].
     pub fn new(stream: UnixStream, path: PathBuf) -> Self {
-        Self {
-            framed: FramedStream::new(stream),
-            path,
-        }
+        Self { stream, path }
     }
 }
 
@@ -32,17 +28,14 @@ impl Transport for UnixTransport {
     type Receiver = UnixReceiver;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
+        let (read, write) = split(self.stream);
         let path = self.path.clone();
-        let (sink, stream) = self.framed.split();
         (
             UnixSender {
-                inner: sink,
+                inner: write,
                 path: path.clone(),
             },
-            UnixReceiver {
-                inner: stream,
-                path,
-            },
+            UnixReceiver { inner: read, path },
         )
     }
 
@@ -53,14 +46,14 @@ impl Transport for UnixTransport {
 
 // Sender / Receiver
 pub struct UnixSender {
-    inner: futures::stream::SplitSink<FramedStream<UnixStream>, Bytes>,
+    inner: WriteHalf<UnixStream>,
     path: PathBuf,
 }
 
 impl_native_sender!(UnixSender, path, "unix");
 
 pub struct UnixReceiver {
-    inner: futures::stream::SplitStream<FramedStream<UnixStream>>,
+    inner: ReadHalf<UnixStream>,
     path: PathBuf,
 }
 

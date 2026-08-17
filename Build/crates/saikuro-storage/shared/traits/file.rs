@@ -1,10 +1,11 @@
 use alloc::string::String;
 use alloc::vec::Vec;
+use async_trait::async_trait;
 use bytes::Bytes;
 use saikuro_event::Result;
 
 /// A file-like storage interface for hierarchical storage.
-#[allow(async_fn_in_trait)]
+#[async_trait(?Send)]
 pub trait FileBackend: 'static {
     /// Read a file's contents.
     async fn read_file(&self, path: &str) -> Result<Bytes>;

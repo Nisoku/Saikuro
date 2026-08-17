@@ -12,7 +12,10 @@ pub enum CapabilityOutcome {
     /// All required capabilities are held by the caller.
     Granted,
     /// The caller is missing this specific required capability.
-    Denied { missing: CapabilityToken },
+    Denied {
+        /// The capability token the caller was missing.
+        missing: CapabilityToken,
+    },
 }
 
 /// Engine that enforces capability requirements on invocations.

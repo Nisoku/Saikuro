@@ -23,9 +23,7 @@ impl<T> Clone for Sender<T> {
 
 impl<T: Clone> Sender<T> {
     pub fn send(&self, value: T) -> Result<(), SendError<T>> {
-        self.inner
-            .send(value)
-            .map_err(|e| SendError(e.into_inner()))
+        self.inner.send(value).map_err(|e| SendError(e.0))
     }
 }
 
@@ -43,7 +41,7 @@ impl<T> Clone for Receiver<T> {
 
 impl<T: Clone> Receiver<T> {
     pub fn borrow(&self) -> T {
-        self.inner.borrow()
+        (*self.inner.borrow()).clone()
     }
 
     pub fn changed(&mut self) -> ChangedFuture<'_, T> {
@@ -60,8 +58,9 @@ impl<T: Clone> Future for ChangedFuture<'_, T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let mut fut = this.receiver.inner.changed();
-        match Pin::new(&mut fut).poll(cx) {
+        let fut = this.receiver.inner.changed();
+        tokio::pin!(fut);
+        match fut.as_mut().poll(cx) {
             Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
             Poll::Ready(Err(_)) => Poll::Ready(Err(RecvError)),
             Poll::Pending => Poll::Pending,

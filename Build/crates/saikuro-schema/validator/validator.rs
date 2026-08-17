@@ -30,6 +30,7 @@ pub struct InvocationValidator {
 }
 
 impl InvocationValidator {
+    /// Build a validator that enforces `Public` visibility only.
     pub fn new(registry: SchemaRegistry) -> Self {
         Self {
             registry,
@@ -130,11 +131,12 @@ impl InvocationValidator {
 
         // Validate each item; collect the first error with its index.
         for (index, item) in items.iter().enumerate() {
-            self.validate(item).await
-                .map_err(|source| SaikuroError::BatchItemFailed {
+            Box::pin(self.validate(item)).await.map_err(|source| {
+                SaikuroError::BatchItemFailed {
                     index,
                     reason: source.to_string(),
-                })?;
+                }
+            })?;
         }
 
         // For batch we return a synthetic report. The router will dispatch each
@@ -147,11 +149,7 @@ impl InvocationValidator {
     }
 
     // Helpers
-    fn check_visibility(
-        &self,
-        target: &str,
-        visibility: &Visibility,
-    ) -> Result<(), SaikuroError> {
+    fn check_visibility(&self, target: &str, visibility: &Visibility) -> Result<(), SaikuroError> {
         match visibility {
             Visibility::Public => Ok(()),
             Visibility::Internal if self.allow_internal => Ok(()),

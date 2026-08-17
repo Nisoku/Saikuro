@@ -27,7 +27,8 @@ impl<T> Future for Receiver<T> {
     type Output = Result<T, RecvError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.get_mut().inner.poll_recv(cx) {
+        let this = self.get_mut();
+        match Pin::new(&mut this.inner).poll(cx) {
             Poll::Ready(Ok(v)) => Poll::Ready(Ok(v)),
             Poll::Ready(Err(_)) => Poll::Ready(Err(RecvError)),
             Poll::Pending => Poll::Pending,

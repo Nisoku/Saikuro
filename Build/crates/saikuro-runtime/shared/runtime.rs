@@ -1,4 +1,5 @@
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
 use core::time::Duration;
 
@@ -72,8 +73,8 @@ impl RuntimeBuilder {
     /// Build the runtime.  This does not start any listener loops; use
     /// [`RuntimeHandle`] methods to attach transports, or [`SaikuroRuntime::serve`]
     /// to run a set of listeners until shutdown.
-    pub fn build(self) -> SaikuroRuntime {
-        SaikuroRuntime::from_config(self.config)
+    pub async fn build(self) -> SaikuroRuntime {
+        SaikuroRuntime::from_config(self.config).await
     }
 }
 
@@ -94,11 +95,11 @@ impl SaikuroRuntime {
         RuntimeBuilder::new()
     }
 
-    fn from_config(config: RuntimeConfig) -> Self {
+    async fn from_config(config: RuntimeConfig) -> Self {
         let schema_bytes = config.schema_bytes;
         let schema_registry = SchemaRegistry::new();
 
-        let mut runtime = Self {
+        let runtime = Self {
             config,
             schema_registry,
             provider_registry: ProviderRegistry::new(),
@@ -111,7 +112,7 @@ impl SaikuroRuntime {
         if let Some(bytes) = schema_bytes {
             match serde_json::from_slice::<Schema>(bytes) {
                 Ok(schema) => {
-                    if let Err(e) = runtime.schema_registry.merge_schema(schema, "static") {
+                    if let Err(e) = runtime.schema_registry.merge_schema(schema, "static").await {
                         error!(error = %e, "failed to merge static schema");
                     }
                 }
@@ -120,7 +121,7 @@ impl SaikuroRuntime {
         }
 
         if runtime.config.mode == crate::config::RuntimeMode::Production {
-            runtime.schema_registry.freeze();
+            runtime.schema_registry.freeze().await;
         }
 
         runtime
@@ -169,7 +170,7 @@ impl SaikuroRuntime {
     }
 
     /// Run a set of listeners until the host signals shutdown via `shutdown`.
-    pub async fn serve<L: RuntimeListener>(
+    pub async fn serve<L: RuntimeListener + 'static>(
         &self,
         listeners: Vec<L>,
         mut shutdown: watch::Receiver<bool>,

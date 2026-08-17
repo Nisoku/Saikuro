@@ -1,9 +1,7 @@
-use alloc::rc::Rc;
-
-use embedded_io_async::{ErrorKind, Read, Write};
+use alloc::sync::Arc;
 
 use crate::shared::error::{Result, TransportError};
-use crate::wasi::tcp::{parse_addr, parse_ipv4};
+use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};
 
 const AF_INET: u8 = 0; // witx address-family::inet4
 const SOCK_STREAM: u8 = 1; // witx socket-type::stream
@@ -46,8 +44,8 @@ extern "C" {
     fn fd_close(fd: u32) -> u16;
 }
 
-/// An open preview1 socket.  Owns the fd: the last `Rc` dropping closes it.
-struct Connection {
+/// An open preview1 socket.  Owns the fd: the last `Arc` dropping closes it.
+pub struct Connection {
     fd: u32,
 }
 
@@ -57,50 +55,6 @@ impl Drop for Connection {
         unsafe {
             let _ = fd_close(self.fd);
         }
-    }
-}
-
-/// A readable socket half.  Shares ownership of the underlying fd.
-pub struct Reader(Rc<Connection>);
-
-/// A writable socket half.  Shares ownership of the underlying fd.
-pub struct Writer(Rc<Connection>);
-
-impl Read for Reader {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, ErrorKind> {
-        let iov = Ciovec {
-            buf: buf.as_ptr(),
-            len: buf.len(),
-        };
-        let mut ret = RecvRet { len: 0, roflags: 0 };
-        // SAFETY: iov aliases buf for the duration of the call and ret is written
-        // by the host. The fd is a valid open socket.
-        let rc = unsafe { sock_recv(self.0.fd, &iov, 0, &mut ret) };
-        if rc != 0 {
-            return Err(ErrorKind::Other);
-        }
-        Ok(ret.len as usize)
-    }
-}
-
-impl Write for Writer {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, ErrorKind> {
-        let iov = Iovec {
-            buf: buf.as_ptr(),
-            len: buf.len(),
-        };
-        let mut n = 0u32;
-        // SAFETY: iov aliases buf for the duration of the call and n is written
-        // by the host. The fd is a valid open socket.
-        let rc = unsafe { sock_send(self.0.fd, &iov, 0, &mut n) };
-        if rc != 0 {
-            return Err(ErrorKind::Other);
-        }
-        Ok(n as usize)
-    }
-
-    async fn flush(&mut self) -> Result<(), ErrorKind> {
-        Ok(())
     }
 }
 
@@ -134,8 +88,58 @@ fn sockaddr_in(octets: [u8; 4], port: u16) -> SockaddrIn {
     }
 }
 
-/// Dial `addr` (host:port) and return the connected read/write halves.
-pub fn connect(addr: &str) -> Result<(Reader, Writer)> {
+/// Receive up to `buf.len()` bytes into `buf`; returns the count read.
+/// A return of `0` indicates a clean EOF.
+fn recv_raw(fd: u32, buf: &mut [u8]) -> Result<usize> {
+    let iov = Ciovec {
+        buf: buf.as_ptr(),
+        len: buf.len(),
+    };
+    let mut ret = RecvRet { len: 0, roflags: 0 };
+    // SAFETY: iov aliases buf for the duration of the call and ret is written
+    // by the host. The fd is a valid open socket.
+    let rc = unsafe { sock_recv(fd, &iov, 0, &mut ret) };
+    if !errno_ok(rc) {
+        return Err(TransportError::ReceiveFailed(format!("sock_recv: {rc}")));
+    }
+    Ok(ret.len as usize)
+}
+
+impl WasiConn for Connection {
+    fn read_bytes(&self, buf: &mut [u8]) -> Result<usize> {
+        recv_raw(self.fd, buf)
+    }
+
+    fn write_bytes(&self, buf: &[u8]) -> Result<()> {
+        send_frame(self, buf)
+    }
+}
+
+/// Send one length-prefixed frame over `conn`.
+pub fn send_frame(conn: &Connection, frame: &[u8]) -> Result<()> {
+    let mut offset = 0;
+    while offset < frame.len() {
+        let iov = Iovec {
+            buf: frame[offset..].as_ptr(),
+            len: frame.len() - offset,
+        };
+        let mut n = 0u32;
+        // SAFETY: iov aliases frame for the duration of the call; n is written
+        // by the host. The fd is a valid open socket.
+        let rc = unsafe { sock_send(conn.fd, &iov, 0, &mut n) };
+        if !errno_ok(rc) {
+            return Err(TransportError::SendFailed(format!("sock_send: {rc}")));
+        }
+        if n == 0 {
+            return Err(TransportError::SendFailed("sock_send wrote 0 bytes".into()));
+        }
+        offset += n as usize;
+    }
+    Ok(())
+}
+
+/// Dial `addr` (host:port) and return the connected socket.
+pub fn connect(addr: &str) -> Result<Arc<Connection>> {
     let (host, port) = parse_addr(addr)?;
     let octets = parse_ipv4(&host)
         .ok_or_else(|| TransportError::ConnectionRefused(format!("unresolved host {host}")))?;
@@ -144,16 +148,20 @@ pub fn connect(addr: &str) -> Result<(Reader, Writer)> {
     // SAFETY: sock_open writes exactly one fd to ret_area on success.
     let rc = unsafe { sock_open(AF_INET, SOCK_STREAM, &mut fd) };
     if !errno_ok(rc) {
-        return Err(TransportError::ConnectionRefused(format!("sock_open: {rc}")));
+        return Err(TransportError::ConnectionRefused(format!(
+            "sock_open: {rc}"
+        )));
     }
-    let conn = Rc::new(Connection { fd });
+    let conn = Arc::new(Connection { fd });
     let sa = sockaddr_in(octets, port);
     // SAFETY: sa points to a valid SockaddrIn for the duration of the call.
     let rc = unsafe { sock_connect(conn.fd, &sa, core::mem::size_of::<SockaddrIn>() as u32) };
     if !errno_ok(rc) {
-        return Err(TransportError::ConnectionRefused(format!("sock_connect: {rc}")));
+        return Err(TransportError::ConnectionRefused(format!(
+            "sock_connect: {rc}"
+        )));
     }
-    Ok((Reader(Rc::clone(&conn)), Writer(conn)))
+    Ok(conn)
 }
 
 /// Bind and listen on `port` on all interfaces.
@@ -161,7 +169,9 @@ pub fn listen(port: u16) -> Result<Listener> {
     let mut fd = 0u32;
     let rc = unsafe { sock_open(AF_INET, SOCK_STREAM, &mut fd) };
     if !errno_ok(rc) {
-        return Err(TransportError::ConnectionRefused(format!("sock_open: {rc}")));
+        return Err(TransportError::ConnectionRefused(format!(
+            "sock_open: {rc}"
+        )));
     }
     let sa = sockaddr_in([0, 0, 0, 0], port);
     let rc = unsafe { sock_bind(fd, &sa, core::mem::size_of::<SockaddrIn>() as u32) };
@@ -170,7 +180,9 @@ pub fn listen(port: u16) -> Result<Listener> {
         unsafe {
             let _ = fd_close(fd);
         }
-        return Err(TransportError::ConnectionRefused(format!("sock_bind: {rc}")));
+        return Err(TransportError::ConnectionRefused(format!(
+            "sock_bind: {rc}"
+        )));
     }
     let rc = unsafe { sock_listen(fd, 16) };
     if !errno_ok(rc) {
@@ -178,22 +190,25 @@ pub fn listen(port: u16) -> Result<Listener> {
         unsafe {
             let _ = fd_close(fd);
         }
-        return Err(TransportError::ConnectionRefused(format!("sock_listen: {rc}")));
+        return Err(TransportError::ConnectionRefused(format!(
+            "sock_listen: {rc}"
+        )));
     }
     Ok(Listener { fd })
 }
 
 impl Listener {
-    /// Accept one inbound connection and return its read/write halves.
-    pub fn accept(&self) -> Result<(Reader, Writer)> {
+    /// Accept one inbound connection and return its socket.
+    pub fn accept(&self) -> Result<Arc<Connection>> {
         let mut flags = 0u16;
         let mut fd = 0u32;
         // SAFETY: host writes the accepted fd to ret_area; flags is read by host.
         let rc = unsafe { sock_accept(self.fd, &mut flags, &mut fd) };
         if !errno_ok(rc) {
-            return Err(TransportError::ConnectionRefused(format!("sock_accept: {rc}")));
+            return Err(TransportError::ConnectionRefused(format!(
+                "sock_accept: {rc}"
+            )));
         }
-        let conn = Rc::new(Connection { fd });
-        Ok((Reader(Rc::clone(&conn)), Writer(conn)))
+        Ok(Arc::new(Connection { fd }))
     }
 }

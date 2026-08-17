@@ -24,7 +24,7 @@ embedded = [
     "dep:embedded-io-async",
 ]
 wasm = []
-embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue"]
+embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue-8"]
 
 [dependencies]
 tokio = { workspace = true, optional = true }

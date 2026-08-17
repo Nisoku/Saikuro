@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use bytes::Bytes;
 use std::path::{Component, Path, PathBuf};
 use tokio::task::spawn_blocking;
@@ -238,6 +239,7 @@ impl KeyValueBackend for FilesystemStorage {
     }
 }
 
+#[async_trait(?Send)]
 impl FileBackend for FilesystemStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let full = safe_join(&self.files_root, path)?;

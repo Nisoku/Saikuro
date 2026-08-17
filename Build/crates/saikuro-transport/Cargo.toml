@@ -22,7 +22,16 @@ native = [
     "dep:tokio-tungstenite",
 ]
 no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std"]
-wasm = ["saikuro-core/wasm", "saikuro-net/wasm", "saikuro-exec/wasm"]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-net/wasm",
+    "saikuro-exec/wasm",
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:web-sys",
+    "dep:send_wrapper",
+    "dep:wasm-bindgen-futures",
+]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-net/embedded",
@@ -30,15 +39,17 @@ embedded = [
     "dep:embedded-io-async",
     "dep:embassy-sync",
 ]
-
 tcp = []
 unix = []
-ws = []
+ws = ["ws-native"]
+ws-native = ["tokio-tungstenite?/connect", "tokio-tungstenite?/handshake"]
+ws-wasm = []
+ws-wasi = ["dep:embedded-websocket", "dep:rand_core_06", "dep:getrandom", "wasi-tcp", "ws"]
 wasm-host = ["wasm"]
-wasi-tcp = ["no_std", "saikuro-exec/no_std", "dep:embedded-io-async"]
+wasi-tcp = ["saikuro-exec/no_std", "dep:embedded-io-async"]
 wasi-host = ["no_std", "saikuro-exec/no_std", "wasi-tcp"]
 wasi-preview2 = ["dep:wasi"]
-wasi-preview1 = []
+wasi-preview1 = ["dep:wasip1"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
@@ -54,16 +65,16 @@ thiserror = { workspace = true }
 tracing = { workspace = true, default-features = false, features = ["log", "attributes"] }
 embedded-io-async = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true }
+embedded-websocket = { workspace = true, optional = true }
+rand_core_06 = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
 
-[target.'cfg(all(target_arch = "wasm32", feature = "wasm"))'.dependencies]
-send_wrapper = { workspace = true }
-wasm-bindgen = { workspace = true }
-js-sys = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true, features = [
+send_wrapper = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "BroadcastChannel",
     "Crypto",
     "MessageEvent",
@@ -74,7 +85,6 @@ web-sys = { workspace = true, features = [
     "BinaryType",
 ] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasi = { workspace = true, optional = true }
 wasip1 = { workspace = true, optional = true }
 

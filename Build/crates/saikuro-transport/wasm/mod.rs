@@ -1,4 +1,4 @@
-#[cfg(feature = "ws")]
+#[cfg(all(feature = "ws", feature = "std"))]
 pub mod websocket;
 
 #[cfg(feature = "wasm-host")]

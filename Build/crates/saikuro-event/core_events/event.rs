@@ -3,7 +3,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::io::{IoError, IoErrorKind};
+use crate::core_events::io::{IoError, IoErrorKind};
 use crate::value::Value;
 
 /// Maximum number of structured context entries an [`ErrorDetail`] or
@@ -112,6 +112,10 @@ pub enum ErrorCode {
     /// A batch item failed to dispatch.
     BatchItemFailed,
 
+    //  Capacity errors
+    /// A fixed-capacity collection reached its compile-time limit.
+    CapacityExceeded,
+
     //  Catch-all
     /// An error category not covered by the above codes.
     Internal,
@@ -174,6 +178,7 @@ impl fmt::Display for ErrorDetail {
 
 /// The main Rust error type for all fallible Saikuro operations.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum SaikuroError {
     // Schema
     #[error("namespace not found: {0}")]
@@ -327,10 +332,10 @@ pub enum SaikuroError {
 
     //  Serialisation
     #[error("msgpack encode error: {0}")]
-    MsgpackEncode(#[from] crate::codec::EncodeError),
+    MsgpackEncode(#[from] crate::core_events::codec::EncodeError),
 
     #[error("msgpack decode error: {0}")]
-    MsgpackDecode(#[from] crate::codec::DecodeError),
+    MsgpackDecode(#[from] crate::core_events::codec::DecodeError),
 
     //  I/O
     #[error("I/O error: {0}")]

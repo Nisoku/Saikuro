@@ -19,16 +19,17 @@ impl<T> Clone for Sender<T> {
 
 impl<T> Sender<T> {
     pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
-        self.inner
-            .send(value)
-            .await
-            .map_err(|e| SendError(e.into_inner()))
+        self.inner.send(value).await.map_err(|e| SendError(e.0))
     }
 
     pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
         self.inner.try_send(value).map_err(|e| match e {
-            tokio::sync::mpsc::TrySendError::Full(v) => TrySendError::Full(v),
-            tokio::sync::mpsc::TrySendError::Closed(v) => TrySendError::Disconnected(v),
+            tokio::sync::mpsc::error::TrySendError::Full(v) => {
+                crate::shared::mpsc::TrySendError::Full(v)
+            }
+            tokio::sync::mpsc::error::TrySendError::Closed(v) => {
+                crate::shared::mpsc::TrySendError::Disconnected(v)
+            }
         })
     }
 

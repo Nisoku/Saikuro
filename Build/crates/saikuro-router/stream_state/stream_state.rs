@@ -9,9 +9,13 @@ use saikuro_exec::{
 /// Result of attempting to deliver one frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeliveryOutcome {
+    /// The item was delivered to its destination queue.
     Delivered,
+    /// The stream ended; no further items are accepted.
     Terminal,
+    /// The stream or connection is closed.
     Closed,
+    /// The item arrived out of expected sequence order.
     OutOfOrder,
 }
 
@@ -29,6 +33,7 @@ pub struct StreamState {
 }
 
 impl StreamState {
+    /// Build a new stream state that forwards delivered items to `item_tx`.
     pub fn new(item_tx: mpsc::Sender<ResponseEnvelope>) -> Arc<Self> {
         Arc::new(Self {
             lifecycle: Mutex::new(Lifecycle::default()),
@@ -36,6 +41,7 @@ impl StreamState {
         })
     }
 
+    /// Deliver a response on this server-to-client stream.
     pub async fn deliver(&self, response: ResponseEnvelope) -> DeliveryOutcome {
         let mut lifecycle = self.lifecycle.lock().await;
         let expected_seq = lifecycle.inbound_seq;
@@ -62,6 +68,7 @@ pub struct ChannelState {
 }
 
 impl ChannelState {
+    /// Build a new bidirectional channel state with inbound/outbound item sinks.
     pub fn new(
         inbound_tx: mpsc::Sender<ResponseEnvelope>,
         outbound_tx: mpsc::Sender<ResponseEnvelope>,
@@ -73,6 +80,7 @@ impl ChannelState {
         })
     }
 
+    /// Deliver a response on this channel in the requested direction.
     pub async fn deliver(&self, response: ResponseEnvelope, inbound: bool) -> DeliveryOutcome {
         let mut lifecycle = self.lifecycle.lock().await;
         let (expected_seq, tx) = if inbound {
@@ -130,10 +138,19 @@ async fn deliver_locked(
 }
 
 /// Thread-safe store for all open stream and channel states.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct StreamStateStore {
     streams: Arc<RwLock<BTreeMap<InvocationId, StreamEntry>>>,
     channels: Arc<RwLock<BTreeMap<InvocationId, ChannelEntry>>>,
+}
+
+impl Default for StreamStateStore {
+    fn default() -> Self {
+        Self {
+            streams: Arc::new(RwLock::new(BTreeMap::new())),
+            channels: Arc::new(RwLock::new(BTreeMap::new())),
+        }
+    }
 }
 
 struct StreamEntry {
@@ -148,10 +165,12 @@ struct ChannelEntry {
 }
 
 impl StreamStateStore {
+    /// Create an empty stream/channel state store.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Insert a new server-to-client stream state.
     pub async fn insert_stream(
         &self,
         id: InvocationId,
@@ -167,6 +186,7 @@ impl StreamStateStore {
         );
     }
 
+    /// Look up the stream state for an invocation id.
     pub async fn get_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
         self.streams
             .read()
@@ -175,6 +195,7 @@ impl StreamStateStore {
             .map(|entry| entry.state.clone())
     }
 
+    /// Remove a stream state, returning it if present.
     pub async fn remove_stream(&self, id: &InvocationId) -> Option<Arc<StreamState>> {
         self.streams
             .write()
@@ -183,6 +204,7 @@ impl StreamStateStore {
             .map(|entry| entry.state)
     }
 
+    /// Remove the stream only if it still matches the given state.
     pub async fn remove_stream_if(&self, id: &InvocationId, state: &Arc<StreamState>) -> bool {
         let mut streams = self.streams.write().await;
         if streams
@@ -196,16 +218,19 @@ impl StreamStateStore {
         }
     }
 
+    /// Take the item receiver half out of the stream state, if present.
     pub async fn take_stream_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
         self.streams
             .write()
+            .await
             .get_mut(id)
             .and_then(|entry| entry.receiver.take())
     }
 
+    /// Insert a new bidirectional channel state.
     pub async fn insert_channel(
         &self,
         id: InvocationId,
@@ -213,7 +238,7 @@ impl StreamStateStore {
         inbound_rx: mpsc::Receiver<ResponseEnvelope>,
         outbound_rx: mpsc::Receiver<ResponseEnvelope>,
     ) {
-        self.channels.write().insert(
+        self.channels.write().await.insert(
             id,
             ChannelEntry {
                 state,
@@ -223,19 +248,27 @@ impl StreamStateStore {
         );
     }
 
+    /// Look up the channel state for an invocation id.
     pub async fn get_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
         self.channels
             .read()
+            .await
             .get(id)
             .map(|entry| entry.state.clone())
     }
 
+    /// Remove a channel state, returning it if present.
     pub async fn remove_channel(&self, id: &InvocationId) -> Option<Arc<ChannelState>> {
-        self.channels.write().remove(id).map(|entry| entry.state)
+        self.channels
+            .write()
+            .await
+            .remove(id)
+            .map(|entry| entry.state)
     }
 
+    /// Remove the channel only if it still matches the given state.
     pub async fn remove_channel_if(&self, id: &InvocationId, state: &Arc<ChannelState>) -> bool {
-        let mut channels = self.channels.write();
+        let mut channels = self.channels.write().await;
         if channels
             .get(id)
             .is_some_and(|entry| Arc::ptr_eq(&entry.state, state))
@@ -247,22 +280,26 @@ impl StreamStateStore {
         }
     }
 
+    /// Take the inbound receiver half out of the channel state, if present.
     pub async fn take_channel_inbound_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
         self.channels
             .write()
+            .await
             .get_mut(id)
             .and_then(|entry| entry.inbound_receiver.take())
     }
 
+    /// Take the outbound receiver half out of the channel state, if present.
     pub async fn take_channel_outbound_receiver(
         &self,
         id: &InvocationId,
     ) -> Option<mpsc::Receiver<ResponseEnvelope>> {
         self.channels
             .write()
+            .await
             .get_mut(id)
             .and_then(|entry| entry.outbound_receiver.take())
     }

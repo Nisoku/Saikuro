@@ -3,6 +3,9 @@
 
 //! Randomness and entropy facade for Saikuro.
 
+#[macro_use]
+extern crate alloc;
+
 #[cfg(any(
     all(
         feature = "native",

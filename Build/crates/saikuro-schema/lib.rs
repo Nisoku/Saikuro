@@ -1,18 +1,31 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 
+//! Schema, capability, and invocation-validation types for the Saikuro runtime.
+
+#[macro_use]
 extern crate alloc;
 
-pub mod engine;
+/// Capability enforcement engine.
+pub mod capability;
+/// Capability enforcement engine (re-exported module path).
+pub use capability::engine as capability_engine;
+/// Schema registry and namespace management.
 pub mod registry;
+/// Invocation validator.
 pub mod validator;
 
-pub use engine::CapabilityEngine;
-pub use registry::{ NamespaceRegistration, SchemaRegistry };
-pub use validator::{ InvocationValidator, ValidationReport };
+pub use capability::engine::CapabilityEngine;
+pub use registry::{NamespaceRegistration, SchemaRegistry};
+pub use validator::{InvocationValidator, ValidationReport};
 
 // Compilation guard: exactly one engine backend must be selected.
-#[cfg(not(any(feature = "native", feature = "no_std", feature = "wasm", feature = "embedded")))]
+#[cfg(not(any(
+    feature = "native",
+    feature = "no_std",
+    feature = "wasm",
+    feature = "embedded"
+)))]
 compile_error!(
     "saikuro-schema: enable exactly one engine feature: native, no_std, wasm, or embedded"
 );

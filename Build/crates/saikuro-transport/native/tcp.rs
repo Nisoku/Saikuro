@@ -1,19 +1,18 @@
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
-use bytes::Bytes;
+use saikuro_net::io::{split, ReadHalf, WriteHalf};
 use saikuro_net::net::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 use tracing::debug;
 
 use crate::shared::{
     error::Result,
-    framing::FramedStream,
     traits::{Transport, TransportConnector, TransportListener},
 };
 
 /// A TCP transport connection.
 pub struct TcpTransport {
-    framed: FramedStream<TcpStream>,
+    stream: TcpStream,
     peer_addr: SocketAddr,
 }
 
@@ -24,10 +23,7 @@ impl TcpTransport {
         // Disable Nagle's algorithm: Saikuro sends complete frames and latency
         // matters more than segment coalescing.
         stream.set_nodelay(true)?;
-        Ok(Self {
-            framed: FramedStream::new(stream),
-            peer_addr,
-        })
+        Ok(Self { stream, peer_addr })
     }
 }
 
@@ -36,15 +32,15 @@ impl Transport for TcpTransport {
     type Receiver = TcpReceiver;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
+        let (read, write) = split(self.stream);
         let peer = self.peer_addr;
-        let (sink, stream) = self.framed.split();
         (
             TcpSender {
-                inner: sink,
+                inner: write,
                 peer_addr: peer,
             },
             TcpReceiver {
-                inner: stream,
+                inner: read,
                 peer_addr: peer,
             },
         )
@@ -57,14 +53,14 @@ impl Transport for TcpTransport {
 
 // Sender / Receiver
 pub struct TcpSender {
-    inner: futures::stream::SplitSink<FramedStream<TcpStream>, Bytes>,
+    inner: WriteHalf<TcpStream>,
     peer_addr: SocketAddr,
 }
 
 impl_native_sender!(TcpSender, peer_addr, "tcp");
 
 pub struct TcpReceiver {
-    inner: futures::stream::SplitStream<FramedStream<TcpStream>>,
+    inner: ReadHalf<TcpStream>,
     peer_addr: SocketAddr,
 }
 

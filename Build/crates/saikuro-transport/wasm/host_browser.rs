@@ -1,6 +1,8 @@
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use async_trait::async_trait;
 use bytes::Bytes;
 use core::fmt::Write;
 use core::time::Duration;
@@ -37,20 +39,23 @@ pub struct BroadcastChannelRecv {
 }
 
 /// The browser `wasm` engine's `WasmHostTransport` concrete type.
-pub type WasmHost = crate::shared::host::WasmHostTransport<BroadcastChannelSend, BroadcastChannelRecv>;
+pub type WasmHost =
+    crate::shared::host::WasmHostTransport<BroadcastChannelSend, BroadcastChannelRecv>;
 
+#[async_trait(?Send)]
 impl HostPipeFactory for BroadcastChannelPipe {
     type Send = BroadcastChannelSend;
     type Recv = BroadcastChannelRecv;
 
     async fn open(channel: &str, role: Role) -> Result<(Self::Send, Self::Recv)> {
         match role {
-            Role::Connect => open_connect(channel),
-            Role::Accept => open_accept(channel),
+            Role::Connect => open_connect(channel).await,
+            Role::Accept => open_accept(channel).await,
         }
     }
 }
 
+#[async_trait(?Send)]
 impl HostPipeSend for BroadcastChannelSend {
     async fn send(&mut self, frame: &[u8]) -> Result<()> {
         trace!(bytes = frame.len(), "wasm-host send");
@@ -58,6 +63,7 @@ impl HostPipeSend for BroadcastChannelSend {
     }
 }
 
+#[async_trait(?Send)]
 impl HostPipeRecv for BroadcastChannelRecv {
     async fn recv(&mut self) -> Result<Option<Vec<u8>>> {
         match self.rx.recv().await {
@@ -91,7 +97,7 @@ async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastC
     let (data_tx, data_rx) = mpsc::channel::<Bytes>(DEFAULT_CHANNEL_CAPACITY);
     let (accept_tx, accept_rx) = oneshot::channel::<()>();
 
-    let handler: Closure<dyn FnMut(MessageEvent)> = Closure::new({
+    let handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>> = SendWrapper::new(Closure::new({
         let data_tx = data_tx;
         let accept_tx = accept_tx;
         let expected = conn_id.clone();
@@ -108,8 +114,8 @@ async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastC
                 let _ = data_tx.try_send(Bytes::from(bytes));
             }
         }
-    });
-    private.set_onmessage(Some(handler.as_ref().unchecked_ref()));
+    }));
+    private.set_onmessage(Some((&*handler).as_ref().unchecked_ref()));
 
     let base = BroadcastChannel::new(channel)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
@@ -119,18 +125,20 @@ async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastC
     drop(base);
 
     match timeout(CONNECT_TIMEOUT, accept_rx.recv()).await {
-        Ok(Some(())) => {
+        Ok(Ok(())) => {
             let send = BroadcastChannelSend {
                 channel: SendWrapper::new(private.clone()),
             };
             let recv = BroadcastChannelRecv {
                 channel: SendWrapper::new(private),
                 rx: data_rx,
-                _handler: SendWrapper::new(handler),
+                _handler: handler,
             };
             Ok((send, recv))
         }
-        Ok(None) => Err(TransportError::ConnectionLost("accept channel closed".into())),
+        Ok(Err(_)) => Err(TransportError::ConnectionLost(
+            "accept channel closed".into(),
+        )),
         Err(_) => Err(TransportError::ConnectionLost("connect timeout".into())),
     }
 }
@@ -140,22 +148,23 @@ async fn open_accept(channel: &str) -> Result<(BroadcastChannelSend, BroadcastCh
     let base = BroadcastChannel::new(channel)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
 
-    let (conn_tx, conn_rx) = mpsc::channel::<String>(
+    let (conn_tx, mut conn_rx) = mpsc::channel::<String>(
         saikuro_exec::ChannelCapacity::try_from(32).expect("32 is a valid channel capacity"),
     );
-    let base_handler: Closure<dyn FnMut(MessageEvent)> = Closure::new({
-        let conn_tx = conn_tx;
-        move |event: MessageEvent| {
-            let data = event.data();
-            if get_field(&data, "type").as_deref() != Some("connect") {
-                return;
+    let base_handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>> =
+        SendWrapper::new(Closure::new({
+            let conn_tx = conn_tx;
+            move |event: MessageEvent| {
+                let data = event.data();
+                if get_field(&data, "type").as_deref() != Some("connect") {
+                    return;
+                }
+                if let Some(id) = get_field(&data, "id") {
+                    let _ = conn_tx.try_send(id);
+                }
             }
-            if let Some(id) = get_field(&data, "id") {
-                let _ = conn_tx.try_send(id);
-            }
-        }
-    });
-    base.set_onmessage(Some(base_handler.as_ref().unchecked_ref()));
+        }));
+    base.set_onmessage(Some((&*base_handler).as_ref().unchecked_ref()));
 
     let conn_id = match conn_rx.recv().await {
         Some(id) => id,
@@ -203,7 +212,9 @@ fn short_id() -> Result<String> {
     let mut buf = [0u8; 16];
     crypto
         .get_random_values_with_u8_array(&mut buf)
-        .map_err(|e| TransportError::ConnectionLost(format!("crypto get_random_values failed: {e:?}")))?;
+        .map_err(|e| {
+            TransportError::ConnectionLost(format!("crypto get_random_values failed: {e:?}"))
+        })?;
     Ok(buf.iter().fold(String::with_capacity(32), |mut s, b| {
         let _ = write!(s, "{:02x}", b);
         s

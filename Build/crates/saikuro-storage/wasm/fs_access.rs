@@ -1,5 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use js_sys::{ArrayBuffer, Uint8Array};
 use std::cell::RefCell;
@@ -409,6 +410,7 @@ impl KeyValueBackend for FsAccessStorage {
     }
 }
 
+#[async_trait(?Send)]
 impl FileBackend for FsAccessStorage {
     async fn read_file(&self, path: &str) -> Result<Bytes> {
         let (dirs, file_name) = navigate_path(path);

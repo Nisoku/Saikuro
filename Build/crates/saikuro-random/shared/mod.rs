@@ -39,10 +39,10 @@ fn keystream_block(
     // chacha20 seeks by byte offset, not by block index.
     let pos = index
         .checked_mul(BLOCK_LEN as u64)
-        .ok_or(SaikuroError::Entropy(format!("DRBG keystream exhausted")))?;
+        .ok_or(SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
     cipher
         .try_seek(pos)
-        .map_err(|_| SaikuroError::Entropy(format!("DRBG keystream exhausted")))?;
+        .map_err(|_| SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
     let mut block = [0u8; BLOCK_LEN];
     cipher.apply_keystream(&mut block);
     Ok(block)
@@ -86,7 +86,7 @@ impl Drbg {
         let end = start
             .checked_add(block_count)
             .filter(|&end| end <= MAX_BLOCKS)
-            .ok_or(SaikuroError::Entropy(format!("DRBG keystream exhausted")))?;
+            .ok_or(SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
         self.counter = end;
         for i in 0..blocks {
             let block = keystream_block(&self.key, &self.nonce, start + i as u64)?;
@@ -182,9 +182,7 @@ pub fn seed_from_slice(seed: &[u8]) -> Result<(), SaikuroError> {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
     {
-        return Err(SaikuroError::Entropy(format!(
-            "DRBG has already been seeded"
-        )));
+        return Err(SaikuroError::Entropy("DRBG has already been seeded".into()));
     }
     for (i, word) in SEED.iter().enumerate() {
         let mut bytes = [0u8; 8];
@@ -229,19 +227,14 @@ fn read_seed() -> ([u8; KEY_LEN], [u8; NONCE_LEN]) {
 
 /// Fill `dest` with cryptographically secure random bytes from the
 /// process-wide DRBG.
-///
-/// On first use, entropy-backed engines (`native`, `wasm`, `no_std`) seed the
-/// DRBG automatically from their platform source, so hosted binaries can call
-/// this without explicit setup. The `embedded` engine has no default source
-/// and returns a [`SaikuroError::Entropy`] until the application calls
-/// [`init_from`].
+#[allow(dead_code)]
 pub fn fill(dest: &mut [u8]) -> Result<(), SaikuroError> {
     if !is_seeded() {
         crate::try_auto_seed()?;
         if !is_seeded() {
-            return Err(SaikuroError::Entropy(format!(
-                "DRBG used before being seeded"
-            )));
+            return Err(SaikuroError::Entropy(
+                "DRBG used before being seeded".into(),
+            ));
         }
     }
     let (key, nonce) = read_seed();
@@ -295,7 +288,7 @@ fn reserve_blocks(blocks: u64) -> Result<u64, SaikuroError> {
         let next = current
             .checked_add(blocks)
             .filter(|&next| next <= MAX_BLOCKS)
-            .ok_or(SaikuroError::Entropy(format!("DRBG keystream exhausted")))?;
+            .ok_or(SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
         match COUNTER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
             Ok(_) => return Ok(current),
             Err(observed) => current = observed,

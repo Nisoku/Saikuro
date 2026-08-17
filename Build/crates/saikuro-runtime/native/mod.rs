@@ -1,43 +1,14 @@
-//! Saikuro Runtime Server (native binary)
-//!
-//! Standalone process that accepts connections from Saikuro adapters over TCP,
-//! WebSocket, and Unix domain sockets. It acts as the central message broker:
-//! adapters announce their capabilities and the runtime routes invocations
-//! among them.
-//!
-//! The engine-agnostic orchestration lives in the `saikuro-runtime` library;
-//! this binary only handles native concerns (CLI, `std::fs` schema loading,
-//! OS signal handling) and drives [`SaikuroRuntime::serve`].
-//!
-//! # Usage
-//!
-//! ```text
-//! saikuro-runtime [OPTIONS]
-//!
-//! Options:
-//!   --schema <PATH>       Load a frozen schema JSON at startup
-//!   --tcp-port <PORT>     Listen for TCP connections (default: 7700)
-//!   --ws-port <PORT>      Listen for WebSocket connections (default: 7701)
-//!   --unix <PATH>         Listen on a Unix domain socket
-//!   --mode <MODE>         Runtime mode: development | production (default: development)
-//!   --log-level <LEVEL>   Log level: error | warn | info | debug | trace (default: info)
-//!   --json-logs           Emit logs as JSON (useful for log aggregation)
-//!   --no-tcp              Disable TCP listener
-//!   --no-ws               Disable WebSocket listener
-//!   ```
-
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
+use crate::config::RuntimeMode;
+use crate::SaikuroRuntime;
 use anyhow::{Context, Result};
 use clap::Parser;
 use saikuro_exec::{signal, spawn, timeout, watch};
-use saikuro_runtime::config::RuntimeMode;
-use saikuro_runtime::SaikuroRuntime;
 use tracing::{error, info, warn};
 
 // CLI
-
 #[derive(Debug, Parser)]
 #[command(
     name = "saikuro-runtime",
@@ -108,7 +79,9 @@ impl From<CliMode> for RuntimeMode {
 
 // Main
 
-fn main() -> Result<()> {
+/// Build the runtime, spawn a serve task per enabled listener, and run until a
+/// shutdown signal arrives. Returns the process exit result.
+pub fn run() -> Result<()> {
     saikuro_exec::block_on(async_main())
 }
 
@@ -137,7 +110,7 @@ async fn async_main() -> Result<()> {
         info!(path = %schema_path.display(), "loaded static schema");
     }
 
-    let runtime = Arc::new(builder.build());
+    let runtime = Arc::new(builder.build().await);
 
     // Set up graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -154,7 +127,7 @@ async fn async_main() -> Result<()> {
             Ok(listener) => {
                 info!(addr = %listener.local_addr(), "TCP listener ready");
                 let rt = runtime.clone();
-                let mut rx = shutdown_rx.clone();
+                let rx = shutdown_rx.clone();
                 serve_tasks.push(spawn(async move {
                     rt.serve(vec![listener], rx).await;
                 }));
@@ -175,7 +148,7 @@ async fn async_main() -> Result<()> {
             Ok(listener) => {
                 info!(addr = %listener.local_addr(), "WebSocket listener ready");
                 let rt = runtime.clone();
-                let mut rx = shutdown_rx.clone();
+                let rx = shutdown_rx.clone();
                 serve_tasks.push(spawn(async move {
                     rt.serve(vec![listener], rx).await;
                 }));
@@ -195,7 +168,7 @@ async fn async_main() -> Result<()> {
             Ok(listener) => {
                 info!(path = %unix_path.display(), "Unix socket listener ready");
                 let rt = runtime.clone();
-                let mut rx = shutdown_rx.clone();
+                let rx = shutdown_rx.clone();
                 serve_tasks.push(spawn(async move {
                     rt.serve(vec![listener], rx).await;
                 }));

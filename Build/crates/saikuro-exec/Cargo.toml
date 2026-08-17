@@ -16,32 +16,38 @@ std = []
 native = ["std", "dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
 no_std = [
     "dep:embassy-executor",
-    "embassy-executor/alloc",
+    "embassy-executor/executor-thread",
     "embassy-executor/arch-spin",
     "dep:embassy-sync",
     "dep:embassy-time",
     "dep:embassy-futures",
     "futures/async-await",
+    "dep:critical-section",
 ]
 wasm = [
     "dep:embassy-executor",
-    "embassy-executor/alloc",
+    "embassy-executor/executor-thread",
     "embassy-executor/arch-wasm",
     "dep:embassy-sync",
     "dep:embassy-time",
+    "embassy-time/wasm",
     "dep:embassy-futures",
     "futures/async-await",
+    "dep:critical-section",
+    "dep:wasm-bindgen-futures",
+    "dep:fluvio-wasm-timer",
 ]
 embedded = [
     "dep:embassy-executor",
-    "embassy-executor/arch-cortex-m",
-    "embassy-executor/task-arena-size-4096",
+    "embassy-executor/executor-thread",
+    "embassy-executor/arch-spin",
     "dep:embassy-sync",
     "dep:embassy-time",
     "dep:embassy-futures",
     "futures/async-await",
+    "dep:critical-section",
 ]
-embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue"]
+embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue-8"]
 
 [dependencies]
 tokio = { workspace = true, optional = true }
@@ -51,6 +57,7 @@ futures = { workspace = true }
 
 embassy-executor = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
+critical-section = { workspace = true, optional = true }
 embassy-time = { workspace = true, optional = true }
 embassy-futures = { workspace = true, optional = true }
 embassy-net = { workspace = true, optional = true, features = [
@@ -59,7 +66,5 @@ embassy-net = { workspace = true, optional = true, features = [
     "tcp",
     "udp",
 ] }
-
-[target.'cfg(all(target_arch = "wasm32", feature = "wasm"))'.dependencies]
-wasm-bindgen-futures = { workspace = true }
-fluvio-wasm-timer = { workspace = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+fluvio-wasm-timer = { workspace = true, optional = true }

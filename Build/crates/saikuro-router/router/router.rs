@@ -67,6 +67,7 @@ impl<S: LogSink + Send + Sync + 'static> Clone for InvocationRouter<S> {
 }
 
 impl InvocationRouter<DefaultRouterSink> {
+    /// Create a router using the default engine log sink.
     pub fn new(providers: ProviderRegistry, config: RouterConfig) -> Self {
         Self::with_log_sink(providers, config, default_sink())
     }
@@ -93,6 +94,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // State store access
+    /// Return a reference to the router's stream/channel state store.
     pub fn streams(&self) -> &StreamStateStore {
         &self.streams
     }
@@ -352,11 +354,8 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         let id = envelope.id;
 
         // args[0] is the LogRecord as a Value::Map.
-        let record = envelope
-            .args
-            .into_iter()
-            .next()
-            .and_then(|v| match LogRecord::try_from(v) {
+        let record = match envelope.args.into_iter().next() {
+            Some(v) => match LogRecord::try_from(v) {
                 Ok(r) => Some(r),
                 Err(e) => {
                     self.log_sink
@@ -372,7 +371,9 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
                         .await;
                     None
                 }
-            });
+            },
+            None => None,
+        };
 
         match record {
             Some(r) => {
@@ -429,6 +430,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         }
     }
 
+    /// Route a client-to-provider channel item (inbound direction).
     pub async fn route_channel_inbound(&self, response: ResponseEnvelope) -> Result<()> {
         self.route_channel_item(response, true).await
     }

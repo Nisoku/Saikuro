@@ -55,5 +55,5 @@ pub mod signal {
 }
 
 // Heap executor harness
-#[cfg(any(feature = "wasm", feature = "no_std"))]
-pub mod exec;
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
+pub(crate) mod exec;
