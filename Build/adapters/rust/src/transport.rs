@@ -7,6 +7,8 @@ use bytes::Bytes;
 use saikuro_transport::DEFAULT_CHANNEL_CAPACITY;
 
 use crate::error::{Error, Result};
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, string::{String, ToString}};
 
 /// A URL-style address string understood by the Saikuro adapter.
 ///
@@ -18,9 +20,15 @@ use crate::error::{Error, Result};
 /// - `wasm-host` (uses default channel "saikuro")
 pub struct Address(pub String);
 
-impl<S: Into<String>> From<S> for Address {
-    fn from(s: S) -> Self {
-        Self(s.into())
+impl From<String> for Address {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for Address {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
     }
 }
 
@@ -28,8 +36,21 @@ impl<S: Into<String>> From<S> for Address {
 ///
 /// This is a thin adapter over the underlying saikuro-transport types so that
 /// the Provider and Client don't need to be generic over the concrete transport.
+// On the browser-wasm engine transports are `!Send` (JS-object backed).
+// On the embedded engine transports are `!Send` (single-threaded, embassy-net
+// types use `RefCell`).  On every other engine (native, wasi) they are `Send`,
+// so the trait's `Send` bound is gated on multi-threaded engines only.
+#[cfg(not(any(feature = "wasm", feature = "embedded")))]
 #[async_trait::async_trait]
 pub trait AdapterTransport: Send + 'static {
+    async fn send(&mut self, frame: Bytes) -> Result<()>;
+    async fn recv(&mut self) -> Result<Option<Bytes>>;
+    async fn close(&mut self) -> Result<()>;
+}
+
+#[cfg(any(feature = "wasm", feature = "embedded"))]
+#[async_trait::async_trait(?Send)]
+pub trait AdapterTransport: 'static {
     async fn send(&mut self, frame: Bytes) -> Result<()>;
     async fn recv(&mut self) -> Result<Option<Bytes>>;
     async fn close(&mut self) -> Result<()>;
@@ -39,7 +60,24 @@ pub trait AdapterTransport: Send + 'static {
 #[cfg(any(feature = "tcp", feature = "unix", feature = "ws", feature = "wasm"))]
 macro_rules! impl_adapter_transport {
     ($Adapter:ident) => {
+        #[cfg(not(any(feature = "wasm", feature = "embedded")))]
         #[async_trait::async_trait]
+        impl AdapterTransport for $Adapter {
+            async fn send(&mut self, frame: Bytes) -> Result<()> {
+                self.sender.send(frame).await.map_err(Into::into)
+            }
+
+            async fn recv(&mut self) -> Result<Option<Bytes>> {
+                self.receiver.recv().await.map_err(Into::into)
+            }
+
+            async fn close(&mut self) -> Result<()> {
+                self.sender.close().await.map_err(Into::into)
+            }
+        }
+
+        #[cfg(any(feature = "wasm", feature = "embedded"))]
+        #[async_trait::async_trait(?Send)]
         impl AdapterTransport for $Adapter {
             async fn send(&mut self, frame: Bytes) -> Result<()> {
                 self.sender.send(frame).await.map_err(Into::into)
@@ -58,14 +96,11 @@ macro_rules! impl_adapter_transport {
 
 // TCP
 
-#[cfg(all(feature = "tcp", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "tcp", feature = "std"))]
 mod tcp_impl {
     use super::*;
-    use saikuro_transport::tcp::{TcpReceiver, TcpSender};
-    use saikuro_transport::{
-        traits::{TransportReceiver, TransportSender},
-        TcpTransport,
-    };
+    use saikuro_transport::tcp::{TcpConnector, TcpReceiver, TcpSender};
+    use saikuro_transport::shared::traits::{TransportConnector, TransportReceiver, TransportSender};
 
     pub struct TcpAdapter {
         sender: TcpSender,
@@ -74,13 +109,11 @@ mod tcp_impl {
 
     impl TcpAdapter {
         pub async fn connect(addr: std::net::SocketAddr) -> Result<Self> {
-            use saikuro_transport::traits::Transport;
-            let transport = TcpTransport::new(
-                saikuro_exec::net::TcpStream::connect(addr)
-                    .await
-                    .map_err(|e| Error::Transport(e.to_string()))?,
-            )
-            .map_err(|e| Error::Transport(e.to_string()))?;
+            use saikuro_transport::shared::traits::Transport;
+            let transport = TcpConnector::new(addr)
+                .connect()
+                .await
+                .map_err(|e| Error::Transport(e.to_string()))?;
             let (sender, receiver) = transport.split();
             Ok(Self { sender, receiver })
         }
@@ -96,15 +129,38 @@ mod tcp_impl {
     }
 }
 
+// Embedded TCP (embassy-net, single-threaded, !Send)
+
+#[cfg(all(feature = "tcp", feature = "embedded"))]
+pub mod tcp_embedded {
+    use super::*;
+    use saikuro_transport::embedded::tcp::{TcpReceiver, TcpSender};
+    use saikuro_transport::shared::traits::{Transport, TransportReceiver, TransportSender};
+
+    pub struct TcpAdapter {
+        sender: TcpSender,
+        receiver: TcpReceiver,
+    }
+
+    impl TcpAdapter {
+        pub fn from_transport(transport: saikuro_transport::embedded::tcp::TcpTransport) -> Self {
+            let (sender, receiver) = transport.split();
+            Self { sender, receiver }
+        }
+    }
+
+    impl_adapter_transport!(TcpAdapter);
+}
+
 // Unix socket
 
 #[cfg(all(feature = "unix", not(target_arch = "wasm32"), target_family = "unix"))]
 mod unix_impl {
     use super::*;
-    use saikuro_transport::traits::TransportConnector;
+    use saikuro_transport::shared::traits::TransportConnector;
     use saikuro_transport::unix::UnixConnector;
     use saikuro_transport::{
-        traits::{Transport, TransportReceiver, TransportSender},
+        shared::traits::{Transport, TransportReceiver, TransportSender},
         unix::{UnixReceiver, UnixSender},
     };
 
@@ -134,11 +190,11 @@ mod unix_impl {
 
 // WebSocket
 
-#[cfg(any(feature = "ws", feature = "wasm"))]
+#[cfg(feature = "ws")]
 mod ws_impl {
     use super::*;
     use saikuro_transport::{
-        traits::{Transport, TransportReceiver, TransportSender},
+        shared::traits::{Transport, TransportReceiver, TransportSender},
         websocket::{WebSocketReceiver, WebSocketSender},
         WebSocketTransport,
     };
@@ -170,23 +226,27 @@ mod ws_impl {
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm_host_impl {
     use super::*;
-    use saikuro_transport::{
-        traits::{Transport, TransportReceiver, TransportSender},
-        wasm_host::{WasmHostConnector, WasmHostReceiver, WasmHostSender},
+    use saikuro_transport::LocalTransport;
+    use saikuro_transport::WasmHostConnector;
+    use saikuro_transport::shared::host::{WasmHostReceiver, WasmHostSender};
+    use saikuro_transport::wasm::host_browser::{
+        BroadcastChannelPipe, BroadcastChannelRecv, BroadcastChannelSend,
+    };
+    use saikuro_transport::shared::traits::{
+        LocalTransportConnector, LocalTransportReceiver, LocalTransportSender,
     };
 
     const DEFAULT_WASM_HOST_CHANNEL: &str = "saikuro";
 
     pub struct WasmHostAdapter {
-        sender: WasmHostSender,
-        receiver: WasmHostReceiver,
+        sender: WasmHostSender<BroadcastChannelSend>,
+        receiver: WasmHostReceiver<BroadcastChannelRecv>,
     }
 
     impl WasmHostAdapter {
         pub async fn connect(channel_name: &str) -> Result<Self> {
-            use saikuro_transport::traits::TransportConnector;
-            let connector = WasmHostConnector::new(channel_name);
-            let transport = connector
+            let connector = WasmHostConnector::<BroadcastChannelPipe>::new(channel_name);
+            let transport: saikuro_transport::wasm::WasmHost = connector
                 .connect()
                 .await
                 .map_err(|e| Error::Transport(e.to_string()))?;
@@ -215,7 +275,7 @@ mod wasm_host_impl {
 /// - `wasm-host` (uses default channel "saikuro")
 pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     if let Some(_rest) = address.strip_prefix("tcp://") {
-        #[cfg(all(feature = "tcp", not(target_arch = "wasm32")))]
+        #[cfg(all(feature = "tcp", feature = "std"))]
         {
             let (host, port_str) = parse_host_port(_rest)?;
             let port: u16 = port_str
@@ -223,18 +283,18 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
                 .map_err(|_| Error::Transport(format!("invalid port in address: {address}")))?;
             return tcp_impl::connect_tcp(&host, port).await;
         }
-        #[cfg(not(all(feature = "tcp", not(target_arch = "wasm32"))))]
+        #[cfg(not(all(feature = "tcp", feature = "std")))]
         return Err(Error::Transport(
-            "TCP transport is not available (feature 'tcp' disabled or wasm32 target)".into(),
+            "TCP transport via address string requires feature 'std' (use tcp_embedded for embedded targets)".into(),
         ));
     }
 
     if address.starts_with("ws://") || address.starts_with("wss://") {
-        #[cfg(any(feature = "ws", feature = "wasm"))]
+        #[cfg(feature = "ws")]
         return ws_impl::connect_ws(address).await;
-        #[cfg(not(any(feature = "ws", feature = "wasm")))]
+        #[cfg(not(feature = "ws"))]
         return Err(Error::Transport(
-            "WebSocket transport is not available (feature 'ws' or 'wasm' disabled)".into(),
+            "WebSocket transport is not available (feature 'ws' disabled)".into(),
         ));
     }
 
@@ -266,8 +326,9 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     )))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "tcp", feature = "std"))]
 fn parse_host_port(s: &str) -> Result<(String, &str)> {
+    use alloc::borrow::ToOwned;
     // Handle IPv6 like [::1]:7700
     if let Some(bracket_end) = s.find(']') {
         let host = &s[1..bracket_end];
@@ -336,7 +397,27 @@ impl InMemoryTransport {
     }
 }
 
+#[cfg(not(any(feature = "wasm", feature = "embedded")))]
 #[async_trait::async_trait]
+impl AdapterTransport for InMemoryTransport {
+    async fn send(&mut self, frame: Bytes) -> Result<()> {
+        self.sender
+            .send(frame)
+            .await
+            .map_err(|_| Error::Transport("in-memory channel closed".into()))
+    }
+
+    async fn recv(&mut self) -> Result<Option<Bytes>> {
+        Ok(self.receiver.recv().await)
+    }
+
+    async fn close(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(any(feature = "wasm", feature = "embedded"))]
+#[async_trait::async_trait(?Send)]
 impl AdapterTransport for InMemoryTransport {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
         self.sender

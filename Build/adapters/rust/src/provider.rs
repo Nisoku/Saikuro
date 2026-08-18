@@ -1,15 +1,21 @@
 //! Saikuro provider: register Rust functions and serve them to the runtime.
 //!
 
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+#[cfg(not(feature = "std"))]
+use alloc::collections::BTreeMap as HashMap;
+use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, borrow::ToOwned};
+use alloc::sync::Arc;
+use core::{future::Future, pin::Pin};
 
 use bytes::Bytes;
 use saikuro_core::{
     envelope::{Envelope, InvocationType, ResponseEnvelope},
-    error::{ErrorCode, ErrorDetail},
     invocation::InvocationId,
     schema::Schema,
 };
+use saikuro_event::{ErrorCode, ErrorDetail};
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -24,10 +30,16 @@ use crate::{
 pub type HandlerArgs = Vec<Value>;
 
 /// A boxed future returned by handler closures.
+#[cfg(not(feature = "wasm"))]
 type HandlerFuture = Pin<Box<dyn Future<Output = Result<Value>> + Send>>;
+#[cfg(feature = "wasm")]
+type HandlerFuture = Pin<Box<dyn Future<Output = Result<Value>>>>;
 
 /// A boxed handler that accepts args and returns a result.
+#[cfg(not(feature = "wasm"))]
 type BoxedHandler = Arc<dyn Fn(HandlerArgs) -> HandlerFuture + Send + Sync>;
+#[cfg(feature = "wasm")]
+type BoxedHandler = Arc<dyn Fn(HandlerArgs) -> HandlerFuture>;
 
 /// Options that can be supplied when registering a function.
 #[derive(Debug, Clone, Default)]
@@ -80,6 +92,7 @@ impl Provider {
     ///     Ok(serde_json::json!(args[0].as_i64().unwrap_or(0) + args[1].as_i64().unwrap_or(0)))
     /// });
     /// ```
+    #[cfg(not(feature = "wasm"))]
     pub fn register<F, Fut>(&mut self, name: impl Into<String>, handler: F)
     where
         F: Fn(HandlerArgs) -> Fut + Send + Sync + 'static,
@@ -88,7 +101,17 @@ impl Provider {
         self.register_with_options(name, handler, RegisterOptions::default());
     }
 
+    #[cfg(feature = "wasm")]
+    pub fn register<F, Fut>(&mut self, name: impl Into<String>, handler: F)
+    where
+        F: Fn(HandlerArgs) -> Fut + 'static,
+        Fut: Future<Output = Result<Value>> + 'static,
+    {
+        self.register_with_options(name, handler, RegisterOptions::default());
+    }
+
     /// Register a function handler with schema metadata.
+    #[cfg(not(feature = "wasm"))]
     pub fn register_with_options<F, Fut>(
         &mut self,
         name: impl Into<String>,
@@ -97,6 +120,28 @@ impl Provider {
     ) where
         F: Fn(HandlerArgs) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<Value>> + Send + 'static,
+    {
+        let name = name.into();
+        debug!(namespace = %self.namespace, function = %name, "registering handler");
+        let boxed: BoxedHandler = Arc::new(move |args| Box::pin(handler(args)));
+        self.handlers.insert(
+            name,
+            HandlerEntry {
+                handler: boxed,
+                schema: options.schema,
+            },
+        );
+    }
+
+    #[cfg(feature = "wasm")]
+    pub fn register_with_options<F, Fut>(
+        &mut self,
+        name: impl Into<String>,
+        handler: F,
+        options: RegisterOptions,
+    ) where
+        F: Fn(HandlerArgs) -> Fut + 'static,
+        Fut: Future<Output = Result<Value>> + 'static,
     {
         let name = name.into();
         debug!(namespace = %self.namespace, function = %name, "registering handler");
@@ -239,7 +284,7 @@ impl Provider {
         // is non-fatal: the provider enters the serve loop regardless so that
         // direct-transport test setups (no runtime) work without a 5-second
         // delay.  A real deployment failure is surfaced via the tracing warning.
-        match saikuro_exec::timeout(std::time::Duration::from_millis(500), transport.recv()).await {
+        match saikuro_exec::timeout(core::time::Duration::from_millis(500), transport.recv()).await {
             Ok(Ok(Some(ack_frame))) => match ResponseEnvelope::from_msgpack(&ack_frame) {
                 Ok(ack) if ack.ok => {
                     debug!(namespace = %self.namespace, "schema announce acknowledged");

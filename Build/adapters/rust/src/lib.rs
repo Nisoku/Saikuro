@@ -5,6 +5,12 @@
 //!
 //! For testing without a live runtime use [`transport::InMemoryTransport`].
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
+
+#[cfg(feature = "std")]
 pub mod client;
 pub mod error;
 pub mod provider;
@@ -15,6 +21,7 @@ pub mod value;
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
 pub mod storage;
 
+#[cfg(feature = "std")]
 pub use client::{Client, ClientOptions, SaikuroChannel, SaikuroStream};
 pub use error::{Error, Result};
 pub use provider::{HandlerArgs, Provider, RegisterOptions};

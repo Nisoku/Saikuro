@@ -4,24 +4,20 @@
 //! invocation IDs as correlation keys.
 //!
 
-use std::{
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use alloc::sync::Arc;
+use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, borrow::ToOwned};
+use core::time::Duration;
 
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures::future::FutureExt;
 use saikuro_core::{
     envelope::{Envelope, InvocationType, ResponseEnvelope, StreamControl},
-    error::{ErrorCode, ErrorDetail},
     invocation::InvocationId,
-    value::Value as CoreValue,
     PROTOCOL_VERSION,
 };
+use saikuro_event::{ErrorCode, ErrorDetail, Value as CoreValue};
 use saikuro_exec::{mpsc, oneshot, sync::Mutex};
 use tracing::{debug, error, warn};
 

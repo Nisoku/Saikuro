@@ -13,38 +13,73 @@ categories = ["network-programming", "asynchronous"]
 [[bin]]
 name = "saikuro-rust-schema"
 path = "src/cli/saikuro_rust_schema.rs"
+required-features = ["native"]
 
 [features]
-default = ["tcp", "unix", "ws", "storage", "saikuro-exec/native"]
+default = ["std", "native", "tcp", "unix", "ws", "storage", "inmemory"]
+std = ["dep:dashmap"]
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-transport/native",
+    "saikuro-random/native",
+    "saikuro-exec/native",
+    "storage",
+    "saikuro-storage/native",
+    "dep:anyhow",
+    "dep:clap",
+    "dep:syn",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-transport/wasm",
+    "saikuro-transport/wasm-host",
+    "saikuro-random/wasm",
+    "saikuro-exec/wasm",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-transport/embedded",
+    "saikuro-random/embedded",
+    "saikuro-exec/embedded",
+]
+no_std = [
+    "saikuro-core/no_std",
+    "saikuro-transport/no_std",
+    "saikuro-random/no_std",
+    "saikuro-exec/no_std",
+]
 tcp  = ["saikuro-transport/tcp"]
 unix = ["saikuro-transport/unix"]
 ws   = ["saikuro-transport/ws"]
 ws-wasi = ["saikuro-transport/ws-wasi"]
-wasm = ["saikuro-transport/wasm", "saikuro-transport/wasm-host", "saikuro-random/wasm", "saikuro-transport/ws"]
-
-# Storage backends: platform-agnostic factory in storage module
-storage         = ["saikuro-storage/native"]
-storage-fs      = ["saikuro-storage/fs"]
-storage-sled    = ["saikuro-storage/sled"]
-storage-sqlite  = ["saikuro-storage/sqlite"]
-wasm-storage    = ["saikuro-storage/wasm"]
+wasi-tcp = ["saikuro-transport/wasi-tcp"]
+wasi-host = ["saikuro-transport/wasi-host"]
+wasi-preview1 = ["saikuro-transport/wasi-preview1"]
+wasi-preview2 = ["saikuro-transport/wasi-preview2"]
+storage = ["saikuro-storage"]
+inmemory = ["saikuro-storage/inmemory"]
+storage-fs = ["saikuro-storage/fs"]
+storage-sled = ["saikuro-storage/sled"]
+storage-sqlite = ["saikuro-storage/sqlite"]
+wasm-storage = ["saikuro-storage/wasm"]
 
 [dependencies]
 saikuro-core      = { path = "../../crates/saikuro-core", default-features = false }
-saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false }
+saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false, optional = true }
 saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
 saikuro-random    = { path = "../../crates/saikuro-random", default-features = false }
+saikuro-event     = { path = "../../crates/saikuro-event", default-features = false }
 
-anyhow      = { workspace = true }
-serde       = { version = "1.0", features = ["derive"] }
-serde_json  = "1.0.150"
-rmp-serde   = "1.3"
-bytes       = "1.7"
+anyhow      = { workspace = true, optional = true }
+serde       = { workspace = true, features = ["derive"] }
+serde_json  = { workspace = true, features = ["alloc"] }
+bytes       = { workspace = true }
 saikuro-exec = { workspace = true, default-features = false }
-futures     = "0.3"
-async-trait = "0.1"
-tracing     = "0.1"
-thiserror   = "2.0"
-dashmap     = "6.2.1"
-clap        = { version = "4.5", features = ["derive"] }
-syn         = { version = "2.0", features = ["full"] }
+futures     = { workspace = true, features = ["async-await"] }
+async-trait = { workspace = true }
+tracing     = { workspace = true }
+thiserror   = { workspace = true }
+dashmap     = { version = "6.2.1", optional = true }
+clap        = { version = "4.5", features = ["derive"], optional = true }
+syn         = { version = "2.0", features = ["full"], optional = true }

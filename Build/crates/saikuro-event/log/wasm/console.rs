@@ -1,4 +1,6 @@
+#[cfg(feature = "console")]
 use serde_json;
+#[cfg(feature = "console")]
 use wasm_bindgen::JsValue;
 
 use crate::record::LogRecord;

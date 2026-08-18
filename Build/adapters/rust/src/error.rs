@@ -1,9 +1,11 @@
 //! Error types for the Saikuro Rust adapter.
 
 use thiserror::Error;
+#[cfg(not(feature = "std"))]
+use alloc::string::{String, ToString};
 
 /// The result type used throughout this crate.
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 /// All errors that can be produced by the Saikuro adapter.
 #[derive(Debug, Error)]

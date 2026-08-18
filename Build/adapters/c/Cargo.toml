@@ -15,20 +15,37 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [[bin]]
 name = "saikuro-c-schema"
 path = "src/cli/saikuro_c_schema.rs"
+required-features = ["native"]
 
 [features]
-default = ["saikuro/default"]
+default = ["std", "native", "saikuro/default"]
+std = ["saikuro/std"]
+no_std = ["saikuro/no_std", "saikuro-exec/no_std"]
+native = ["std", "saikuro/native", "saikuro-exec/native", "dep:tokio", "dep:anyhow", "dep:clap", "dep:regex"]
 wasm = ["saikuro/wasm", "saikuro-exec/wasm"]
+embedded = ["saikuro/embedded", "saikuro-exec/embedded"]
+tcp = ["saikuro/tcp"]
+unix = ["saikuro/unix"]
+ws = ["saikuro/ws"]
+ws-wasi = ["saikuro/ws-wasi"]
+wasi-tcp = ["saikuro/wasi-tcp"]
+wasi-host = ["saikuro/wasi-host"]
+wasi-preview1 = ["saikuro/wasi-preview1"]
+wasi-preview2 = ["saikuro/wasi-preview2"]
 
 [dependencies]
 saikuro = { workspace = true, default-features = false }
-anyhow = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-
 saikuro-exec = { workspace = true, default-features = false }
-clap = { version = "4.5", features = ["derive"] }
-regex = "1.11"
+serde_json = { workspace = true, features = ["alloc"] }
+spin = "0.12.3"
+anyhow = { workspace = true, optional = true }
+clap = { version = "4.5", features = ["derive"], optional = true }
+regex = { version = "1.11", optional = true }
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "rt-multi-thread"]
+optional = true
 
 [dev-dependencies]
 saikuro-core = { workspace = true, features = ["std"] }
