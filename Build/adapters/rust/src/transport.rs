@@ -7,8 +7,16 @@ use bytes::Bytes;
 use saikuro_transport::DEFAULT_CHANNEL_CAPACITY;
 
 use crate::error::{Error, Result};
+
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::{String, ToString}};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+};
+
+#[allow(unused_imports)]
+#[cfg(feature = "std")]
+use std::sync::Arc;
 
 /// A URL-style address string understood by the Saikuro adapter.
 ///
@@ -99,8 +107,10 @@ macro_rules! impl_adapter_transport {
 #[cfg(all(feature = "tcp", feature = "std"))]
 mod tcp_impl {
     use super::*;
+    use saikuro_transport::shared::traits::{
+        TransportConnector, TransportReceiver, TransportSender,
+    };
     use saikuro_transport::tcp::{TcpConnector, TcpReceiver, TcpSender};
-    use saikuro_transport::shared::traits::{TransportConnector, TransportReceiver, TransportSender};
 
     pub struct TcpAdapter {
         sender: TcpSender,
@@ -110,7 +120,8 @@ mod tcp_impl {
     impl TcpAdapter {
         pub async fn connect(addr: std::net::SocketAddr) -> Result<Self> {
             use saikuro_transport::shared::traits::Transport;
-            let transport = TcpConnector::new(addr)
+            let log: Arc<dyn saikuro_event::LogSink> = Arc::new(saikuro_event::NullSink);
+            let transport = TcpConnector::new(addr, log)
                 .connect()
                 .await
                 .map_err(|e| Error::Transport(e.to_string()))?;
@@ -171,7 +182,8 @@ mod unix_impl {
 
     impl UnixAdapter {
         pub async fn connect(path: &str) -> Result<Self> {
-            let connector = UnixConnector::new(path);
+            let log: Arc<dyn saikuro_event::LogSink> = Arc::new(saikuro_event::NullSink);
+            let connector = UnixConnector::new(path, log);
             let transport = connector
                 .connect()
                 .await
@@ -206,7 +218,8 @@ mod ws_impl {
 
     impl WsAdapter {
         pub async fn connect(url: &str) -> Result<Self> {
-            let transport = WebSocketTransport::connect(url)
+            let log: Arc<dyn saikuro_event::LogSink> = Arc::new(saikuro_event::NullSink);
+            let transport = WebSocketTransport::connect(url, log)
                 .await
                 .map_err(|e| Error::Transport(e.to_string()))?;
             let (sender, receiver) = transport.split();
@@ -226,15 +239,15 @@ mod ws_impl {
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 mod wasm_host_impl {
     use super::*;
-    use saikuro_transport::LocalTransport;
-    use saikuro_transport::WasmHostConnector;
     use saikuro_transport::shared::host::{WasmHostReceiver, WasmHostSender};
-    use saikuro_transport::wasm::host_browser::{
-        BroadcastChannelPipe, BroadcastChannelRecv, BroadcastChannelSend,
-    };
     use saikuro_transport::shared::traits::{
         LocalTransportConnector, LocalTransportReceiver, LocalTransportSender,
     };
+    use saikuro_transport::wasm::host_browser::{
+        BroadcastChannelPipe, BroadcastChannelRecv, BroadcastChannelSend,
+    };
+    use saikuro_transport::LocalTransport;
+    use saikuro_transport::WasmHostConnector;
 
     const DEFAULT_WASM_HOST_CHANNEL: &str = "saikuro";
 

@@ -1,7 +1,15 @@
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 #[cfg(feature = "console")]
 use serde_json;
 #[cfg(feature = "console")]
 use wasm_bindgen::JsValue;
+
+use async_trait::async_trait;
 
 use crate::record::LogRecord;
 use crate::sink::LogSink;
@@ -9,6 +17,7 @@ use crate::sink::LogSink;
 /// A sink emitting [`LogRecord`]s as JSON lines on the browser console.
 pub struct ConsoleSink;
 
+#[async_trait]
 impl LogSink for ConsoleSink {
     async fn emit(&self, record: &LogRecord) {
         #[cfg(feature = "console")]

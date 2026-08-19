@@ -5,27 +5,27 @@ use std::thread;
 use std::time::Duration;
 
 use saikuro_c::{
-    saikuro_client_batch_json, saikuro_client_call_json, saikuro_client_cast_json,
-    saikuro_client_close, saikuro_client_connect, saikuro_client_free,
+    saikuro_client_batch_json_async, saikuro_client_call_json_async,
+    saikuro_client_cast_json_async, saikuro_client_close_async, saikuro_client_connect_async,
+    saikuro_client_free,
 };
 use saikuro_core::{
-    capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
     schema::{
         FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
         TypeDescriptor, TypeMap, Visibility,
     },
-    value::Value,
     ResponseEnvelope,
 };
-use saikuro_runtime::runtime::SaikuroRuntime;
+use saikuro_event::Value;
+use saikuro_runtime::SaikuroRuntime;
 use saikuro_transport::tcp::TcpTransportListener;
-use saikuro_transport::traits::TransportListener;
+use saikuro_transport::TransportListener;
 
 mod common;
 
 fn make_schema(namespace: &str, function: &str, n_args: usize) -> Schema {
-    use saikuro_core::schema::ArgumentDescriptor;
+    use saikuro_core::ArgumentDescriptor;
 
     let args = (0..n_args)
         .map(|i| ArgumentDescriptor {
@@ -83,46 +83,52 @@ impl RuntimeHarness {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let worker = thread::spawn(move || {
-            let rt = saikuro_exec::runtime::Builder::new_current_thread()
+            let rt = saikuro_exec::RuntimeBuilder::new_current_thread()
                 .enable_all()
-                .build()
-                .expect("create test runtime");
+                .build();
 
             rt.block_on(async move {
                 let socket = SocketAddr::from(([127, 0, 0, 1], 0));
-                let runtime = Arc::new(SaikuroRuntime::builder().build());
+                let runtime = Arc::new(SaikuroRuntime::builder().build().await);
                 let handle = runtime.handle();
 
-                let mut listener = TcpTransportListener::bind(socket)
-                    .await
-                    .expect("bind TCP listener");
+                let mut listener = TcpTransportListener::bind(
+                    socket,
+                    std::sync::Arc::new(saikuro_event::NullSink),
+                )
+                .await
+                .expect("bind TCP listener");
 
                 let schema = make_schema("math", "add", 2);
                 runtime
                     .handle()
                     .register_schema(schema, "c-test-provider")
+                    .await
                     .expect("register schema");
 
-                runtime.handle().register_fn_provider(
-                    "c-test-provider",
-                    vec!["math".to_owned()],
-                    |env: Envelope| async move {
-                        match env.invocation_type {
-                            InvocationType::Call | InvocationType::Cast => {
-                                let a = match env.args.first() {
-                                    Some(Value::Int(v)) => *v,
-                                    _ => 0,
-                                };
-                                let b = match env.args.get(1) {
-                                    Some(Value::Int(v)) => *v,
-                                    _ => 0,
-                                };
-                                ResponseEnvelope::ok(env.id, Value::Int(a + b))
+                runtime
+                    .handle()
+                    .register_fn_provider(
+                        "c-test-provider",
+                        vec!["math".to_owned()],
+                        |env: Envelope| async move {
+                            match env.invocation_type {
+                                InvocationType::Call | InvocationType::Cast => {
+                                    let a = match env.args.first() {
+                                        Some(Value::Int(v)) => *v,
+                                        _ => 0,
+                                    };
+                                    let b = match env.args.get(1) {
+                                        Some(Value::Int(v)) => *v,
+                                        _ => 0,
+                                    };
+                                    ResponseEnvelope::ok(env.id, Value::Int(a + b))
+                                }
+                                _ => ResponseEnvelope::ok_empty(env.id),
                             }
-                            _ => ResponseEnvelope::ok_empty(env.id),
-                        }
-                    },
-                );
+                        },
+                    )
+                    .await;
 
                 let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
                 let mut peer_counter: u64 = 0;
@@ -135,7 +141,7 @@ impl RuntimeHarness {
                                     handle.accept_transport(
                                         transport,
                                         format!("c-test-peer-{peer_counter}"),
-                                        CapabilitySet::default(),
+                                        saikuro_core::CapabilitySet::default(),
                                     );
                                 }
                                 Ok(None) => break,
@@ -177,19 +183,30 @@ impl Drop for RuntimeHarness {
 fn c_client_call_cast_batch_roundtrip_with_runtime() {
     let runtime = RuntimeHarness::start();
 
-    let address = common::c(&runtime.address);
-    let handle = saikuro_client_connect(address.as_ptr());
+    // Connect.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_connect_async(
+        common::c(&runtime.address).as_ptr(),
+        Some(common::connect_cb),
+        user_data,
+    );
+    let handle = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !handle.is_null(),
         "connect should succeed: {}",
         common::take_error()
     );
 
-    let call_result = saikuro_client_call_json(
+    // Call.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_async(
         handle,
         common::c("math.add").as_ptr(),
         common::c("[2, 40]").as_ptr(),
+        Some(common::result_cb),
+        user_data,
     );
+    let call_result = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !call_result.is_null(),
         "call failed: {}",
@@ -198,20 +215,33 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
     let call_json = common::take_c_string(call_result);
     assert_eq!(call_json, "42");
 
-    let cast_rc = saikuro_client_cast_json(
+    // Cast.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_cast_json_async(
         handle,
         common::c("math.add").as_ptr(),
         common::c("[5, 6]").as_ptr(),
+        Some(common::status_cb),
+        user_data,
     );
+    let cast_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(cast_rc, 0, "cast should succeed: {}", common::take_error());
 
+    // Batch.
     let batch_calls = common::c(
         r#"[
             {"target": "math.add", "args": [1, 2]},
             {"target": "math.add", "args": [3, 4]}
         ]"#,
     );
-    let batch_result = saikuro_client_batch_json(handle, batch_calls.as_ptr());
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_batch_json_async(
+        handle,
+        batch_calls.as_ptr(),
+        Some(common::result_cb),
+        user_data,
+    );
+    let batch_result = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !batch_result.is_null(),
         "batch failed: {}",
@@ -220,7 +250,10 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
     let batch_json = common::take_c_string(batch_result);
     assert_eq!(batch_json, "[3,7]");
 
-    let close_rc = saikuro_client_close(handle);
+    // Close.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_close_async(handle, Some(common::status_cb), user_data);
+    let close_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(
         close_rc,
         0,
@@ -234,15 +267,26 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
 fn c_client_reports_transport_error_when_namespace_missing() {
     let runtime = RuntimeHarness::start();
 
-    let address = common::c(&runtime.address);
-    let handle = saikuro_client_connect(address.as_ptr());
+    // Connect.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_connect_async(
+        common::c(&runtime.address).as_ptr(),
+        Some(common::connect_cb),
+        user_data,
+    );
+    let handle = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(!handle.is_null());
 
-    let missing = saikuro_client_call_json(
+    // Call missing namespace.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_async(
         handle,
         common::c("missing.add").as_ptr(),
         common::c("[1, 1]").as_ptr(),
+        Some(common::result_cb),
+        user_data,
     );
+    let missing = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(missing.is_null(), "unknown namespace call should fail");
 
     let message = common::take_error();
@@ -251,7 +295,10 @@ fn c_client_reports_transport_error_when_namespace_missing() {
         "unexpected error message: {message}"
     );
 
-    let close_rc = saikuro_client_close(handle);
+    // Close.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_close_async(handle, Some(common::status_cb), user_data);
+    let close_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(
         close_rc,
         0,

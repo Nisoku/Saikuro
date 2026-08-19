@@ -2,34 +2,26 @@
 
 use bytes::Bytes;
 use saikuro_core::{
-    capability::{ CapabilitySet, CapabilityToken },
-    envelope::{ Envelope, InvocationType },
+    capability::{CapabilitySet, CapabilityToken},
+    envelope::{Envelope, InvocationType},
     schema::{
-        FunctionMap,
-        FunctionSchema,
-        NamespaceMap,
-        NamespaceSchema,
-        PrimitiveType,
-        Schema,
-        TypeDescriptor,
-        TypeMap,
-        Visibility,
+        FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
+        TypeDescriptor, TypeMap, Visibility,
     },
     value::Value,
-    InvocationId,
-    ResponseEnvelope,
-    PROTOCOL_VERSION,
+    InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
-use saikuro_router::{ provider::ProviderRegistry, router::{ InvocationRouter, RouterConfig } };
+use saikuro_router::{
+    provider::ProviderRegistry,
+    router::{InvocationRouter, RouterConfig},
+};
 use saikuro_runtime::connection::ConnectionHandler;
 use saikuro_schema::{
-    capability_engine::CapabilityEngine,
-    registry::SchemaRegistry,
-    validator::InvocationValidator,
+    capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
 use saikuro_transport::{
     memory::MemoryTransport,
-    traits::{ Transport, TransportReceiver, TransportSender },
+    traits::{Transport, TransportReceiver, TransportSender},
 };
 
 // Helpers
@@ -37,51 +29,66 @@ use saikuro_transport::{
 fn build_schema() -> Schema {
     let mut functions = FunctionMap::new();
     functions
-        .insert("public_fn".to_owned(), FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Public,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        })
+        .insert(
+            "public_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Public,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
         .ok();
     functions
-        .insert("internal_fn".to_owned(), FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Internal,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        })
+        .insert(
+            "internal_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Internal,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
         .ok();
     functions
-        .insert("private_fn".to_owned(), FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Private,
-            capabilities: vec![],
-            idempotent: false,
-            doc: None,
-        })
+        .insert(
+            "private_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Private,
+                capabilities: vec![],
+                idempotent: false,
+                doc: None,
+            },
+        )
         .ok();
     functions
-        .insert("guarded_fn".to_owned(), FunctionSchema {
-            args: vec![],
-            returns: TypeDescriptor::primitive(PrimitiveType::Unit),
-            visibility: Visibility::Public,
-            capabilities: vec![CapabilityToken::new("special.cap")],
-            idempotent: false,
-            doc: None,
-        })
+        .insert(
+            "guarded_fn".to_owned(),
+            FunctionSchema {
+                args: vec![],
+                returns: TypeDescriptor::primitive(PrimitiveType::Unit),
+                visibility: Visibility::Public,
+                capabilities: vec![CapabilityToken::new("special.cap")],
+                idempotent: false,
+                doc: None,
+            },
+        )
         .ok();
     let mut namespaces = NamespaceMap::new();
     namespaces
-        .insert("svc".to_owned(), NamespaceSchema {
-            functions: Box::new(functions),
-            doc: None,
-        })
+        .insert(
+            "svc".to_owned(),
+            NamespaceSchema {
+                functions: Box::new(functions),
+                doc: None,
+            },
+        )
         .ok();
     Schema {
         version: 1,
@@ -108,7 +115,7 @@ async fn run_and_collect(
     schema_registry: SchemaRegistry,
     peer_capabilities: CapabilitySet,
     sandbox: bool,
-    envelope: Envelope
+    envelope: Envelope,
 ) -> Vec<Bytes> {
     let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
     let (handler_sender, handler_receiver) = handler_transport.split();
@@ -194,11 +201,13 @@ fn sandbox_filtered_schema_excludes_internal_functions() {
         let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
         let schema_value = push.args.into_iter().next().expect("args[0] must exist");
         let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-        let filtered: Schema = rmp_serde
-            ::from_slice(&schema_bytes)
-            .expect("decode filtered schema");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
-        let svc = filtered.namespaces.get("svc").expect("svc namespace must be present");
+        let svc = filtered
+            .namespaces
+            .get("svc")
+            .expect("svc namespace must be present");
         assert!(
             !svc.functions.contains_key("internal_fn"),
             "Internal functions must be excluded from sandbox schema"
@@ -220,9 +229,8 @@ fn sandbox_filtered_schema_excludes_private_functions() {
         let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
         let schema_value = push.args.into_iter().next().expect("args[0]");
         let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-        let filtered: Schema = rmp_serde
-            ::from_slice(&schema_bytes)
-            .expect("decode filtered schema");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
         let svc = filtered.namespaces.get("svc").expect("svc namespace");
         assert!(
@@ -246,9 +254,8 @@ fn sandbox_filtered_schema_includes_public_no_cap_functions() {
         let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
         let schema_value = push.args.into_iter().next().expect("args[0]");
         let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-        let filtered: Schema = rmp_serde
-            ::from_slice(&schema_bytes)
-            .expect("decode filtered schema");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
         let svc = filtered.namespaces.get("svc").expect("svc namespace");
         assert!(
@@ -273,9 +280,8 @@ fn sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for() {
         let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
         let schema_value = push.args.into_iter().next().expect("args[0]");
         let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-        let filtered: Schema = rmp_serde
-            ::from_slice(&schema_bytes)
-            .expect("decode filtered schema");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
         let svc = filtered.namespaces.get("svc").expect("svc namespace");
         assert!(
@@ -300,9 +306,8 @@ fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() {
         let push: Envelope = rmp_serde::from_slice(&frames[1]).expect("decode pushed announce");
         let schema_value = push.args.into_iter().next().expect("args[0]");
         let schema_bytes = rmp_serde::to_vec_named(&schema_value).expect("re-encode");
-        let filtered: Schema = rmp_serde
-            ::from_slice(&schema_bytes)
-            .expect("decode filtered schema");
+        let filtered: Schema =
+            rmp_serde::from_slice(&schema_bytes).expect("decode filtered schema");
 
         let svc = filtered.namespaces.get("svc").expect("svc namespace");
         assert!(
@@ -340,7 +345,9 @@ fn sandbox_handler_denies_internal_function_invocation() {
         let schema = build_schema();
 
         // Pre-register the schema so the validator can find it.
-        registry.merge_schema(schema.clone(), "test-provider").expect("merge schema");
+        registry
+            .merge_schema(schema.clone(), "test-provider")
+            .expect("merge schema");
 
         // Build the Invoke envelope for the internal function.
         let invoke_env = Envelope {
@@ -360,7 +367,10 @@ fn sandbox_handler_denies_internal_function_invocation() {
 
         assert_eq!(frames.len(), 1);
         let resp = ResponseEnvelope::from_msgpack(&frames[0]).expect("decode response");
-        assert!(!resp.ok, "internal function invocation must be denied in sandbox mode");
+        assert!(
+            !resp.ok,
+            "internal function invocation must be denied in sandbox mode"
+        );
         let err = resp.error.expect("error detail must be present");
         assert_eq!(
             err.code,

@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::level::LogLevel;
 use crate::record::LogRecord;
 use crate::sink::LogSink;
@@ -6,6 +8,7 @@ use crate::sink::LogSink;
 /// level.
 pub struct TracingSink;
 
+#[async_trait]
 impl LogSink for TracingSink {
     async fn emit(&self, record: &LogRecord) {
         let line = format!("[{}] {}", record.name, record.msg);

@@ -42,8 +42,10 @@ native = [
     "saikuro-random/native",
     "saikuro-event/native",
     "saikuro-event/stderr",
+    "saikuro-event/tracing",
     "dep:anyhow",
     "dep:clap",
+    "dep:tracing",
     "dep:tracing-subscriber",
 ]
 no_std = [
@@ -105,15 +107,16 @@ saikuro-event = { path = "../saikuro-event", default-features = false }
 
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
-bytes = { workspace = true, default-features = false }
+bytes = { workspace = true, default-features = false, features = ["extra-platforms"] }
 async-trait = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true, default-features = false, features = [
     "log",
     "attributes",
-] }
+], optional = true }
 spin = { workspace = true }
 portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
 
 wasi = { workspace = true, optional = true }
 embassy-executor = { workspace = true, optional = true }

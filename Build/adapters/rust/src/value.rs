@@ -15,10 +15,7 @@ pub type Value = serde_json::Value;
 pub fn core_to_json(v: saikuro_event::Value) -> Value {
     match serde_json::to_value(&v) {
         Ok(j) => j,
-        Err(e) => {
-            tracing::warn!(error = %e, "core_to_json serialization failed");
-            Value::Null
-        }
+        Err(_) => Value::Null,
     }
 }
 
@@ -26,9 +23,6 @@ pub fn core_to_json(v: saikuro_event::Value) -> Value {
 pub fn json_to_core(v: Value) -> saikuro_event::Value {
     match serde_json::from_value(v) {
         Ok(c) => c,
-        Err(e) => {
-            tracing::warn!(error = %e, "json_to_core deserialization failed");
-            saikuro_event::Value::Null
-        }
+        Err(_) => saikuro_event::Value::Null,
     }
 }

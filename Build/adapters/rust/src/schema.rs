@@ -3,12 +3,12 @@
 //! Used by [`Provider`](crate::Provider) to construct the schema announcement
 //! envelope that it sends to the runtime when it first connects.
 
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use saikuro_core::schema::{

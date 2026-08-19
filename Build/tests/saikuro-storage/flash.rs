@@ -72,8 +72,16 @@ mod mock {
         }
 
         async fn write(&self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
-            assert_eq!(offset as usize % WRITE_SIZE, 0, "write must be word-aligned");
-            assert_eq!(bytes.len() % WRITE_SIZE, 0, "write length must be a word multiple");
+            assert_eq!(
+                offset as usize % WRITE_SIZE,
+                0,
+                "write must be word-aligned"
+            );
+            assert_eq!(
+                bytes.len() % WRITE_SIZE,
+                0,
+                "write length must be a word multiple"
+            );
             let mut cells = self.cells.borrow_mut();
             let mut written = self.written.borrow_mut();
             for (i, &b) in bytes.iter().enumerate() {
@@ -378,7 +386,10 @@ fn quota_exceeded_when_region_full_then_recoverable() {
             }
             assert!(count < 1000, "never hit the quota");
         }
-        assert!(count >= 5, "expected a handful of items before full, got {count}");
+        assert!(
+            count >= 5,
+            "expected a handful of items before full, got {count}"
+        );
         // Freeing space makes the region writable again.
         for i in 0..count / 2 {
             store.delete("ns", &format!("k{i}")).await.unwrap();

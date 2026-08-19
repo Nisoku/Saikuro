@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use bytes::Bytes;
 use dashmap::DashMap;
-use tracing::debug;
+use saikuro_event::{LogLevel, LogRecord, LogSink};
 
 use crate::config::StorageConfig;
 use crate::traits::{KeyValueBackend, StorageBackend};
@@ -18,27 +18,58 @@ type NamespaceStore = DashMap<String, Bytes>;
 pub struct InMemoryStorage {
     config: StorageConfig,
     namespaces: DashMap<String, Arc<NamespaceStore>>,
+    log: Arc<dyn LogSink>,
 }
 
 impl InMemoryStorage {
     /// Create a new in-memory storage backend with default configuration.
     pub fn new() -> Self {
-        Self::with_config(StorageConfig::default())
+        Self {
+            config: StorageConfig::default(),
+            namespaces: DashMap::new(),
+            log: Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn LogSink>),
+        }
+    }
+
+    /// Create a new in-memory storage backend with a custom log sink.
+    pub fn with_log(log: Arc<dyn LogSink>) -> Self {
+        Self {
+            config: StorageConfig::default(),
+            namespaces: DashMap::new(),
+            log,
+        }
     }
 
     /// Create a new in-memory storage backend with custom configuration.
-    pub fn with_config(config: StorageConfig) -> Self {
+    pub async fn with_config(config: StorageConfig, log: Arc<dyn LogSink>) -> Self {
         let namespaces = DashMap::new();
 
         if config.cleanup != crate::config::CleanupPolicy::Never {
-            debug!("in-memory backend does not enforce cleanup (TTL/Age/LRU); configured cleanup settings are ignored");
+            let record = LogRecord::now(
+                LogLevel::Debug,
+                "saikuro.storage.inmemory",
+                "in-memory backend does not enforce cleanup (TTL/Age/LRU); configured cleanup settings are ignored",
+            );
+            log.emit(&record).await;
         }
-        debug!(
-            persistence = ?config.persistence,
-            "in-memory storage backend initialized"
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.storage.inmemory",
+            "in-memory storage backend initialized",
         );
+        record.set_context("persistence", alloc::format!("{:?}", config.persistence));
+        log.emit(&record).await;
 
-        Self { config, namespaces }
+        Self {
+            config,
+            namespaces,
+            log,
+        }
+    }
+
+    /// Return a reference to the log sink for this storage backend.
+    pub fn log(&self) -> &Arc<dyn LogSink> {
+        &self.log
     }
 
     /// Prefix a logical namespace name with the configured prefix.

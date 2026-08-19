@@ -8,7 +8,6 @@ use core::fmt::Write;
 use core::time::Duration;
 use js_sys::{ArrayBuffer, Reflect, Uint8Array};
 use send_wrapper::SendWrapper;
-use tracing::trace;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{BroadcastChannel, Crypto, MessageEvent};
 
@@ -58,7 +57,6 @@ impl HostPipeFactory for BroadcastChannelPipe {
 #[async_trait(?Send)]
 impl HostPipeSend for BroadcastChannelSend {
     async fn send(&mut self, frame: &[u8]) -> Result<()> {
-        trace!(bytes = frame.len(), "wasm-host send");
         send_buffer(&self.channel, frame)
     }
 }
@@ -67,14 +65,8 @@ impl HostPipeSend for BroadcastChannelSend {
 impl HostPipeRecv for BroadcastChannelRecv {
     async fn recv(&mut self) -> Result<Option<Vec<u8>>> {
         match self.rx.recv().await {
-            Some(bytes) => {
-                trace!(bytes = bytes.len(), "wasm-host recv");
-                Ok(Some(bytes.to_vec()))
-            }
-            None => {
-                trace!("wasm-host channel closed");
-                Ok(None)
-            }
+            Some(bytes) => Ok(Some(bytes.to_vec())),
+            None => Ok(None),
         }
     }
 }

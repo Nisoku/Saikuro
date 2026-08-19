@@ -1,13 +1,21 @@
 //! Saikuro provider: register Rust functions and serve them to the runtime.
 //!
 
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
-use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, borrow::ToOwned};
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::{future::Future, pin::Pin};
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 use bytes::Bytes;
 use saikuro_core::{
@@ -15,8 +23,7 @@ use saikuro_core::{
     invocation::InvocationId,
     schema::Schema,
 };
-use saikuro_event::{ErrorCode, ErrorDetail};
-use tracing::{debug, error, info, warn};
+use saikuro_event::{ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink};
 
 use crate::{
     error::{Error, Result},
@@ -61,6 +68,7 @@ pub struct Provider {
     namespace: String,
     handlers: HashMap<String, HandlerEntry>,
     extra_namespaces: HashMap<String, NamespaceSchema>,
+    log: Arc<dyn LogSink>,
 }
 
 impl Provider {
@@ -70,7 +78,14 @@ impl Provider {
             namespace: namespace.into(),
             handlers: HashMap::new(),
             extra_namespaces: HashMap::new(),
+            log: Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn LogSink>),
         }
+    }
+
+    /// Set the log sink for this provider.
+    pub fn with_log_sink(mut self, log: Arc<dyn LogSink>) -> Self {
+        self.log = log;
+        self
     }
 
     /// The namespace this provider publishes under.
@@ -81,17 +96,6 @@ impl Provider {
     // Registration
 
     /// Register a function handler.
-    ///
-    /// The closure receives a `Vec<Value>` (JSON values) and must return a
-    /// `Future<Output = Result<Value>>`.
-    ///
-    /// ```no_run
-    /// # use saikuro::{Provider, Result};
-    /// # let mut provider = Provider::new("math");
-    /// provider.register("add", |args: Vec<serde_json::Value>| async move {
-    ///     Ok(serde_json::json!(args[0].as_i64().unwrap_or(0) + args[1].as_i64().unwrap_or(0)))
-    /// });
-    /// ```
     #[cfg(not(feature = "wasm"))]
     pub fn register<F, Fut>(&mut self, name: impl Into<String>, handler: F)
     where
@@ -122,8 +126,9 @@ impl Provider {
         Fut: Future<Output = Result<Value>> + Send + 'static,
     {
         let name = name.into();
-        debug!(namespace = %self.namespace, function = %name, "registering handler");
-        let boxed: BoxedHandler = Arc::new(move |args| Box::pin(handler(args)));
+        let handler = move |args| Box::pin(handler(args)) as HandlerFuture;
+        let boxed: BoxedHandler =
+            Arc::from(Box::new(handler) as Box<dyn Fn(HandlerArgs) -> HandlerFuture + Send + Sync>);
         self.handlers.insert(
             name,
             HandlerEntry {
@@ -144,8 +149,9 @@ impl Provider {
         Fut: Future<Output = Result<Value>> + 'static,
     {
         let name = name.into();
-        debug!(namespace = %self.namespace, function = %name, "registering handler");
-        let boxed: BoxedHandler = Arc::new(move |args| Box::pin(handler(args)));
+        let handler = move |args| Box::pin(handler(args)) as HandlerFuture;
+        let boxed: BoxedHandler =
+            Arc::from(Box::new(handler) as Box<dyn Fn(HandlerArgs) -> HandlerFuture>);
         self.handlers.insert(
             name,
             HandlerEntry {
@@ -181,30 +187,56 @@ impl Provider {
     /// connection is closed or an unrecoverable error occurs.
     pub async fn serve(self, address: impl AsRef<str>) -> Result<()> {
         let addr = address.as_ref();
-        info!(namespace = %self.namespace, address = %addr, "connecting to runtime");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.rust.provider",
+                "connecting to runtime",
+            );
+            record.set_context("namespace", self.namespace.clone());
+            record.set_context("address", addr.to_owned());
+            self.log.emit(&record).await;
+        }
         let transport = connect(addr).await?;
         self.serve_on(transport).await
     }
 
     /// Serve on an already-connected transport.
     pub async fn serve_on(self, mut transport: Box<dyn AdapterTransport>) -> Result<()> {
-        // Announce schema.
         self.announce(&mut *transport).await?;
 
-        // Serve loop.
-        info!(namespace = %self.namespace, "provider ready, entering serve loop");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.rust.provider",
+                "provider ready, entering serve loop",
+            );
+            record.set_context("namespace", self.namespace.clone());
+            self.log.emit(&record).await;
+        }
         let handlers = Arc::new(self.handlers);
         let namespace = Arc::new(self.namespace);
+        let log = self.log.clone();
 
         loop {
             let frame = match transport.recv().await {
                 Ok(Some(f)) => f,
                 Ok(None) => {
-                    info!(namespace = %namespace, "runtime closed connection");
+                    let mut record = LogRecord::now(
+                        LogLevel::Info,
+                        "saikuro.rust.provider",
+                        "runtime closed connection",
+                    );
+                    record.set_context("namespace", namespace.to_string());
+                    log.emit(&record).await;
                     break;
                 }
                 Err(e) => {
-                    error!(namespace = %namespace, error = %e, "recv error");
+                    let mut record =
+                        LogRecord::now(LogLevel::Error, "saikuro.rust.provider", "recv error");
+                    record.set_context("namespace", namespace.to_string());
+                    record.set_context("error", alloc::format!("{e}"));
+                    log.emit(&record).await;
                     break;
                 }
             };
@@ -212,31 +244,36 @@ impl Provider {
             let envelope = match Envelope::from_msgpack(&frame) {
                 Ok(e) => e,
                 Err(e) => {
-                    warn!(error = %e, "malformed inbound envelope, skipping");
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "malformed inbound envelope, skipping",
+                    );
+                    record.set_context("error", alloc::format!("{e}"));
+                    log.emit(&record).await;
                     continue;
                 }
             };
 
-            // We handle dispatch inline (sequential per connection) because the
-            // transport is not Clone.  Handlers that need true concurrency should
-            // use the runtime's in-process provider API instead.
             match envelope.invocation_type {
                 InvocationType::Call => {
-                    dispatch_call(envelope, &handlers, &mut *transport).await;
+                    dispatch_call(envelope, &handlers, &mut *transport, &*log).await;
                 }
                 InvocationType::Cast => {
-                    // Fire-and-forget: dispatch the handler but send no response.
-                    dispatch_cast(envelope, &handlers).await;
+                    dispatch_cast(envelope, &handlers, &*log).await;
                 }
                 InvocationType::Batch => {
-                    dispatch_batch(envelope, &handlers, &mut *transport).await;
+                    dispatch_batch(envelope, &handlers, &mut *transport, &*log).await;
                 }
                 other => {
-                    warn!(
-                        invocation_type = %other,
-                        target = %envelope.target,
-                        "provider received unsupported invocation type, skipping"
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "unsupported invocation type",
                     );
+                    record.set_context("invocation_type", alloc::format!("{other}"));
+                    record.set_context("target", envelope.target.clone());
+                    log.emit(&record).await;
                 }
             }
         }
@@ -248,19 +285,29 @@ impl Provider {
     // Announce
 
     async fn announce(&self, transport: &mut dyn AdapterTransport) -> Result<()> {
-        // A capacity overflow here means the announcement would be silently
-        // truncated; fail the announce instead of publishing a partial schema.
         let schema = match self.build_schema() {
             Ok(schema) => schema,
             Err(e) => {
-                warn!(error = %e, "failed to build schema announcement");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.rust.provider",
+                    "failed to build schema announcement",
+                );
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
                 return Err(e);
             }
         };
         let schema_value = match serde_json::to_value(&schema) {
             Ok(v) => json_to_core(v),
             Err(e) => {
-                warn!(error = %e, "failed to serialize schema for announcement");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.rust.provider",
+                    "failed to serialize schema for announcement",
+                );
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
                 return Err(Error::Codec(e.to_string()));
             }
         };
@@ -269,55 +316,97 @@ impl Provider {
         let frame = match announce_env.to_msgpack() {
             Ok(b) => Bytes::from(b),
             Err(e) => {
-                warn!(error = %e, "failed to encode announce envelope");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.rust.provider",
+                    "failed to encode announce envelope",
+                );
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
                 return Err(Error::Codec(e.to_string()));
             }
         };
 
         if let Err(e) = transport.send(frame).await {
-            warn!(error = %e, "failed to send schema announce");
+            let mut record = LogRecord::now(
+                LogLevel::Warn,
+                "saikuro.rust.provider",
+                "failed to send schema announce",
+            );
+            record.set_context("error", alloc::format!("{e}"));
+            self.log.emit(&record).await;
             return Err(Error::Transport(e.to_string()));
         }
 
-        // Wait for the runtime ack.  The runtime must reply with ok_empty
-        // before the provider can start serving; a timed-out or rejected ack
-        // is non-fatal: the provider enters the serve loop regardless so that
-        // direct-transport test setups (no runtime) work without a 5-second
-        // delay.  A real deployment failure is surfaced via the tracing warning.
-        match saikuro_exec::timeout(core::time::Duration::from_millis(500), transport.recv()).await {
+        match saikuro_exec::timeout(core::time::Duration::from_millis(500), transport.recv()).await
+        {
             Ok(Ok(Some(ack_frame))) => match ResponseEnvelope::from_msgpack(&ack_frame) {
                 Ok(ack) if ack.ok => {
-                    debug!(namespace = %self.namespace, "schema announce acknowledged");
+                    let mut record = LogRecord::now(
+                        LogLevel::Debug,
+                        "saikuro.rust.provider",
+                        "schema announce acknowledged",
+                    );
+                    record.set_context("namespace", self.namespace.clone());
+                    self.log.emit(&record).await;
                 }
                 Ok(_) => {
-                    warn!(namespace = %self.namespace, "schema announce rejected by runtime");
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "schema announce rejected by runtime",
+                    );
+                    record.set_context("namespace", self.namespace.clone());
+                    self.log.emit(&record).await;
                 }
                 Err(e) => {
-                    warn!(error = %e, "could not decode schema announce ack");
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "could not decode schema announce ack",
+                    );
+                    record.set_context("error", alloc::format!("{e}"));
+                    self.log.emit(&record).await;
                 }
             },
             Ok(Ok(None)) => {
-                warn!(namespace = %self.namespace, "transport closed after schema announce");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.rust.provider",
+                    "transport closed after schema announce",
+                );
+                record.set_context("namespace", self.namespace.clone());
+                self.log.emit(&record).await;
             }
             Ok(Err(e)) => {
-                warn!(error = %e, "error receiving schema announce ack");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.rust.provider",
+                    "error receiving schema announce ack",
+                );
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
             }
             Err(_) => {
-                // Ack timed out.  Acceptable for direct-transport test setups;
-                // in production this means the runtime is unresponsive.
-                debug!(namespace = %self.namespace, "schema announce ack timed out, continuing");
+                let mut record = LogRecord::now(
+                    LogLevel::Debug,
+                    "saikuro.rust.provider",
+                    "schema announce ack timed out, continuing",
+                );
+                record.set_context("namespace", self.namespace.clone());
+                self.log.emit(&record).await;
             }
         }
 
         Ok(())
     }
 }
-// Dispatch helpers
-/// Dispatch a `Call` envelope, send the response (ok or error) to the runtime.
+
 async fn dispatch_call(
     envelope: Envelope,
     handlers: &HashMap<String, HandlerEntry>,
     transport: &mut dyn AdapterTransport,
+    log: &dyn LogSink,
 ) {
     let id = envelope.id;
     let target = envelope.target.clone();
@@ -343,12 +432,9 @@ async fn dispatch_call(
     match handler(args).await {
         Ok(result) => {
             let response = ResponseEnvelope::ok(id, json_to_core(result));
-            send_response(transport, &response).await;
+            send_response(transport, &response, log).await;
         }
         Err(Error::Remote { code, message, .. }) => {
-            // Re-map the adapter's Remote error back onto the wire.  The code
-            // is a PascalCase string from the remote side; round-trip it through
-            // serde so unknown codes fall back to Internal.
             let error_code = parse_error_code(&code);
             send_error(transport, id, error_code, message).await;
         }
@@ -358,40 +444,37 @@ async fn dispatch_call(
     }
 }
 
-/// Dispatch a `Cast` envelope.  Runs the handler but never sends a response.
-async fn dispatch_cast(envelope: Envelope, handlers: &HashMap<String, HandlerEntry>) {
+async fn dispatch_cast(
+    envelope: Envelope,
+    handlers: &HashMap<String, HandlerEntry>,
+    log: &dyn LogSink,
+) {
     let fn_name = local_name(&envelope.target);
     let entry = match handlers.get(fn_name) {
         Some(e) => e,
-        None => {
-            // No handler: silently ignore.  Casts are fire-and-forget; the
-            // caller does not expect a response or an error.
-            debug!(target = %envelope.target, "cast: no handler registered, ignoring");
-            return;
-        }
+        None => return,
     };
 
     let args: Vec<Value> = envelope.args.into_iter().map(core_to_json).collect();
     let handler = entry.handler.clone();
 
     if let Err(e) = handler(args).await {
-        // Log the error but do not surface it to the caller.
-        warn!(target = %envelope.target, error = %e, "cast handler returned error");
+        let mut record = LogRecord::now(
+            LogLevel::Warn,
+            "saikuro.rust.provider",
+            "cast handler returned error",
+        );
+        record.set_context("target", envelope.target.clone());
+        record.set_context("error", alloc::format!("{e}"));
+        log.emit(&record).await;
     }
 }
 
-/// Dispatch a `Batch` envelope.
-///
-/// Each item is dispatched in order.  Items that fail produce a null result
-/// entry in the array; a structured per-item error envelope is not part of the
-/// current batch wire format.  The batch as a whole always returns `ok`.
-///
-/// Items that are not of type `Call` (e.g. casts nested in a batch) are
-/// executed but produce `null` in the result array.
 async fn dispatch_batch(
     envelope: Envelope,
     handlers: &HashMap<String, HandlerEntry>,
     transport: &mut dyn AdapterTransport,
+    log: &dyn LogSink,
 ) {
     use saikuro_event::Value as CoreValue;
 
@@ -423,47 +506,37 @@ async fn dispatch_batch(
                         match handler(args).await {
                             Ok(v) => results.push(json_to_core(v)),
                             Err(e) => {
-                                // Per-item failure: record null and log; the
-                                // batch as a whole is not aborted.
-                                warn!(
-                                    target = %item.target,
-                                    error = %e,
-                                    "batch item handler error"
+                                let mut record = LogRecord::now(
+                                    LogLevel::Warn,
+                                    "saikuro.rust.provider",
+                                    "batch item handler error",
                                 );
+                                record.set_context("target", item.target.clone());
+                                record.set_context("error", alloc::format!("{e}"));
+                                log.emit(&record).await;
                                 results.push(CoreValue::Null);
                             }
                         }
                     }
                     None => {
-                        warn!(
-                            target = %item.target,
-                            "batch item: no handler registered"
-                        );
                         results.push(CoreValue::Null);
                     }
                 }
             }
             InvocationType::Cast => {
-                // Execute the cast item but produce no result in the array.
-                dispatch_cast(item, handlers).await;
+                dispatch_cast(item, handlers, log).await;
                 results.push(CoreValue::Null);
             }
-            other => {
-                warn!(
-                    invocation_type = %other,
-                    "batch item has unsupported type, skipping"
-                );
+            _other => {
                 results.push(CoreValue::Null);
             }
         }
     }
 
     let response = ResponseEnvelope::ok(id, CoreValue::Array(results));
-    send_response(transport, &response).await;
+    send_response(transport, &response, log).await;
 }
-// Wire helpers
-/// Extract the local function name from a fully-qualified `"namespace.fn"` target.
-/// If there is no dot, returns the whole string.
+
 fn local_name(target: &str) -> &str {
     match target.rsplit_once('.') {
         Some((_, name)) => name,
@@ -471,24 +544,35 @@ fn local_name(target: &str) -> &str {
     }
 }
 
-/// Attempt to deserialise a PascalCase code string as an [`ErrorCode`].
-/// Falls back to [`ErrorCode::Internal`] for unknown strings.
 fn parse_error_code(s: &str) -> ErrorCode {
-    // ErrorCode serialises as PascalCase via serde.  Wrap in a JSON string
-    // and deserialise so that new codes added to the enum in future are
-    // automatically handled without a match table here.
     serde_json::from_value(serde_json::Value::String(s.to_owned())).unwrap_or(ErrorCode::Internal)
 }
 
-async fn send_response(transport: &mut dyn AdapterTransport, response: &ResponseEnvelope) {
+async fn send_response(
+    transport: &mut dyn AdapterTransport,
+    response: &ResponseEnvelope,
+    log: &dyn LogSink,
+) {
     match response.to_msgpack() {
         Ok(bytes) => {
             if let Err(e) = transport.send(Bytes::from(bytes)).await {
-                error!(error = %e, "failed to send response");
+                let mut record = LogRecord::now(
+                    LogLevel::Error,
+                    "saikuro.rust.provider",
+                    "failed to send response",
+                );
+                record.set_context("error", alloc::format!("{e}"));
+                log.emit(&record).await;
             }
         }
         Err(e) => {
-            error!(error = %e, "failed to encode response");
+            let mut record = LogRecord::now(
+                LogLevel::Error,
+                "saikuro.rust.provider",
+                "failed to encode response",
+            );
+            record.set_context("error", alloc::format!("{e}"));
+            log.emit(&record).await;
         }
     }
 }
@@ -501,5 +585,18 @@ async fn send_error(
 ) {
     let detail = ErrorDetail::new(code, message);
     let response = ResponseEnvelope::err(id, detail);
-    send_response(transport, &response).await;
+    let _ = send_response_raw(transport, &response).await;
+}
+
+async fn send_response_raw(
+    transport: &mut dyn AdapterTransport,
+    response: &ResponseEnvelope,
+) -> Result<()> {
+    let bytes = response
+        .to_msgpack()
+        .map_err(|e| Error::Codec(e.to_string()))?;
+    transport
+        .send(Bytes::from(bytes))
+        .await
+        .map_err(|e| Error::Transport(e.to_string()))
 }

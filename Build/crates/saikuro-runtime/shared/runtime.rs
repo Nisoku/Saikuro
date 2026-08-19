@@ -1,18 +1,22 @@
+use alloc::boxed::Box;
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
 use core::time::Duration;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use portable_atomic::AtomicU64;
 use saikuro_core::capability::CapabilitySet;
 use saikuro_core::schema::Schema;
+use saikuro_event::{LogLevel, LogRecord, LogSink};
 use saikuro_exec::{sleep, spawn, timeout, watch};
 use saikuro_router::provider::ProviderRegistry;
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
 use spin::RwLock;
-use tracing::{error, info};
 
 use crate::transport_adapter::RuntimeListener;
 use crate::{config::RuntimeConfig, handle::RuntimeHandle};
@@ -34,12 +38,14 @@ fn next_peer_id() -> alloc::string::String {
 /// Fluent builder for [`SaikuroRuntime`].
 pub struct RuntimeBuilder {
     config: RuntimeConfig,
+    log: Arc<dyn LogSink>,
 }
 
 impl RuntimeBuilder {
     fn new() -> Self {
         Self {
             config: RuntimeConfig::default(),
+            log: Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn LogSink>),
         }
     }
 
@@ -70,11 +76,17 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Set the log sink for the runtime.
+    pub fn log_sink(mut self, log: Arc<dyn LogSink>) -> Self {
+        self.log = log;
+        self
+    }
+
     /// Build the runtime.  This does not start any listener loops; use
     /// [`RuntimeHandle`] methods to attach transports, or [`SaikuroRuntime::serve`]
     /// to run a set of listeners until shutdown.
     pub async fn build(self) -> SaikuroRuntime {
-        SaikuroRuntime::from_config(self.config).await
+        SaikuroRuntime::from_config(self.config, self.log).await
     }
 }
 
@@ -88,6 +100,7 @@ pub struct SaikuroRuntime {
     provider_registry: ProviderRegistry,
     capability_engine: CapabilityEngine,
     shutdown: Arc<RwLock<bool>>,
+    log: Arc<dyn LogSink>,
 }
 
 impl SaikuroRuntime {
@@ -95,7 +108,7 @@ impl SaikuroRuntime {
         RuntimeBuilder::new()
     }
 
-    async fn from_config(config: RuntimeConfig) -> Self {
+    async fn from_config(config: RuntimeConfig, log: Arc<dyn LogSink>) -> Self {
         let schema_bytes = config.schema_bytes;
         let schema_registry = SchemaRegistry::new();
 
@@ -105,6 +118,7 @@ impl SaikuroRuntime {
             provider_registry: ProviderRegistry::new(),
             capability_engine: CapabilityEngine::new(),
             shutdown: Arc::new(RwLock::new(false)),
+            log: log.clone(),
         };
 
         // Register a baked-in schema (embedded / wasm / WASI) or a schema the
@@ -113,10 +127,24 @@ impl SaikuroRuntime {
             match serde_json::from_slice::<Schema>(bytes) {
                 Ok(schema) => {
                     if let Err(e) = runtime.schema_registry.merge_schema(schema, "static").await {
-                        error!(error = %e, "failed to merge static schema");
+                        let mut record = LogRecord::now(
+                            LogLevel::Error,
+                            "saikuro.runtime",
+                            "failed to merge static schema",
+                        );
+                        record.set_context("error", alloc::format!("{}", e));
+                        log.emit(&record).await;
                     }
                 }
-                Err(e) => error!(error = %e, "failed to parse static schema"),
+                Err(e) => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Error,
+                        "saikuro.runtime",
+                        "failed to parse static schema",
+                    );
+                    record.set_context("error", alloc::format!("{}", e));
+                    log.emit(&record).await;
+                }
             }
         }
 
@@ -156,13 +184,19 @@ impl SaikuroRuntime {
             capability_engine: self.capability_engine.clone(),
             config: self.config.clone(),
             shutdown: self.shutdown.clone(),
+            log: self.log.clone(),
         }
     }
 
     /// Signal a graceful shutdown.
-    pub fn shutdown(&self) {
+    pub async fn shutdown(&self) {
         *self.shutdown.write() = true;
-        info!("saikuro runtime shutting down");
+        let record = LogRecord::now(
+            LogLevel::Info,
+            "saikuro.runtime",
+            "saikuro runtime shutting down",
+        );
+        self.log.emit(&record).await;
     }
 
     pub fn is_shutdown(&self) -> bool {
@@ -179,6 +213,7 @@ impl SaikuroRuntime {
         for mut listener in listeners {
             let handle = self.handle();
             let mut rx = shutdown.clone();
+            let log = self.log.clone();
             tasks.push(spawn(async move {
                 loop {
                     saikuro_exec::select! {
@@ -186,22 +221,44 @@ impl SaikuroRuntime {
                             match result {
                                 Ok(Some(transport)) => {
                                     let id = next_peer_id();
-                                    info!(peer = %id, "connection accepted");
+                                    let mut record = LogRecord::now(
+                                        LogLevel::Info,
+                                        "saikuro.runtime",
+                                        "connection accepted",
+                                    );
+                                    record.set_context("peer", id.clone());
+                                    log.emit(&record).await;
                                     handle.accept_transport(transport, id, CapabilitySet::default());
                                 }
                                 Ok(None) => {
-                                    info!("listener closed");
+                                    let record = LogRecord::now(
+                                        LogLevel::Info,
+                                        "saikuro.runtime",
+                                        "listener closed",
+                                    );
+                                    log.emit(&record).await;
                                     break;
                                 }
                                 Err(e) => {
-                                    error!(error = %e, "accept error");
+                                    let mut record = LogRecord::now(
+                                        LogLevel::Error,
+                                        "saikuro.runtime",
+                                        "accept error",
+                                    );
+                                    record.set_context("error", alloc::format!("{}", e));
+                                    log.emit(&record).await;
                                     sleep(Duration::from_millis(ACCEPT_BACKOFF_MS)).await;
                                 }
                             }
                         }
                         changed = rx.changed() => {
                             if changed.is_err() || rx.borrow() {
-                                info!("listener shutting down");
+                                let record = LogRecord::now(
+                                    LogLevel::Info,
+                                    "saikuro.runtime",
+                                    "listener shutting down",
+                                );
+                                log.emit(&record).await;
                                 break;
                             }
                         }
@@ -223,6 +280,11 @@ impl SaikuroRuntime {
             let _ = timeout(Duration::from_secs(5), task).await;
         }
 
-        info!("saikuro runtime listener set stopped");
+        let record = LogRecord::now(
+            LogLevel::Info,
+            "saikuro.runtime",
+            "saikuro runtime listener set stopped",
+        );
+        self.log.emit(&record).await;
     }
 }

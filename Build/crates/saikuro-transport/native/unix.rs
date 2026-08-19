@@ -1,9 +1,13 @@
 use crate::{impl_native_receiver, impl_native_sender};
+#[cfg(target_has_atomic = "ptr")]
+use alloc::sync::Arc;
 use async_trait::async_trait;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+use saikuro_event::{LogLevel, LogRecord};
 use saikuro_net::io::{split, ReadHalf, WriteHalf};
 use saikuro_net::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use tracing::debug;
 
 use crate::shared::{
     error::Result,
@@ -14,12 +18,13 @@ use crate::shared::{
 pub struct UnixTransport {
     stream: UnixStream,
     path: PathBuf,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl UnixTransport {
     /// Wrap an already-connected [`UnixStream`].
-    pub fn new(stream: UnixStream, path: PathBuf) -> Self {
-        Self { stream, path }
+    pub fn new(stream: UnixStream, path: PathBuf, log: Arc<dyn saikuro_event::LogSink>) -> Self {
+        Self { stream, path, log }
     }
 }
 
@@ -30,12 +35,18 @@ impl Transport for UnixTransport {
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (read, write) = split(self.stream);
         let path = self.path.clone();
+        let log = self.log;
         (
             UnixSender {
                 inner: write,
                 path: path.clone(),
+                log: log.clone(),
             },
-            UnixReceiver { inner: read, path },
+            UnixReceiver {
+                inner: read,
+                path,
+                log,
+            },
         )
     }
 
@@ -48,6 +59,7 @@ impl Transport for UnixTransport {
 pub struct UnixSender {
     inner: WriteHalf<UnixStream>,
     path: PathBuf,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl_native_sender!(UnixSender, path, "unix");
@@ -55,6 +67,7 @@ impl_native_sender!(UnixSender, path, "unix");
 pub struct UnixReceiver {
     inner: ReadHalf<UnixStream>,
     path: PathBuf,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl_native_receiver!(UnixReceiver, path, "unix");
@@ -62,12 +75,14 @@ impl_native_receiver!(UnixReceiver, path, "unix");
 /// Establishes outgoing Unix socket connections.
 pub struct UnixConnector {
     path: PathBuf,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl UnixConnector {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub fn new(path: impl AsRef<Path>, log: Arc<dyn saikuro_event::LogSink>) -> Self {
         Self {
             path: path.as_ref().to_owned(),
+            log,
         }
     }
 }
@@ -77,9 +92,16 @@ impl TransportConnector for UnixConnector {
     type Output = UnixTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        debug!(path = ?self.path, "unix connecting");
+        let mut record =
+            LogRecord::now(LogLevel::Debug, "saikuro.transport.unix", "unix connecting");
+        record.set_context("path", alloc::format!("{:?}", self.path));
+        self.log.emit(&record).await;
         let stream = UnixStream::connect(&self.path).await?;
-        Ok(UnixTransport::new(stream, self.path.clone()))
+        Ok(UnixTransport::new(
+            stream,
+            self.path.clone(),
+            self.log.clone(),
+        ))
     }
 }
 
@@ -87,21 +109,31 @@ impl TransportConnector for UnixConnector {
 pub struct UnixTransportListener {
     inner: UnixListener,
     path: PathBuf,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl UnixTransportListener {
     /// Bind a listener on the given socket path.
     ///
     /// If a stale socket file already exists at the path it is removed first.
-    pub async fn bind(path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn bind(
+        path: impl AsRef<Path>,
+        log: Arc<dyn saikuro_event::LogSink>,
+    ) -> Result<Self> {
         let path = path.as_ref().to_owned();
         // Remove any stale socket from a previous run.
         if path.exists() {
             std::fs::remove_file(&path)?;
         }
         let inner = UnixListener::bind(&path)?;
-        debug!(?path, "unix listener bound");
-        Ok(Self { inner, path })
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.unix",
+            "unix listener bound",
+        );
+        record.set_context("path", alloc::format!("{:?}", path));
+        log.emit(&record).await;
+        Ok(Self { inner, path, log })
     }
 
     pub fn path(&self) -> &Path {
@@ -123,15 +155,31 @@ impl TransportListener for UnixTransportListener {
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
         match self.inner.accept().await {
             Ok((stream, _addr)) => {
-                debug!(path = ?self.path, "unix accepted connection");
-                Ok(Some(UnixTransport::new(stream, self.path.clone())))
+                let mut record = LogRecord::now(
+                    LogLevel::Debug,
+                    "saikuro.transport.unix",
+                    "unix accepted connection",
+                );
+                record.set_context("path", alloc::format!("{:?}", self.path));
+                self.log.emit(&record).await;
+                Ok(Some(UnixTransport::new(
+                    stream,
+                    self.path.clone(),
+                    self.log.clone(),
+                )))
             }
             Err(e) => Err(e.into()),
         }
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(path = ?self.path, "unix listener closing");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.unix",
+            "unix listener closing",
+        );
+        record.set_context("path", alloc::format!("{:?}", self.path));
+        self.log.emit(&record).await;
         Ok(())
     }
 }

@@ -45,6 +45,39 @@ impl LogRecord {
         }
     }
 
+    /// Construct a log record with an auto-generated ISO-8601 timestamp.
+    ///
+    /// On `std` targets the current wall-clock time is used.  On `no_std` /
+    /// `embedded` targets the timestamp is empty.
+    #[cfg(feature = "std")]
+    pub fn now(level: LogLevel, name: impl Into<String>, msg: impl Into<String>) -> Self {
+        use std::time::SystemTime;
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| {
+                let secs = d.as_secs();
+                let millis = d.subsec_millis();
+                format!("{secs:010}.{millis:03}")
+            })
+            .unwrap_or_default();
+        Self::new(ts, level, name, msg)
+    }
+
+    /// Construct a log record with an auto-generated timestamp.
+    ///
+    /// On `no_std` / `embedded` targets the timestamp is empty.
+    #[cfg(not(feature = "std"))]
+    pub fn now(level: LogLevel, name: impl Into<String>, msg: impl Into<String>) -> Self {
+        Self::new("", level, name, msg)
+    }
+
+    /// Add a structured field in-place, ignoring capacity errors.
+    ///
+    /// If the field bag is full the field is silently dropped.
+    pub fn set_context(&mut self, key: impl Into<String>, value: impl Into<Value>) {
+        let _ = self.fields.insert(key.into(), value.into());
+    }
+
     /// Add a structured field and return `self` for chaining.
     ///
     /// Fails with [`SaikuroError::CapacityExceeded`] if the record is already at

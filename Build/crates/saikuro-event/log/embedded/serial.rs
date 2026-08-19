@@ -1,3 +1,10 @@
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use async_trait::async_trait;
 use embedded_io_async::Write;
 use heapless::String as HString;
 use spin::Mutex;
@@ -22,6 +29,7 @@ impl<W: Write + Send> SerialSink<W> {
     }
 }
 
+#[async_trait(?Send)]
 impl<W: Write + Send> LogSink for SerialSink<W> {
     async fn emit(&self, record: &LogRecord) {
         let mut buf = HString::<512>::new();

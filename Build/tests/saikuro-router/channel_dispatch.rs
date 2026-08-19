@@ -14,7 +14,7 @@ use saikuro_router::router::InvocationRouter;
 use saikuro_router::stream_state::{ChannelState, DeliveryOutcome};
 use std::task::Poll;
 
-mod common;
+use crate::common;
 
 fn channel_item(id: InvocationId, seq: u64, value: Value) -> ResponseEnvelope {
     ResponseEnvelope {

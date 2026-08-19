@@ -1,11 +1,15 @@
 use alloc::string::{String, ToString};
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use saikuro_core::{
     capability::CapabilitySet, envelope::Envelope, schema::Schema, RegistrationToken,
     ResponseEnvelope,
 };
+use saikuro_event::{LogLevel, LogRecord, LogSink};
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -17,7 +21,6 @@ use saikuro_schema::{
     validator::InvocationValidator,
 };
 use spin::RwLock;
-use tracing::{debug, info};
 
 use crate::config::RuntimeConfig;
 use crate::connection::ConnectionHandler;
@@ -34,6 +37,7 @@ pub struct RuntimeHandle {
     pub(crate) capability_engine: CapabilityEngine,
     pub(crate) config: RuntimeConfig,
     pub(crate) shutdown: Arc<RwLock<bool>>,
+    pub(crate) log: Arc<dyn LogSink>,
 }
 
 impl RuntimeHandle {
@@ -178,10 +182,21 @@ impl RuntimeHandle {
             max_message_size: self.config.max_message_size,
             schema_registry: self.schema_registry.clone(),
             provider_registry: self.provider_registry.clone(),
+            log: self.log.clone(),
         };
 
-        info!(peer = %peer_id, "spawning connection handler");
-        saikuro_exec::spawn(handler.run());
+        let log = self.log.clone();
+        let peer_id_clone = peer_id.clone();
+        saikuro_exec::spawn(async move {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.runtime",
+                "spawning connection handler",
+            );
+            record.set_context("peer", peer_id_clone);
+            log.emit(&record).await;
+            handler.run().await;
+        });
     }
 
     // In-process provider registration
@@ -217,7 +232,15 @@ impl RuntimeHandle {
 
         let handler = Arc::new(handler);
 
-        debug!(provider = %provider_id, "in-process provider registered");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Debug,
+                "saikuro.runtime",
+                "in-process provider registered",
+            );
+            record.set_context("provider", provider_id.clone());
+            self.log.emit(&record).await;
+        }
 
         saikuro_exec::spawn(async move {
             while let Some(item) = work_rx.recv().await {

@@ -1,6 +1,7 @@
 #![cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 
 use alloc::boxed::Box;
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -9,16 +10,22 @@ use core::future::Future;
 use core::mem::transmute;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 #[cfg(feature = "no_std")]
 use core::ptr::null_mut;
 
+#[cfg(not(target_has_atomic = "ptr"))]
+use self::no_atomic_futures::FuturesUnordered;
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::signal::Signal;
 use embassy_sync::waitqueue::MultiWakerRegistration;
-use futures::stream::{FuturesUnordered, StreamExt};
+#[cfg(target_has_atomic = "ptr")]
+use futures::stream::FuturesUnordered;
+use futures::stream::StreamExt;
 
 use crate::shared::JoinError;
 
@@ -319,6 +326,53 @@ impl<T> Future for JoinHandle<T> {
         match result {
             Some(r) => Poll::Ready(r),
             None => Poll::Pending,
+        }
+    }
+}
+
+/// Minimal `FuturesUnordered` for targets without `target_has_atomic = "ptr"`.
+///
+/// Polls all contained futures on every waker notification.
+#[cfg(not(target_has_atomic = "ptr"))]
+mod no_atomic_futures {
+    use alloc::vec::Vec;
+    use core::future::Future;
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
+    use futures::stream::Stream;
+
+    pub(super) struct FuturesUnordered<F> {
+        futures: Vec<F>,
+    }
+
+    impl<F> FuturesUnordered<F> {
+        pub fn new() -> Self {
+            Self {
+                futures: Vec::new(),
+            }
+        }
+
+        pub fn push(&mut self, f: F) {
+            self.futures.push(f);
+        }
+    }
+
+    impl<F: Future> Stream for FuturesUnordered<F> {
+        type Item = F::Output;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let this = unsafe { self.get_unchecked_mut() };
+            let mut i = this.futures.len();
+            while i > 0 {
+                i -= 1;
+                if let Poll::Ready(output) =
+                    unsafe { Pin::new_unchecked(&mut this.futures[i]) }.poll(cx)
+                {
+                    this.futures.swap_remove(i);
+                    return Poll::Ready(Some(output));
+                }
+            }
+            Poll::Pending
         }
     }
 }

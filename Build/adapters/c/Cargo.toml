@@ -49,5 +49,6 @@ optional = true
 
 [dev-dependencies]
 saikuro-core = { workspace = true, features = ["std"] }
+saikuro-event = { workspace = true }
 saikuro-runtime = { workspace = true }
 saikuro-transport = { workspace = true }

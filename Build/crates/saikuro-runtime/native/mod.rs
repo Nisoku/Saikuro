@@ -1,11 +1,12 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use crate::config::RuntimeMode;
 use crate::SaikuroRuntime;
 use anyhow::{Context, Result};
 use clap::Parser;
-use saikuro_exec::{signal, spawn, timeout, watch};
+use saikuro_event::LogSink;
+use saikuro_exec::{signal, timeout, watch};
 use tracing::{error, info, warn};
 
 // CLI
@@ -90,6 +91,11 @@ async fn async_main() -> Result<()> {
 
     init_logging(&args.log_level, args.json_logs);
 
+    // Create a TracingSink that bridges structured logging into the tracing
+    // subscriber configured above.  All runtime components receive this sink
+    // and emit structured log records through it.
+    let log: Arc<dyn LogSink> = Arc::from(Box::new(saikuro_event::TracingSink) as Box<dyn LogSink>);
+
     info!(
         version = env!("CARGO_PKG_VERSION"),
         mode = ?args.mode,
@@ -99,7 +105,8 @@ async fn async_main() -> Result<()> {
     // Build the runtime.
     let mut builder = SaikuroRuntime::builder()
         .mode(args.mode.into())
-        .json_logs(args.json_logs);
+        .json_logs(args.json_logs)
+        .log_sink(log);
 
     // Load a baked-in schema from disk (native only).
     if let Some(schema_path) = &args.schema {
@@ -116,14 +123,17 @@ async fn async_main() -> Result<()> {
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     // Each enabled listener type is driven by its own `serve` task.
-    let mut serve_tasks: Vec<_> = Vec::new();
+    let mut serve_tasks: Vec<saikuro_exec::JoinHandle<()>> = Vec::new();
 
     // TCP listener.
     #[cfg(feature = "tcp")]
     if !args.no_tcp {
+        use saikuro_exec::spawn;
         use saikuro_transport::tcp::TcpTransportListener;
+        use std::net::SocketAddr;
         let addr = SocketAddr::new(args.bind, args.tcp_port);
-        match TcpTransportListener::bind(addr).await {
+        let log = runtime.handle().log.clone();
+        match TcpTransportListener::bind(addr, log).await {
             Ok(listener) => {
                 info!(addr = %listener.local_addr(), "TCP listener ready");
                 let rt = runtime.clone();
@@ -142,9 +152,12 @@ async fn async_main() -> Result<()> {
     // WebSocket listener.
     #[cfg(feature = "ws")]
     if !args.no_ws {
+        use saikuro_exec::spawn;
         use saikuro_transport::websocket::WsTransportListener;
+        use std::net::SocketAddr;
         let addr = SocketAddr::new(args.bind, args.ws_port);
-        match WsTransportListener::bind(addr).await {
+        let log = runtime.handle().log.clone();
+        match WsTransportListener::bind(addr, log).await {
             Ok(listener) => {
                 info!(addr = %listener.local_addr(), "WebSocket listener ready");
                 let rt = runtime.clone();
@@ -163,8 +176,10 @@ async fn async_main() -> Result<()> {
     // Unix domain socket listener (Unix-only).
     #[cfg(all(feature = "unix", target_family = "unix"))]
     if let Some(unix_path) = &args.unix {
+        use saikuro_exec::spawn;
         use saikuro_transport::unix::UnixTransportListener;
-        match UnixTransportListener::bind(unix_path).await {
+        let log = runtime.handle().log.clone();
+        match UnixTransportListener::bind(unix_path, log).await {
             Ok(listener) => {
                 info!(path = %unix_path.display(), "Unix socket listener ready");
                 let rt = runtime.clone();
@@ -189,7 +204,7 @@ async fn async_main() -> Result<()> {
     info!("shutdown signal received; stopping listeners");
 
     let _ = shutdown_tx.send(true);
-    runtime.shutdown();
+    runtime.shutdown().await;
 
     // Allow the listener tasks to exit cleanly.
     for task in serve_tasks {

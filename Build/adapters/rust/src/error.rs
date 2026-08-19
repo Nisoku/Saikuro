@@ -1,8 +1,8 @@
 //! Error types for the Saikuro Rust adapter.
 
-use thiserror::Error;
 #[cfg(not(feature = "std"))]
 use alloc::string::{String, ToString};
+use thiserror::Error;
 
 /// The result type used throughout this crate.
 pub type Result<T, E = Error> = core::result::Result<T, E>;

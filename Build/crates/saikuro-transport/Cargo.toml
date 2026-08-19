@@ -19,13 +19,15 @@ native = [
     "saikuro-core/native",
     "saikuro-net/native",
     "saikuro-exec/native",
+    "saikuro-event/native",
     "dep:tokio-tungstenite",
 ]
-no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std"]
+no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std", "saikuro-event/no_std"]
 wasm = [
     "saikuro-core/wasm",
     "saikuro-net/wasm",
     "saikuro-exec/wasm",
+    "saikuro-event/wasm",
     "dep:wasm-bindgen",
     "dep:js-sys",
     "dep:web-sys",
@@ -36,6 +38,7 @@ embedded = [
     "saikuro-core/embedded",
     "saikuro-net/embedded",
     "saikuro-exec/embedded",
+    "saikuro-event/embedded",
     "dep:embedded-io-async",
     "dep:embassy-sync",
 ]
@@ -56,13 +59,15 @@ saikuro-core = { path = "../saikuro-core", default-features = false }
 saikuro-net = { path = "../saikuro-net", default-features = false }
 saikuro-exec = { path = "../saikuro-exec", default-features = false }
 saikuro-random = { path = "../saikuro-random", default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
 serde = { workspace = true }
-bytes = { workspace = true, default-features = false }
+bytes = { workspace = true, default-features = false, features = ["extra-platforms"] }
 async-trait = { workspace = true }
 futures = { workspace = true, default-features = false, features = ["async-await", "alloc"] }
 pin-project-lite = { workspace = true }
+portable-atomic-util = { workspace = true }
+portable-atomic = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true, default-features = false, features = ["log", "attributes"] }
 embedded-io-async = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
@@ -89,5 +94,4 @@ wasi = { workspace = true, optional = true }
 wasip1 = { workspace = true, optional = true }
 
 [dev-dependencies]
-tracing-subscriber = { workspace = true }
 futures = { workspace = true, default-features = false, features = ["async-await", "alloc", "executor"] }

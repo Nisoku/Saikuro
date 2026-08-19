@@ -24,6 +24,8 @@ native = [
     "saikuro-transport/native",
     "saikuro-random/native",
     "saikuro-exec/native",
+    "saikuro-event/native",
+    "saikuro-event/std",
     "storage",
     "saikuro-storage/native",
     "dep:anyhow",
@@ -36,18 +38,21 @@ wasm = [
     "saikuro-transport/wasm-host",
     "saikuro-random/wasm",
     "saikuro-exec/wasm",
+    "saikuro-event/wasm",
 ]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-transport/embedded",
     "saikuro-random/embedded",
     "saikuro-exec/embedded",
+    "saikuro-event/embedded",
 ]
 no_std = [
     "saikuro-core/no_std",
     "saikuro-transport/no_std",
     "saikuro-random/no_std",
     "saikuro-exec/no_std",
+    "saikuro-event/no_std",
 ]
 tcp  = ["saikuro-transport/tcp"]
 unix = ["saikuro-transport/unix"]
@@ -75,10 +80,11 @@ anyhow      = { workspace = true, optional = true }
 serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true, features = ["alloc"] }
 bytes       = { workspace = true }
+portable-atomic     = { workspace = true }
+portable-atomic-util = { workspace = true, features = ["alloc"] }
 saikuro-exec = { workspace = true, default-features = false }
 futures     = { workspace = true, features = ["async-await"] }
 async-trait = { workspace = true }
-tracing     = { workspace = true }
 thiserror   = { workspace = true }
 dashmap     = { version = "6.2.1", optional = true }
 clap        = { version = "4.5", features = ["derive"], optional = true }

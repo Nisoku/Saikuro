@@ -1,8 +1,12 @@
+#[cfg(target_has_atomic = "ptr")]
+use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+use saikuro_event::{LogLevel, LogRecord};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, trace};
 
 use saikuro_net::net::{TcpListener, TcpStream};
 
@@ -17,22 +21,44 @@ use crate::shared::{
 pub struct WebSocketTransport {
     inner: WebSocketStream<MaybeTlsStream<TcpStream>>,
     url: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl WebSocketTransport {
     /// Connect to a WebSocket server at `url` (e.g. `"ws://127.0.0.1:9000"`).
-    pub async fn connect(url: impl Into<String>) -> Result<Self> {
+    pub async fn connect(
+        url: impl Into<String>,
+        log: Arc<dyn saikuro_event::LogSink>,
+    ) -> Result<Self> {
         let url = url.into();
-        debug!(%url, "websocket connecting");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.websocket",
+            "websocket connecting",
+        );
+        record.set_context("url", url.clone());
+        log.emit(&record).await;
         let (ws, _response) = connect_async(&url).await.map_err(|e| {
             TransportError::ConnectionRefused(format!("ws connect to {url} failed: {e}"))
         })?;
-        Ok(Self { inner: ws, url })
+        Ok(Self {
+            inner: ws,
+            url,
+            log,
+        })
     }
 
     /// Construct from an already-upgraded WebSocket stream (server-side accept path).
-    pub fn from_stream(ws: WebSocketStream<MaybeTlsStream<TcpStream>>, url: String) -> Self {
-        Self { inner: ws, url }
+    pub fn from_stream(
+        ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
+        url: String,
+        log: Arc<dyn saikuro_event::LogSink>,
+    ) -> Self {
+        Self {
+            inner: ws,
+            url,
+            log,
+        }
     }
 }
 
@@ -42,13 +68,19 @@ impl Transport for WebSocketTransport {
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let url = self.url.clone();
+        let log = self.log;
         let (sink, stream) = self.inner.split();
         (
             WebSocketSender {
                 inner: sink,
                 url: url.clone(),
+                log: log.clone(),
             },
-            WebSocketReceiver { inner: stream, url },
+            WebSocketReceiver {
+                inner: stream,
+                url,
+                log,
+            },
         )
     }
 
@@ -62,17 +94,25 @@ impl Transport for WebSocketTransport {
 pub struct WsTransportListener {
     inner: Option<TcpListener>,
     local_addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl WsTransportListener {
     /// Bind a TCP listener on the given address for WebSocket upgrades.
-    pub async fn bind(addr: SocketAddr) -> Result<Self> {
+    pub async fn bind(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
         let inner = TcpListener::bind(addr).await?;
         let local_addr = inner.local_addr()?;
-        debug!(%local_addr, "ws listener bound");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.websocket",
+            "ws listener bound",
+        );
+        record.set_context("local_addr", alloc::format!("{}", local_addr));
+        log.emit(&record).await;
         Ok(Self {
             inner: Some(inner),
             local_addr,
+            log,
         })
     }
 
@@ -96,11 +136,28 @@ impl TransportListener for WsTransportListener {
         let maybe_tls = MaybeTlsStream::Plain(stream);
         match tokio_tungstenite::accept_async(maybe_tls).await {
             Ok(ws_stream) => {
-                debug!(peer = %peer_addr, "ws upgrade successful");
-                Ok(Some(WebSocketTransport::from_stream(ws_stream, url)))
+                let mut record = LogRecord::now(
+                    LogLevel::Debug,
+                    "saikuro.transport.websocket",
+                    "ws upgrade successful",
+                );
+                record.set_context("peer", alloc::format!("{}", peer_addr));
+                self.log.emit(&record).await;
+                Ok(Some(WebSocketTransport::from_stream(
+                    ws_stream,
+                    url,
+                    self.log.clone(),
+                )))
             }
             Err(e) => {
-                tracing::warn!(peer = %peer_addr, error = %e, "ws upgrade failed");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.transport.websocket",
+                    "ws upgrade failed",
+                );
+                record.set_context("peer", alloc::format!("{}", peer_addr));
+                record.set_context("error", alloc::format!("{}", e));
+                self.log.emit(&record).await;
                 Err(TransportError::ConnectionRefused(format!(
                     "WebSocket upgrade from {peer_addr} failed: {e}"
                 )))
@@ -109,7 +166,13 @@ impl TransportListener for WsTransportListener {
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(local = %self.local_addr, "ws listener closing");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.websocket",
+            "ws listener closing",
+        );
+        record.set_context("local_addr", alloc::format!("{}", self.local_addr));
+        self.log.emit(&record).await;
         drop(self.inner.take());
         Ok(())
     }
@@ -119,12 +182,16 @@ impl TransportListener for WsTransportListener {
 pub struct WebSocketSender {
     inner: futures::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     url: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 #[async_trait]
 impl TransportSender for WebSocketSender {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
-        trace!(url = %self.url, bytes = frame.len(), "ws send");
+        let mut record = LogRecord::now(LogLevel::Trace, "saikuro.transport.websocket", "ws send");
+        record.set_context("url", self.url.clone());
+        record.set_context("bytes", frame.len() as u64);
+        self.log.emit(&record).await;
         self.inner
             .send(Message::Binary(frame))
             .await
@@ -132,7 +199,13 @@ impl TransportSender for WebSocketSender {
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(url = %self.url, "ws sender closing");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.websocket",
+            "ws sender closing",
+        );
+        record.set_context("url", self.url.clone());
+        self.log.emit(&record).await;
         self.inner
             .send(Message::Close(None))
             .await
@@ -144,6 +217,7 @@ impl TransportSender for WebSocketSender {
 pub struct WebSocketReceiver {
     inner: futures::stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     url: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 #[async_trait]
@@ -152,18 +226,38 @@ impl TransportReceiver for WebSocketReceiver {
         loop {
             match self.inner.next().await {
                 Some(Ok(Message::Binary(data))) => {
-                    trace!(url = %self.url, bytes = data.len(), "ws recv binary");
+                    let mut record = LogRecord::now(
+                        LogLevel::Trace,
+                        "saikuro.transport.websocket",
+                        "ws recv binary",
+                    );
+                    record.set_context("url", self.url.clone());
+                    record.set_context("bytes", data.len() as u64);
+                    self.log.emit(&record).await;
                     return Ok(Some(data));
                 }
                 Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {
                     continue;
                 }
                 Some(Ok(Message::Close(_))) => {
-                    debug!(url = %self.url, "ws closed by peer");
+                    let mut record = LogRecord::now(
+                        LogLevel::Debug,
+                        "saikuro.transport.websocket",
+                        "ws closed by peer",
+                    );
+                    record.set_context("url", self.url.clone());
+                    self.log.emit(&record).await;
                     return Ok(None);
                 }
                 Some(Ok(other)) => {
-                    trace!(url = %self.url, "ws ignoring non-binary frame: {:?}", other);
+                    let mut record = LogRecord::now(
+                        LogLevel::Trace,
+                        "saikuro.transport.websocket",
+                        "ws ignoring non-binary frame",
+                    );
+                    record.set_context("url", self.url.clone());
+                    record.set_context("frame_type", alloc::format!("{:?}", other));
+                    self.log.emit(&record).await;
                     continue;
                 }
                 Some(Err(e)) => {

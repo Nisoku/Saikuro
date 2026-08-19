@@ -2,8 +2,11 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use bytes::Bytes;
 use futures::future::FutureExt;
@@ -14,7 +17,7 @@ use saikuro_core::{
     schema::Schema,
     RegistrationToken, ResponseEnvelope,
 };
-use saikuro_event::{ErrorDetail, Value};
+use saikuro_event::{ErrorDetail, LogLevel, LogRecord, LogSink, Value};
 use saikuro_exec::{mpsc, oneshot, spawn};
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -27,7 +30,6 @@ use saikuro_schema::{
 };
 use serde::Serialize;
 use spin::Mutex;
-use tracing::{debug, error, info, instrument, warn};
 
 use crate::transport_adapter::{RuntimeReceiver, RuntimeSender};
 
@@ -68,6 +70,8 @@ where
     /// Provider registry shared with the runtime; used to register/deregister
     /// wire-forwarding provider handles when the peer announces its schema.
     pub provider_registry: ProviderRegistry,
+    /// Log sink for structured logging.
+    pub log: Arc<dyn LogSink>,
 }
 
 impl<S, R> ConnectionHandler<S, R>
@@ -94,9 +98,16 @@ where
 {
     /// Run the receive loop until the connection is closed or an unrecoverable
     /// error occurs.
-    #[instrument(skip(self), fields(peer = %self.peer_id))]
     pub async fn run(mut self) {
-        info!(peer = %self.peer_id, "connection established");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.runtime.connection",
+                "connection established",
+            );
+            record.set_context("peer", self.peer_id.clone());
+            self.log.emit(&record).await;
+        }
 
         // Shared pending-call map: ForwardTask writes response_tx into this;
         // the recv loop reads it when a ResponseEnvelope arrives from the peer.
@@ -115,12 +126,25 @@ where
                     match frame_opt {
                         Some(frame) => {
                             if let Err(e) = self.sender.send(frame).await {
-                                error!(peer = %self.peer_id, "send error on forwarded call: {e}");
+                                let mut record = LogRecord::now(
+                                    LogLevel::Error,
+                                    "saikuro.runtime.connection",
+                                    "send error on forwarded call",
+                                );
+                                record.set_context("peer", self.peer_id.clone());
+                                record.set_context("error", alloc::format!("{e}"));
+                                self.log.emit(&record).await;
                                 break;
                             }
                         }
                         None => {
-                            info!(peer = %self.peer_id, "forward channel closed");
+                            let mut record = LogRecord::now(
+                                LogLevel::Info,
+                                "saikuro.runtime.connection",
+                                "forward channel closed",
+                            );
+                            record.set_context("peer", self.peer_id.clone());
+                            self.log.emit(&record).await;
                             break;
                         }
                     }
@@ -136,11 +160,24 @@ where
                             }
                         }
                         Ok(None) => {
-                            info!(peer = %self.peer_id, "connection closed by peer");
+                            let mut record = LogRecord::now(
+                                LogLevel::Info,
+                                "saikuro.runtime.connection",
+                                "connection closed by peer",
+                            );
+                            record.set_context("peer", self.peer_id.clone());
+                            self.log.emit(&record).await;
                             break;
                         }
                         Err(e) => {
-                            error!(peer = %self.peer_id, "recv error: {e}");
+                            let mut record = LogRecord::now(
+                                LogLevel::Error,
+                                "saikuro.runtime.connection",
+                                "recv error",
+                            );
+                            record.set_context("peer", self.peer_id.clone());
+                            record.set_context("error", alloc::format!("{e}"));
+                            self.log.emit(&record).await;
                             break;
                         }
                     }
@@ -156,7 +193,15 @@ where
             .deregister_provider(&self.peer_id, self.registration_token)
             .await;
 
-        info!(peer = %self.peer_id, "connection handler exiting");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.runtime.connection",
+                "connection handler exiting",
+            );
+            record.set_context("peer", self.peer_id.clone());
+            self.log.emit(&record).await;
+        }
     }
 
     /// Decode, validate, check capabilities, and route a single frame.
@@ -172,14 +217,24 @@ where
         forward_tx: &mpsc::Sender<Bytes>,
     ) -> Option<(ResponseEnvelope, Option<Schema>)> {
         // 1. Decode the MessagePack envelope.
-        let envelope = match self.decode_envelope(&frame) {
+        let envelope = match self.decode_envelope(&frame).await {
             Ok(e) => e,
             Err(Some(resp)) => return Some((*resp, None)),
             Err(None) => return None,
         };
 
         let id = envelope.id;
-        debug!(peer = %self.peer_id, %id, target = %envelope.target, "received envelope");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Debug,
+                "saikuro.runtime.connection",
+                "received envelope",
+            );
+            record.set_context("peer", self.peer_id.clone());
+            record.set_context("id", alloc::format!("{}", id));
+            record.set_context("target", envelope.target.clone());
+            self.log.emit(&record).await;
+        }
 
         // 2. Handle system envelopes before schema validation.
         match envelope.invocation_type {
@@ -238,15 +293,31 @@ where
 
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
     /// response on failure.
-    fn decode_envelope(&self, frame: &[u8]) -> Result<Envelope, Option<Box<ResponseEnvelope>>> {
+    async fn decode_envelope(
+        &self,
+        frame: &[u8],
+    ) -> Result<Envelope, Option<Box<ResponseEnvelope>>> {
         match saikuro_core::msgpack::from_slice(frame) {
             Ok(env) => Ok(env),
             Err(e) => {
-                warn!(peer = %self.peer_id, "envelope decode failed: {e}");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.runtime.connection",
+                    "envelope decode failed",
+                );
+                record.set_context("peer", self.peer_id.clone());
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
                 let id = match InvocationId::new() {
                     Ok(id) => id,
-                    Err(error) => {
-                        error!(peer = %self.peer_id, %error, "cannot generate malformed-envelope response ID");
+                    Err(_error) => {
+                        let mut record = LogRecord::now(
+                            LogLevel::Error,
+                            "saikuro.runtime.connection",
+                            "cannot generate malformed-envelope response ID",
+                        );
+                        record.set_context("peer", self.peer_id.clone());
+                        self.log.emit(&record).await;
                         return Err(None);
                     }
                 };
@@ -279,8 +350,14 @@ where
             );
             let id = match InvocationId::new() {
                 Ok(id) => id,
-                Err(error) => {
-                    error!(peer = %self.peer_id, %error, "cannot generate oversized-frame response ID");
+                Err(_error) => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Error,
+                        "saikuro.runtime.connection",
+                        "cannot generate oversized-frame response ID",
+                    );
+                    record.set_context("peer", self.peer_id.clone());
+                    self.log.emit(&record).await;
                     return false;
                 }
             };
@@ -303,13 +380,24 @@ where
         };
 
         if let Err(e) = self.send_response(response).await {
-            error!(peer = %self.peer_id, "send error: {e}");
+            let mut record =
+                LogRecord::now(LogLevel::Error, "saikuro.runtime.connection", "send error");
+            record.set_context("peer", self.peer_id.clone());
+            record.set_context("error", alloc::format!("{e}"));
+            self.log.emit(&record).await;
             return false;
         }
 
         if let Some(filtered) = sandbox_schema {
             if let Err(e) = self.push_sandbox_schema(filtered).await {
-                error!(peer = %self.peer_id, "failed to push sandbox schema: {e}");
+                let mut record = LogRecord::now(
+                    LogLevel::Error,
+                    "saikuro.runtime.connection",
+                    "failed to push sandbox schema",
+                );
+                record.set_context("peer", self.peer_id.clone());
+                record.set_context("error", alloc::format!("{e}"));
+                self.log.emit(&record).await;
                 return false;
             }
         }
@@ -342,11 +430,16 @@ where
                     .await
                 {
                     Ok(()) => {
-                        info!(
-                            peer = %self.peer_id,
-                            namespaces = ns_count,
-                            "schema announced and merged"
-                        );
+                        {
+                            let mut record = LogRecord::now(
+                                LogLevel::Info,
+                                "saikuro.runtime.connection",
+                                "schema announced and merged",
+                            );
+                            record.set_context("peer", self.peer_id.clone());
+                            record.set_context("namespaces", alloc::format!("{ns_count}"));
+                            self.log.emit(&record).await;
+                        }
 
                         // Register a wire-forwarding provider handle so the
                         // router can dispatch calls to this peer.
@@ -356,7 +449,14 @@ where
                         ResponseEnvelope::ok_empty(id)
                     }
                     Err(e) => {
-                        warn!(peer = %self.peer_id, "schema merge failed: {e}");
+                        let mut record = LogRecord::now(
+                            LogLevel::Warn,
+                            "saikuro.runtime.connection",
+                            "schema merge failed",
+                        );
+                        record.set_context("peer", self.peer_id.clone());
+                        record.set_context("error", alloc::format!("{e}"));
+                        self.log.emit(&record).await;
                         ResponseEnvelope::err(
                             id,
                             ErrorDetail::new(
@@ -368,7 +468,13 @@ where
                 }
             }
             None => {
-                warn!(peer = %self.peer_id, "announce envelope has no valid Schema in args[0]");
+                let mut record = LogRecord::now(
+                    LogLevel::Warn,
+                    "saikuro.runtime.connection",
+                    "announce envelope has no valid Schema in args[0]",
+                );
+                record.set_context("peer", self.peer_id.clone());
+                self.log.emit(&record).await;
                 ResponseEnvelope::err(
                     id,
                     ErrorDetail::new(
@@ -401,13 +507,21 @@ where
         let pending_clone = pending.clone();
         let forward_tx_clone = forward_tx.clone();
         let peer_id = self.peer_id.clone();
+        let log = self.log.clone();
 
         spawn(async move {
             while let Some(item) = work_rx.recv().await {
                 let frame = match encode_bytes(&item.envelope) {
                     Ok(bytes) => bytes,
                     Err(e) => {
-                        warn!(peer = %peer_id, "failed to encode forwarded call: {e}");
+                        let mut record = LogRecord::now(
+                            LogLevel::Warn,
+                            "saikuro.runtime.connection",
+                            "failed to encode forwarded call",
+                        );
+                        record.set_context("peer", peer_id.clone());
+                        record.set_context("error", alloc::format!("{e}"));
+                        log.emit(&record).await;
                         if let Some(tx) = item.response_tx {
                             let _ = tx.send(ResponseEnvelope::err(
                                 item.envelope.id,
@@ -430,12 +544,24 @@ where
 
                 // Send the frame to the peer (via the connection handler's sender).
                 if forward_tx_clone.send(frame).await.is_err() {
-                    warn!(peer = %peer_id, "forward channel closed; provider disconnected");
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.runtime.connection",
+                        "forward channel closed; provider disconnected",
+                    );
+                    record.set_context("peer", peer_id.clone());
+                    log.emit(&record).await;
                     pending_clone.lock().remove(&item.envelope.id);
                     break;
                 }
             }
-            debug!(peer = %peer_id, "wire-forward task exiting");
+            let mut record = LogRecord::now(
+                LogLevel::Debug,
+                "saikuro.runtime.connection",
+                "wire-forward task exiting",
+            );
+            record.set_context("peer", peer_id.clone());
+            log.emit(&record).await;
         });
     }
 
@@ -447,7 +573,14 @@ where
         let full = match self.schema_registry.snapshot().await {
             Ok(schema) => schema,
             Err(e) => {
-                error!(peer = %self.peer_id, error = %e, "schema snapshot capacity exceeded");
+                let mut record = LogRecord::now(
+                    LogLevel::Error,
+                    "saikuro.runtime.connection",
+                    "schema snapshot capacity exceeded",
+                );
+                record.set_context("peer", self.peer_id.clone());
+                record.set_context("error", alloc::format!("{}", e));
+                self.log.emit(&record).await;
                 return None;
             }
         };
@@ -500,7 +633,15 @@ where
             .map_err(|e| format!("announce invocation ID error: {e}"))?;
         let frame =
             encode_bytes(&announce).map_err(|e| format!("announce frame encode error: {e}"))?;
-        info!(peer = %self.peer_id, "pushing sandbox-filtered schema to peer");
+        {
+            let mut record = LogRecord::now(
+                LogLevel::Info,
+                "saikuro.runtime.connection",
+                "pushing sandbox-filtered schema to peer",
+            );
+            record.set_context("peer", self.peer_id.clone());
+            self.log.emit(&record).await;
+        }
         self.sender.send(frame).await.map_err(|e| e.to_string())
     }
 

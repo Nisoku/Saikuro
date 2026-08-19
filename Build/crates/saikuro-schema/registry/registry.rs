@@ -1,4 +1,8 @@
-use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
+#[cfg(target_has_atomic = "ptr")]
+use alloc::sync::Arc;
+use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, vec::Vec};
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
     SCHEMA_TYPES_CAPACITY,

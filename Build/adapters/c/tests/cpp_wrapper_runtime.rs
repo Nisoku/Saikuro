@@ -9,18 +9,17 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use saikuro_core::{
-    capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
     schema::{
         ArgumentDescriptor, FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema,
         PrimitiveType, Schema, TypeDescriptor, TypeMap, Visibility,
     },
-    value::Value,
-    ResponseEnvelope,
+    CapabilitySet, ResponseEnvelope,
 };
-use saikuro_runtime::runtime::SaikuroRuntime;
+use saikuro_event::Value;
+use saikuro_runtime::SaikuroRuntime;
 use saikuro_transport::tcp::TcpTransportListener;
-use saikuro_transport::traits::{Transport, TransportListener, TransportReceiver, TransportSender};
+use saikuro_transport::{Transport, TransportListener, TransportReceiver, TransportSender};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -179,16 +178,15 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
     let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
-        let rt = saikuro_exec::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::RuntimeBuilder::new_current_thread()
             .enable_all()
-            .build()
-            .expect("runtime");
+            .build();
 
         rt.block_on(async move {
             let socket = SocketAddr::from(([127, 0, 0, 1], 0));
-            let runtime = SaikuroRuntime::builder().build();
+            let runtime = SaikuroRuntime::builder().build().await;
             let handle = runtime.handle();
-            let (done_tx, done_rx) = saikuro_exec::oneshot::channel::<()>();
+            let (done_tx, done_rx) = saikuro_exec::_tokio::sync::oneshot::channel::<()>();
             let done_tx = Arc::new(Mutex::new(Some(done_tx)));
             let call_count = Arc::new(AtomicUsize::new(0));
 
@@ -253,48 +251,53 @@ fn spawn_runtime_for_cpp_client() -> (String, thread::JoinHandle<()>) {
             };
             handle
                 .register_schema(schema, "cpp-runtime-provider")
+                .await
                 .expect("register schema");
 
             let done_tx_closure = done_tx.clone();
             let call_count_closure = call_count.clone();
-            handle.register_fn_provider(
-                "cpp-runtime-provider",
-                vec!["math".to_owned()],
-                move |env: Envelope| {
-                    let done_tx_closure = done_tx_closure.clone();
-                    let call_count_closure = call_count_closure.clone();
-                    async move {
-                        match env.target.as_str() {
-                            "math.add" => {
-                                let seen = call_count_closure.fetch_add(1, Ordering::Relaxed) + 1;
-                                if seen >= 3 {
-                                    if let Some(tx) = done_tx_closure
-                                        .lock()
-                                        .expect("done sender mutex poisoned")
-                                        .take()
-                                    {
-                                        let _ = tx.send(());
+            handle
+                .register_fn_provider(
+                    "cpp-runtime-provider",
+                    vec!["math".to_owned()],
+                    move |env: Envelope| {
+                        let done_tx_closure = done_tx_closure.clone();
+                        let call_count_closure = call_count_closure.clone();
+                        async move {
+                            match env.target.as_str() {
+                                "math.add" => {
+                                    let seen =
+                                        call_count_closure.fetch_add(1, Ordering::Relaxed) + 1;
+                                    if seen >= 3 {
+                                        if let Some(tx) = done_tx_closure
+                                            .lock()
+                                            .expect("done sender mutex poisoned")
+                                            .take()
+                                        {
+                                            let _ = tx.send(());
+                                        }
                                     }
+                                    let a = match env.args.first() {
+                                        Some(Value::Int(v)) => *v,
+                                        _ => 0,
+                                    };
+                                    let b = match env.args.get(1) {
+                                        Some(Value::Int(v)) => *v,
+                                        _ => 0,
+                                    };
+                                    ResponseEnvelope::ok(env.id, Value::Int(a + b))
                                 }
-                                let a = match env.args.first() {
-                                    Some(Value::Int(v)) => *v,
-                                    _ => 0,
-                                };
-                                let b = match env.args.get(1) {
-                                    Some(Value::Int(v)) => *v,
-                                    _ => 0,
-                                };
-                                ResponseEnvelope::ok(env.id, Value::Int(a + b))
+                                _ => ResponseEnvelope::ok_empty(env.id),
                             }
-                            _ => ResponseEnvelope::ok_empty(env.id),
                         }
-                    }
-                },
-            );
+                    },
+                )
+                .await;
 
-            let mut listener = TcpTransportListener::bind(socket)
-                .await
-                .expect("bind listener");
+            let mut listener =
+                TcpTransportListener::bind(socket, std::sync::Arc::new(saikuro_event::NullSink))
+                    .await
+                    .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
 
             let transport = saikuro_exec::timeout(Duration::from_secs(60), listener.accept())
@@ -322,16 +325,16 @@ fn spawn_scripted_runtime_for_cpp_provider() -> (String, thread::JoinHandle<bool
     let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::spawn(move || {
-        let rt = saikuro_exec::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::RuntimeBuilder::new_current_thread()
             .enable_all()
-            .build()
-            .expect("runtime");
+            .build();
 
         rt.block_on(async move {
             let socket = SocketAddr::from(([127, 0, 0, 1], 0));
-            let mut listener = TcpTransportListener::bind(socket)
-                .await
-                .expect("bind listener");
+            let mut listener =
+                TcpTransportListener::bind(socket, std::sync::Arc::new(saikuro_event::NullSink))
+                    .await
+                    .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport =
                 match saikuro_exec::timeout(Duration::from_secs(60), listener.accept()).await {

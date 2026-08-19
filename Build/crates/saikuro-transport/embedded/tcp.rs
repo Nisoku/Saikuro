@@ -1,11 +1,14 @@
 use alloc::boxed::Box;
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex as AsyncMutex;
-use tracing::debug;
+use saikuro_event::{LogLevel, LogRecord};
 
 use saikuro_net::net::tcp::TcpSocket;
 use saikuro_net::net::{IpEndpoint, IpListenEndpoint, Stack};
@@ -111,7 +114,13 @@ impl TransportConnector for TcpConnector {
     type Output = TcpTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        debug!(remote = ?self.remote, "embedded tcp connecting");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.embedded.tcp",
+            "embedded tcp connecting",
+        );
+        record.set_context("remote", alloc::format!("{:?}", self.remote));
+        // NOTE: no log sink available in embedded connector; record is unused
         let rx = unsafe { &mut *core::ptr::addr_of_mut!(CLIENT_RX) };
         let tx = unsafe { &mut *core::ptr::addr_of_mut!(CLIENT_TX) };
         let mut socket = TcpSocket::new(*self.stack, rx, tx);
@@ -159,12 +168,10 @@ impl TransportListener for TcpTransportListener {
             })
             .await
             .map_err(|e| TransportError::ConnectionRefused(alloc::format!("{:?}", e)))?;
-        debug!(local = ?self.local, "embedded tcp accepted connection");
         Ok(Some(TcpTransport::new(socket)))
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(local = ?self.local, "embedded tcp listener closing");
         Ok(())
     }
 }

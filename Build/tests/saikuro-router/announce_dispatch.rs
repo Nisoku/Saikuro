@@ -23,7 +23,7 @@ use saikuro_transport::{
     traits::{Transport, TransportReceiver, TransportSender},
 };
 
-mod common;
+use crate::common;
 
 use common::{make_announce_envelope, round_trip_via_handler, simple_schema};
 

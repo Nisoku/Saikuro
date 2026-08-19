@@ -1,4 +1,7 @@
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use wasi::io::streams::{InputStream, OutputStream};
 use wasi::sockets::instance_network::instance_network;

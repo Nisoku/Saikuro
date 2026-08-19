@@ -212,9 +212,13 @@ pub async fn create_storage(config: &StorageConfig) -> Result<Storage> {
     }
 
     match config.persistence {
-        PersistenceMode::Transient | PersistenceMode::BestEffort => Ok(Storage::InMemory(
-            InMemoryStorage::with_config(config.clone()),
-        )),
+        PersistenceMode::Transient | PersistenceMode::BestEffort => {
+            let log: std::sync::Arc<dyn saikuro_event::LogSink> =
+                std::sync::Arc::new(saikuro_event::NullSink);
+            Ok(Storage::InMemory(
+                InMemoryStorage::with_config(config.clone(), log).await,
+            ))
+        }
         PersistenceMode::Durable => Err(Error::Storage(
             "no durable storage backend selected; set `config.backend` to \
              `BackendKind::Filesystem`, `Sled`, or `Sqlite` on native"

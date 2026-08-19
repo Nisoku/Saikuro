@@ -1,4 +1,8 @@
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 use alloc::vec::Vec;
+use async_trait::async_trait;
 use spin::Mutex;
 
 use crate::record::LogRecord;
@@ -28,6 +32,20 @@ impl RingSink {
     }
 }
 
+#[cfg(feature = "embedded")]
+#[async_trait(?Send)]
+impl LogSink for RingSink {
+    async fn emit(&self, record: &LogRecord) {
+        let mut buf = self.buffer.lock();
+        if buf.len() >= self.capacity {
+            buf.remove(0);
+        }
+        buf.push(record.clone());
+    }
+}
+
+#[cfg(not(feature = "embedded"))]
+#[async_trait]
 impl LogSink for RingSink {
     async fn emit(&self, record: &LogRecord) {
         let mut buf = self.buffer.lock();

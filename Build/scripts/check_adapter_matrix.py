@@ -74,10 +74,40 @@ MATRIX: list[Combo] = [
         "no_std wasm",
     ),
     Combo(
-        "embedded",
+        "embedded (no_std) (Cortex-M3 / RP2350-class)",
         "thumbv7m-none-eabi",
         ["--no-default-features", "--features", "embedded,tcp"],
-        "no_std embedded (thumbv7m)",
+        "no_std embedded",
+    ),
+    Combo(
+        "embedded (no_std) (Cortex-M0+ / RP2040)",
+        "thumbv6m-none-eabi",
+        ["--no-default-features", "--features", "embedded,tcp"],
+        "no_std embedded",
+    ),
+    Combo(
+        "embedded (no_std) (Cortex-M33 / RP2350)",
+        "thumbv8m.main-none-eabihf",
+        ["--no-default-features", "--features", "embedded,tcp"],
+        "no_std embedded",
+    ),
+    Combo(
+        "embedded (no_std) (AArch64 bare-metal)",
+        "aarch64-unknown-none",
+        ["--no-default-features", "--features", "embedded,tcp"],
+        "no_std embedded",
+    ),
+    Combo(
+        "embedded (no_std) (RISC-V 32 IMAC)",
+        "riscv32imac-unknown-none-elf",
+        ["--no-default-features", "--features", "embedded,tcp"],
+        "no_std embedded",
+    ),
+    Combo(
+        "embedded (no_std) (RISC-V 32 IMC / ESP32-C3)",
+        "riscv32imc-unknown-none-elf",
+        ["--no-default-features", "--features", "embedded,tcp"],
+        "no_std embedded",
     ),
     Combo(
         "wasi preview1 (no_std)",

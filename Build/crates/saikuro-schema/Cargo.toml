@@ -24,4 +24,6 @@ saikuro-core = { path = "../saikuro-core", default-features = false }
 saikuro-exec = { path = "../saikuro-exec", default-features = false }
 saikuro-event = { workspace = true, default-features = false }
 
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
 thiserror = { workspace = true }

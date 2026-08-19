@@ -5,10 +5,7 @@ extern crate alloc;
 #[cfg(all(
     not(feature = "std"),
     not(feature = "native"),
-    any(
-        target_os = "none",
-        all(target_os = "wasi", target_env = "p1"),
-    ),
+    any(target_os = "none", all(target_os = "wasi", target_env = "p1"),),
 ))]
 mod embedded_rt {
     use core::alloc::{GlobalAlloc, Layout};
@@ -35,9 +32,9 @@ mod embedded_rt {
 use alloc::borrow::ToOwned;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
+use alloc::ffi::CString;
 #[cfg(not(feature = "std"))]
 use alloc::format;
-use alloc::ffi::CString;
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
@@ -47,8 +44,7 @@ use core::future::Future;
 use core::ptr;
 
 use saikuro::{
-    ArgDescriptor, FunctionSchema, PrimitiveType, Provider, RegisterOptions,
-    TypeDescriptor, Value,
+    ArgDescriptor, FunctionSchema, PrimitiveType, Provider, RegisterOptions, TypeDescriptor, Value,
 };
 #[cfg(feature = "std")]
 use saikuro::{Client, SaikuroChannel, SaikuroStream};
@@ -114,9 +110,8 @@ mod exec {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let rt = RT.get_or_init(|| {
-            TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime")
-        });
+        let rt = RT
+            .get_or_init(|| TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime"));
         rt.handle().spawn(fut);
     }
 }
@@ -440,7 +435,7 @@ pub extern "C" fn saikuro_client_close_async(
     let handle = unsafe { Box::from_raw(handle as *mut ClientHandle) };
     let user_data_addr = user_data as usize;
     spawn_future(async move {
-            let status = match handle.client {
+        let status = match handle.client {
             Some(client) => int_saikuro(client.close().await, "close"),
             None => 0,
         };
@@ -469,9 +464,14 @@ pub extern "C" fn saikuro_client_call_json_async(
             return;
         }
     };
-    let h = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let h = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -484,7 +484,7 @@ pub extern "C" fn saikuro_client_call_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         let res = h.client().call(target, args).await;
         let out = ptr_saikuro(res, "call");
         cb(out, user_data_addr as *mut c_void);
@@ -511,13 +511,18 @@ pub extern "C" fn saikuro_client_call_json_timeout_async(
             return;
         }
     };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
     if timeout_ms < 0 {
         set_last_error("timeout_ms must be non-negative");
         return;
     }
-    let parsed = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    let parsed = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -531,8 +536,11 @@ pub extern "C" fn saikuro_client_call_json_timeout_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
-        let res = h.client().call_with_timeout(target, args, Some(timeout)).await;
+        let h = client_ref(handle);
+        let res = h
+            .client()
+            .call_with_timeout(target, args, Some(timeout))
+            .await;
         let out = ptr_saikuro(res, "call");
         cb(out, user_data_addr as *mut c_void);
     });
@@ -557,9 +565,14 @@ pub extern "C" fn saikuro_client_cast_json_async(
             return;
         }
     };
-    let parsed = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(1, user_data);
+        return;
+    }
+    let parsed = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -573,7 +586,7 @@ pub extern "C" fn saikuro_client_cast_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         let res = h.client().cast(target, args).await;
         cb(int_saikuro(res, "cast"), user_data_addr as *mut c_void);
     });
@@ -597,6 +610,11 @@ pub extern "C" fn saikuro_client_batch_json_async(
             return;
         }
     };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
     let raw = match cstr_to_string(calls_json, "calls_json") {
         Ok(s) => s,
         Err(e) => {
@@ -616,7 +634,7 @@ pub extern "C" fn saikuro_client_batch_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         match h.client().batch(calls).await {
             Ok(v) => match serde_json::to_string(&v) {
                 Ok(json) => cb(into_c_string_ptr(&json), user_data_addr as *mut c_void),
@@ -652,9 +670,14 @@ pub extern "C" fn saikuro_client_resource_json_async(
             return;
         }
     };
-    let parsed = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let parsed = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -667,7 +690,7 @@ pub extern "C" fn saikuro_client_resource_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         let res = h.client().resource(target, args).await;
         let out = ptr_saikuro(res, "resource");
         cb(out, user_data_addr as *mut c_void);
@@ -695,6 +718,11 @@ pub extern "C" fn saikuro_client_log_async(
             return;
         }
     };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(1, user_data);
+        return;
+    }
     let parsed = match cstr_to_string(level, "level")
         .and_then(|l| cstr_to_string(name, "name").map(|n| (l, n)))
         .and_then(|(l, n)| cstr_to_string(msg, "msg").map(|m| (l, n, m)))
@@ -710,9 +738,9 @@ pub extern "C" fn saikuro_client_log_async(
     let fields = if fields_json.is_null() {
         None
     } else {
-        match cstr_to_string(fields_json, "fields_json").and_then(|raw| {
-            parse_json_object_arg(&raw, "fields_json").map(Value::Object)
-        }) {
+        match cstr_to_string(fields_json, "fields_json")
+            .and_then(|raw| parse_json_object_arg(&raw, "fields_json").map(Value::Object))
+        {
             Ok(v) => Some(v),
             Err(e) => {
                 set_last_error(e);
@@ -726,7 +754,7 @@ pub extern "C" fn saikuro_client_log_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         let res = h.client().log(level, name, msg, fields).await;
         cb(int_saikuro(res, "log"), user_data_addr as *mut c_void);
     });
@@ -753,9 +781,14 @@ pub extern "C" fn saikuro_client_stream_json_async(
             return;
         }
     };
-    let parsed = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let parsed = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -768,7 +801,7 @@ pub extern "C" fn saikuro_client_stream_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         match h.client().stream(target, args).await {
             Ok(stream) => {
                 let sh = Box::into_raw(Box::new(StreamHandle { stream }));
@@ -819,7 +852,7 @@ pub unsafe extern "C" fn saikuro_stream_next_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let stream = stream_addr as *mut StreamHandle;
-            let s = unsafe { &mut *stream };
+        let s = unsafe { &mut *stream };
         match s.stream.next().await {
             Some(Ok(value)) => match serde_json::to_string(&value) {
                 Ok(json) => cb(into_c_string_ptr(&json), 0, user_data_addr as *mut c_void),
@@ -858,9 +891,14 @@ pub extern "C" fn saikuro_client_channel_json_async(
             return;
         }
     };
-    let parsed = match cstr_to_string(target, "target").and_then(|t| {
-        c_json_array(args_json).map(|a| (t, a))
-    }) {
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let parsed = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
         Ok(v) => v,
         Err(e) => {
             set_last_error(e);
@@ -873,7 +911,7 @@ pub extern "C" fn saikuro_client_channel_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let handle = handle_addr as *mut c_void;
-            let h = client_ref(handle);
+        let h = client_ref(handle);
         match h.client().channel(target, args).await {
             Ok(channel) => {
                 let ch = Box::into_raw(Box::new(ChannelHandle { channel }));
@@ -931,9 +969,12 @@ pub extern "C" fn saikuro_channel_send_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let channel = channel_addr as *mut ChannelHandle;
-            let c = unsafe { &mut *channel };
+        let c = unsafe { &mut *channel };
         let res = c.channel.send(item).await;
-        cb(int_saikuro(res, "channel send"), user_data_addr as *mut c_void);
+        cb(
+            int_saikuro(res, "channel send"),
+            user_data_addr as *mut c_void,
+        );
     });
 }
 
@@ -961,8 +1002,11 @@ pub extern "C" fn saikuro_channel_close_async(
     let channel = unsafe { Box::from_raw(channel as *mut ChannelHandle) };
     let user_data_addr = user_data as usize;
     spawn_future(async move {
-            let res = channel.channel.close().await;
-        cb(int_saikuro(res, "channel close"), user_data_addr as *mut c_void);
+        let res = channel.channel.close().await;
+        cb(
+            int_saikuro(res, "channel close"),
+            user_data_addr as *mut c_void,
+        );
     });
 }
 
@@ -990,8 +1034,11 @@ pub extern "C" fn saikuro_channel_abort_async(
     let channel = unsafe { Box::from_raw(channel as *mut ChannelHandle) };
     let user_data_addr = user_data as usize;
     spawn_future(async move {
-            let res = channel.channel.abort().await;
-        cb(int_saikuro(res, "channel abort"), user_data_addr as *mut c_void);
+        let res = channel.channel.abort().await;
+        cb(
+            int_saikuro(res, "channel abort"),
+            user_data_addr as *mut c_void,
+        );
     });
 }
 
@@ -1023,7 +1070,7 @@ pub unsafe extern "C" fn saikuro_channel_next_json_async(
     let user_data_addr = user_data as usize;
     spawn_future(async move {
         let channel = channel_addr as *mut ChannelHandle;
-            let c = unsafe { &mut *channel };
+        let c = unsafe { &mut *channel };
         match c.channel.next().await {
             Some(Ok(value)) => match serde_json::to_string(&value) {
                 Ok(json) => cb(into_c_string_ptr(&json), 0, user_data_addr as *mut c_void),
@@ -1283,7 +1330,7 @@ pub extern "C" fn saikuro_provider_serve_async(
 
     let user_data_addr = user_data as usize;
     spawn_future(async move {
-            match provider.serve(address).await {
+        match provider.serve(address).await {
             Ok(()) => cb(0, user_data_addr as *mut c_void),
             Err(e) => {
                 set_last_error(format!("provider serve failed: {e}"));

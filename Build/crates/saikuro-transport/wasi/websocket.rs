@@ -1,7 +1,10 @@
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;

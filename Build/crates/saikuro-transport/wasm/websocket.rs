@@ -5,7 +5,6 @@ use core::cell::RefCell;
 use async_trait::async_trait;
 use bytes::Bytes;
 use send_wrapper::SendWrapper;
-use tracing::{debug, trace};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{BinaryType, CloseEvent, ErrorEvent, Event, MessageEvent};
 
@@ -27,7 +26,6 @@ impl WebSocketTransport {
     /// Connect to a WebSocket server using the browser WebSocket API.
     pub async fn connect(url: impl Into<String>) -> Result<Self> {
         let url = url.into();
-        debug!(%url, "wasm websocket connecting");
 
         let ws = web_sys::WebSocket::new(&url)
             .map_err(|e| TransportError::ConnectionRefused(format!("{e:?}")))?;
@@ -64,13 +62,10 @@ impl WebSocketTransport {
         ws.set_onerror(None);
 
         match result {
-            Ok(Ok(())) => {
-                debug!(%url, "wasm websocket connected");
-                Ok(Self {
-                    ws: SendWrapper::new(ws),
-                    url,
-                })
-            }
+            Ok(Ok(())) => Ok(Self {
+                ws: SendWrapper::new(ws),
+                url,
+            }),
             Ok(Err(e)) => {
                 ws.close().ok();
                 Err(e)
@@ -160,7 +155,6 @@ impl TransportSender for WebSocketSender {
         use js_sys::{ArrayBuffer, Uint8Array};
         use wasm_bindgen::JsValue;
 
-        trace!(url = %self.url, bytes = frame.len(), "wasm ws send");
         let len = frame.len() as u32;
         let buffer = ArrayBuffer::new(len);
         let dst = Uint8Array::new(&buffer);
@@ -172,7 +166,6 @@ impl TransportSender for WebSocketSender {
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(url = %self.url, "wasm ws sender closing");
         self.ws
             .close()
             .map_err(|e| TransportError::SendFailed(format!("{e:?}")))
@@ -206,14 +199,7 @@ impl Drop for WebSocketReceiver {
 impl TransportReceiver for WebSocketReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
         match self.rx.recv().await {
-            Some(Ok(opt)) => {
-                if opt.is_some() {
-                    trace!(url = %self.url, bytes = opt.as_ref().unwrap().len(), "wasm ws recv");
-                } else {
-                    debug!(url = %self.url, "wasm ws closed by peer");
-                }
-                Ok(opt)
-            }
+            Some(Ok(opt)) => Ok(opt),
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }

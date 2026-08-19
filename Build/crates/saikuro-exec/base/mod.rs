@@ -1,9 +1,12 @@
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 use core::time::Duration;
+#[cfg(not(target_has_atomic = "ptr"))]
+pub(crate) use portable_atomic_util::Arc;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;

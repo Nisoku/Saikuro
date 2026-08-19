@@ -1,9 +1,13 @@
 use alloc::boxed::Box;
 use alloc::string::String;
+#[cfg(target_has_atomic = "ptr")]
+use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+use saikuro_event::{LogLevel, LogRecord};
 use saikuro_exec::mpsc;
-use tracing::trace;
 
 use crate::shared::{
     error::{Result, TransportError},
@@ -19,6 +23,7 @@ pub struct MemoryTransport {
     sender: mpsc::Sender<Bytes>,
     receiver: mpsc::Receiver<Bytes>,
     label: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl MemoryTransport {
@@ -28,7 +33,11 @@ impl MemoryTransport {
     /// bytes sent on one will be received on the other.
     ///
     /// `label_a` and `label_b` are used only for log output.
-    pub fn pair(label_a: impl Into<String>, label_b: impl Into<String>) -> (Self, Self) {
+    pub fn pair(
+        label_a: impl Into<String>,
+        label_b: impl Into<String>,
+        log: Arc<dyn saikuro_event::LogSink>,
+    ) -> (Self, Self) {
         let (a_tx, b_rx) = mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
         let (b_tx, a_rx) = mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
 
@@ -36,19 +45,21 @@ impl MemoryTransport {
             sender: a_tx,
             receiver: a_rx,
             label: label_a.into(),
+            log: log.clone(),
         };
         let transport_b = Self {
             sender: b_tx,
             receiver: b_rx,
             label: label_b.into(),
+            log,
         };
 
         (transport_a, transport_b)
     }
 
     /// Create a pair with the default labels `"client"` and `"server"`.
-    pub fn connected_pair() -> (Self, Self) {
-        Self::pair("client", "server")
+    pub fn connected_pair(log: Arc<dyn saikuro_event::LogSink>) -> (Self, Self) {
+        Self::pair("client", "server", log)
     }
 }
 
@@ -61,10 +72,12 @@ impl Transport for MemoryTransport {
             MemorySender {
                 inner: self.sender,
                 label: self.label.clone(),
+                log: self.log.clone(),
             },
             MemoryReceiver {
                 inner: self.receiver,
                 label: self.label,
+                log: self.log,
             },
         )
     }
@@ -78,12 +91,14 @@ impl Transport for MemoryTransport {
 pub struct MemorySender {
     inner: mpsc::Sender<Bytes>,
     label: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 /// Receiving half of a [`MemoryTransport`].
 pub struct MemoryReceiver {
     inner: mpsc::Receiver<Bytes>,
     label: String,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 #[cfg(feature = "native")]
@@ -93,7 +108,11 @@ mod send_impls {
     #[async_trait]
     impl TransportSender for MemorySender {
         async fn send(&mut self, frame: Bytes) -> Result<()> {
-            trace!(label = %self.label, bytes = frame.len(), "memory send");
+            let mut record =
+                LogRecord::now(LogLevel::Trace, "saikuro.transport.memory", "memory send");
+            record.set_context("label", self.label.clone());
+            record.set_context("bytes", frame.len() as u64);
+            self.log.emit(&record).await;
             self.inner.send(frame).await.map_err(|_| {
                 TransportError::ConnectionLost(format!(
                     "in-memory receiver dropped for '{}'",
@@ -103,7 +122,13 @@ mod send_impls {
         }
 
         async fn close(&mut self) -> Result<()> {
-            trace!(label = %self.label, "memory sender closing");
+            let mut record = LogRecord::now(
+                LogLevel::Trace,
+                "saikuro.transport.memory",
+                "memory sender closing",
+            );
+            record.set_context("label", self.label.clone());
+            self.log.emit(&record).await;
             Ok(())
         }
     }
@@ -113,8 +138,22 @@ mod send_impls {
         async fn recv(&mut self) -> Result<Option<Bytes>> {
             let result = self.inner.recv().await;
             match &result {
-                Some(bytes) => trace!(label = %self.label, bytes = bytes.len(), "memory recv"),
-                None => trace!(label = %self.label, "memory channel closed"),
+                Some(bytes) => {
+                    let mut record =
+                        LogRecord::now(LogLevel::Trace, "saikuro.transport.memory", "memory recv");
+                    record.set_context("label", self.label.clone());
+                    record.set_context("bytes", bytes.len() as u64);
+                    self.log.emit(&record).await;
+                }
+                None => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Trace,
+                        "saikuro.transport.memory",
+                        "memory channel closed",
+                    );
+                    record.set_context("label", self.label.clone());
+                    self.log.emit(&record).await;
+                }
             }
             Ok(result)
         }
@@ -128,7 +167,11 @@ mod nosend_impls {
     #[async_trait(?Send)]
     impl TransportSender for MemorySender {
         async fn send(&mut self, frame: Bytes) -> Result<()> {
-            trace!(label = %self.label, bytes = frame.len(), "memory send");
+            let mut record =
+                LogRecord::now(LogLevel::Trace, "saikuro.transport.memory", "memory send");
+            record.set_context("label", self.label.clone());
+            record.set_context("bytes", frame.len() as u64);
+            self.log.emit(&record).await;
             self.inner.send(frame).await.map_err(|_| {
                 TransportError::ConnectionLost(format!(
                     "in-memory receiver dropped for '{}'",
@@ -138,7 +181,13 @@ mod nosend_impls {
         }
 
         async fn close(&mut self) -> Result<()> {
-            trace!(label = %self.label, "memory sender closing");
+            let mut record = LogRecord::now(
+                LogLevel::Trace,
+                "saikuro.transport.memory",
+                "memory sender closing",
+            );
+            record.set_context("label", self.label.clone());
+            self.log.emit(&record).await;
             Ok(())
         }
     }
@@ -148,8 +197,22 @@ mod nosend_impls {
         async fn recv(&mut self) -> Result<Option<Bytes>> {
             let result = self.inner.recv().await;
             match &result {
-                Some(bytes) => trace!(label = %self.label, bytes = bytes.len(), "memory recv"),
-                None => trace!(label = %self.label, "memory channel closed"),
+                Some(bytes) => {
+                    let mut record =
+                        LogRecord::now(LogLevel::Trace, "saikuro.transport.memory", "memory recv");
+                    record.set_context("label", self.label.clone());
+                    record.set_context("bytes", bytes.len() as u64);
+                    self.log.emit(&record).await;
+                }
+                None => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Trace,
+                        "saikuro.transport.memory",
+                        "memory channel closed",
+                    );
+                    record.set_context("label", self.label.clone());
+                    self.log.emit(&record).await;
+                }
             }
             Ok(result)
         }

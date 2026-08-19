@@ -52,6 +52,8 @@ saikuro-event  = { workspace = true, default-features = false }
 
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
 
 [dev-dependencies]
 saikuro-exec = { workspace = true }

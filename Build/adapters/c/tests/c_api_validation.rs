@@ -1,13 +1,14 @@
 use std::ptr;
 
 use saikuro_c::{
-    saikuro_channel_abort, saikuro_channel_close, saikuro_channel_free, saikuro_channel_next_json,
-    saikuro_channel_send_json, saikuro_client_batch_json, saikuro_client_call_json,
-    saikuro_client_call_json_timeout, saikuro_client_cast_json, saikuro_client_channel_json,
-    saikuro_client_connect, saikuro_client_log, saikuro_client_resource_json,
-    saikuro_client_stream_json, saikuro_provider_free, saikuro_provider_new,
-    saikuro_provider_register, saikuro_stream_free, saikuro_stream_next_json, saikuro_string_dup,
-    saikuro_string_free,
+    saikuro_channel_abort_async, saikuro_channel_close_async, saikuro_channel_next_json_async,
+    saikuro_channel_send_json_async, saikuro_client_batch_json_async,
+    saikuro_client_call_json_async, saikuro_client_call_json_timeout_async,
+    saikuro_client_cast_json_async, saikuro_client_channel_json_async,
+    saikuro_client_connect_async, saikuro_client_log_async, saikuro_client_resource_json_async,
+    saikuro_client_stream_json_async, saikuro_provider_free, saikuro_provider_new,
+    saikuro_provider_register, saikuro_stream_free, saikuro_stream_next_json_async,
+    saikuro_string_dup, saikuro_string_free,
 };
 
 mod common;
@@ -28,11 +29,8 @@ fn string_helpers_work_and_null_is_safe() {
 
 #[test]
 fn client_connect_requires_non_null_address() {
-    let handle = saikuro_client_connect(ptr::null());
-    assert!(handle.is_null());
-
-    let message = common::take_error();
-    assert!(message.contains("address must not be null"));
+    saikuro_client_connect_async(ptr::null(), Some(common::noop_connect_cb), ptr::null_mut());
+    assert!(common::take_error().contains("address must not be null"));
 }
 
 #[test]
@@ -40,78 +38,156 @@ fn call_cast_batch_require_non_null_handle() {
     let target = common::c("math.add");
     let args = common::c("[1,2]");
 
-    let call = saikuro_client_call_json(ptr::null_mut(), target.as_ptr(), args.as_ptr());
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_async(
+        ptr::null_mut(),
+        target.as_ptr(),
+        args.as_ptr(),
+        Some(common::result_cb),
+        user_data,
+    );
+    let call = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(call.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 
-    let cast = saikuro_client_cast_json(ptr::null_mut(), target.as_ptr(), args.as_ptr());
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_cast_json_async(
+        ptr::null_mut(),
+        target.as_ptr(),
+        args.as_ptr(),
+        Some(common::status_cb),
+        user_data,
+    );
+    let cast = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(cast, 1);
     assert!(common::take_error().contains("handle must not be null"));
 
-    let batch = saikuro_client_batch_json(ptr::null_mut(), common::c("[]").as_ptr());
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_batch_json_async(
+        ptr::null_mut(),
+        common::c("[]").as_ptr(),
+        Some(common::result_cb),
+        user_data,
+    );
+    let batch = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(batch.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 
-    let timeout_call =
-        saikuro_client_call_json_timeout(ptr::null_mut(), target.as_ptr(), args.as_ptr(), 100);
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_timeout_async(
+        ptr::null_mut(),
+        target.as_ptr(),
+        args.as_ptr(),
+        100,
+        Some(common::result_cb),
+        user_data,
+    );
+    let timeout_call = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(timeout_call.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 }
 
 #[test]
 fn stream_and_channel_null_handle_paths_are_safe() {
-    let stream = saikuro_client_stream_json(ptr::null_mut(), ptr::null(), ptr::null());
+    // Null client handle on stream open.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_stream_json_async(
+        ptr::null_mut(),
+        ptr::null(),
+        ptr::null(),
+        Some(common::connect_cb),
+        user_data,
+    );
+    let stream = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(stream.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 
-    let channel = saikuro_client_channel_json(ptr::null_mut(), ptr::null(), ptr::null());
+    // Null client handle on channel open.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_channel_json_async(
+        ptr::null_mut(),
+        ptr::null(),
+        ptr::null(),
+        Some(common::connect_cb),
+        user_data,
+    );
+    let channel = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(channel.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 
-    let mut out_json = ptr::null_mut();
-    let mut out_done = 0;
-
-    let stream_next =
-        unsafe { saikuro_stream_next_json(ptr::null_mut(), &mut out_json, &mut out_done) };
-    assert_eq!(stream_next, 1);
+    // Null stream on next.
+    unsafe {
+        saikuro_stream_next_json_async(ptr::null_mut(), Some(common::noop_item_cb), ptr::null_mut())
+    };
     assert!(common::take_error().contains("stream must not be null"));
 
-    let channel_next =
-        unsafe { saikuro_channel_next_json(ptr::null_mut(), &mut out_json, &mut out_done) };
-    assert_eq!(channel_next, 1);
+    // Null channel on next.
+    unsafe {
+        saikuro_channel_next_json_async(
+            ptr::null_mut(),
+            Some(common::noop_item_cb),
+            ptr::null_mut(),
+        )
+    };
     assert!(common::take_error().contains("channel must not be null"));
 
-    let send_rc = saikuro_channel_send_json(ptr::null_mut(), common::c("{}").as_ptr());
+    // Null channel on send.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_channel_send_json_async(
+        ptr::null_mut(),
+        common::c("{}").as_ptr(),
+        Some(common::status_cb),
+        user_data,
+    );
+    let send_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(send_rc, 1);
     assert!(common::take_error().contains("channel must not be null"));
 
-    let close_rc = saikuro_channel_close(ptr::null_mut());
+    // Null channel on close.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_channel_close_async(ptr::null_mut(), Some(common::status_cb), user_data);
+    let close_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(close_rc, 1);
     assert!(common::take_error().contains("channel must not be null"));
 
-    let abort_rc = saikuro_channel_abort(ptr::null_mut());
+    // Null channel on abort.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_channel_abort_async(ptr::null_mut(), Some(common::status_cb), user_data);
+    let abort_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(abort_rc, 1);
     assert!(common::take_error().contains("channel must not be null"));
 
     saikuro_stream_free(ptr::null_mut());
-    saikuro_channel_free(ptr::null_mut());
 }
 
 #[test]
 fn resource_and_log_require_non_null_handle() {
     let target = common::c("files.open");
     let args = common::c("[]");
-    let resource = saikuro_client_resource_json(ptr::null_mut(), target.as_ptr(), args.as_ptr());
+
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_resource_json_async(
+        ptr::null_mut(),
+        target.as_ptr(),
+        args.as_ptr(),
+        Some(common::result_cb),
+        user_data,
+    );
+    let resource = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(resource.is_null());
     assert!(common::take_error().contains("handle must not be null"));
 
-    let log_rc = saikuro_client_log(
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_log_async(
         ptr::null_mut(),
         common::c("info").as_ptr(),
         common::c("tests").as_ptr(),
         common::c("hello").as_ptr(),
         common::c("{}").as_ptr(),
+        Some(common::status_cb),
+        user_data,
     );
+    let log_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(log_rc, 1);
     assert!(common::take_error().contains("handle must not be null"));
 }

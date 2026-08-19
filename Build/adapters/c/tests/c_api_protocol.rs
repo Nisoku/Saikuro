@@ -4,21 +4,21 @@ use std::thread;
 use std::time::Duration;
 
 use saikuro_c::{
-    saikuro_channel_close, saikuro_channel_next_json, saikuro_channel_send_json,
-    saikuro_client_call_json, saikuro_client_call_json_timeout, saikuro_client_channel_json,
-    saikuro_client_close, saikuro_client_connect, saikuro_client_free, saikuro_client_log,
-    saikuro_client_resource_json, saikuro_client_stream_json, saikuro_provider_free,
-    saikuro_provider_new, saikuro_provider_register, saikuro_provider_serve,
-    saikuro_stream_next_json, saikuro_string_dup,
+    saikuro_channel_close_async, saikuro_channel_next_json_async, saikuro_channel_send_json_async,
+    saikuro_client_call_json_async, saikuro_client_call_json_timeout_async,
+    saikuro_client_channel_json_async, saikuro_client_close_async, saikuro_client_connect_async,
+    saikuro_client_free, saikuro_client_log_async, saikuro_client_resource_json_async,
+    saikuro_client_stream_json_async, saikuro_provider_free, saikuro_provider_new,
+    saikuro_provider_register, saikuro_provider_serve_async, saikuro_stream_next_json_async,
+    saikuro_string_dup,
 };
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::{ErrorCode, ErrorDetail},
-    value::Value,
     ResponseEnvelope,
 };
+use saikuro_event::{ErrorCode, ErrorDetail, Value};
 use saikuro_transport::tcp::TcpTransportListener;
-use saikuro_transport::traits::{Transport, TransportListener, TransportReceiver, TransportSender};
+use saikuro_transport::{Transport, TransportListener, TransportReceiver, TransportSender};
 
 mod common;
 
@@ -33,16 +33,16 @@ struct ScriptReport {
 fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptReport>) {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
-        let rt = saikuro_exec::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::RuntimeBuilder::new_current_thread()
             .enable_all()
-            .build()
-            .expect("create runtime");
+            .build();
 
         rt.block_on(async move {
             let socket = SocketAddr::from(([127, 0, 0, 1], 0));
-            let mut listener = TcpTransportListener::bind(socket)
-                .await
-                .expect("bind listener");
+            let mut listener =
+                TcpTransportListener::bind(socket, std::sync::Arc::new(saikuro_event::NullSink))
+                    .await
+                    .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport = listener
                 .accept()
@@ -89,10 +89,7 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
                             .expect("send stream end");
                     }
                     InvocationType::Channel => {
-                        if matches!(
-                            env.stream_control,
-                            Some(saikuro_core::envelope::StreamControl::End)
-                        ) {
+                        if matches!(env.stream_control, Some(saikuro_core::StreamControl::End)) {
                             report.saw_channel_close = true;
                             continue;
                         }
@@ -147,18 +144,30 @@ fn spawn_scripted_server_for_client() -> (String, thread::JoinHandle<ScriptRepor
 fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout() {
     let (address, server) = spawn_scripted_server_for_client();
 
-    let handle = saikuro_client_connect(common::c(&address).as_ptr());
+    // Connect.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_connect_async(
+        common::c(&address).as_ptr(),
+        Some(common::connect_cb),
+        user_data,
+    );
+    let handle = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !handle.is_null(),
         "connect failed: {}",
         common::take_error()
     );
 
-    let resource = saikuro_client_resource_json(
+    // Resource.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_resource_json_async(
         handle,
         common::c("files.read").as_ptr(),
         common::c("[]").as_ptr(),
+        Some(common::result_cb),
+        user_data,
     );
+    let resource = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !resource.is_null(),
         "resource failed: {}",
@@ -166,67 +175,111 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
     );
     assert_eq!(common::take_c_string(resource), "\"contents\"");
 
-    let log_rc = saikuro_client_log(
+    // Log.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_log_async(
         handle,
         common::c("info").as_ptr(),
         common::c("tests").as_ptr(),
         common::c("hello").as_ptr(),
         common::c("{}").as_ptr(),
+        Some(common::status_cb),
+        user_data,
     );
+    let log_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(log_rc, 0, "log failed: {}", common::take_error());
 
-    let stream = saikuro_client_stream_json(
+    // Stream open.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_stream_json_async(
         handle,
         common::c("events.watch").as_ptr(),
         common::c("[]").as_ptr(),
+        Some(common::connect_cb),
+        user_data,
     );
+    let stream = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !stream.is_null(),
         "stream open failed: {}",
         common::take_error()
     );
 
-    let mut out_json = ptr::null_mut();
-    let mut out_done = 0;
-    let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
-    assert_eq!(rc, 0);
+    // Stream next (item 1).
+    let (rx, user_data) = common::channel_pair::<(*mut std::ffi::c_char, std::ffi::c_int)>();
+    unsafe {
+        saikuro_stream_next_json_async(stream, Some(common::item_cb), user_data);
+    }
+    let (out_json, out_done) = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(out_done, 0);
     assert_eq!(common::take_c_string(out_json), "1");
 
-    let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
-    assert_eq!(rc, 0);
+    // Stream next (item 2).
+    let (rx, user_data) = common::channel_pair::<(*mut std::ffi::c_char, std::ffi::c_int)>();
+    unsafe {
+        saikuro_stream_next_json_async(stream, Some(common::item_cb), user_data);
+    }
+    let (out_json, out_done) = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(out_done, 0);
     assert_eq!(common::take_c_string(out_json), "2");
 
-    let rc = unsafe { saikuro_stream_next_json(stream, &mut out_json, &mut out_done) };
-    assert_eq!(rc, 0);
+    // Stream next (done).
+    let (rx, user_data) = common::channel_pair::<(*mut std::ffi::c_char, std::ffi::c_int)>();
+    unsafe {
+        saikuro_stream_next_json_async(stream, Some(common::item_cb), user_data);
+    }
+    let (_out_json, out_done) = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(out_done, 1);
 
-    let channel = saikuro_client_channel_json(
+    // Channel open.
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
+    saikuro_client_channel_json_async(
         handle,
         common::c("chat.open").as_ptr(),
         common::c("[]").as_ptr(),
+        Some(common::connect_cb),
+        user_data,
     );
+    let channel = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(
         !channel.is_null(),
         "channel open failed: {}",
         common::take_error()
     );
 
-    let rc = unsafe { saikuro_channel_next_json(channel, &mut out_json, &mut out_done) };
-    assert_eq!(rc, 0);
+    // Channel next (welcome).
+    let (rx, user_data) = common::channel_pair::<(*mut std::ffi::c_char, std::ffi::c_int)>();
+    unsafe {
+        saikuro_channel_next_json_async(channel, Some(common::item_cb), user_data);
+    }
+    let (out_json, out_done) = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(out_done, 0);
     assert_eq!(common::take_c_string(out_json), "\"welcome\"");
 
-    let send_rc = saikuro_channel_send_json(channel, common::c("\"ping\"").as_ptr());
+    // Channel send.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_channel_send_json_async(
+        channel,
+        common::c("\"ping\"").as_ptr(),
+        Some(common::status_cb),
+        user_data,
+    );
+    let send_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(send_rc, 0, "channel send failed: {}", common::take_error());
 
-    let rc = unsafe { saikuro_channel_next_json(channel, &mut out_json, &mut out_done) };
-    assert_eq!(rc, 0);
+    // Channel next (pong).
+    let (rx, user_data) = common::channel_pair::<(*mut std::ffi::c_char, std::ffi::c_int)>();
+    unsafe {
+        saikuro_channel_next_json_async(channel, Some(common::item_cb), user_data);
+    }
+    let (out_json, out_done) = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(out_done, 0);
     assert_eq!(common::take_c_string(out_json), "\"pong\"");
 
-    let close_rc = saikuro_channel_close(channel);
+    // Channel close.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_channel_close_async(channel, Some(common::status_cb), user_data);
+    let close_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(
         close_rc,
         0,
@@ -234,11 +287,16 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
         common::take_error()
     );
 
-    let call_fail = saikuro_client_call_json(
+    // Call (error path).
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_async(
         handle,
         common::c("math.fail").as_ptr(),
         common::c("[]").as_ptr(),
+        Some(common::result_cb),
+        user_data,
     );
+    let call_fail = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(call_fail.is_null(), "call should fail");
     let call_error = common::take_error();
     assert!(
@@ -246,12 +304,17 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
         "unexpected error mapping: {call_error}"
     );
 
-    let timeout = saikuro_client_call_json_timeout(
+    // Call (timeout path).
+    let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
+    saikuro_client_call_json_timeout_async(
         handle,
         common::c("slow.never").as_ptr(),
         common::c("[]").as_ptr(),
         30,
+        Some(common::result_cb),
+        user_data,
     );
+    let timeout = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert!(timeout.is_null(), "timeout call should fail");
     let timeout_error = common::take_error();
     assert!(
@@ -259,7 +322,10 @@ fn c_client_protocol_paths_cover_stream_channel_resource_log_error_and_timeout()
         "unexpected timeout error: {timeout_error}"
     );
 
-    let client_close_rc = saikuro_client_close(handle);
+    // Close client.
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_client_close_async(handle, Some(common::status_cb), user_data);
+    let client_close_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(
         client_close_rc,
         0,
@@ -287,16 +353,16 @@ unsafe extern "C" fn add_cb(
 fn spawn_scripted_server_for_provider() -> (String, thread::JoinHandle<ScriptReport>) {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
-        let rt = saikuro_exec::runtime::Builder::new_current_thread()
+        let rt = saikuro_exec::RuntimeBuilder::new_current_thread()
             .enable_all()
-            .build()
-            .expect("create runtime");
+            .build();
 
         rt.block_on(async move {
             let socket = SocketAddr::from(([127, 0, 0, 1], 0));
-            let mut listener = TcpTransportListener::bind(socket)
-                .await
-                .expect("bind listener");
+            let mut listener =
+                TcpTransportListener::bind(socket, std::sync::Arc::new(saikuro_event::NullSink))
+                    .await
+                    .expect("bind listener");
             let _ = ready_tx.send(format!("tcp://{}", listener.local_addr()));
             let transport = listener
                 .accept()
@@ -371,7 +437,14 @@ fn c_provider_announce_and_runtime_dispatch_roundtrip() {
         common::take_error()
     );
 
-    let serve_rc = saikuro_provider_serve(provider, common::c(&address).as_ptr());
+    let (rx, user_data) = common::channel_pair::<std::ffi::c_int>();
+    saikuro_provider_serve_async(
+        provider,
+        common::c(&address).as_ptr(),
+        Some(common::status_cb),
+        user_data,
+    );
+    let serve_rc = rx.recv_timeout(common::CALLBACK_TIMEOUT).unwrap();
     assert_eq!(
         serve_rc,
         0,

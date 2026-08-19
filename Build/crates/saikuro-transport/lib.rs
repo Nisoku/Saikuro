@@ -94,12 +94,27 @@ macro_rules! impl_native_sender {
         #[async_trait::async_trait]
         impl $crate::shared::traits::TransportSender for $ty {
             async fn send(&mut self, frame: ::bytes::Bytes) -> $crate::shared::error::Result<()> {
-                tracing::trace!($addr = ?self.$addr, bytes = frame.len(), concat!($desc, " send"));
+                use ::saikuro_event::{LogLevel, LogRecord};
+                let mut record = LogRecord::now(
+                    LogLevel::Trace,
+                    concat!("saikuro.transport.", $desc),
+                    concat!($desc, " send"),
+                );
+                record.set_context("_addr", ::alloc::format!("{:?}", self.$addr));
+                record.set_context("bytes", frame.len() as u64);
+                self.log.emit(&record).await;
                 $crate::shared::framing::write_frame(&mut self.inner, &frame).await
             }
 
             async fn close(&mut self) -> $crate::shared::error::Result<()> {
-                tracing::debug!($addr = ?self.$addr, concat!($desc, " sender closing"));
+                use ::saikuro_event::{LogLevel, LogRecord};
+                let mut record = LogRecord::now(
+                    LogLevel::Debug,
+                    concat!("saikuro.transport.", $desc),
+                    concat!($desc, " sender closing"),
+                );
+                record.set_context("_addr", ::alloc::format!("{:?}", self.$addr));
+                self.log.emit(&record).await;
                 $crate::shared::framing::AsyncByteWrite::flush(&mut self.inner).await
             }
         }
@@ -107,26 +122,38 @@ macro_rules! impl_native_sender {
 }
 
 /// Implements [`TransportReceiver`] for a native transport's receiving half.
+///
+/// The concrete type must have a `log: Arc<dyn ::saikuro_event::LogSink>` field.
 #[macro_export]
 macro_rules! impl_native_receiver {
     ($ty:ty, $addr:ident, $desc:literal) => {
         #[async_trait::async_trait]
         impl $crate::shared::traits::TransportReceiver for $ty {
-            async fn recv(
-                &mut self,
-            ) -> $crate::shared::error::Result<Option<::bytes::Bytes>> {
+            async fn recv(&mut self) -> $crate::shared::error::Result<Option<::bytes::Bytes>> {
                 match $crate::shared::framing::read_frame(&mut self.inner).await {
                     Ok(bytes) => {
                         match &bytes {
-                            Some(b) => tracing::trace!(
-                                $addr = ?self.$addr,
-                                bytes = b.len(),
-                                concat!($desc, " recv")
-                            ),
-                            None => tracing::debug!(
-                                $addr = ?self.$addr,
-                                concat!($desc, " connection closed by peer")
-                            ),
+                            Some(b) => {
+                                use ::saikuro_event::{LogLevel, LogRecord};
+                                let mut record = LogRecord::now(
+                                    LogLevel::Trace,
+                                    concat!("saikuro.transport.", $desc),
+                                    concat!($desc, " recv"),
+                                );
+                                record.set_context("_addr", ::alloc::format!("{:?}", self.$addr));
+                                record.set_context("bytes", b.len() as u64);
+                                self.log.emit(&record).await;
+                            }
+                            None => {
+                                use ::saikuro_event::{LogLevel, LogRecord};
+                                let mut record = LogRecord::now(
+                                    LogLevel::Debug,
+                                    concat!("saikuro.transport.", $desc),
+                                    concat!($desc, " connection closed by peer"),
+                                );
+                                record.set_context("_addr", ::alloc::format!("{:?}", self.$addr));
+                                self.log.emit(&record).await;
+                            }
                         }
                         Ok(bytes)
                     }

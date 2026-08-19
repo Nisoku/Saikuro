@@ -14,7 +14,7 @@ use saikuro_router::{
 };
 use saikuro_schema::registry::SchemaRegistry;
 
-mod common;
+use crate::common;
 
 //  Helpers
 

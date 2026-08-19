@@ -4,13 +4,10 @@
 //! concurrency, rapid connect-disconnect cycles, and backpressure
 //! scenarios specific to the in-memory channel backend.
 
-use bytes::Bytes;
-use saikuro_exec::sync::Barrier;
 use saikuro_transport::{
     memory::MemoryTransport,
     traits::{Transport, TransportReceiver, TransportSender},
 };
-use std::sync::Arc;
 
 // HIGH-VOLUME THROUGHPUT
 

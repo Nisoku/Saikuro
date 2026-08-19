@@ -4,9 +4,14 @@
 //! invocation IDs as correlation keys.
 //!
 
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use alloc::sync::Arc;
-use alloc::{boxed::Box, string::{String, ToString}, vec::Vec, borrow::ToOwned};
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use core::time::Duration;
 
 use bytes::Bytes;
@@ -17,9 +22,8 @@ use saikuro_core::{
     invocation::InvocationId,
     PROTOCOL_VERSION,
 };
-use saikuro_event::{ErrorCode, ErrorDetail, Value as CoreValue};
+use saikuro_event::{ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, Value as CoreValue};
 use saikuro_exec::{mpsc, oneshot, sync::Mutex};
-use tracing::{debug, error, warn};
 
 use crate::{
     error::{Error, Result},
@@ -181,13 +185,14 @@ pub struct Client {
     /// Whether the client is still connected.
     connected: Arc<AtomicBool>,
     options: ClientOptions,
+    /// The log sink used by this client.
+    pub log: Arc<dyn LogSink>,
 }
 
 impl Client {
     /// Connect to a Saikuro runtime at `address` and return a ready client.
     pub async fn connect(address: impl AsRef<str>) -> Result<Self> {
         let address = address.as_ref();
-        debug!(address = %address, "client connecting");
         let transport = connect(address).await?;
         Self::from_transport(transport, None)
     }
@@ -202,59 +207,68 @@ impl Client {
         Self::from_transport(transport, Some(options))
     }
 
+    /// Connect with a custom log sink.
+    pub async fn connect_with_log(
+        address: impl AsRef<str>,
+        options: Option<ClientOptions>,
+        log: Arc<dyn LogSink>,
+    ) -> Result<Self> {
+        let address = address.as_ref();
+        {
+            let mut record =
+                LogRecord::now(LogLevel::Debug, "saikuro.rust.client", "client connecting");
+            record.set_context("address", address.to_owned());
+            log.emit(&record).await;
+        }
+        let transport = connect(address).await?;
+        Self::from_transport_with_log(transport, options, log)
+    }
+
     /// Construct a client from an already-connected transport.
-    ///
-    /// Starts the background I/O task immediately.  The task first drains any
-    /// announce frames already waiting in the transport (which happens when a
-    /// provider and client share an in-process transport pair directly), then
-    /// enters the normal send/receive loop.
     pub fn from_transport(
+        transport: Box<dyn AdapterTransport>,
+        options: Option<ClientOptions>,
+    ) -> Result<Self> {
+        Self::from_transport_with_log(transport, options, Arc::new(saikuro_event::NullSink))
+    }
+
+    /// Construct a client from an already-connected transport with a log sink.
+    pub fn from_transport_with_log(
         mut transport: Box<dyn AdapterTransport>,
         options: Option<ClientOptions>,
+        log: Arc<dyn LogSink>,
     ) -> Result<Self> {
         let options = options.unwrap_or_default();
         let pending: Arc<DashMap<InvocationId, PendingSlot>> = Arc::new(DashMap::new());
         let channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>> = Arc::new(DashMap::new());
         let connected = Arc::new(AtomicBool::new(true));
 
-        // Outbound frame channel: callers push frames here; the I/O task
-        // drains them and writes to the transport.  The channel capacity is
-        // large enough that a burst of concurrent calls never blocks a caller.
         let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(CHANNEL_CAPACITY);
 
         let pending_recv = pending.clone();
         let channel_senders_recv = channel_senders.clone();
         let connected_recv = connected.clone();
+        let log_recv = log.clone();
 
         let recv_task = saikuro_exec::spawn(async move {
-            // Handshake phase: drain any announce frames that may have arrived
-            // before this task started.  This is the normal path when a
-            // provider and client are connected directly via InMemoryTransport
-            // (e.g. integration tests), where the provider sends its announce
-            // before the client task is even spawned.
-            //
-            // We use try_recv rather than a timeout-based poll so that the
-            // phase is instant for normal runtime connections (where no announce
-            // arrives on the client side at all).
             drain_announces(&mut *transport).await;
 
-            // I/O loop: multiplex outbound sends and inbound responses.
             loop {
                 saikuro_exec::select! {
-                    // Forward outbound frames from callers to the transport.
                     frame = send_rx.recv() => {
                         match frame {
                             Some(f) => {
                                 if let Err(e) = transport.send(f).await {
-                                    error!(error = %e, "client send error");
+                                    let mut record = LogRecord::now(LogLevel::Error, "saikuro.rust.client", "client send error");
+                                    record.set_context("error", alloc::format!("{e}"));
+                                    log_recv.emit(&record).await;
                                     break;
                                 }
                             }
-                            None => break, // all Client handles dropped
+                            None => break,
                         }
                     }
 
-                    // Route inbound response frames to their waiting callers.
                     incoming = transport.recv().fuse() => {
                         match incoming {
                             Ok(Some(frame)) => {
@@ -267,11 +281,14 @@ impl Client {
                                 .await;
                             }
                             Ok(None) => {
-                                debug!("client: transport closed");
+                                let record = LogRecord::now(LogLevel::Debug, "saikuro.rust.client", "client: transport closed");
+                                log_recv.emit(&record).await;
                                 break;
                             }
                             Err(e) => {
-                                error!(error = %e, "client recv error");
+                                let mut record = LogRecord::now(LogLevel::Error, "saikuro.rust.client", "client recv error");
+                                record.set_context("error", alloc::format!("{e}"));
+                                log_recv.emit(&record).await;
                                 break;
                             }
                         }
@@ -292,6 +309,7 @@ impl Client {
             recv_task: Some(recv_task),
             connected,
             options,
+            log,
         })
     }
 
@@ -560,7 +578,6 @@ async fn drain_announces(transport: &mut dyn AdapterTransport) {
         }
         // Non-announce frame arrived before any pending slot exists;
         // this is unexpected.
-        warn!("client: unexpected frame during handshake phase, discarding");
     }
 }
 
@@ -588,17 +605,9 @@ async fn handle_inbound(
             if let Ok(ack_bytes) = ack.to_msgpack() {
                 let _ = transport.send(Bytes::from(ack_bytes)).await;
             }
-        } else {
-            warn!(
-                target = %env.target,
-                invocation_type = %env.invocation_type,
-                "client received unexpected inbound envelope"
-            );
         }
         return;
     }
-
-    warn!("client: received undecodable inbound frame");
 }
 
 async fn route_response(
@@ -636,22 +645,17 @@ async fn route_response(
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "stream error")
                         });
-                        if tx
+                        let _ = tx
                             .send(Err(Error::remote(
                                 detail.code.to_string(),
                                 detail.message,
                                 None,
                             )))
-                            .await
-                            .is_err()
-                        {
-                            warn!(id = %id, "stream receiver closed while sending error");
-                        }
+                            .await;
                         pending.remove(&id);
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
                         if tx.send(Ok(value)).await.is_err() {
-                            warn!(id = %id, "stream receiver closed while sending value");
                             pending.remove(&id);
                         }
                     }
@@ -672,16 +676,11 @@ async fn route_response(
                         let detail = resp.error.unwrap_or_else(|| {
                             ErrorDetail::new(ErrorCode::Internal, "channel error")
                         });
-                        if tx
-                            .try_send(Err(Error::remote(
-                                detail.code.to_string(),
-                                detail.message,
-                                None,
-                            )))
-                            .is_err()
-                        {
-                            warn!(id = %id, "channel receiver closed while sending error");
-                        }
+                        let _ = tx.try_send(Err(Error::remote(
+                            detail.code.to_string(),
+                            detail.message,
+                            None,
+                        )));
                         pending.remove(&id);
                         if let Some((_, sender)) = channel_senders.remove(&id) {
                             let _ = sender.lock().await.take();
@@ -689,7 +688,6 @@ async fn route_response(
                     } else {
                         let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
                         if tx.try_send(Ok(value)).is_err() {
-                            warn!(id = %id, "channel receiver closed while sending value");
                             pending.remove(&id);
                             if let Some((_, sender)) = channel_senders.remove(&id) {
                                 let _ = sender.lock().await.take();
@@ -699,9 +697,7 @@ async fn route_response(
                 }
             }
         }
-        _ => {
-            debug!(id = %id, "received response for unknown invocation id");
-        }
+        _ => {}
     }
 }
 

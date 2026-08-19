@@ -1,9 +1,13 @@
 use crate::{impl_native_receiver, impl_native_sender};
+#[cfg(target_has_atomic = "ptr")]
+use alloc::sync::Arc;
 use async_trait::async_trait;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+use saikuro_event::{LogLevel, LogRecord};
 use saikuro_net::io::{split, ReadHalf, WriteHalf};
 use saikuro_net::net::{TcpListener, TcpStream};
 use std::net::SocketAddr;
-use tracing::debug;
 
 use crate::shared::{
     error::Result,
@@ -14,16 +18,21 @@ use crate::shared::{
 pub struct TcpTransport {
     stream: TcpStream,
     peer_addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl TcpTransport {
     /// Wrap an already-connected [`TcpStream`].
-    pub fn new(stream: TcpStream) -> Result<Self> {
+    pub fn new(stream: TcpStream, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
         let peer_addr = stream.peer_addr()?;
         // Disable Nagle's algorithm: Saikuro sends complete frames and latency
         // matters more than segment coalescing.
         stream.set_nodelay(true)?;
-        Ok(Self { stream, peer_addr })
+        Ok(Self {
+            stream,
+            peer_addr,
+            log,
+        })
     }
 }
 
@@ -34,14 +43,17 @@ impl Transport for TcpTransport {
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (read, write) = split(self.stream);
         let peer = self.peer_addr;
+        let log = self.log;
         (
             TcpSender {
                 inner: write,
                 peer_addr: peer,
+                log: log.clone(),
             },
             TcpReceiver {
                 inner: read,
                 peer_addr: peer,
+                log,
             },
         )
     }
@@ -55,6 +67,7 @@ impl Transport for TcpTransport {
 pub struct TcpSender {
     inner: WriteHalf<TcpStream>,
     peer_addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl_native_sender!(TcpSender, peer_addr, "tcp");
@@ -62,6 +75,7 @@ impl_native_sender!(TcpSender, peer_addr, "tcp");
 pub struct TcpReceiver {
     inner: ReadHalf<TcpStream>,
     peer_addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl_native_receiver!(TcpReceiver, peer_addr, "tcp");
@@ -69,11 +83,12 @@ impl_native_receiver!(TcpReceiver, peer_addr, "tcp");
 /// Establishes outgoing TCP connections.
 pub struct TcpConnector {
     addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl TcpConnector {
-    pub fn new(addr: SocketAddr) -> Self {
-        Self { addr }
+    pub fn new(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Self {
+        Self { addr, log }
     }
 }
 
@@ -82,9 +97,11 @@ impl TransportConnector for TcpConnector {
     type Output = TcpTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        debug!(addr = %self.addr, "tcp connecting");
+        let mut record = LogRecord::now(LogLevel::Debug, "saikuro.transport.tcp", "tcp connecting");
+        record.set_context("addr", alloc::format!("{}", self.addr));
+        self.log.emit(&record).await;
         let stream = TcpStream::connect(self.addr).await?;
-        TcpTransport::new(stream)
+        TcpTransport::new(stream, self.log.clone())
     }
 }
 
@@ -92,15 +109,26 @@ impl TransportConnector for TcpConnector {
 pub struct TcpTransportListener {
     inner: TcpListener,
     local_addr: SocketAddr,
+    log: Arc<dyn saikuro_event::LogSink>,
 }
 
 impl TcpTransportListener {
     /// Bind a listener on the given address.
-    pub async fn bind(addr: SocketAddr) -> Result<Self> {
+    pub async fn bind(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
         let inner = TcpListener::bind(addr).await?;
         let local_addr = inner.local_addr()?;
-        debug!(%local_addr, "tcp listener bound");
-        Ok(Self { inner, local_addr })
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.tcp",
+            "tcp listener bound",
+        );
+        record.set_context("local_addr", alloc::format!("{}", local_addr));
+        log.emit(&record).await;
+        Ok(Self {
+            inner,
+            local_addr,
+            log,
+        })
     }
 
     /// Return the address this listener is bound to.
@@ -115,16 +143,28 @@ impl TransportListener for TcpTransportListener {
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
         match self.inner.accept().await {
-            Ok((stream, _peer)) => {
-                debug!(peer = %_peer, "tcp accepted connection");
-                Ok(Some(TcpTransport::new(stream)?))
+            Ok((stream, peer)) => {
+                let mut record = LogRecord::now(
+                    LogLevel::Debug,
+                    "saikuro.transport.tcp",
+                    "tcp accepted connection",
+                );
+                record.set_context("peer", alloc::format!("{}", peer));
+                self.log.emit(&record).await;
+                Ok(Some(TcpTransport::new(stream, self.log.clone())?))
             }
             Err(e) => Err(e.into()),
         }
     }
 
     async fn close(&mut self) -> Result<()> {
-        debug!(local = %self.local_addr, "tcp listener closing");
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.transport.tcp",
+            "tcp listener closing",
+        );
+        record.set_context("local_addr", alloc::format!("{}", self.local_addr));
+        self.log.emit(&record).await;
         // TcpListener closes on drop.
         Ok(())
     }

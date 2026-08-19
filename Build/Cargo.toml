@@ -14,6 +14,7 @@ members = [
     "crates/saikuro-codegen",
     "adapters/c",
     "adapters/rust",
+    "tests"
 ]
 
 [workspace.package]
@@ -51,6 +52,7 @@ portable-atomic = { version = "1", default-features = false, features = [
     "fallback",
     "critical-section",
 ] }
+portable-atomic-util = { version = "0.2", default-features = false, features = ["alloc"] }
 
 rand_core = { version = "0.9", default-features = false }
 
@@ -143,9 +145,6 @@ saikuro-random = { path = "crates/saikuro-random", default-features = false }
 saikuro-event = { path = "crates/saikuro-event", default-features = false }
 saikuro = { path = "adapters/rust", default-features = false }
 
-# no_std (wasm / wasi) targets cannot unwind; abort on panic everywhere.
 [profile.dev]
-panic = "abort"
 
 [profile.release]
-panic = "abort"
