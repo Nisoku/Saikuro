@@ -1,11 +1,7 @@
 //! Error propagation tests
 
-use saikuro_core::{
-    error::{ErrorCode, ErrorDetail, SaikuroError},
-    invocation::InvocationId,
-    value::Value,
-    ResponseEnvelope,
-};
+use saikuro_core::{InvocationId, ResponseEnvelope};
+use saikuro_event::{ErrorCode, ErrorDetail, SaikuroError, Value};
 
 // SaikuroError -> ErrorDetail conversion
 
@@ -156,9 +152,9 @@ fn internal_error_maps_correctly() {
 #[test]
 fn error_detail_with_detail_accumulates_entries() {
     let detail = ErrorDetail::new(ErrorCode::ProviderError, "something went wrong")
-        .with_detail("field", Value::String("arg_a".into()))
+        .with_context("field", Value::String("arg_a".into()))
         .unwrap()
-        .with_detail("line", Value::Int(42))
+        .with_context("line", Value::Int(42))
         .unwrap();
 
     assert_eq!(detail.details["field"], Value::String("arg_a".into()));
@@ -179,7 +175,7 @@ fn error_detail_display_includes_code_and_message() {
 fn error_response_survives_msgpack_roundtrip() {
     let id = InvocationId::new().expect("entropy available");
     let detail = ErrorDetail::new(ErrorCode::InvalidArguments, "bad types")
-        .with_detail("arg", Value::String("x".into()))
+        .with_context("arg", Value::String("x".into()))
         .unwrap();
 
     let resp = ResponseEnvelope::err(id, detail.clone());
@@ -250,7 +246,7 @@ fn provider_returns_error_response_to_caller() {
         );
         let handle = ProviderHandle::new("failing", vec!["fail".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
 
         // Provider always returns an error.
         saikuro_exec::spawn(async move {

@@ -4,9 +4,9 @@ use bytes::Bytes;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
-    value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
+use saikuro_event::Value;
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -18,10 +18,7 @@ use saikuro_schema::{
     registry::{RegistryMode, SchemaRegistry},
     validator::InvocationValidator,
 };
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 use crate::common;
 
@@ -38,7 +35,9 @@ async fn round_trip_while_alive(
     provider_registry: ProviderRegistry,
     envelope: Envelope,
 ) -> ResponseEnvelope {
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
+    let log: std::sync::Arc<dyn saikuro_event::LogSink> =
+        std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>);
+    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
     let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
@@ -58,6 +57,7 @@ async fn round_trip_while_alive(
         max_message_size: 4 * 1024 * 1024,
         schema_registry,
         provider_registry,
+        log,
     };
 
     // Spawn the handler so we can interleave reads/writes.
@@ -92,7 +92,7 @@ fn announce_registers_namespace_in_schema() {
         let providers = ProviderRegistry::new();
 
         assert!(
-            !registry.has_namespace("math"),
+            !registry.has_namespace("math").await,
             "registry must be empty before announce"
         );
 
@@ -146,8 +146,8 @@ fn announce_allows_subsequent_calls_to_not_fail_schema_validation() {
 fn announce_in_production_mode_returns_error() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
-        registry.freeze(); // switch to production mode
-        assert_eq!(registry.mode(), RegistryMode::Production);
+        registry.freeze().await; // switch to production mode
+        assert_eq!(registry.mode().await, RegistryMode::Production);
 
         let providers = ProviderRegistry::new();
         let schema = simple_schema("frozen", "op");
@@ -166,7 +166,7 @@ fn announce_in_production_mode_returns_error() {
         );
         // Namespace must not have been registered.
         assert!(
-            !registry.has_namespace("frozen"),
+            !registry.has_namespace("frozen").await,
             "namespace must not appear after a rejected announce"
         );
     })
@@ -254,7 +254,7 @@ fn announce_does_not_route_to_provider() {
         );
         let handle = ProviderHandle::new("interceptor", vec!["$saikuro".to_owned()], work_tx);
         let providers = ProviderRegistry::new();
-        providers.register(handle);
+        providers.register(handle).await;
 
         let schema = simple_schema("intercept_test", "fn");
         let env = make_announce_envelope(&schema);
@@ -266,7 +266,7 @@ fn announce_does_not_route_to_provider() {
             resp.error
         );
         assert!(
-            work_rx.try_recv().is_err(),
+            matches!(work_rx.recv().await, None),
             "announce must NOT be forwarded to any provider channel"
         );
     })

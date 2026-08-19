@@ -4,17 +4,21 @@
 //! concurrency, rapid connect-disconnect cycles, and backpressure
 //! scenarios specific to the in-memory channel backend.
 
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use bytes::Bytes;
+use saikuro_exec::sync::Barrier;
+use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
+use std::sync::Arc;
+
+fn null_log() -> Arc<dyn saikuro_event::LogSink> {
+    Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>)
+}
 
 // HIGH-VOLUME THROUGHPUT
 
 #[test]
 fn ten_thousand_frames_in_order() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
 
@@ -42,7 +46,7 @@ fn ten_thousand_frames_in_order() {
 #[test]
 fn concurrent_bidirectional_stress() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut a_tx, mut a_rx) = a.split();
         let (mut b_tx, mut b_rx) = b.split();
 
@@ -79,7 +83,7 @@ fn concurrent_bidirectional_stress() {
 #[test]
 fn backpressure_sender_blocks_until_drain() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
 
@@ -115,7 +119,7 @@ fn backpressure_sender_blocks_until_drain() {
 fn rapid_connect_disconnect_cycles() {
     saikuro_exec::block_on(async {
         for _ in 0..100 {
-            let (a, b) = MemoryTransport::connected_pair();
+            let (a, b) = MemoryTransport::connected_pair(null_log());
             let (mut sender, _) = a.split();
             let (_, mut receiver) = b.split();
 
@@ -133,7 +137,7 @@ fn rapid_connect_disconnect_cycles() {
 #[test]
 fn max_size_frame_just_under_limit() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
 
@@ -149,7 +153,7 @@ fn max_size_frame_just_under_limit() {
 #[test]
 fn zero_length_frames_dont_confuse_ordering() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
 
@@ -169,7 +173,7 @@ fn zero_length_frames_dont_confuse_ordering() {
 #[test]
 fn many_concurrent_senders_single_receiver() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender_base, _) = a.split();
         let (_, mut receiver) = b.split();
 
@@ -179,7 +183,7 @@ fn many_concurrent_senders_single_receiver() {
         // Since TransportSender::send takes &mut self, each sender must be
         // used from one task.  Create multiple transports for parallelism.
         for i in 0..n {
-            let (a_i, b_i) = MemoryTransport::connected_pair();
+            let (a_i, b_i) = MemoryTransport::connected_pair(null_log());
             let (mut tx_i, _) = a_i.split();
             let (_, mut rx_i) = b_i.split();
             handles.push(saikuro_exec::spawn(async move {
@@ -205,7 +209,7 @@ fn many_concurrent_senders_single_receiver() {
 #[test]
 fn drop_receiver_while_sender_is_sending() {
     saikuro_exec::block_on(async {
-        let (a, b) = MemoryTransport::connected_pair();
+        let (a, b) = MemoryTransport::connected_pair(null_log());
         let (mut sender, _) = a.split();
         let (_, receiver) = b.split();
 
@@ -240,8 +244,8 @@ fn drop_receiver_while_sender_is_sending() {
 #[test]
 fn labels_do_not_cross_transports() {
     saikuro_exec::block_on(async {
-        let (a1, b1) = MemoryTransport::pair("sys-A", "sys-B");
-        let (a2, b2) = MemoryTransport::pair("sys-C", "sys-D");
+        let (a1, b1) = MemoryTransport::pair("sys-A", "sys-B", null_log());
+        let (a2, b2) = MemoryTransport::pair("sys-C", "sys-D", null_log());
 
         let (mut a1_tx, _) = a1.split();
         let (_, mut b1_rx) = b1.split();

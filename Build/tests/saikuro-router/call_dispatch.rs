@@ -1,6 +1,7 @@
 //! Call and cast dispatch integration tests
 
-use saikuro_core::{envelope::Envelope, error::ErrorCode, value::Value, ResponseEnvelope};
+use saikuro_core::{envelope::Envelope, ResponseEnvelope};
+use saikuro_event::{ErrorCode, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -14,7 +15,9 @@ use std::time::Duration;
 ///
 /// Returns the [`ProviderRegistry`] with the provider registered, plus a
 /// join handle so callers can wait for completion.
-fn make_echo_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
+async fn make_echo_provider(
+    namespace: &str,
+) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
         saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
     );
@@ -24,7 +27,7 @@ fn make_echo_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<Prov
         work_tx,
     );
     let registry = ProviderRegistry::new();
-    registry.register(handle);
+    registry.register(handle).await;
     (registry, work_rx)
 }
 
@@ -66,7 +69,7 @@ fn spawn_silent_responder(
 #[test]
 fn call_returns_provider_response() {
     saikuro_exec::block_on(async {
-        let (registry, work_rx) = make_echo_provider("math");
+        let (registry, work_rx) = make_echo_provider("math").await;
         let _responder = spawn_responder(work_rx, Value::Int(42));
 
         let router = InvocationRouter::with_providers(registry);
@@ -82,7 +85,7 @@ fn call_returns_provider_response() {
 #[test]
 fn cast_returns_ok_empty_immediately() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = make_echo_provider("logger");
+        let (registry, mut work_rx) = make_echo_provider("logger").await;
 
         // Consume work items so the channel doesn't fill up, but never respond.
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -119,7 +122,7 @@ fn call_to_dropped_provider_returns_unavailable() {
             mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
         let handle = ProviderHandle::new("gone", vec!["svc".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
 
         // Drop the receiver:  the provider is "gone".
         drop(work_rx);
@@ -141,7 +144,7 @@ fn call_to_dropped_provider_returns_unavailable() {
 #[test]
 fn call_times_out_when_provider_does_not_respond() {
     saikuro_exec::block_on(async {
-        let (registry, work_rx) = make_echo_provider("slow");
+        let (registry, work_rx) = make_echo_provider("slow").await;
         let _silent = spawn_silent_responder(work_rx);
 
         let config = RouterConfig {
@@ -162,7 +165,7 @@ fn call_times_out_when_provider_does_not_respond() {
 #[test]
 fn multiple_sequential_calls_all_succeed() {
     saikuro_exec::block_on(async {
-        let (registry, work_rx) = make_echo_provider("counter");
+        let (registry, work_rx) = make_echo_provider("counter").await;
         let _responder = spawn_responder(work_rx, Value::Bool(true));
 
         let router = InvocationRouter::with_providers(registry);
@@ -178,7 +181,7 @@ fn multiple_sequential_calls_all_succeed() {
 #[test]
 fn concurrent_calls_all_succeed() {
     saikuro_exec::block_on(async {
-        let (registry, work_rx) = make_echo_provider("parallel");
+        let (registry, work_rx) = make_echo_provider("parallel").await;
         let _responder = spawn_responder(work_rx, Value::Int(0));
 
         let router = InvocationRouter::with_providers(registry);
@@ -211,7 +214,9 @@ fn call_with_null_target_returns_malformed_or_no_provider() {
         assert!(!resp.ok);
         let err = resp.error.unwrap();
         assert!(
-            err.code == ErrorCode::MalformedEnvelope || err.code == ErrorCode::NoProvider,
+            err.code == ErrorCode::MalformedTarget
+                || err.code == ErrorCode::MalformedEnvelope
+                || err.code == ErrorCode::NoProvider,
             "unexpected code {:?}",
             err.code
         );

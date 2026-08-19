@@ -3,9 +3,9 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{SinkExt, StreamExt};
 use saikuro_exec::block_on;
-use saikuro_exec::io::AsyncWriteExt;
-use saikuro_transport::error::TransportError;
-use saikuro_transport::framing::{FramedStream, LengthPrefixedCodec};
+use saikuro_transport::shared::framing::{FramedStream, LengthPrefixedCodec};
+use saikuro_transport::TransportError;
+use tokio::io::AsyncWriteExt;
 
 fn encode_frames(items: &[Bytes]) -> BytesMut {
     let mut codec = LengthPrefixedCodec::new();
@@ -100,7 +100,7 @@ fn codec_encode_rejects_oversized_frame() {
 #[test]
 fn framed_stream_roundtrips_multiple_frames() {
     block_on(async {
-        let (client, server) = saikuro_exec::io::duplex(1024 * 1024);
+        let (client, server) = tokio::io::duplex(1024 * 1024);
         let framed_client = FramedStream::new(client);
         let (mut tx, _rx) = framed_client.split();
         let mut framed_server = FramedStream::new(server);
@@ -127,11 +127,11 @@ fn framed_stream_roundtrips_multiple_frames() {
 #[test]
 fn framed_stream_truncated_frame_errors() {
     block_on(async {
-        let (client, server) = saikuro_exec::io::duplex(4096);
+        let (client, server) = tokio::io::duplex(4096);
         // Write a length header promising 100 bytes, then only 3 bytes, and
         // drop the write half: the reader must report a framing error, not
         // silently return a short frame or hang.
-        let (_rx, mut tx) = saikuro_exec::io::split(client);
+        let (_rx, mut tx) = tokio::io::split(client);
         let mut framed_server = FramedStream::new(server);
 
         let mut partial = BytesMut::new();
@@ -155,8 +155,8 @@ fn framed_stream_truncated_frame_errors() {
 #[test]
 fn framed_stream_rejects_header_only_eof() {
     block_on(async {
-        let (client, server) = saikuro_exec::io::duplex(4096);
-        let (_rx, mut tx) = saikuro_exec::io::split(client);
+        let (client, server) = tokio::io::duplex(4096);
+        let (_rx, mut tx) = tokio::io::split(client);
         let mut framed_server = FramedStream::new(server);
 
         let mut header = BytesMut::new();
@@ -176,8 +176,8 @@ fn framed_stream_rejects_header_only_eof() {
 #[test]
 fn framed_stream_stays_terminal_after_oversized_frame_error() {
     block_on(async {
-        let (client, server) = saikuro_exec::io::duplex(4096);
-        let (_rx, mut tx) = saikuro_exec::io::split(client);
+        let (client, server) = tokio::io::duplex(4096);
+        let (_rx, mut tx) = tokio::io::split(client);
         let mut framed_server = FramedStream::new(server);
 
         // Forge an oversized length header.  The byte stream is unaligned
@@ -200,7 +200,7 @@ fn framed_stream_stays_terminal_after_oversized_frame_error() {
 #[test]
 fn framed_stream_supports_bidirectional_use() {
     block_on(async {
-        let (client, server) = saikuro_exec::io::duplex(4096);
+        let (client, server) = tokio::io::duplex(4096);
         let (mut client_tx, mut client_rx) = FramedStream::new(client).split();
         let (mut server_tx, mut server_rx) = FramedStream::new(server).split();
 
@@ -217,7 +217,7 @@ fn framed_stream_supports_bidirectional_use() {
 #[test]
 fn framed_stream_tcp_roundtrip_concurrent() {
     block_on(async {
-        let listener = saikuro_exec::net::TcpListener::bind("127.0.0.1:0")
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let addr = listener.local_addr().expect("local addr");
@@ -233,9 +233,7 @@ fn framed_stream_tcp_roundtrip_concurrent() {
         });
 
         let client_task = saikuro_exec::spawn(async move {
-            let stream = saikuro_exec::net::TcpStream::connect(addr)
-                .await
-                .expect("connect");
+            let stream = tokio::net::TcpStream::connect(addr).await.expect("connect");
             let (mut tx, _rx) = FramedStream::new(stream).split();
             for i in 0..5 {
                 let payload = Bytes::from(vec![i as u8; 300_000]);
@@ -263,7 +261,7 @@ fn framed_stream_tcp_raw_writer() {
     // Server side uses FramedStream; client writes pre-encoded wire bytes
     // directly, isolating the read path.
     block_on(async {
-        let listener = saikuro_exec::net::TcpListener::bind("127.0.0.1:0")
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
         let addr = listener.local_addr().expect("local addr");
@@ -279,10 +277,8 @@ fn framed_stream_tcp_raw_writer() {
         });
 
         let client_task = saikuro_exec::spawn(async move {
-            let stream = saikuro_exec::net::TcpStream::connect(addr)
-                .await
-                .expect("connect");
-            let (_r, mut w) = saikuro_exec::io::split(stream);
+            let stream = tokio::net::TcpStream::connect(addr).await.expect("connect");
+            let (_r, mut w) = tokio::io::split(stream);
             let mut codec = LengthPrefixedCodec::new();
             let mut wire = BytesMut::new();
             for i in 0..5 {

@@ -3,11 +3,10 @@
 use futures::{pin_mut, poll};
 use saikuro_core::{
     envelope::{Envelope, StreamControl},
-    error::ErrorCode,
     invocation::InvocationId,
-    value::Value,
     ResponseEnvelope,
 };
+use saikuro_event::{ErrorCode, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
 use saikuro_router::router::InvocationRouter;
@@ -54,7 +53,7 @@ fn channel_abort(id: InvocationId, seq: u64) -> ResponseEnvelope {
 #[test]
 fn channel_open_returns_ok_empty() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("chat");
+        let (registry, mut work_rx) = common::make_provider("chat").await;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
@@ -87,7 +86,7 @@ fn channel_open_to_unknown_namespace_returns_no_provider() {
 #[test]
 fn route_channel_inbound_delivers_to_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("pipe");
+        let (registry, mut work_rx) = common::make_provider("pipe").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("pipe.connect", vec![]).expect("entropy available");
@@ -102,6 +101,7 @@ fn route_channel_inbound_delivers_to_state() {
         let mut inbound_rx = router
             .streams()
             .take_channel_inbound_receiver(&channel_id)
+            .await
             .expect("inbound receiver must exist after channel open");
 
         // Route an inbound item from the client.
@@ -114,7 +114,8 @@ fn route_channel_inbound_delivers_to_state() {
 
         // Confirm the item arrived on the inbound queue.
         let received = inbound_rx
-            .try_recv()
+            .recv()
+            .await
             .expect("inbound item should be buffered");
         assert_eq!(received.result, Some(Value::String("hello".into())));
     })
@@ -123,7 +124,7 @@ fn route_channel_inbound_delivers_to_state() {
 #[test]
 fn route_channel_outbound_delivers_to_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("pipe2");
+        let (registry, mut work_rx) = common::make_provider("pipe2").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("pipe2.connect", vec![]).expect("entropy available");
@@ -137,6 +138,7 @@ fn route_channel_outbound_delivers_to_state() {
         let mut outbound_rx = router
             .streams()
             .take_channel_outbound_receiver(&channel_id)
+            .await
             .expect("outbound receiver must exist after channel open");
 
         // Provider pushes a message to the client.
@@ -148,7 +150,8 @@ fn route_channel_outbound_delivers_to_state() {
         );
 
         let received = outbound_rx
-            .try_recv()
+            .recv()
+            .await
             .expect("outbound item should be buffered");
         assert_eq!(received.result, Some(Value::Int(42)));
     })
@@ -157,7 +160,7 @@ fn route_channel_outbound_delivers_to_state() {
 #[test]
 fn route_channel_inbound_end_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("fin_chan");
+        let (registry, mut work_rx) = common::make_provider("fin_chan").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("fin_chan.open", vec![]).expect("entropy available");
@@ -167,7 +170,10 @@ fn route_channel_inbound_end_removes_state() {
         router.dispatch(open_env).await;
 
         // Consume the receiver so sends don't fail.
-        let _rx = router.streams().take_channel_inbound_receiver(&channel_id);
+        let _rx = router
+            .streams()
+            .take_channel_inbound_receiver(&channel_id)
+            .await;
 
         // Send end-of-channel from the client side.
         let end = channel_end(channel_id, 0);
@@ -184,7 +190,7 @@ fn route_channel_inbound_end_removes_state() {
 #[test]
 fn route_channel_outbound_end_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("fin_out");
+        let (registry, mut work_rx) = common::make_provider("fin_out").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env = Envelope::channel_open("fin_out.open", vec![]).expect("entropy available");
@@ -193,7 +199,10 @@ fn route_channel_outbound_end_removes_state() {
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
         router.dispatch(open_env).await;
 
-        let _rx = router.streams().take_channel_outbound_receiver(&channel_id);
+        let _rx = router
+            .streams()
+            .take_channel_outbound_receiver(&channel_id)
+            .await;
 
         let end = channel_end(channel_id, 0);
         let result = router.route_channel_outbound(end).await;
@@ -211,7 +220,7 @@ fn route_channel_outbound_end_removes_state() {
 #[test]
 fn route_channel_abort_removes_state() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("abort_chan");
+        let (registry, mut work_rx) = common::make_provider("abort_chan").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env =
@@ -221,7 +230,10 @@ fn route_channel_abort_removes_state() {
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
         router.dispatch(open_env).await;
 
-        let _rx = router.streams().take_channel_inbound_receiver(&channel_id);
+        let _rx = router
+            .streams()
+            .take_channel_inbound_receiver(&channel_id)
+            .await;
 
         let abort = channel_abort(channel_id, 0);
         let result = router.route_channel_inbound(abort).await;
@@ -266,7 +278,7 @@ fn route_channel_outbound_to_unknown_channel_fails() {
 #[test]
 fn multiple_channels_are_independent() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("multi_chan");
+        let (registry, mut work_rx) = common::make_provider("multi_chan").await;
         let router = InvocationRouter::with_providers(registry);
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -279,8 +291,8 @@ fn multiple_channels_are_independent() {
         router.dispatch(env1).await;
         router.dispatch(env2).await;
 
-        let _rx1_in = router.streams().take_channel_inbound_receiver(&id1);
-        let _rx2_in = router.streams().take_channel_inbound_receiver(&id2);
+        let _rx1_in = router.streams().take_channel_inbound_receiver(&id1).await;
+        let _rx2_in = router.streams().take_channel_inbound_receiver(&id2).await;
 
         // Route items to channel 1.
         let item1 = channel_item(id1, 0, Value::Int(1));
@@ -313,7 +325,7 @@ fn channel_open_to_dropped_provider_returns_unavailable() {
             work_tx,
         );
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
 
         // Drop the receiver:  provider is now unavailable.
         drop(work_rx);
@@ -335,7 +347,7 @@ fn channel_open_to_dropped_provider_returns_unavailable() {
 #[test]
 fn channel_pause_resume_round_trips() {
     saikuro_exec::block_on(async {
-        let (registry, mut work_rx) = common::make_provider("bpressure");
+        let (registry, mut work_rx) = common::make_provider("bpressure").await;
 
         let router = InvocationRouter::with_providers(registry);
         let open_env =
@@ -348,6 +360,7 @@ fn channel_pause_resume_round_trips() {
         let mut outbound_rx = router
             .streams()
             .take_channel_outbound_receiver(&channel_id)
+            .await
             .expect("outbound receiver must exist");
 
         // Provider sends a Pause control frame to signal backpressure.
@@ -362,7 +375,8 @@ fn channel_pause_resume_round_trips() {
         assert!(router.route_channel_outbound(pause).await.is_ok());
 
         let received = outbound_rx
-            .try_recv()
+            .recv()
+            .await
             .expect("pause frame should be buffered");
         assert_eq!(received.stream_control, Some(StreamControl::Pause));
 
@@ -381,7 +395,8 @@ fn channel_pause_resume_round_trips() {
         );
 
         let received2 = outbound_rx
-            .try_recv()
+            .recv()
+            .await
             .expect("resume frame should be buffered");
         assert_eq!(received2.stream_control, Some(StreamControl::Resume));
     })
@@ -425,8 +440,10 @@ fn concurrent_channel_delivery_preserves_order_and_terminal_closure() {
                 .await,
             DeliveryOutcome::Closed
         );
+        let recv_fut = outbound_rx.recv();
+        pin_mut!(recv_fut);
         assert!(
-            outbound_rx.try_recv().is_err(),
+            matches!(poll!(recv_fut.as_mut()), Poll::Pending),
             "post-terminal frame was not delivered"
         );
     })

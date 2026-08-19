@@ -1,9 +1,10 @@
 //! Code generation output tests
 
-use saikuro_codegen::{
-    csharp::CSharpGenerator, generator::BindingGenerator, python::PythonGenerator,
-    rust::RustGenerator, typescript::TypeScriptGenerator,
+use saikuro_codegen::language::{
+    csharp::CSharpGenerator, python::PythonGenerator, rust::RustGenerator,
+    typescript::TypeScriptGenerator,
 };
+use saikuro_codegen::BindingGenerator;
 use saikuro_core::schema::{
     ArgumentDescriptor, FieldDescriptor, FieldMap, FunctionMap, FunctionSchema, NamespaceSchema,
     PrimitiveType, Schema, TypeDefinition, TypeDescriptor, Visibility,

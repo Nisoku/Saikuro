@@ -1,13 +1,13 @@
 mod common;
 
 #[path = "saikuro-codegen"]
-mod saikuro_codegen {
+mod codegen_tests {
     mod c_cpp_codegen;
     mod codegen_output;
 }
 
 #[path = "saikuro-core"]
-mod saikuro_core {
+mod core_tests {
     mod cross_language_wire;
     mod envelope_roundtrip;
     mod error_propagation;
@@ -17,7 +17,7 @@ mod saikuro_core {
 }
 
 #[path = "saikuro-exec"]
-mod saikuro_exec {
+mod exec_tests {
     mod embassy_cancellation;
     mod embassy_executor;
     mod exec_channels;
@@ -26,19 +26,19 @@ mod saikuro_exec {
 }
 
 #[path = "saikuro-net"]
-mod saikuro_net {
+mod net_tests {
     mod embassy_net_loopback;
 }
 
 #[path = "saikuro-random"]
-mod saikuro_random {
+mod random_tests {
     mod drbg;
     mod drbg_unseeded;
     mod os_backend;
 }
 
 #[path = "saikuro-router"]
-mod saikuro_router {
+mod router_tests {
     mod announce_dispatch;
     mod batch_dispatch;
     mod call_dispatch;
@@ -51,13 +51,13 @@ mod saikuro_router {
 }
 
 #[path = "saikuro-runtime"]
-mod saikuro_runtime {
+mod runtime_tests {
     mod config_capacity;
     mod schema_registration;
 }
 
 #[path = "saikuro-schema"]
-mod saikuro_schema {
+mod schema_tests {
     mod capability_enforcement;
     mod registry;
     mod schema_validation;
@@ -65,17 +65,19 @@ mod saikuro_schema {
 }
 
 #[path = "saikuro-storage"]
-mod saikuro_storage {
+mod storage_tests {
+    #[cfg(feature = "flash")]
     mod flash;
     mod inmemory;
     mod util;
 }
 
 #[path = "saikuro-transport"]
-mod saikuro_transport {
+mod transport_tests {
+    #[cfg(feature = "embedded-io")]
     mod embedded_io;
     mod transport_compliance;
-    mod transport_framing;
     mod transport_memory_stress;
+    #[cfg(target_arch = "wasm32")]
     mod transport_wasm_host;
 }

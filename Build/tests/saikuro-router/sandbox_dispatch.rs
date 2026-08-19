@@ -8,9 +8,9 @@ use saikuro_core::{
         FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
         TypeDescriptor, TypeMap, Visibility,
     },
-    value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
+use saikuro_event::Value;
 use saikuro_router::{
     provider::ProviderRegistry,
     router::{InvocationRouter, RouterConfig},
@@ -19,10 +19,7 @@ use saikuro_runtime::connection::ConnectionHandler;
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 // Helpers
 
@@ -117,7 +114,9 @@ async fn run_and_collect(
     sandbox: bool,
     envelope: Envelope,
 ) -> Vec<Bytes> {
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
+    let log: std::sync::Arc<dyn saikuro_event::LogSink> =
+        std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>);
+    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
     let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
@@ -142,6 +141,7 @@ async fn run_and_collect(
         max_message_size: 4 * 1024 * 1024,
         schema_registry,
         provider_registry: providers,
+        log,
     };
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
@@ -347,6 +347,7 @@ fn sandbox_handler_denies_internal_function_invocation() {
         // Pre-register the schema so the validator can find it.
         registry
             .merge_schema(schema.clone(), "test-provider")
+            .await
             .expect("merge schema");
 
         // Build the Invoke envelope for the internal function.

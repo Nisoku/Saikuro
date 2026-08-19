@@ -1,6 +1,5 @@
-use saikuro_codegen::{
-    c::CGenerator, cpp::CppGenerator, generator::BindingGenerator, GeneratorOutput,
-};
+use saikuro_codegen::language::{c::CGenerator, cpp::CppGenerator};
+use saikuro_codegen::{BindingGenerator, GeneratorOutput};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
 };

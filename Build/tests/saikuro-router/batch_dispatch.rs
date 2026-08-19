@@ -2,10 +2,9 @@
 
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::ErrorCode,
-    value::Value,
     ResponseEnvelope,
 };
+use saikuro_event::{ErrorCode, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -14,7 +13,7 @@ use saikuro_router::{
 
 //  Helpers
 
-fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response: Value) {
+async fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response: Value) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
         saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
     );
@@ -23,7 +22,7 @@ fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response
         vec![namespace.to_owned()],
         work_tx,
     );
-    registry.register(handle);
+    registry.register(handle).await;
 
     // Spawn a background responder.
     saikuro_exec::spawn({
@@ -45,7 +44,7 @@ fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response
 fn batch_with_single_item_succeeds() {
     saikuro_exec::block_on(async {
         let registry = ProviderRegistry::new();
-        register_echo_provider(&registry, "math", Value::Int(7));
+        register_echo_provider(&registry, "math", Value::Int(7)).await;
 
         let router = InvocationRouter::with_providers(registry);
 
@@ -71,7 +70,7 @@ fn batch_with_single_item_succeeds() {
 fn batch_with_multiple_items_returns_all_results() {
     saikuro_exec::block_on(async {
         let registry = ProviderRegistry::new();
-        register_echo_provider(&registry, "svc", Value::Int(42));
+        register_echo_provider(&registry, "svc", Value::Int(42)).await;
 
         let router = InvocationRouter::with_providers(registry);
 
@@ -119,8 +118,8 @@ fn batch_with_no_items_field_returns_malformed() {
 fn batch_items_targeting_different_namespaces() {
     saikuro_exec::block_on(async {
         let registry = ProviderRegistry::new();
-        register_echo_provider(&registry, "ns_a", Value::Bool(true));
-        register_echo_provider(&registry, "ns_b", Value::Int(0));
+        register_echo_provider(&registry, "ns_a", Value::Bool(true)).await;
+        register_echo_provider(&registry, "ns_b", Value::Int(0)).await;
 
         let router = InvocationRouter::with_providers(registry);
 
@@ -153,7 +152,7 @@ fn batch_item_to_unknown_namespace_returns_null_in_result() {
         // Per our router implementation, failed batch items produce Null in the
         // results array (not an error on the whole batch).
         let registry = ProviderRegistry::new();
-        register_echo_provider(&registry, "known", Value::Int(1));
+        register_echo_provider(&registry, "known", Value::Int(1)).await;
 
         let router = InvocationRouter::with_providers(registry);
 
@@ -189,7 +188,7 @@ fn batch_result_is_ordered_array() {
             saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
         );
         let handle = ProviderHandle::new("ordered", vec!["ord".to_owned()], work_tx);
-        registry.register(handle);
+        registry.register(handle).await;
 
         saikuro_exec::spawn(async move {
             while let Some(item) = work_rx.recv().await {

@@ -4,19 +4,15 @@ use bytes::Bytes;
 use saikuro_core::{
     capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
-    error::ErrorCode,
     schema::{
-        FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
-        TypeDescriptor, TypeMap, Visibility,
+        ArgumentDescriptor, FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema,
+        PrimitiveType, Schema, TypeDescriptor, TypeMap, Visibility,
     },
-    value::Value,
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
-use saikuro_runtime::runtime::SaikuroRuntime;
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use saikuro_event::{ErrorCode, Value};
+use saikuro_runtime::SaikuroRuntime;
+use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 //  Shared helpers
 
@@ -42,7 +38,6 @@ fn decode_envelope(frame: Bytes) -> Envelope {
 /// caller sends, which keeps the helper broadly reusable across tests that
 /// focus on routing / wire fidelity rather than argument validation.
 fn make_schema_with_args(namespace: &str, function: &str, n_args: usize) -> Schema {
-    use saikuro_core::schema::ArgumentDescriptor;
     let args = (0..n_args)
         .map(|i| ArgumentDescriptor {
             name: format!("arg{i}"),
@@ -106,8 +101,10 @@ fn connect_simulated_peer(
     impl TransportSender + 'static,
     impl TransportReceiver + 'static,
 ) {
+    let log: std::sync::Arc<dyn saikuro_event::LogSink> =
+        std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>);
     let (test_transport, runtime_transport) =
-        MemoryTransport::pair(peer_id, format!("{peer_id}-runtime"));
+        MemoryTransport::pair(peer_id, format!("{peer_id}-runtime"), log);
     let (test_sender, test_receiver) = test_transport.split();
     handle.accept_transport(
         runtime_transport,
@@ -125,26 +122,29 @@ fn connect_simulated_peer(
 #[test]
 fn a_rust_provider_simulated_client_call() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // 1:  Register a Rust in-process provider for `math`.
         let schema = make_schema_with_args("math", "add", 2);
         handle
             .register_schema(schema, "math-provider")
+            .await
             .expect("register schema");
 
-        handle.register_fn_provider("math-provider", vec!["math".to_owned()], |env| async move {
-            let a = match env.args.first() {
-                Some(Value::Int(n)) => *n,
-                _ => 0,
-            };
-            let b = match env.args.get(1) {
-                Some(Value::Int(n)) => *n,
-                _ => 0,
-            };
-            ResponseEnvelope::ok(env.id, Value::Int(a + b))
-        });
+        handle
+            .register_fn_provider("math-provider", vec!["math".to_owned()], |env| async move {
+                let a = match env.args.first() {
+                    Some(Value::Int(n)) => *n,
+                    _ => 0,
+                };
+                let b = match env.args.get(1) {
+                    Some(Value::Int(n)) => *n,
+                    _ => 0,
+                };
+                ResponseEnvelope::ok(env.id, Value::Int(a + b))
+            })
+            .await;
 
         // 2:  Connect a simulated adapter peer.
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "py-client");
@@ -174,22 +174,25 @@ fn a_rust_provider_simulated_client_call() {
 #[test]
 fn l_csharp_style_client_wire_fidelity() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a provider that returns the length of a byte slice.
         let schema = make_schema_with_args("buf", "len", 1);
         handle
             .register_schema(schema, "buf-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider("buf-provider", vec!["buf".to_owned()], |env| async move {
-            let n = match env.args.first() {
-                Some(Value::Bytes(b)) => b.len() as i64,
-                Some(Value::String(s)) => s.len() as i64,
-                _ => 0,
-            };
-            ResponseEnvelope::ok(env.id, Value::Int(n))
-        });
+        handle
+            .register_fn_provider("buf-provider", vec!["buf".to_owned()], |env| async move {
+                let n = match env.args.first() {
+                    Some(Value::Bytes(b)) => b.len() as i64,
+                    Some(Value::String(s)) => s.len() as i64,
+                    _ => 0,
+                };
+                ResponseEnvelope::ok(env.id, Value::Int(n))
+            })
+            .await;
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "cs-client");
 
@@ -221,28 +224,34 @@ fn m_rust_adapter_client_calls_runtime_provider() {
         use saikuro::transport::InMemoryTransport;
         use saikuro::Client;
 
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a Rust in-process provider for `nums.negate`.
         let schema = make_schema_with_args("nums", "negate", 1);
         handle
             .register_schema(schema, "nums-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider("nums-provider", vec!["nums".to_owned()], |env| async move {
-            let n = match env.args.first() {
-                Some(Value::Int(n)) => *n,
-                _ => 0,
-            };
-            ResponseEnvelope::ok(env.id, Value::Int(-n))
-        });
+        handle
+            .register_fn_provider("nums-provider", vec!["nums".to_owned()], |env| async move {
+                let n = match env.args.first() {
+                    Some(Value::Int(n)) => *n,
+                    _ => 0,
+                };
+                ResponseEnvelope::ok(env.id, Value::Int(-n))
+            })
+            .await;
 
         // Create an InMemoryTransport pair and bridge to the runtime.
         let (client_side, bridge_side) = InMemoryTransport::pair();
 
         let (mut bridge_sender, mut bridge_receiver) = {
+            let bridge_log: std::sync::Arc<dyn saikuro_event::LogSink> = std::sync::Arc::from(
+                Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>,
+            );
             let (ts, tr) =
-                saikuro_transport::memory::MemoryTransport::pair("m-bridge", "m-bridge-rt");
+                saikuro_transport::MemoryTransport::pair("m-bridge", "m-bridge-rt", bridge_log);
             handle.accept_transport(
                 tr,
                 "m-rust-client".to_owned(),
@@ -302,7 +311,7 @@ fn n_rust_adapter_provider_serves_simulated_client() {
         use saikuro::{ArgDescriptor, FunctionSchema, Provider, RegisterOptions};
         use saikuro_core::schema::{PrimitiveType, TypeDescriptor, Visibility};
 
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Create an InMemoryTransport pair for provider <-> runtime communication.
@@ -310,8 +319,11 @@ fn n_rust_adapter_provider_serves_simulated_client() {
 
         // Bridge the InMemoryTransport to the runtime's MemoryTransport.
         let (mut bridge_sender, mut bridge_receiver) = {
+            let bridge_log: std::sync::Arc<dyn saikuro_event::LogSink> = std::sync::Arc::from(
+                Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>,
+            );
             let (ts, tr) =
-                saikuro_transport::memory::MemoryTransport::pair("n-bridge", "n-bridge-rt");
+                saikuro_transport::MemoryTransport::pair("n-bridge", "n-bridge-rt", bridge_log);
             handle.accept_transport(
                 tr,
                 "n-rust-provider".to_owned(),
@@ -416,7 +428,7 @@ fn n_rust_adapter_provider_serves_simulated_client() {
 #[test]
 fn b_simulated_provider_rust_client_dispatch() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // 1:  Connect a simulated Python provider.
@@ -478,17 +490,20 @@ fn b_simulated_provider_rust_client_dispatch() {
 #[test]
 fn c_rust_and_simulated_providers_coexist() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Rust provider for `svc`
         let svc_schema = make_schema("svc", "ping");
         handle
             .register_schema(svc_schema, "svc-provider")
+            .await
             .expect("register svc schema");
-        handle.register_fn_provider("svc-provider", vec!["svc".to_owned()], |env| async move {
-            ResponseEnvelope::ok(env.id, Value::String("pong".into()))
-        });
+        handle
+            .register_fn_provider("svc-provider", vec!["svc".to_owned()], |env| async move {
+                ResponseEnvelope::ok(env.id, Value::String("pong".into()))
+            })
+            .await;
 
         // Simulated external provider for `ext`
         let (mut ext_tx, mut ext_rx) = connect_simulated_peer(&handle, "ext-provider");
@@ -559,22 +574,25 @@ fn c_rust_and_simulated_providers_coexist() {
 #[test]
 fn d_batch_call_from_simulated_client() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a simple identity provider for `items`.
         let schema = make_schema_with_args("items", "get", 1);
         handle
             .register_schema(schema, "items-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider(
-            "items-provider",
-            vec!["items".to_owned()],
-            |env| async move {
-                let val = env.args.first().cloned().unwrap_or(Value::Null);
-                ResponseEnvelope::ok(env.id, val)
-            },
-        );
+        handle
+            .register_fn_provider(
+                "items-provider",
+                vec!["items".to_owned()],
+                |env| async move {
+                    let val = env.args.first().cloned().unwrap_or(Value::Null);
+                    ResponseEnvelope::ok(env.id, val)
+                },
+            )
+            .await;
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "batch-client");
 
@@ -623,7 +641,7 @@ fn d_batch_call_from_simulated_client() {
 #[test]
 fn e_call_unknown_namespace_returns_error_on_wire() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "err-client");
@@ -655,7 +673,7 @@ fn e_call_unknown_namespace_returns_error_on_wire() {
 #[test]
 fn e_malformed_frame_returns_error_on_wire() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "bad-client");
@@ -687,7 +705,7 @@ fn e_malformed_frame_returns_error_on_wire() {
 #[test]
 fn f_announce_then_client_call_round_trip() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Simulated provider
@@ -748,18 +766,21 @@ fn f_announce_then_client_call_round_trip() {
 #[test]
 fn g_concurrent_simulated_clients() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a provider that returns the input value.
         let schema = make_schema_with_args("echo", "run", 1);
         handle
             .register_schema(schema, "echo-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider("echo-provider", vec!["echo".to_owned()], |env| async move {
-            let val = env.args.first().cloned().unwrap_or(Value::Null);
-            ResponseEnvelope::ok(env.id, val)
-        });
+        handle
+            .register_fn_provider("echo-provider", vec!["echo".to_owned()], |env| async move {
+                let val = env.args.first().cloned().unwrap_or(Value::Null);
+                ResponseEnvelope::ok(env.id, val)
+            })
+            .await;
 
         const N: usize = 10;
         let mut tasks = Vec::with_capacity(N);
@@ -793,22 +814,25 @@ fn g_concurrent_simulated_clients() {
 #[test]
 fn h_cast_fire_and_forget_returns_ok_empty() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a no-op provider so the schema validator can find the function.
         let schema = make_schema_with_args("logger", "info", 1);
         handle
             .register_schema(schema, "logger-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider(
-            "logger-provider",
-            vec!["logger".to_owned()],
-            |env| async move {
-                // Cast providers receive the work item but do not need to respond.
-                ResponseEnvelope::ok_empty(env.id)
-            },
-        );
+        handle
+            .register_fn_provider(
+                "logger-provider",
+                vec!["logger".to_owned()],
+                |env| async move {
+                    // Cast providers receive the work item but do not need to respond.
+                    ResponseEnvelope::ok_empty(env.id)
+                },
+            )
+            .await;
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "cast-client");
 
@@ -834,7 +858,7 @@ fn h_cast_fire_and_forget_returns_ok_empty() {
 #[test]
 fn i_provider_reconnect_and_reannounce() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // First provider instance
@@ -926,21 +950,24 @@ fn i_provider_reconnect_and_reannounce() {
 #[test]
 fn j_typescript_style_client_wire_fidelity() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         // Register a provider that uppercases a string.
         let schema = make_schema_with_args("str", "upper", 1);
         handle
             .register_schema(schema, "str-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider("str-provider", vec!["str".to_owned()], |env| async move {
-            let s = match env.args.first() {
-                Some(Value::String(s)) => s.to_uppercase(),
-                _ => String::new(),
-            };
-            ResponseEnvelope::ok(env.id, Value::String(s))
-        });
+        handle
+            .register_fn_provider("str-provider", vec!["str".to_owned()], |env| async move {
+                let s = match env.args.first() {
+                    Some(Value::String(s)) => s.to_uppercase(),
+                    _ => String::new(),
+                };
+                ResponseEnvelope::ok(env.id, Value::String(s))
+            })
+            .await;
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "ts-client");
 
@@ -969,18 +996,21 @@ fn j_typescript_style_client_wire_fidelity() {
 #[test]
 fn k_response_id_always_matches_request_id() {
     saikuro_exec::block_on(async {
-        let runtime = SaikuroRuntime::builder().build();
+        let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
         let schema = make_schema("id_check", "fn");
         handle
             .register_schema(schema, "idcheck-provider")
+            .await
             .expect("register schema");
-        handle.register_fn_provider(
-            "idcheck-provider",
-            vec!["id_check".to_owned()],
-            |env| async move { ResponseEnvelope::ok(env.id, Value::Null) },
-        );
+        handle
+            .register_fn_provider(
+                "idcheck-provider",
+                vec!["id_check".to_owned()],
+                |env| async move { ResponseEnvelope::ok(env.id, Value::Null) },
+            )
+            .await;
 
         let (mut tx, mut rx) = connect_simulated_peer(&handle, "id-client");
 

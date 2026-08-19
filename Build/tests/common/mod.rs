@@ -6,9 +6,9 @@ use saikuro_core::{
         FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
         TypeDescriptor, TypeMap, Visibility,
     },
-    value::Value,
     RegistrationToken, ResponseEnvelope,
 };
+use saikuro_event::Value;
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -18,12 +18,16 @@ use saikuro_runtime::connection::ConnectionHandler;
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
-use saikuro_transport::{
-    memory::MemoryTransport,
-    traits::{Transport, TransportReceiver, TransportSender},
-};
+use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
+use std::sync::Arc;
 
-pub fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
+pub fn null_log() -> Arc<dyn saikuro_event::LogSink> {
+    Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>)
+}
+
+pub async fn make_provider(
+    namespace: &str,
+) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
         saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
     );
@@ -33,7 +37,7 @@ pub fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<Provi
         work_tx,
     );
     let registry = ProviderRegistry::new();
-    registry.register(handle);
+    registry.register(handle).await;
     (registry, work_rx)
 }
 
@@ -78,9 +82,10 @@ pub fn make_announce_envelope(schema: &Schema) -> Envelope {
     Envelope::announce(schema_to_value(schema)).expect("entropy available")
 }
 
-pub fn register_namespace(registry: &SchemaRegistry, namespace: &str, function: &str) {
+pub async fn register_namespace(registry: &SchemaRegistry, namespace: &str, function: &str) {
     registry
         .merge_schema(simple_schema(namespace, function), "test-provider")
+        .await
         .expect("merge_schema must succeed");
 }
 
@@ -89,7 +94,8 @@ pub async fn round_trip_via_handler(
     provider_registry: ProviderRegistry,
     envelope: Envelope,
 ) -> ResponseEnvelope {
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler");
+    let log = null_log();
+    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
     let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
@@ -109,6 +115,7 @@ pub async fn round_trip_via_handler(
         max_message_size: 4 * 1024 * 1024,
         schema_registry,
         provider_registry,
+        log,
     };
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));

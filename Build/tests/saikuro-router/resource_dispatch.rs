@@ -2,11 +2,10 @@
 
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    error::ErrorCode,
     resource::ResourceHandle,
-    value::Value,
     ResponseEnvelope,
 };
+use saikuro_event::{ErrorCode, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
@@ -19,7 +18,7 @@ use crate::common;
 //  Helpers
 
 /// Build a `ProviderRegistry` with a single provider subscribed to `namespace`.
-fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
+async fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
         saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
     );
@@ -29,7 +28,7 @@ fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderW
         work_tx,
     );
     let registry = ProviderRegistry::new();
-    registry.register(handle);
+    registry.register(handle).await;
     (registry, work_rx)
 }
 
@@ -76,7 +75,7 @@ fn resource_envelope_routes_as_call() {
             .with_uri("saikuro://res/abc-001");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("files");
+        let (registry, work_rx) = make_provider("files").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -103,7 +102,7 @@ fn resource_envelope_returns_handle_from_provider() {
             .with_uri("https://storage.example.com/blobs/xyz-999");
         let result_value = handle_to_value(&original_handle);
 
-        let (registry, work_rx) = make_provider("storage");
+        let (registry, work_rx) = make_provider("storage").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -159,7 +158,7 @@ fn resource_to_dropped_provider_returns_unavailable() {
             mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
         let handle = ProviderHandle::new("gone", vec!["blobs".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
         drop(work_rx); // provider vanished
 
         let router = InvocationRouter::with_providers(registry);
@@ -220,11 +219,11 @@ fn resource_dispatch_through_connection_handler() {
             .with_size(128);
         let result_value = handle_to_value(&handle);
 
-        let (provider_registry, work_rx) = make_provider("docs");
+        let (provider_registry, work_rx) = make_provider("docs").await;
         let _responder = spawn_responder(work_rx, result_value.clone());
 
         let schema_registry = SchemaRegistry::new();
-        common::register_namespace(&schema_registry, "docs", "fetch");
+        common::register_namespace(&schema_registry, "docs", "fetch").await;
 
         let env = Envelope::resource("docs.fetch", vec![]).expect("entropy available");
 
@@ -273,7 +272,7 @@ fn resource_response_id_matches_request_id() {
         let handle = ResourceHandle::new("corr-001");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("corr");
+        let (registry, work_rx) = make_provider("corr").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -297,7 +296,7 @@ fn concurrent_resource_invocations_all_succeed() {
         let handle = ResourceHandle::new("concurrent-test");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("bulk");
+        let (registry, work_rx) = make_provider("bulk").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);

@@ -1660,8 +1660,11 @@ dependencies = [
 name = "saikuro-tests"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
+ "embedded-storage-async",
  "futures",
+ "futures-executor",
  "js-sys",
  "rmp-serde",
  "saikuro",
@@ -1673,11 +1676,11 @@ dependencies = [
  "saikuro-router",
  "saikuro-runtime",
  "saikuro-schema",
+ "saikuro-storage",
  "saikuro-transport",
  "serde",
  "serde_json",
- "tracing",
- "tracing-subscriber",
+ "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",

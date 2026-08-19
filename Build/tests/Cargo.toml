@@ -10,26 +10,34 @@ publish = false
 [lib]
 path = "lib.rs"
 
+[features]
+flash = ["saikuro-storage/embedded", "dep:embedded-storage-async", "dep:futures-executor"]
+
 [dependencies]
 saikuro-core      = { workspace = true }
 saikuro-schema    = { workspace = true }
 saikuro-router    = { workspace = true }
 saikuro-codegen   = { workspace = true }
-saikuro-event      = { workspace = true }
-saikuro           = { workspace = true }
-saikuro-exec      = { workspace = true }
+saikuro-event     = { workspace = true }
+saikuro           = { workspace = true, features = ["std"] }
+saikuro-exec      = { workspace = true, features = ["native"] }
+saikuro-storage   = { workspace = true, features = ["inmemory", "std"] }
 
 bytes         = { workspace = true }
 futures       = { workspace = true }
 rmp-serde     = { workspace = true }
 serde         = { workspace = true }
 serde_json    = { workspace = true }
-tracing       = { workspace = true }
-tracing-subscriber = { workspace = true }
+async-trait   = { workspace = true }
+
+embedded-storage-async = { workspace = true, optional = true }
+futures-executor       = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 saikuro-transport = { workspace = true, features = ["tcp", "unix"] }
 saikuro-runtime   = { workspace = true, features = ["native"] }
+saikuro-random    = { workspace = true }
+tokio             = { workspace = true, features = ["net", "io-util", "rt", "macros"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 saikuro-core      = { workspace = true, features = ["wasm"] }

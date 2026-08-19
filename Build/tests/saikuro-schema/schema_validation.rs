@@ -52,7 +52,7 @@ fn unit_fn() -> FunctionSchema {
     }
 }
 
-fn make_registry_with_math() -> SchemaRegistry {
+async fn make_registry_with_math() -> SchemaRegistry {
     let registry = SchemaRegistry::new();
     let mut functions = FunctionMap::new();
     functions
@@ -84,212 +84,236 @@ fn make_registry_with_math() -> SchemaRegistry {
             provider_id: "provider-1".into(),
             registration_token: saikuro_core::RegistrationToken::new(),
         })
+        .await
         .unwrap();
 
     registry
 }
 
-// Tests
-
 #[test]
 fn lookup_existing_function() {
-    let registry = make_registry_with_math();
-    let func = registry.lookup_function("math.add");
-    assert!(func.is_ok(), "math.add should exist");
-    assert_eq!(func.unwrap().schema.args.len(), 2);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let func = registry.lookup_function("math.add").await;
+        assert!(func.is_ok(), "math.add should exist");
+        assert_eq!(func.unwrap().schema.args.len(), 2);
+    });
 }
 
 #[test]
 fn lookup_unknown_namespace() {
-    let registry = make_registry_with_math();
-    let result = registry.lookup_function("unknown.fn");
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("namespace not found") || err.contains("unknown"),
-        "{err}"
-    );
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let result = registry.lookup_function("unknown.fn").await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("namespace not found") || err.contains("unknown"),
+            "{err}"
+        );
+    });
 }
 
 #[test]
 fn lookup_unknown_function_in_known_namespace() {
-    let registry = make_registry_with_math();
-    let result = registry.lookup_function("math.nonexistent");
-    assert!(result.is_err());
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let result = registry.lookup_function("math.nonexistent").await;
+        assert!(result.is_err());
+    });
 }
 
 #[test]
 fn valid_call_passes_validation() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
-    let env =
-        Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)]).expect("entropy available");
-    assert!(validator.validate(&env).is_ok());
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
+        let env = Envelope::call("math.add", vec![Value::Int(1), Value::Int(2)])
+            .expect("entropy available");
+        assert!(validator.validate(&env).await.is_ok());
+    });
 }
 
 #[test]
 fn wrong_arity_fails_validation() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    // too few args
-    let env_few = Envelope::call("math.add", vec![Value::Int(1)]).expect("entropy available");
-    let err = validator.validate(&env_few).unwrap_err();
-    assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
-    assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
+        // too few args
+        let env_few = Envelope::call("math.add", vec![Value::Int(1)]).expect("entropy available");
+        let err = validator.validate(&env_few).await.unwrap_err();
+        assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
+        assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
 
-    // too many args
-    let env_many = Envelope::call(
-        "math.add",
-        vec![Value::Int(1), Value::Int(2), Value::Int(3)],
-    )
-    .expect("entropy available");
-    let err = validator.validate(&env_many).unwrap_err();
-    assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
+        // too many args
+        let env_many = Envelope::call(
+            "math.add",
+            vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+        )
+        .expect("entropy available");
+        let err = validator.validate(&env_many).await.unwrap_err();
+        assert!(matches!(err, SaikuroError::ArgumentArity { .. }));
+    });
 }
 
 #[test]
 fn wrong_type_fails_validation() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    // "hello" is not an integer
-    let env = Envelope::call(
-        "math.add",
-        vec![Value::String("hello".into()), Value::Int(2)],
-    )
-    .expect("entropy available");
-    let err = validator.validate(&env).unwrap_err();
-    assert!(
-        matches!(err, SaikuroError::ArgumentType { .. }),
-        "expected ArgumentType, got {err:?}"
-    );
-    assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
+        // "hello" is not an integer
+        let env = Envelope::call(
+            "math.add",
+            vec![Value::String("hello".into()), Value::Int(2)],
+        )
+        .expect("entropy available");
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(
+            matches!(err, SaikuroError::ArgumentType { .. }),
+            "expected ArgumentType, got {err:?}"
+        );
+        assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
+    });
 }
 
 #[test]
 fn internal_visibility_denied_for_external_callers() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("math.internal_op", vec![]).expect("entropy available");
-    let err = validator.validate(&env).unwrap_err();
-    assert!(
-        matches!(err, SaikuroError::VisibilityDenied { .. }),
-        "expected VisibilityDenied, got {err:?}"
-    );
-    assert_eq!(err.error_code(), ErrorCode::CapabilityDenied);
+        let env = Envelope::call("math.internal_op", vec![]).expect("entropy available");
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(
+            matches!(err, SaikuroError::VisibilityDenied { .. }),
+            "expected VisibilityDenied, got {err:?}"
+        );
+        assert_eq!(err.error_code(), ErrorCode::CapabilityDenied);
+    });
 }
 
 #[test]
 fn private_function_denied_for_external_callers() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("math.secret", vec![]).expect("entropy available");
-    let err = validator.validate(&env).unwrap_err();
-    assert!(
-        matches!(err, SaikuroError::VisibilityDenied { .. }),
-        "expected VisibilityDenied for private fn, got {err:?}"
-    );
+        let env = Envelope::call("math.secret", vec![]).expect("entropy available");
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(
+            matches!(err, SaikuroError::VisibilityDenied { .. }),
+            "expected VisibilityDenied for private fn, got {err:?}"
+        );
+    });
 }
 
 #[test]
 fn batch_with_no_items_fails() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    let mut env = Envelope::call("", vec![]).expect("entropy available");
-    env.invocation_type = InvocationType::Batch;
-    env.target = String::new();
-    env.batch_items = None;
+        let mut env = Envelope::call("", vec![]).expect("entropy available");
+        env.invocation_type = InvocationType::Batch;
+        env.target = String::new();
+        env.batch_items = None;
 
-    let err = validator.validate(&env).unwrap_err();
-    assert!(
-        matches!(err, SaikuroError::MissingBatch),
-        "expected MissingBatch, got {err:?}"
-    );
-    assert_eq!(err.error_code(), ErrorCode::MalformedEnvelope);
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(
+            matches!(err, SaikuroError::MissingBatch),
+            "expected MissingBatch, got {err:?}"
+        );
+        assert_eq!(err.error_code(), ErrorCode::MalformedEnvelope);
+    });
 }
 
 #[test]
 fn batch_with_empty_items_fails() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    let mut env = Envelope::call("", vec![]).expect("entropy available");
-    env.invocation_type = InvocationType::Batch;
-    env.target = String::new();
-    env.batch_items = Some(vec![]);
+        let mut env = Envelope::call("", vec![]).expect("entropy available");
+        env.invocation_type = InvocationType::Batch;
+        env.target = String::new();
+        env.batch_items = Some(vec![]);
 
-    let err = validator.validate(&env).unwrap_err();
-    assert!(matches!(err, SaikuroError::EmptyBatch));
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(matches!(err, SaikuroError::EmptyBatch));
+    });
 }
 
 #[test]
 fn malformed_target_without_dot_fails() {
-    let registry = make_registry_with_math();
-    let validator = InvocationValidator::new(registry);
+    saikuro_exec::block_on(async {
+        let registry = make_registry_with_math().await;
+        let validator = InvocationValidator::new(registry);
 
-    let env = Envelope::call("nofunctionpart", vec![]).expect("entropy available");
-    let err = validator.validate(&env).unwrap_err();
-    assert!(
-        matches!(err, SaikuroError::MalformedEnvelope(_)),
-        "expected MalformedEnvelope, got {err:?}"
-    );
+        let env = Envelope::call("nofunctionpart", vec![]).expect("entropy available");
+        let err = validator.validate(&env).await.unwrap_err();
+        assert!(
+            matches!(err, SaikuroError::MalformedEnvelope(_)),
+            "expected MalformedEnvelope, got {err:?}"
+        );
+    });
 }
 
 #[test]
 fn optional_argument_may_be_omitted() {
-    // Register a function with one required and one optional argument.
-    let registry = SchemaRegistry::new();
-    let mut functions = FunctionMap::new();
-    functions
-        .insert(
-            "greet".into(),
-            FunctionSchema {
-                args: vec![
-                    ArgumentDescriptor {
-                        name: "name".into(),
-                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                        optional: false,
-                        default: None,
-                        doc: None,
-                    },
-                    ArgumentDescriptor {
-                        name: "greeting".into(),
-                        r#type: TypeDescriptor::primitive(PrimitiveType::String),
-                        optional: true,
-                        default: Some(Value::String("Hello".into())),
-                        doc: None,
-                    },
-                ],
-                returns: TypeDescriptor::primitive(PrimitiveType::String),
-                visibility: Visibility::Public,
-                capabilities: vec![],
-                idempotent: false,
-                doc: None,
-            },
-        )
-        .ok();
-    registry
-        .register(NamespaceRegistration {
-            namespace: "greet".into(),
-            schema: NamespaceSchema {
-                functions: Box::new(functions),
-                doc: None,
-            },
-            provider_id: "p".into(),
-            registration_token: saikuro_core::RegistrationToken::new(),
-        })
-        .unwrap();
+    saikuro_exec::block_on(async {
+        // Register a function with one required and one optional argument.
+        let registry = SchemaRegistry::new();
+        let mut functions = FunctionMap::new();
+        functions
+            .insert(
+                "greet".into(),
+                FunctionSchema {
+                    args: vec![
+                        ArgumentDescriptor {
+                            name: "name".into(),
+                            r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                            optional: false,
+                            default: None,
+                            doc: None,
+                        },
+                        ArgumentDescriptor {
+                            name: "greeting".into(),
+                            r#type: TypeDescriptor::primitive(PrimitiveType::String),
+                            optional: true,
+                            default: Some(Value::String("Hello".into())),
+                            doc: None,
+                        },
+                    ],
+                    returns: TypeDescriptor::primitive(PrimitiveType::String),
+                    visibility: Visibility::Public,
+                    capabilities: vec![],
+                    idempotent: false,
+                    doc: None,
+                },
+            )
+            .ok();
+        registry
+            .register(NamespaceRegistration {
+                namespace: "greet".into(),
+                schema: NamespaceSchema {
+                    functions: Box::new(functions),
+                    doc: None,
+                },
+                provider_id: "p".into(),
+                registration_token: saikuro_core::RegistrationToken::new(),
+            })
+            .await
+            .unwrap();
 
-    let validator = InvocationValidator::new(registry);
-    // Providing only the required argument should pass.
-    let env = Envelope::call("greet.greet", vec![Value::String("Alice".into())])
-        .expect("entropy available");
-    assert!(
-        validator.validate(&env).is_ok(),
-        "one-arg call to two-arg fn (second optional) should pass"
-    );
+        let validator = InvocationValidator::new(registry);
+        // Providing only the required argument should pass.
+        let env = Envelope::call("greet.greet", vec![Value::String("Alice".into())])
+            .expect("entropy available");
+        assert!(
+            validator.validate(&env).await.is_ok(),
+            "one-arg call to two-arg fn (second optional) should pass"
+        );
+    });
 }

@@ -281,7 +281,7 @@ fn watch_send_and_borrow() {
     saikuro_exec::block_on(async {
         let (tx, rx) = watch::channel(0u32);
         tx.send(42).unwrap();
-        assert_eq!(*rx.borrow(), 42);
+        assert_eq!(rx.borrow(), 42);
     })
 }
 
@@ -292,7 +292,7 @@ fn watch_send_and_changed() {
         tx.send(1).unwrap();
         // changed() should return immediately since the value has changed.
         rx.changed().await.unwrap();
-        assert_eq!(*rx.borrow(), 1);
+        assert_eq!(rx.borrow(), 1);
     })
 }
 
@@ -308,7 +308,7 @@ fn watch_changed_blocks_until_next_update() {
         });
         // This should block until the spawned task sends.
         rx.changed().await.unwrap();
-        assert_eq!(*rx.borrow(), 99);
+        assert_eq!(rx.borrow(), 99);
         handle.await.unwrap();
     })
 }
@@ -317,7 +317,7 @@ fn watch_changed_blocks_until_next_update() {
 fn watch_initial_value_available() {
     saikuro_exec::block_on(async {
         let (_tx, rx) = watch::channel("hello");
-        assert_eq!(*rx.borrow(), "hello");
+        assert_eq!(rx.borrow(), "hello");
     })
 }
 
@@ -327,8 +327,8 @@ fn watch_multiple_receivers() {
         let (tx, rx1) = watch::channel(0i32);
         let rx2 = rx1.clone();
         tx.send(10).unwrap();
-        assert_eq!(*rx1.borrow(), 10);
-        assert_eq!(*rx2.borrow(), 10);
+        assert_eq!(rx1.borrow(), 10);
+        assert_eq!(rx2.borrow(), 10);
     })
 }
 
@@ -349,6 +349,6 @@ fn watch_borrow_returns_last_value() {
         let (tx, rx) = watch::channel(1u64);
         tx.send(2).unwrap();
         tx.send(3).unwrap();
-        assert_eq!(*rx.borrow(), 3);
+        assert_eq!(rx.borrow(), 3);
     })
 }

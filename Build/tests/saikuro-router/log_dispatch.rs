@@ -1,27 +1,38 @@
 //! Log-envelope dispatch tests
 
+use futures::{pin_mut, poll};
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
-    log::{LogLevel, LogRecord, LogSink},
-    value::Value,
     InvocationId, PROTOCOL_VERSION,
 };
+use saikuro_event::{LogLevel, LogRecord, LogSink, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::{
     provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
     router::{InvocationRouter, RouterConfig},
 };
 use std::sync::{Arc, Mutex};
+use std::task::Poll;
 
 //  Helpers
 
+struct CapturingSink {
+    captured: Arc<Mutex<Vec<LogRecord>>>,
+}
+
+#[async_trait::async_trait]
+impl LogSink for CapturingSink {
+    async fn emit(&self, record: &LogRecord) {
+        self.captured.lock().unwrap().push(record.clone());
+    }
+}
+
 /// Build a capturing log sink that records every [`LogRecord`] it receives.
-fn capturing_sink() -> (LogSink, Arc<Mutex<Vec<LogRecord>>>) {
+fn capturing_sink() -> (CapturingSink, Arc<Mutex<Vec<LogRecord>>>) {
     let captured: Arc<Mutex<Vec<LogRecord>>> = Arc::new(Mutex::new(Vec::new()));
-    let cap_clone = Arc::clone(&captured);
-    let sink: LogSink = Box::new(move |record: LogRecord| {
-        cap_clone.lock().unwrap().push(record);
-    });
+    let sink = CapturingSink {
+        captured: captured.clone(),
+    };
     (sink, captured)
 }
 
@@ -46,9 +57,9 @@ fn make_log_envelope(level: LogLevel, name: &str, msg: &str) -> Envelope {
     }
 }
 
-fn make_router_with_sink(sink: LogSink) -> InvocationRouter {
+fn make_router_with_sink(sink: CapturingSink) -> InvocationRouter<CapturingSink> {
     let registry = ProviderRegistry::new(); // no providers needed for log tests
-    InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink)
+    InvocationRouter::<CapturingSink>::with_log_sink(registry, RouterConfig::default(), sink)
 }
 
 //  Tests
@@ -62,10 +73,14 @@ fn log_envelope_is_not_routed_to_provider() {
         );
         let handle = ProviderHandle::new("logger", vec!["$log".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
 
         let (sink, _captured) = capturing_sink();
-        let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
+        let router = InvocationRouter::<CapturingSink>::with_log_sink(
+            registry,
+            RouterConfig::default(),
+            sink,
+        );
 
         let env = make_log_envelope(LogLevel::Info, "test.logger", "hello from test");
         let resp = router.dispatch(env).await;
@@ -74,8 +89,10 @@ fn log_envelope_is_not_routed_to_provider() {
         assert!(resp.ok, "log dispatch should return ok_empty");
 
         // Provider channel must be empty:  log was NOT forwarded to it.
+        let recv_fut = work_rx.recv();
+        pin_mut!(recv_fut);
         assert!(
-            work_rx.try_recv().is_err(),
+            matches!(poll!(recv_fut.as_mut()), Poll::Pending),
             "log envelope must not be forwarded to any provider"
         );
     })
@@ -153,10 +170,10 @@ fn log_envelope_with_no_args_returns_ok_without_panicking() {
         // Must not panic; ok_empty is returned.
         assert!(resp.ok, "malformed log should still return ok");
 
-        // Nothing was delivered to the sink.
+        // The router logs a warning about the malformed record.
         assert!(
-            captured.lock().unwrap().is_empty(),
-            "malformed log should not reach sink"
+            !captured.lock().unwrap().is_empty(),
+            "malformed log should emit a warning to sink"
         );
     })
 }
@@ -184,8 +201,8 @@ fn log_envelope_with_invalid_args_returns_ok_without_panicking() {
 
         assert!(resp.ok, "invalid log args should still return ok");
         assert!(
-            captured.lock().unwrap().is_empty(),
-            "invalid log args should not reach sink"
+            !captured.lock().unwrap().is_empty(),
+            "invalid log args should emit a warning to sink"
         );
     })
 }
@@ -199,7 +216,7 @@ fn router_with_custom_sink_still_routes_calls() {
         );
         let handle = ProviderHandle::new("math", vec!["math".to_owned()], work_tx);
         let registry = ProviderRegistry::new();
-        registry.register(handle);
+        registry.register(handle).await;
 
         // Spawn an auto-responder.
         saikuro_exec::spawn(async move {
@@ -215,7 +232,11 @@ fn router_with_custom_sink_still_routes_calls() {
         });
 
         let (sink, _captured) = capturing_sink();
-        let router = InvocationRouter::with_log_sink(registry, RouterConfig::default(), sink);
+        let router = InvocationRouter::<CapturingSink>::with_log_sink(
+            registry,
+            RouterConfig::default(),
+            sink,
+        );
 
         let env = Envelope::call("math.compute", vec![]).expect("entropy available");
         let resp = router.dispatch(env).await;
