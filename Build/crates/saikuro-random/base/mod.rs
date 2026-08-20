@@ -26,5 +26,8 @@ pub fn init_default() -> Result<(), SaikuroError> {
 #[cfg(feature = "no_std")]
 #[doc(hidden)]
 pub fn try_auto_seed() -> Result<(), SaikuroError> {
+    if crate::shared::is_seeded() {
+        return Ok(());
+    }
     init(&WasiEntropy)
 }

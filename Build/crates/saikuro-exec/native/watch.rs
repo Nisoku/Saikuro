@@ -1,4 +1,5 @@
 use core::future::Future;
+use core::marker::PhantomData;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
@@ -44,23 +45,31 @@ impl<T: Clone> Receiver<T> {
         (*self.inner.borrow()).clone()
     }
 
-    pub fn changed(&mut self) -> ChangedFuture<'_, T> {
-        ChangedFuture { receiver: self }
+    pub fn changed(&mut self) -> ChangedFuture<'_, T>
+    where
+        T: Send + Sync,
+    {
+        ChangedFuture {
+            inner: Box::pin(self.inner.changed()),
+            _marker: PhantomData,
+        }
     }
 }
 
 pub struct ChangedFuture<'a, T> {
-    receiver: &'a mut Receiver<T>,
+    inner:
+        Pin<Box<dyn Future<Output = Result<(), tokio::sync::watch::error::RecvError>> + Send + 'a>>,
+    _marker: PhantomData<fn(T)>,
 }
 
-impl<T: Clone> Future for ChangedFuture<'_, T> {
+impl<T> Unpin for ChangedFuture<'_, T> {}
+
+impl<T> Future for ChangedFuture<'_, T> {
     type Output = Result<(), RecvError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let fut = this.receiver.inner.changed();
-        tokio::pin!(fut);
-        match fut.as_mut().poll(cx) {
+        match this.inner.as_mut().poll(cx) {
             Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
             Poll::Ready(Err(_)) => Poll::Ready(Err(RecvError)),
             Poll::Pending => Poll::Pending,

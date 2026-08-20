@@ -20,5 +20,8 @@ pub fn init_default() -> Result<(), SaikuroError> {
 /// Called automatically by [`crate::fill`] on first use.
 #[doc(hidden)]
 pub fn try_auto_seed() -> Result<(), SaikuroError> {
+    if crate::shared::is_seeded() {
+        return Ok(());
+    }
     init(&JsEntropy)
 }

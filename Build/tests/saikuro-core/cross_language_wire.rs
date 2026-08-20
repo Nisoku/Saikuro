@@ -297,7 +297,7 @@ fn m_rust_adapter_client_calls_runtime_provider() {
         assert_eq!(result, serde_json::json!(-42), "negate(42) must return -42");
 
         client.close().await.expect("close");
-        bridge.abort();
+        let _ = bridge.abort();
     })
 }
 
@@ -418,8 +418,8 @@ fn n_rust_adapter_provider_serves_simulated_client() {
         );
 
         drop(client_tx);
-        serve_task.abort();
-        bridge.abort();
+        let _ = serve_task.abort();
+        let _ = bridge.abort();
     })
 }
 
@@ -564,7 +564,7 @@ fn c_rust_and_simulated_providers_coexist() {
         assert_eq!(echo_resp.result, Some(Value::String("hello".into())));
 
         drop(client_tx);
-        ext_loop.abort();
+        let _ = ext_loop.abort();
     })
 }
 
@@ -756,7 +756,7 @@ fn f_announce_then_client_call_round_trip() {
         assert_eq!(resp.result, Some(Value::Int(81)), "9² = 81");
 
         drop(cli_tx);
-        prov_loop.abort();
+        let _ = prov_loop.abort();
     })
 }
 
@@ -939,7 +939,7 @@ fn i_provider_reconnect_and_reannounce() {
         assert_eq!(resp2.result, Some(Value::Int(2)), "v2 provider must answer");
 
         drop(cli2_tx);
-        prov2_loop.abort();
+        let _ = prov2_loop.abort();
     })
 }
 

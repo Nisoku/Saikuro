@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::Duration;
 
@@ -179,9 +179,14 @@ impl Drop for RuntimeHarness {
     }
 }
 
+fn shared_runtime() -> &'static RuntimeHarness {
+    static RT: OnceLock<RuntimeHarness> = OnceLock::new();
+    RT.get_or_init(|| RuntimeHarness::start())
+}
+
 #[test]
 fn c_client_call_cast_batch_roundtrip_with_runtime() {
-    let runtime = RuntimeHarness::start();
+    let runtime = shared_runtime();
 
     // Connect.
     let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
@@ -265,7 +270,8 @@ fn c_client_call_cast_batch_roundtrip_with_runtime() {
 
 #[test]
 fn c_client_reports_transport_error_when_namespace_missing() {
-    let runtime = RuntimeHarness::start();
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
+    let runtime = shared_runtime();
 
     // Connect.
     let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();

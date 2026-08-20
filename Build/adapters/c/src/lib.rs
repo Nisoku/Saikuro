@@ -114,6 +114,12 @@ mod exec {
             .get_or_init(|| TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime"));
         rt.handle().spawn(fut);
     }
+
+    pub(super) fn block_on<F: Future>(fut: F) -> F::Output {
+        let rt = RT
+            .get_or_init(|| TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime"));
+        rt.block_on(fut)
+    }
 }
 
 #[cfg(feature = "native")]
@@ -122,6 +128,11 @@ where
     F: Future<Output = ()> + Send + 'static,
 {
     exec::spawn(fut);
+}
+
+#[cfg(feature = "native")]
+fn block_on_future<F: Future>(fut: F) -> F::Output {
+    exec::block_on(fut)
 }
 
 #[cfg(not(feature = "native"))]
@@ -432,10 +443,11 @@ pub extern "C" fn saikuro_client_close_async(
         return;
     }
 
-    let handle = unsafe { Box::from_raw(handle as *mut ClientHandle) };
+    let handle_ref = unsafe { &mut *(handle as *mut ClientHandle) };
+    let client = handle_ref.client.take();
     let user_data_addr = user_data as usize;
     spawn_future(async move {
-        let status = match handle.client {
+        let status = match client {
             Some(client) => int_saikuro(client.close().await, "close"),
             None => 0,
         };
@@ -1349,4 +1361,506 @@ pub extern "C" fn saikuro_provider_free(handle: *mut c_void) {
     // Drop the provider (and any pending handlers) before freeing the box.
     let mut boxed = unsafe { Box::from_raw(handle as *mut ProviderHandle) };
     let _ = boxed.provider.take();
+}
+
+// Synchronous blocking API
+// These block the calling thread on the global tokio runtime.
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_connect(address: *const c_char) -> *mut c_void {
+    clear_last_error();
+    let address = match cstr_to_string(address, "address") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+
+    let client = match block_on_future(saikuro::Client::connect(address)) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(format!("failed to connect client: {e}"));
+            return ptr::null_mut();
+        }
+    };
+
+    Box::into_raw(Box::new(ClientHandle {
+        client: Some(client),
+    })) as *mut c_void
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let handle_ref = unsafe { &mut *(handle as *mut ClientHandle) };
+    let client = match handle_ref.client.take() {
+        Some(c) => c,
+        None => return 0,
+    };
+    int_saikuro(block_on_future(client.close()), "close")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    ptr_saikuro(block_on_future(h.client().call(target, args)), "call")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json_timeout(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    timeout_ms: c_int,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    if timeout_ms < 0 {
+        set_last_error("timeout_ms must be non-negative");
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let timeout = core::time::Duration::from_millis(timeout_ms as u64);
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    ptr_saikuro(
+        block_on_future(h.client().call_with_timeout(target, args, Some(timeout))),
+        "call",
+    )
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_cast_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    int_saikuro(block_on_future(h.client().cast(target, args)), "cast")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_batch_json(
+    handle: *mut c_void,
+    calls_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let raw = match cstr_to_string(calls_json, "calls_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let calls = match parse_batch_calls(&raw) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    let res = block_on_future(h.client().batch(calls));
+    match res {
+        Ok(v) => match serde_json::to_string(&v) {
+            Ok(json) => into_c_string_ptr(&json),
+            Err(e) => {
+                set_last_error(format!("failed to serialize result: {e}"));
+                ptr::null_mut()
+            }
+        },
+        Err(e) => {
+            set_last_error(format!("batch failed: {e}"));
+            ptr::null_mut()
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_stream_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_void {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    match block_on_future(h.client().stream(target, args)) {
+        Ok(stream) => Box::into_raw(Box::new(StreamHandle { stream })) as *mut c_void,
+        Err(e) => {
+            set_last_error(format!("stream open failed: {e}"));
+            ptr::null_mut()
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_channel_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_void {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    match block_on_future(h.client().channel(target, args)) {
+        Ok(channel) => Box::into_raw(Box::new(ChannelHandle { channel })) as *mut c_void,
+        Err(e) => {
+            set_last_error(format!("channel open failed: {e}"));
+            ptr::null_mut()
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_send_json(
+    channel: *mut c_void,
+    item_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let item_json = match cstr_to_string(item_json, "item_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let item: Value = match serde_json::from_str(&item_json) {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(format!("item_json must be valid JSON: {e}"));
+            return 1;
+        }
+    };
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    int_saikuro(block_on_future(c.channel.send(item)), "channel send")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_close(channel: *mut c_void) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    int_saikuro(block_on_future(c.channel.close()), "channel close")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_abort(channel: *mut c_void) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    int_saikuro(block_on_future(c.channel.abort()), "channel abort")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_next_json(
+    channel: *mut c_void,
+    out_item_json: *mut *mut c_char,
+    out_done: *mut c_int,
+) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    match block_on_future(c.channel.next()) {
+        Some(Ok(value)) => match serde_json::to_string(&value) {
+            Ok(json) => {
+                unsafe {
+                    *out_item_json = into_c_string_ptr(&json);
+                    *out_done = 0;
+                }
+                0
+            }
+            Err(e) => {
+                set_last_error(format!("failed to serialize channel item: {e}"));
+                unsafe {
+                    *out_item_json = ptr::null_mut();
+                    *out_done = 1;
+                }
+                1
+            }
+        },
+        Some(Err(e)) => {
+            set_last_error(format!("channel receive failed: {e}"));
+            unsafe {
+                *out_item_json = ptr::null_mut();
+                *out_done = 1;
+            }
+            1
+        }
+        None => {
+            unsafe {
+                *out_item_json = ptr::null_mut();
+                *out_done = 1;
+            }
+            0
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn saikuro_channel_free(channel: *mut c_void) {
+    if channel.is_null() {
+        return;
+    }
+    let _ = unsafe { Box::from_raw(channel as *mut ChannelHandle) };
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_stream_next_json(
+    stream: *mut c_void,
+    out_item_json: *mut *mut c_char,
+    out_done: *mut c_int,
+) -> c_int {
+    clear_last_error();
+    if stream.is_null() {
+        set_last_error("stream must not be null");
+        return 1;
+    }
+    let s = unsafe { &mut *(stream as *mut StreamHandle) };
+    match block_on_future(s.stream.next()) {
+        Some(Ok(value)) => match serde_json::to_string(&value) {
+            Ok(json) => {
+                unsafe {
+                    *out_item_json = into_c_string_ptr(&json);
+                    *out_done = 0;
+                }
+                0
+            }
+            Err(e) => {
+                set_last_error(format!("failed to serialize stream item: {e}"));
+                unsafe {
+                    *out_item_json = ptr::null_mut();
+                    *out_done = 1;
+                }
+                1
+            }
+        },
+        Some(Err(e)) => {
+            set_last_error(format!("stream receive failed: {e}"));
+            unsafe {
+                *out_item_json = ptr::null_mut();
+                *out_done = 1;
+            }
+            1
+        }
+        None => {
+            unsafe {
+                *out_item_json = ptr::null_mut();
+                *out_done = 1;
+            }
+            0
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_resource_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    ptr_saikuro(
+        block_on_future(h.client().resource(target, args)),
+        "resource",
+    )
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_log(
+    handle: *mut c_void,
+    level: *const c_char,
+    name: *const c_char,
+    msg: *const c_char,
+    fields_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let (level, name, msg) = match cstr_to_string(level, "level")
+        .and_then(|l| cstr_to_string(name, "name").map(|n| (l, n)))
+        .and_then(|(l, n)| cstr_to_string(msg, "msg").map(|m| (l, n, m)))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let fields = if fields_json.is_null() {
+        None
+    } else {
+        match cstr_to_string(fields_json, "fields_json")
+            .and_then(|raw| parse_json_object_arg(&raw, "fields_json").map(Value::Object))
+        {
+            Ok(v) => Some(v),
+            Err(e) => {
+                set_last_error(e);
+                return 1;
+            }
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    int_saikuro(
+        block_on_future(h.client().log(level, name, msg, fields)),
+        "log",
+    )
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_char) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let address = match cstr_to_string(address, "address") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let handle_ref = unsafe { &mut *(handle as *mut ProviderHandle) };
+    let provider = match handle_ref.provider.take() {
+        Some(p) => p,
+        None => {
+            set_last_error("provider has already started serving");
+            return 1;
+        }
+    };
+    int_saikuro(block_on_future(provider.serve(address)), "provider serve")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_provider_close(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let handle_ref = unsafe { &mut *(handle as *mut ProviderHandle) };
+    let _ = handle_ref.provider.take();
+    0
 }

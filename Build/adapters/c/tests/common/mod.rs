@@ -1,10 +1,17 @@
+#![allow(dead_code)]
+
 use std::ffi::{c_int, c_void, CStr, CString};
 use std::sync::mpsc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use saikuro_c::{saikuro_last_error_message, saikuro_string_free};
 
 pub const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Serializes access to the global `LAST_ERROR` so parallel tests don't stomp
+/// on each other's error messages.
+pub static LAST_ERROR_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn c(text: &str) -> CString {
     CString::new(text).expect("CString should be created")

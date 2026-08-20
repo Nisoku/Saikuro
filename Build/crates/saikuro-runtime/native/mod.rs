@@ -120,9 +120,11 @@ async fn async_main() -> Result<()> {
     let runtime = Arc::new(builder.build().await);
 
     // Set up graceful shutdown channel.
+    #[allow(unused_variables)]
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     // Each enabled listener type is driven by its own `serve` task.
+    #[allow(unused_mut)]
     let mut serve_tasks: Vec<saikuro_exec::JoinHandle<()>> = Vec::new();
 
     // TCP listener.

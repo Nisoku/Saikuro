@@ -177,11 +177,19 @@ pub fn seed_from_slice(seed: &[u8]) -> Result<(), SaikuroError> {
             "DRBG seed must be at least {SEED_LEN} bytes"
         )));
     }
-    if SEEDED.load(Ordering::Acquire)
-        || INITIALIZING
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_err()
+    if SEEDED.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    if INITIALIZING
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
     {
+        for _ in 0..1_000_000u32 {
+            if SEEDED.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            core::hint::spin_loop();
+        }
         return Err(SaikuroError::Entropy("DRBG has already been seeded".into()));
     }
     for (i, word) in SEED.iter().enumerate() {

@@ -1,3 +1,5 @@
+#![allow(unused_imports, dead_code)]
+
 mod common;
 
 #[path = "saikuro-codegen"]

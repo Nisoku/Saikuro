@@ -21,5 +21,8 @@ pub fn init_default() -> Result<(), SaikuroError> {
 /// don't have to seed explicitly.
 #[doc(hidden)]
 pub fn try_auto_seed() -> Result<(), SaikuroError> {
+    if crate::shared::is_seeded() {
+        return Ok(());
+    }
     init(&OsEntropy)
 }

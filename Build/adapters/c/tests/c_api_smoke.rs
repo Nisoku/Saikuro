@@ -28,13 +28,14 @@ fn string_dup_roundtrip() {
 
 #[test]
 fn client_connect_rejects_null_address() {
-    // Null address is validated synchronously; callback is never called.
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     saikuro_client_connect_async(ptr::null(), Some(common::noop_connect_cb), ptr::null_mut());
     assert!(common::take_error().contains("address must not be null"));
 }
 
 #[test]
 fn provider_register_rejects_null_callback() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let ns = CString::new("math").expect("CString should be created");
     let provider = saikuro_provider_new(ns.as_ptr());
     assert!(!provider.is_null());
@@ -51,6 +52,7 @@ fn provider_register_rejects_null_callback() {
 
 #[test]
 fn batch_rejects_null_handle() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let calls = CString::new("{}").expect("CString should be created");
     let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_char>();
     saikuro_client_batch_json_async(
@@ -66,6 +68,7 @@ fn batch_rejects_null_handle() {
 
 #[test]
 fn stream_rejects_null_stream_handle() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     // Null client handle on open.
     let (rx, user_data) = common::channel_pair::<*mut c_void>();
     saikuro_client_stream_json_async(
@@ -91,6 +94,7 @@ fn stream_rejects_null_stream_handle() {
 
 #[test]
 fn channel_calls_reject_null_handles() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     // Null client handle on channel open.
     let (rx, user_data) = common::channel_pair::<*mut c_void>();
     saikuro_client_channel_json_async(
@@ -130,6 +134,7 @@ fn channel_calls_reject_null_handles() {
 
 #[test]
 fn resource_and_log_reject_null_handles() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let target = CString::new("files.open").expect("CString should be created");
     let args = CString::new("[]").expect("CString should be created");
 

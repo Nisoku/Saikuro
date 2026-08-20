@@ -29,12 +29,14 @@ fn string_helpers_work_and_null_is_safe() {
 
 #[test]
 fn client_connect_requires_non_null_address() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     saikuro_client_connect_async(ptr::null(), Some(common::noop_connect_cb), ptr::null_mut());
     assert!(common::take_error().contains("address must not be null"));
 }
 
 #[test]
 fn call_cast_batch_require_non_null_handle() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let target = common::c("math.add");
     let args = common::c("[1,2]");
 
@@ -89,6 +91,7 @@ fn call_cast_batch_require_non_null_handle() {
 
 #[test]
 fn stream_and_channel_null_handle_paths_are_safe() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     // Null client handle on stream open.
     let (rx, user_data) = common::channel_pair::<*mut std::ffi::c_void>();
     saikuro_client_stream_json_async(
@@ -162,6 +165,7 @@ fn stream_and_channel_null_handle_paths_are_safe() {
 
 #[test]
 fn resource_and_log_require_non_null_handle() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let target = common::c("files.open");
     let args = common::c("[]");
 
@@ -205,6 +209,7 @@ unsafe extern "C" fn add_handler(
 
 #[test]
 fn provider_registration_accepts_valid_callback() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let provider = saikuro_provider_new(common::c("math").as_ptr());
     assert!(!provider.is_null());
 

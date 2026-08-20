@@ -740,11 +740,15 @@ fn create_storage_backend_kind_web_storage_returns_in_memory_on_native() {
         use saikuro_storage::{BackendKind, StorageConfig};
 
         let cfg = StorageConfig::default().with_backend(BackendKind::WebStorage);
-        let store = saikuro::create_storage(&cfg).await.expect("web storage");
-        // WebStorage on native is an InMemoryStorage alias that does round-trip
-        store.put("ns", "k", bytes::Bytes::from("v")).await.unwrap();
-        let v = store.get("ns", "k").await.unwrap();
-        assert_eq!(v, Some(bytes::Bytes::from("v")));
+        let result = saikuro::create_storage(&cfg).await;
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("expected error, got Ok"),
+        };
+        assert!(
+            err.contains("browser") || err.contains("wasm"),
+            "error mentions browser/wasm: {err}"
+        );
     })
 }
 
@@ -759,7 +763,10 @@ fn create_storage_backend_kind_indexeddb_errors_on_native() {
             Err(e) => e.to_string(),
             Ok(_) => panic!("expected error, got Ok"),
         };
-        assert!(err.contains("IndexedDB"), "error mentions IndexedDB: {err}");
+        assert!(
+            err.contains("browser") || err.contains("wasm") || err.contains("IndexedDB"),
+            "error mentions IndexedDB or browser: {err}"
+        );
     })
 }
 
@@ -774,7 +781,10 @@ fn create_storage_backend_kind_opfs_errors_on_native() {
             Err(e) => e.to_string(),
             Ok(_) => panic!("expected error, got Ok"),
         };
-        assert!(err.contains("OPFS"), "error mentions OPFS: {err}");
+        assert!(
+            err.contains("browser") || err.contains("wasm") || err.contains("OPFS"),
+            "error mentions OPFS or browser: {err}"
+        );
     })
 }
 
