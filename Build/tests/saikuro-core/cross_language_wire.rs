@@ -1,5 +1,6 @@
 //! Cross-language wire-protocol integration tests
 
+use crate::common;
 use bytes::Bytes;
 use saikuro_core::{
     capability::CapabilitySet,
@@ -81,12 +82,6 @@ fn make_schema_with_args(namespace: &str, function: &str, n_args: usize) -> Sche
 /// Build a minimal one-function schema with no required arguments.
 fn make_schema(namespace: &str, function: &str) -> Schema {
     make_schema_with_args(namespace, function, 0)
-}
-
-/// Serialise a [`Schema`] into a [`Value`] suitable for `Envelope::announce`.
-fn schema_to_value(schema: &Schema) -> Value {
-    let bytes = rmp_serde::to_vec_named(schema).expect("serialize schema");
-    rmp_serde::from_slice::<Value>(&bytes).expect("re-decode schema as Value")
 }
 
 /// Wire the "simulated adapter" side: returns `(sender, receiver)` for the
@@ -436,7 +431,8 @@ fn b_simulated_provider_rust_client_dispatch() {
 
         // 2:  Send an Announce so the runtime learns about `greeter.hello`.
         let schema = make_schema("greeter", "hello");
-        let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
+        let announce =
+            Envelope::announce(common::schema_to_value(&schema)).expect("entropy available");
         provider_tx
             .send(encode_envelope(&announce))
             .await
@@ -509,7 +505,8 @@ fn c_rust_and_simulated_providers_coexist() {
         let (mut ext_tx, mut ext_rx) = connect_simulated_peer(&handle, "ext-provider");
 
         let ext_schema = make_schema_with_args("ext", "echo", 1);
-        let announce = Envelope::announce(schema_to_value(&ext_schema)).expect("entropy available");
+        let announce =
+            Envelope::announce(common::schema_to_value(&ext_schema)).expect("entropy available");
         ext_tx
             .send(encode_envelope(&announce))
             .await
@@ -712,7 +709,8 @@ fn f_announce_then_client_call_round_trip() {
         let (mut prov_tx, mut prov_rx) = connect_simulated_peer(&handle, "prov-f");
 
         let schema = make_schema_with_args("calc", "square", 1);
-        let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
+        let announce =
+            Envelope::announce(common::schema_to_value(&schema)).expect("entropy available");
         prov_tx
             .send(encode_envelope(&announce))
             .await
@@ -866,7 +864,8 @@ fn i_provider_reconnect_and_reannounce() {
             let (mut prov_tx, mut prov_rx) = connect_simulated_peer(&handle, "reconnect-prov-v1");
 
             let schema = make_schema("svc2", "op");
-            let announce = Envelope::announce(schema_to_value(&schema)).expect("entropy available");
+            let announce =
+                Envelope::announce(common::schema_to_value(&schema)).expect("entropy available");
             prov_tx
                 .send(encode_envelope(&announce))
                 .await
@@ -907,7 +906,8 @@ fn i_provider_reconnect_and_reannounce() {
         let (mut prov2_tx, mut prov2_rx) = connect_simulated_peer(&handle, "reconnect-prov-v2");
 
         let schema2 = make_schema("svc2", "op");
-        let announce2 = Envelope::announce(schema_to_value(&schema2)).expect("entropy available");
+        let announce2 =
+            Envelope::announce(common::schema_to_value(&schema2)).expect("entropy available");
         prov2_tx
             .send(encode_envelope(&announce2))
             .await

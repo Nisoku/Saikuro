@@ -22,7 +22,6 @@ native = [
     "std",
     "saikuro-core/native",
     "saikuro-transport/native",
-    "saikuro-random/native",
     "saikuro-exec/native",
     "saikuro-event/native",
     "saikuro-event/std",
@@ -36,21 +35,18 @@ wasm = [
     "saikuro-core/wasm",
     "saikuro-transport/wasm",
     "saikuro-transport/wasm-host",
-    "saikuro-random/wasm",
     "saikuro-exec/wasm",
     "saikuro-event/wasm",
 ]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-transport/embedded",
-    "saikuro-random/embedded",
     "saikuro-exec/embedded",
     "saikuro-event/embedded",
 ]
 no_std = [
     "saikuro-core/no_std",
     "saikuro-transport/no_std",
-    "saikuro-random/no_std",
     "saikuro-exec/no_std",
     "saikuro-event/no_std",
 ]
@@ -73,14 +69,11 @@ wasm-storage = ["saikuro-storage/wasm"]
 saikuro-core      = { path = "../../crates/saikuro-core", default-features = false }
 saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false, optional = true }
 saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
-saikuro-random    = { path = "../../crates/saikuro-random", default-features = false }
 saikuro-event     = { path = "../../crates/saikuro-event", default-features = false }
 
 anyhow      = { workspace = true, optional = true }
-serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true, features = ["alloc"] }
 bytes       = { workspace = true }
-portable-atomic     = { workspace = true }
 portable-atomic-util = { workspace = true, features = ["alloc"] }
 saikuro-exec = { workspace = true, default-features = false }
 futures     = { workspace = true, features = ["async-await"] }

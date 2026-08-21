@@ -67,7 +67,6 @@ struct HandlerEntry {
 pub struct Provider {
     namespace: String,
     handlers: HashMap<String, HandlerEntry>,
-    extra_namespaces: HashMap<String, NamespaceSchema>,
     log: Arc<dyn LogSink>,
 }
 
@@ -77,7 +76,6 @@ impl Provider {
         Self {
             namespace: namespace.into(),
             handlers: HashMap::new(),
-            extra_namespaces: HashMap::new(),
             log: Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn LogSink>),
         }
     }
@@ -174,9 +172,6 @@ impl Provider {
 
         let mut all_ns = HashMap::new();
         all_ns.insert(self.namespace.clone(), ns_schema);
-        for (name, ns) in &self.extra_namespaces {
-            all_ns.insert(name.clone(), ns.clone());
-        }
 
         build_schema(&all_ns)
     }

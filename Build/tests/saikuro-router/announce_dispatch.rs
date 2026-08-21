@@ -2,22 +2,13 @@
 
 use bytes::Bytes;
 use saikuro_core::{
-    capability::CapabilitySet,
     envelope::{Envelope, InvocationType},
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
 use saikuro_event::Value;
 use saikuro_exec::mpsc;
-use saikuro_router::{
-    provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem},
-    router::{InvocationRouter, RouterConfig},
-};
-use saikuro_runtime::connection::ConnectionHandler;
-use saikuro_schema::{
-    capability_engine::CapabilityEngine,
-    registry::{RegistryMode, SchemaRegistry},
-    validator::InvocationValidator,
-};
+use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
+use saikuro_schema::registry::{RegistryMode, SchemaRegistry};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 use crate::common;
@@ -35,30 +26,17 @@ async fn round_trip_while_alive(
     provider_registry: ProviderRegistry,
     envelope: Envelope,
 ) -> ResponseEnvelope {
-    let log: std::sync::Arc<dyn saikuro_event::LogSink> =
-        std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>);
+    let log = common::null_log();
     let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
-    let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
-    let router = InvocationRouter::new(provider_registry.clone(), RouterConfig::default());
-    let validator = InvocationValidator::new(schema_registry.clone());
-    let capability_engine = CapabilityEngine::default();
-
-    let handler = ConnectionHandler {
-        peer_id: "test-peer".to_owned(),
-        registration_token: saikuro_core::RegistrationToken::new(),
-        sender: handler_sender,
-        receiver: handler_receiver,
-        validator,
-        capability_engine,
-        router,
-        peer_capabilities: CapabilitySet::empty(),
-        max_message_size: 4 * 1024 * 1024,
+    let handler = common::make_handler(
+        "test-peer",
         schema_registry,
         provider_registry,
         log,
-    };
+        handler_transport,
+    );
 
     // Spawn the handler so we can interleave reads/writes.
     let task = saikuro_exec::spawn(handler.run());

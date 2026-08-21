@@ -10,16 +10,11 @@ use saikuro_core::{
     },
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
-use saikuro_event::Value;
-use saikuro_router::{
-    provider::ProviderRegistry,
-    router::{InvocationRouter, RouterConfig},
-};
-use saikuro_runtime::connection::ConnectionHandler;
-use saikuro_schema::{
-    capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
-};
+use saikuro_router::provider::ProviderRegistry;
+use saikuro_schema::registry::SchemaRegistry;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
+
+use crate::common;
 
 // Helpers
 
@@ -94,15 +89,6 @@ fn build_schema() -> Schema {
     }
 }
 
-fn schema_to_value(schema: &Schema) -> Value {
-    let bytes = rmp_serde::to_vec_named(schema).expect("serialize schema");
-    rmp_serde::from_slice::<Value>(&bytes).expect("deserialize schema to Value")
-}
-
-fn make_announce(schema: &Schema) -> Envelope {
-    Envelope::announce(schema_to_value(schema)).expect("entropy available")
-}
-
 /// Send `envelope` through a `ConnectionHandler` (optionally sandboxed) and
 /// collect all frames the handler pushes back.
 ///
@@ -114,35 +100,22 @@ async fn run_and_collect(
     sandbox: bool,
     envelope: Envelope,
 ) -> Vec<Bytes> {
-    let log: std::sync::Arc<dyn saikuro_event::LogSink> =
-        std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>);
+    let log = common::null_log();
     let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
-    let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
     let providers = ProviderRegistry::new();
-    let router = InvocationRouter::new(providers.clone(), RouterConfig::default());
-    let validator = InvocationValidator::new(schema_registry.clone());
-    let capability_engine = if sandbox {
-        CapabilityEngine::sandboxed()
-    } else {
-        CapabilityEngine::new()
-    };
-
-    let handler = ConnectionHandler {
-        peer_id: "sandbox-peer".to_owned(),
-        registration_token: saikuro_core::RegistrationToken::new(),
-        sender: handler_sender,
-        receiver: handler_receiver,
-        validator,
-        capability_engine,
-        router,
-        peer_capabilities,
-        max_message_size: 4 * 1024 * 1024,
+    let mut handler = common::make_handler(
+        "sandbox-peer",
         schema_registry,
-        provider_registry: providers,
+        providers,
         log,
-    };
+        handler_transport,
+    );
+    if sandbox {
+        handler = handler.sandboxed();
+    }
+    handler.peer_capabilities = peer_capabilities;
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
     test_sender.send(frame).await.expect("send frame");
@@ -166,7 +139,7 @@ fn sandbox_announce_pushes_filtered_schema_frame() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
 
@@ -193,7 +166,7 @@ fn sandbox_filtered_schema_excludes_internal_functions() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
         assert_eq!(frames.len(), 2);
@@ -221,7 +194,7 @@ fn sandbox_filtered_schema_excludes_private_functions() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
         assert_eq!(frames.len(), 2);
@@ -246,7 +219,7 @@ fn sandbox_filtered_schema_includes_public_no_cap_functions() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
         assert_eq!(frames.len(), 2);
@@ -271,7 +244,7 @@ fn sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         // Peer has no capabilities.
         let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
@@ -297,7 +270,7 @@ fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")]).unwrap();
         let frames = run_and_collect(registry, caps, true, env).await;
@@ -323,7 +296,7 @@ fn non_sandbox_announce_produces_single_response_frame() {
     saikuro_exec::block_on(async {
         let registry = SchemaRegistry::new();
         let schema = build_schema();
-        let env = make_announce(&schema);
+        let env = common::make_announce_envelope(&schema);
 
         let frames = run_and_collect(registry, CapabilitySet::empty(), false, env).await;
 

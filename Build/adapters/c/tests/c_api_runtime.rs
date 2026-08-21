@@ -186,6 +186,7 @@ fn shared_runtime() -> &'static RuntimeHarness {
 
 #[test]
 fn c_client_call_cast_batch_roundtrip_with_runtime() {
+    let _lock = common::LAST_ERROR_LOCK.lock().expect("lock poisoned");
     let runtime = shared_runtime();
 
     // Connect.

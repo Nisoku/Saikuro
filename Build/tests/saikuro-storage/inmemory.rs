@@ -7,6 +7,8 @@
 use bytes::Bytes;
 use saikuro_storage::{InMemoryStorage, KeyValueBackend, StorageBackend, StorageConfig};
 
+use crate::common;
+
 // Construction
 
 #[test]
@@ -15,15 +17,11 @@ fn new_creates_empty_store() {
     assert_eq!(s.config(), &StorageConfig::default());
 }
 
-fn null_log() -> std::sync::Arc<dyn saikuro_event::LogSink> {
-    std::sync::Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>)
-}
-
 #[test]
 fn with_config_applies_config() {
     saikuro_exec::block_on(async {
         let cfg = StorageConfig::durable().with_prefix("test");
-        let s = InMemoryStorage::with_config(cfg.clone(), null_log()).await;
+        let s = InMemoryStorage::with_config(cfg.clone(), common::null_log()).await;
         assert_eq!(s.config(), &cfg);
     })
 }
@@ -74,7 +72,7 @@ fn exists_errors_on_missing_namespace() {
             namespace_prefix: Some("x".into()),
             ..Default::default()
         };
-        let s = InMemoryStorage::with_config(cfg, null_log()).await;
+        let s = InMemoryStorage::with_config(cfg, common::null_log()).await;
         let r = s.exists("nonexistent", "k").await;
         assert!(r.is_err());
     })
@@ -261,7 +259,7 @@ fn put_fails_when_auto_create_disabled() {
             auto_create_namespaces: false,
             ..Default::default()
         };
-        let s = InMemoryStorage::with_config(cfg, null_log()).await;
+        let s = InMemoryStorage::with_config(cfg, common::null_log()).await;
         let r = s.put("manual", "k", Bytes::from("v")).await;
         assert!(r.is_err());
     })
@@ -275,7 +273,7 @@ fn get_fails_on_missing_namespace_without_auto_create() {
                 auto_create_namespaces: false,
                 ..Default::default()
             },
-            null_log(),
+            common::null_log(),
         )
         .await;
         let r = s.get("nowhere", "k").await;
@@ -290,12 +288,12 @@ fn namespace_prefix_isolates_storage() {
     saikuro_exec::block_on(async {
         let a = InMemoryStorage::with_config(
             StorageConfig::default().with_prefix("tenant_a"),
-            null_log(),
+            common::null_log(),
         )
         .await;
         let b = InMemoryStorage::with_config(
             StorageConfig::default().with_prefix("tenant_b"),
-            null_log(),
+            common::null_log(),
         )
         .await;
 
@@ -310,9 +308,11 @@ fn namespace_prefix_isolates_storage() {
 #[test]
 fn namespace_prefix_list_namespaces_is_stripped() {
     saikuro_exec::block_on(async {
-        let s =
-            InMemoryStorage::with_config(StorageConfig::default().with_prefix("app"), null_log())
-                .await;
+        let s = InMemoryStorage::with_config(
+            StorageConfig::default().with_prefix("app"),
+            common::null_log(),
+        )
+        .await;
         s.put("myns", "k", Bytes::from("v")).await.unwrap();
         let nss = s.list_namespaces().await.unwrap();
         assert_eq!(nss, vec!["myns"]);

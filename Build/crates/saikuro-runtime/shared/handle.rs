@@ -49,10 +49,7 @@ impl RuntimeHandle {
         schema: Schema,
         provider_id: impl Into<String>,
     ) -> Result<()> {
-        self.schema_registry
-            .merge_schema(schema, provider_id)
-            .await
-            .map_err(Into::into)
+        self.schema_registry.merge_schema(schema, provider_id).await
     }
 
     /// Register or merge a schema under an existing provider registration.
@@ -65,12 +62,11 @@ impl RuntimeHandle {
         self.schema_registry
             .merge_schema_with_token(schema, provider_id, registration_token)
             .await
-            .map_err(Into::into)
     }
 
     /// Register a single namespace from a provider.
     pub async fn register_namespace(&self, reg: NamespaceRegistration) -> Result<()> {
-        self.schema_registry.register(reg).await.map_err(Into::into)
+        self.schema_registry.register(reg).await
     }
 
     /// Deregister all schemas owned by a provider (called on disconnect).
@@ -86,7 +82,7 @@ impl RuntimeHandle {
 
     /// Export a snapshot of the current schema state.
     pub async fn schema_snapshot(&self) -> Result<Schema> {
-        self.schema_registry.snapshot().await.map_err(Into::into)
+        self.schema_registry.snapshot().await
     }
 
     // Providers

@@ -116,7 +116,6 @@ impl SaikuroChannel {
             InvocationType::Channel,
             "",
             vec![],
-            None,
             Some(self.next_seq()),
         );
         envelope.stream_control = Some(StreamControl::End);
@@ -130,7 +129,6 @@ impl SaikuroChannel {
             InvocationType::Channel,
             "",
             vec![],
-            None,
             Some(self.next_seq()),
         );
         envelope.stream_control = Some(StreamControl::Abort);
@@ -144,7 +142,6 @@ impl SaikuroChannel {
             InvocationType::Channel,
             "",
             vec![value],
-            None,
             Some(self.next_seq()),
         );
         self.send_channel_envelope(&envelope).await
@@ -353,7 +350,7 @@ impl Client {
         timeout: Option<Duration>,
     ) -> Result<Value> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Call, &target, args, None)?;
+        let envelope = make_envelope(InvocationType::Call, &target, args)?;
         let id = envelope.id;
 
         let (tx, rx) = oneshot::channel();
@@ -385,7 +382,7 @@ impl Client {
     /// Fire-and-forget invocation. No response is expected.
     pub async fn cast(&self, target: impl Into<String>, args: Vec<Value>) -> Result<()> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Cast, &target, args, None)?;
+        let envelope = make_envelope(InvocationType::Cast, &target, args)?;
         self.send_envelope(&envelope).await
     }
 
@@ -398,7 +395,7 @@ impl Client {
         args: Vec<Value>,
     ) -> Result<SaikuroStream> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Stream, &target, args, None)?;
+        let envelope = make_envelope(InvocationType::Stream, &target, args)?;
         let id = envelope.id;
 
         let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
@@ -419,7 +416,7 @@ impl Client {
     pub async fn batch(&self, calls: Vec<(String, Vec<Value>)>) -> Result<Vec<Value>> {
         let batch_items: Vec<Envelope> = calls
             .into_iter()
-            .map(|(target, args)| make_envelope(InvocationType::Call, &target, args, None))
+            .map(|(target, args)| make_envelope(InvocationType::Call, &target, args))
             .collect::<Result<_>>()?;
 
         let batch_env = Envelope {
@@ -465,7 +462,7 @@ impl Client {
         args: Vec<Value>,
     ) -> Result<SaikuroChannel> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Channel, &target, args, None)?;
+        let envelope = make_envelope(InvocationType::Channel, &target, args)?;
         let id = envelope.id;
 
         let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
@@ -484,7 +481,7 @@ impl Client {
     /// Invoke a resource-producing function and return the resource payload.
     pub async fn resource(&self, target: impl Into<String>, args: Vec<Value>) -> Result<Value> {
         let target = target.into();
-        let envelope = make_envelope(InvocationType::Resource, &target, args, None)?;
+        let envelope = make_envelope(InvocationType::Resource, &target, args)?;
         let id = envelope.id;
 
         let (tx, rx) = oneshot::channel();
@@ -520,12 +517,7 @@ impl Client {
             record.insert("fields".to_owned(), extra);
         }
 
-        let envelope = make_envelope(
-            InvocationType::Log,
-            "$log",
-            vec![Value::Object(record)],
-            None,
-        )?;
+        let envelope = make_envelope(InvocationType::Log, "$log", vec![Value::Object(record)])?;
         self.send_envelope(&envelope).await
     }
 
@@ -541,43 +533,21 @@ impl Client {
     }
 }
 // Background task helpers
-/// Drain any announce envelopes that have already arrived on the transport.
-///
-/// This is called once at the start of the I/O task, before the main select
-/// loop.  In a real runtime deployment, announce frames are sent by the
-/// *provider* to the runtime, never to the client; this path is only active
-/// when a provider and client are wired together directly via
-/// [`InMemoryTransport`](crate::transport::InMemoryTransport) in tests.
-///
-/// We process announces using a non-blocking `try_recv`-style loop: poll the
-/// transport with a short deadline and ack any announce frames, stopping as
-/// soon as nothing is immediately available.  This avoids an indefinite wait
-/// on a connection where the provider has not yet sent its announce.
+
+/// Drain announce envelopes that arrived before the client's I/O task starts.
 async fn drain_announces(transport: &mut dyn AdapterTransport) {
-    // Use a very short deadline per poll so that on real runtime connections
-    // (where no announce will ever arrive on the client side) we escape
-    // immediately after the first timeout.
     const POLL_TIMEOUT: Duration = Duration::from_millis(20);
 
     while let Ok(Ok(Some(frame))) = saikuro_exec::timeout(POLL_TIMEOUT, transport.recv()).await {
-        // Check if this is an announce.  If it is, ack it and continue
-        // draining.  If it is a normal response, we cannot put it back
-        // into the transport; log an unexpected-frame warning and drop
-        // it.  In practice this should never happen: no pending call
-        // exists yet when this runs.
         if let Ok(env) = Envelope::from_msgpack(&frame) {
             if env.invocation_type == InvocationType::Announce {
                 let ack = ResponseEnvelope::ok_empty(env.id);
                 if let Ok(ack_bytes) = ack.to_msgpack() {
                     let _ = transport.send(Bytes::from(ack_bytes)).await;
                 }
-                // Continue: there could be more queued frames
-                // (unlikely, but be thorough).
                 continue;
             }
         }
-        // Non-announce frame arrived before any pending slot exists;
-        // this is unexpected.
     }
 }
 
@@ -606,7 +576,6 @@ async fn handle_inbound(
                 let _ = transport.send(Bytes::from(ack_bytes)).await;
             }
         }
-        return;
     }
 }
 
@@ -622,82 +591,70 @@ async fn route_response(
         .is_some_and(|c| matches!(c, StreamControl::End | StreamControl::Abort));
     let is_error = !resp.ok;
 
-    let slot_type = pending.get(&id).map(|s| match s.value() {
-        PendingSlot::Call(_) => "call",
-        PendingSlot::Stream(_) => "stream",
-        PendingSlot::Channel(_) => "channel",
-    });
-
-    match slot_type {
-        Some("call") => {
+    let slot = pending.get(&id);
+    match slot.as_deref() {
+        Some(PendingSlot::Call(_)) => {
+            drop(slot);
             if let Some((_, PendingSlot::Call(tx))) = pending.remove(&id) {
                 let _ = tx.send(resp);
             }
         }
-        Some("stream") => {
-            if let Some(slot) = pending.get(&id) {
-                if let PendingSlot::Stream(tx) = slot.value() {
-                    let tx = tx.clone();
-                    drop(slot);
-                    if is_stream_end {
-                        pending.remove(&id);
-                    } else if is_error {
-                        let detail = resp.error.unwrap_or_else(|| {
-                            ErrorDetail::new(ErrorCode::Internal, "stream error")
-                        });
-                        let _ = tx
-                            .send(Err(Error::remote(
-                                detail.code.to_string(),
-                                detail.message,
-                                None,
-                            )))
-                            .await;
-                        pending.remove(&id);
-                    } else {
-                        let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if tx.send(Ok(value)).await.is_err() {
-                            pending.remove(&id);
-                        }
+        Some(PendingSlot::Stream(tx)) => {
+            let tx = tx.clone();
+            drop(slot);
+            if is_stream_end {
+                pending.remove(&id);
+            } else if is_error {
+                let detail = resp
+                    .error
+                    .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "stream error"));
+                let _ = tx
+                    .send(Err(Error::remote(
+                        detail.code.to_string(),
+                        detail.message,
+                        None,
+                    )))
+                    .await;
+                pending.remove(&id);
+            } else {
+                let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
+                if tx.send(Ok(value)).await.is_err() {
+                    pending.remove(&id);
+                }
+            }
+        }
+        Some(PendingSlot::Channel(tx)) => {
+            let tx = tx.clone();
+            drop(slot);
+            if is_stream_end {
+                pending.remove(&id);
+                if let Some((_, sender)) = channel_senders.remove(&id) {
+                    let _ = sender.lock().await.take();
+                }
+            } else if is_error {
+                let detail = resp
+                    .error
+                    .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "channel error"));
+                let _ = tx.try_send(Err(Error::remote(
+                    detail.code.to_string(),
+                    detail.message,
+                    None,
+                )));
+                pending.remove(&id);
+                if let Some((_, sender)) = channel_senders.remove(&id) {
+                    let _ = sender.lock().await.take();
+                }
+            } else {
+                let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
+                if tx.try_send(Ok(value)).is_err() {
+                    pending.remove(&id);
+                    if let Some((_, sender)) = channel_senders.remove(&id) {
+                        let _ = sender.lock().await.take();
                     }
                 }
             }
         }
-        Some("channel") => {
-            if let Some(slot) = pending.get(&id) {
-                if let PendingSlot::Channel(tx) = slot.value() {
-                    let tx = tx.clone();
-                    drop(slot);
-                    if is_stream_end {
-                        pending.remove(&id);
-                        if let Some((_, sender)) = channel_senders.remove(&id) {
-                            let _ = sender.lock().await.take();
-                        }
-                    } else if is_error {
-                        let detail = resp.error.unwrap_or_else(|| {
-                            ErrorDetail::new(ErrorCode::Internal, "channel error")
-                        });
-                        let _ = tx.try_send(Err(Error::remote(
-                            detail.code.to_string(),
-                            detail.message,
-                            None,
-                        )));
-                        pending.remove(&id);
-                        if let Some((_, sender)) = channel_senders.remove(&id) {
-                            let _ = sender.lock().await.take();
-                        }
-                    } else {
-                        let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                        if tx.try_send(Ok(value)).is_err() {
-                            pending.remove(&id);
-                            if let Some((_, sender)) = channel_senders.remove(&id) {
-                                let _ = sender.lock().await.take();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        _ => {}
+        None => {}
     }
 }
 
@@ -718,18 +675,12 @@ fn teardown_pending(pending: &DashMap<InvocationId, PendingSlot>) {
     }
 }
 // Helpers
-fn make_envelope(
-    inv_type: InvocationType,
-    target: &str,
-    args: Vec<Value>,
-    capability: Option<saikuro_core::capability::CapabilityToken>,
-) -> Result<Envelope> {
+fn make_envelope(inv_type: InvocationType, target: &str, args: Vec<Value>) -> Result<Envelope> {
     Ok(make_envelope_with_id(
         InvocationId::new()?,
         inv_type,
         target,
         args,
-        capability,
         None,
     ))
 }
@@ -739,7 +690,6 @@ fn make_envelope_with_id(
     inv_type: InvocationType,
     target: &str,
     args: Vec<Value>,
-    capability: Option<saikuro_core::capability::CapabilityToken>,
     seq: Option<u64>,
 ) -> Envelope {
     let core_args: Vec<CoreValue> = args.into_iter().map(json_to_core).collect();
@@ -750,7 +700,7 @@ fn make_envelope_with_id(
         target: target.to_owned(),
         args: core_args,
         meta: Default::default(),
-        capability,
+        capability: None,
         batch_items: None,
         stream_control: None,
         seq,

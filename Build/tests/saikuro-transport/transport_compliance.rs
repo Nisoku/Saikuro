@@ -13,11 +13,9 @@ use saikuro_exec::{block_on, spawn, yield_now};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 use std::sync::Arc;
 
-// COMPLIANCE TEST SUITE
+use crate::common;
 
-fn null_log() -> Arc<dyn saikuro_event::LogSink> {
-    Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>)
-}
+// COMPLIANCE TEST SUITE
 
 /// Run the full compliance suite against a transport pair factory.
 ///
@@ -213,13 +211,13 @@ fn many_sequential_transports_correct(pair: (MemoryTransport, MemoryTransport)) 
 
 #[test]
 fn memory_transport_compliance() {
-    let log = null_log();
+    let log = common::null_log();
     run_transport_compliance(move || MemoryTransport::connected_pair(log.clone()));
 }
 
 #[test]
 fn memory_transport_compliance_labeled() {
-    let log = null_log();
+    let log = common::null_log();
     run_transport_compliance(move || {
         MemoryTransport::pair("compliance-a", "compliance-b", log.clone())
     });

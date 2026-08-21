@@ -12,13 +12,7 @@ path = "lib.rs"
 
 [features]
 flash = ["saikuro-storage/embedded", "dep:embedded-storage-async", "dep:futures-executor"]
-embassy-test = []
-drbg = []
-os = []
-wasm = []
-custom = []
 embedded-io = []
-net = []
 
 [dependencies]
 saikuro-core      = { workspace = true }

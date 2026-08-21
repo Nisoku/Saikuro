@@ -25,7 +25,7 @@ pub mod storage;
 pub use client::{Client, ClientOptions, SaikuroChannel, SaikuroStream};
 pub use error::{Error, Result};
 pub use provider::{HandlerArgs, Provider, RegisterOptions};
-pub use saikuro_core::schema::{PrimitiveType, TypeDescriptor};
+pub use saikuro_core::schema::{PrimitiveType, TypeDescriptor, Visibility};
 pub use schema::{ArgDescriptor, FunctionSchema, NamespaceSchema};
 pub use transport::InMemoryTransport;
 pub use value::Value;

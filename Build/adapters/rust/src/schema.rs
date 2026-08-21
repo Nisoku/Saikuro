@@ -109,10 +109,7 @@ impl NamespaceSchema {
 ///
 /// Fails when the namespace count exceeds the core schema's fixed map
 /// capacity, so a provider never announces a silently truncated schema.
-///
-/// Internal helper exposed for the crate's integration tests.
-#[doc(hidden)]
-pub fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<Schema> {
+pub(crate) fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<Schema> {
     let mut schema = Schema::new();
     for (ns_name, ns) in namespaces {
         schema
@@ -121,4 +118,22 @@ pub fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<Sch
             .map_err(|_| Error::SchemaCapacityExceeded)?;
     }
     Ok(schema)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use saikuro_core::schema::SCHEMA_NAMESPACES_CAPACITY;
+
+    #[test]
+    fn build_schema_overflow_namespaces_returns_capacity_error() {
+        let mut namespaces = HashMap::new();
+        for i in 0..=SCHEMA_NAMESPACES_CAPACITY {
+            let mut ns = NamespaceSchema::new();
+            ns.insert("f", FunctionSchema::default());
+            namespaces.insert(format!("ns_{i}"), ns);
+        }
+        let err = build_schema(&namespaces).unwrap_err();
+        assert!(matches!(err, Error::SchemaCapacityExceeded));
+    }
 }

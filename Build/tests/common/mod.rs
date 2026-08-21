@@ -18,6 +18,7 @@ use saikuro_runtime::connection::ConnectionHandler;
 use saikuro_schema::{
     capability_engine::CapabilityEngine, registry::SchemaRegistry, validator::InvocationValidator,
 };
+use saikuro_transport::shared::memory::{MemoryReceiver, MemorySender};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 use std::sync::Arc;
 
@@ -89,6 +90,36 @@ pub async fn register_namespace(registry: &SchemaRegistry, namespace: &str, func
         .expect("merge_schema must succeed");
 }
 
+/// Build a `ConnectionHandler` over the runtime side of a
+/// `MemoryTransport::pair` with the standard test configuration: default
+/// router config, non-sandbox capability engine, and empty peer capabilities.
+///
+/// Tests needing sandbox mode or specific peer capabilities mutate the
+/// returned handler's public fields (or call `ConnectionHandler::sandboxed`).
+pub fn make_handler(
+    peer_id: &str,
+    schema_registry: SchemaRegistry,
+    provider_registry: ProviderRegistry,
+    log: Arc<dyn saikuro_event::LogSink>,
+    handler_transport: MemoryTransport,
+) -> ConnectionHandler<MemorySender, MemoryReceiver> {
+    let (handler_sender, handler_receiver) = handler_transport.split();
+    ConnectionHandler {
+        peer_id: peer_id.to_owned(),
+        registration_token: RegistrationToken::new(),
+        sender: handler_sender,
+        receiver: handler_receiver,
+        validator: InvocationValidator::new(schema_registry.clone()),
+        capability_engine: CapabilityEngine::default(),
+        router: InvocationRouter::new(provider_registry.clone(), RouterConfig::default()),
+        peer_capabilities: CapabilitySet::empty(),
+        max_message_size: 4 * 1024 * 1024,
+        schema_registry,
+        provider_registry,
+        log,
+    }
+}
+
 pub async fn round_trip_via_handler(
     schema_registry: SchemaRegistry,
     provider_registry: ProviderRegistry,
@@ -96,27 +127,15 @@ pub async fn round_trip_via_handler(
 ) -> ResponseEnvelope {
     let log = null_log();
     let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
-    let (handler_sender, handler_receiver) = handler_transport.split();
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
-    let router = InvocationRouter::new(provider_registry.clone(), RouterConfig::default());
-    let validator = InvocationValidator::new(schema_registry.clone());
-    let capability_engine = CapabilityEngine::default();
-
-    let handler = ConnectionHandler {
-        peer_id: "test-peer".to_owned(),
-        registration_token: RegistrationToken::new(),
-        sender: handler_sender,
-        receiver: handler_receiver,
-        validator,
-        capability_engine,
-        router,
-        peer_capabilities: CapabilitySet::empty(),
-        max_message_size: 4 * 1024 * 1024,
+    let handler = make_handler(
+        "test-peer",
         schema_registry,
         provider_registry,
         log,
-    };
+        handler_transport,
+    );
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
     test_sender.send(frame).await.expect("send frame");

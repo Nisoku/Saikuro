@@ -383,7 +383,7 @@ where
             let mut record =
                 LogRecord::now(LogLevel::Error, "saikuro.runtime.connection", "send error");
             record.set_context("peer", self.peer_id.clone());
-            record.set_context("error", alloc::format!("{e}"));
+            record.set_context("error", e.to_string());
             self.log.emit(&record).await;
             return false;
         }
@@ -396,7 +396,7 @@ where
                     "failed to push sandbox schema",
                 );
                 record.set_context("peer", self.peer_id.clone());
-                record.set_context("error", alloc::format!("{e}"));
+                record.set_context("error", e.to_string());
                 self.log.emit(&record).await;
                 return false;
             }
@@ -520,7 +520,7 @@ where
                             "failed to encode forwarded call",
                         );
                         record.set_context("peer", peer_id.clone());
-                        record.set_context("error", alloc::format!("{e}"));
+                        record.set_context("error", e.to_string());
                         log.emit(&record).await;
                         if let Some(tx) = item.response_tx {
                             let _ = tx.send(ResponseEnvelope::err(

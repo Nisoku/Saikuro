@@ -1,5 +1,3 @@
-#![allow(unused_imports, dead_code)]
-
 mod common;
 
 #[path = "saikuro-codegen"]
@@ -20,23 +18,9 @@ mod core_tests {
 
 #[path = "saikuro-exec"]
 mod exec_tests {
-    mod embassy_cancellation;
-    mod embassy_executor;
     mod exec_channels;
     mod exec_concurrency;
     mod exec_select;
-}
-
-#[path = "saikuro-net"]
-mod net_tests {
-    mod embassy_net_loopback;
-}
-
-#[path = "saikuro-random"]
-mod random_tests {
-    mod drbg;
-    mod drbg_unseeded;
-    mod os_backend;
 }
 
 #[path = "saikuro-router"]
@@ -63,7 +47,6 @@ mod schema_tests {
     mod capability_enforcement;
     mod registry;
     mod schema_validation;
-    mod validator;
 }
 
 #[path = "saikuro-storage"]

@@ -14,32 +14,6 @@ use alloc::{
     string::{String, ToString},
 };
 
-#[allow(unused_imports)]
-#[cfg(feature = "std")]
-use std::sync::Arc;
-
-/// A URL-style address string understood by the Saikuro adapter.
-///
-/// Supported schemes:
-/// - `tcp://host:port`
-/// - `ws://host:port`  (requires `ws` feature)
-/// - `unix:///path/to/socket`  (requires `unix` feature, Unix only)
-/// - `wasm-host://channel-name` (WASM only, feature `wasm`)
-/// - `wasm-host` (uses default channel "saikuro")
-pub struct Address(pub String);
-
-impl From<String> for Address {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<&str> for Address {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
 /// A trait-object-compatible trait for sending and receiving framed byte buffers.
 ///
 /// This is a thin adapter over the underlying saikuro-transport types so that
@@ -111,6 +85,7 @@ mod tcp_impl {
         TransportConnector, TransportReceiver, TransportSender,
     };
     use saikuro_transport::tcp::{TcpConnector, TcpReceiver, TcpSender};
+    use std::sync::Arc;
 
     pub struct TcpAdapter {
         sender: TcpSender,
@@ -174,6 +149,7 @@ mod unix_impl {
         shared::traits::{Transport, TransportReceiver, TransportSender},
         unix::{UnixReceiver, UnixSender},
     };
+    use std::sync::Arc;
 
     pub struct UnixAdapter {
         sender: UnixSender,
@@ -210,6 +186,7 @@ mod ws_impl {
         websocket::{WebSocketReceiver, WebSocketSender},
         WebSocketTransport,
     };
+    use std::sync::Arc;
 
     pub struct WsAdapter {
         sender: WebSocketSender,

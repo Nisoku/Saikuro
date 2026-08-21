@@ -33,10 +33,6 @@ pub enum Error {
     #[error("call to '{target}' timed out after {ms}ms")]
     Timeout { target: String, ms: u64 },
 
-    /// A response arrived for an unknown invocation ID.
-    #[error("unexpected response for id '{0}'")]
-    UnexpectedResponse(String),
-
     /// Serialization or deserialization failed.
     #[error("codec error: {0}")]
     Codec(String),

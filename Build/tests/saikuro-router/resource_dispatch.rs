@@ -17,21 +17,6 @@ use crate::common;
 
 //  Helpers
 
-/// Build a `ProviderRegistry` with a single provider subscribed to `namespace`.
-async fn make_provider(namespace: &str) -> (ProviderRegistry, mpsc::Receiver<ProviderWorkItem>) {
-    let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(
-        saikuro_exec::ChannelCapacity::try_from(64).expect("64 is a valid channel capacity"),
-    );
-    let handle = ProviderHandle::new(
-        format!("{namespace}-provider"),
-        vec![namespace.to_owned()],
-        work_tx,
-    );
-    let registry = ProviderRegistry::new();
-    registry.register(handle).await;
-    (registry, work_rx)
-}
-
 /// Spawn a background task that answers every work item with `result_value`.
 fn spawn_responder(
     mut work_rx: mpsc::Receiver<ProviderWorkItem>,
@@ -75,7 +60,7 @@ fn resource_envelope_routes_as_call() {
             .with_uri("saikuro://res/abc-001");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("files").await;
+        let (registry, work_rx) = common::make_provider("files").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -102,7 +87,7 @@ fn resource_envelope_returns_handle_from_provider() {
             .with_uri("https://storage.example.com/blobs/xyz-999");
         let result_value = handle_to_value(&original_handle);
 
-        let (registry, work_rx) = make_provider("storage").await;
+        let (registry, work_rx) = common::make_provider("storage").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -219,7 +204,7 @@ fn resource_dispatch_through_connection_handler() {
             .with_size(128);
         let result_value = handle_to_value(&handle);
 
-        let (provider_registry, work_rx) = make_provider("docs").await;
+        let (provider_registry, work_rx) = common::make_provider("docs").await;
         let _responder = spawn_responder(work_rx, result_value.clone());
 
         let schema_registry = SchemaRegistry::new();
@@ -272,7 +257,7 @@ fn resource_response_id_matches_request_id() {
         let handle = ResourceHandle::new("corr-001");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("corr").await;
+        let (registry, work_rx) = common::make_provider("corr").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
@@ -296,7 +281,7 @@ fn concurrent_resource_invocations_all_succeed() {
         let handle = ResourceHandle::new("concurrent-test");
         let result_value = handle_to_value(&handle);
 
-        let (registry, work_rx) = make_provider("bulk").await;
+        let (registry, work_rx) = common::make_provider("bulk").await;
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
