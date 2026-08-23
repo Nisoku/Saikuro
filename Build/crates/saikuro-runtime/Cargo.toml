@@ -107,7 +107,7 @@ saikuro-event = { path = "../saikuro-event", default-features = false }
 
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
-bytes = { workspace = true, default-features = false, features = ["extra-platforms"] }
+bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true, default-features = false, features = [

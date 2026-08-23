@@ -26,6 +26,14 @@ extern crate alloc;
 ))]
 compile_error!("exactly one engine must be enabled: native | no_std | wasm | embedded");
 
+#[cfg(not(any(
+    feature = "native",
+    feature = "no_std",
+    feature = "wasm",
+    feature = "embedded"
+)))]
+compile_error!("an engine must be enabled: native | no_std | wasm | embedded");
+
 #[cfg(all(feature = "std", feature = "no_std"))]
 compile_error!("the no_std engine cannot be combined with the std toolchain");
 

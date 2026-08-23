@@ -32,7 +32,7 @@ pub mod native;
 pub mod shared;
 #[cfg(any(feature = "wasi-preview1", feature = "wasi-component"))]
 pub mod wasi;
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "std"))]
 pub mod wasm;
 
 /// Generates a web-storage-backed key-value backend.
@@ -177,27 +177,27 @@ pub use shared::util;
 #[cfg(feature = "inmemory")]
 pub use common::inmemory::InMemoryStorage;
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm", feature = "std", target_arch = "wasm32"))]
 pub use wasm::indexeddb::IndexedDbStorage;
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "std"))]
 pub use wasm::local_storage::LocalStorage;
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "std"))]
 pub use wasm::session_storage::SessionStorage;
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm", feature = "std", target_arch = "wasm32"))]
 pub use wasm::fs_access::FsAccessStorage;
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm", feature = "std", target_arch = "wasm32"))]
 pub use wasm::opfs::OpfsStorage;
 
 // Root aliases for the wasm submodules referenced by `impl_web_storage!`.
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "std"))]
 pub use wasm::local_storage;
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "std"))]
 pub use wasm::session_storage;
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm", feature = "std", target_arch = "wasm32"))]
 pub use wasm::{fs_access, indexeddb, opfs, webstorage};
 
 #[cfg(feature = "fs")]

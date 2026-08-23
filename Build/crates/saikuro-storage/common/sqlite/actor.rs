@@ -34,8 +34,8 @@ enum OpenTarget {
 }
 
 /// `Send + Sync` handle to the SQLite worker thread.
-pub(crate) struct SqliteStorage {
-    config: StorageConfig,
+pub struct SqliteStorage {
+    pub(crate) config: StorageConfig,
     tx: SyncSender<Job>,
     #[allow(dead_code)]
     worker: Option<JoinHandle<()>>,

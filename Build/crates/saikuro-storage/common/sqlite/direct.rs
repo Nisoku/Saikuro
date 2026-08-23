@@ -1,6 +1,7 @@
-use alloc::string::String;
+#[cfg(target_has_atomic = "ptr")]
 use alloc::sync::Arc;
-use alloc::vec::Vec;
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
 
 use spin::Mutex;
 
@@ -10,35 +11,22 @@ use graphitesql::QueryResult;
 
 use crate::common::sqlite::{map_err, RawSqlite, CREATE_KV};
 use crate::shared::config::StorageConfig;
-use saikuro_event::{Result, SaikuroError};
+use saikuro_event::Result;
 
 /// Owns the SQLite connection on the current (single) thread.
-pub(crate) struct SqliteStorage {
-    config: StorageConfig,
+pub struct SqliteStorage {
+    pub(crate) config: StorageConfig,
     conn: Arc<Mutex<Connection>>,
 }
 
 impl SqliteStorage {
-    /// Open or create a SQLite database at the given path.
-    #[cfg(feature = "std")]
-    pub fn new(path: impl AsRef<std::path::Path>) -> Result<Self> {
-        Self::with_config(path, StorageConfig::default())
-    }
-
-    /// Open or create a SQLite database with a custom configuration.
-    #[cfg(feature = "std")]
-    pub fn with_config(path: impl AsRef<std::path::Path>, config: StorageConfig) -> Result<Self> {
-        let conn = Connection::open(path).map_err(map_err)?;
-        Self::from_conn(conn, config)
-    }
-
     /// Open an in-memory SQLite database (wasm / no_std / embedded / testing).
     pub fn temporary() -> Result<Self> {
         let conn = Connection::open_memory().map_err(map_err)?;
         Self::from_conn(conn, StorageConfig::default())
     }
 
-    fn from_conn(conn: Connection, config: StorageConfig) -> Result<Self> {
+    fn from_conn(mut conn: Connection, config: StorageConfig) -> Result<Self> {
         conn.execute_batch(CREATE_KV).map_err(map_err)?;
         Ok(Self {
             config,
@@ -54,7 +42,7 @@ impl RawSqlite for SqliteStorage {
     }
 
     async fn batch(&self, sql: &str) -> Result<()> {
-        let conn = self.conn.lock();
+        let mut conn = self.conn.lock();
         conn.execute_batch(sql).map_err(map_err)
     }
 }

@@ -1636,6 +1636,7 @@ dependencies = [
  "futures-executor",
  "graphitesql",
  "js-sys",
+ "portable-atomic-util",
  "saikuro-core",
  "saikuro-event",
  "saikuro-exec",

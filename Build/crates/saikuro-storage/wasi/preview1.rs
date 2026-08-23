@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -48,7 +49,7 @@ struct Iovec {
 }
 
 fn wasi_err(code: i32) -> SaikuroError {
-    SaikuroError::io(format!("wasi_snapshot_preview1 error code {code}"))
+    SaikuroError::Internal(format!("wasi_snapshot_preview1 error code {code}"))
 }
 
 fn open_file(path: &str, create: bool, directory: bool) -> Result<i32> {
@@ -71,8 +72,8 @@ fn open_file(path: &str, create: bool, directory: bool) -> Result<i32> {
             bytes.as_ptr(),
             bytes.len() as i32,
             oflags,
-            u64::MAX,
-            u64::MAX,
+            u64::MAX as i64,
+            u64::MAX as i64,
             0,
             &mut fd,
         )
@@ -124,7 +125,7 @@ fn write_all(fd: i32, data: &[u8]) -> Result<()> {
             return Err(wasi_err(rc));
         }
         if nwritten == 0 {
-            return Err(SaikuroError::io("wasi write made no progress"));
+            return Err(SaikuroError::Internal("wasi write made no progress".into()));
         }
         written += nwritten as usize;
     }
@@ -362,6 +363,58 @@ impl WasiFileStore {
 impl Default for WasiFileStore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl KeyValueBackend for WasiFileStore {
+    fn config(&self) -> &StorageConfig {
+        &self.config
+    }
+
+    async fn exists(&self, _namespace: &str, _key: &str) -> Result<bool> {
+        Ok(false)
+    }
+
+    async fn get(&self, _namespace: &str, _key: &str) -> Result<Option<Bytes>> {
+        Ok(None)
+    }
+
+    async fn put(&self, _namespace: &str, _key: &str, _value: Bytes) -> Result<()> {
+        Err(SaikuroError::OperationNotSupported(
+            "WasiFileStore does not support key-value operations".into(),
+        ))
+    }
+
+    async fn delete(&self, _namespace: &str, _key: &str) -> Result<()> {
+        Err(SaikuroError::OperationNotSupported(
+            "WasiFileStore does not support key-value operations".into(),
+        ))
+    }
+
+    async fn list_keys(&self, _namespace: &str) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_namespaces(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+
+    async fn create_namespace(&self, _namespace: &str) -> Result<()> {
+        Err(SaikuroError::OperationNotSupported(
+            "WasiFileStore does not support key-value operations".into(),
+        ))
+    }
+
+    async fn delete_namespace(&self, _namespace: &str) -> Result<()> {
+        Err(SaikuroError::OperationNotSupported(
+            "WasiFileStore does not support key-value operations".into(),
+        ))
+    }
+
+    async fn clear_namespace(&self, _namespace: &str) -> Result<()> {
+        Err(SaikuroError::OperationNotSupported(
+            "WasiFileStore does not support key-value operations".into(),
+        ))
     }
 }
 

@@ -18,7 +18,7 @@ use graphitesql::Value;
 
 use crate::shared::config::StorageConfig;
 use crate::shared::traits::{KeyValueBackend, StorageBackend};
-use saikuro_event::{Result, SaikuroError};
+use saikuro_event::Result;
 
 /// Schema for the single key-value table shared by every engine.
 pub(crate) const CREATE_KV: &str = "
@@ -37,14 +37,14 @@ pub(crate) trait RawSqlite {
 }
 
 /// Map a `graphitesql` error into the crate's unified error type.
-pub(crate) fn map_err(e: graphitesql::Error) -> SaikuroError {
-    SaikuroError::internal(format!("graphitesql error: {e:?}"))
+pub(crate) fn map_err(e: graphitesql::Error) -> saikuro_event::SaikuroError {
+    saikuro_event::SaikuroError::internal(format!("graphitesql error: {e:?}"))
 }
 
 fn apply_prefix(config: &StorageConfig, namespace: &str) -> String {
     match &config.namespace_prefix {
         Some(prefix) => format!("{prefix}:{namespace}"),
-        None => namespace.to_owned(),
+        None => String::from(namespace),
     }
 }
 
@@ -53,26 +53,23 @@ fn strip_prefix(config: &StorageConfig, stored: &str) -> String {
         Some(prefix) => {
             let prefixed = format!("{prefix}:");
             if stored.starts_with(&prefixed) {
-                stored[prefixed.len()..].to_owned()
+                String::from(&stored[prefixed.len()..])
             } else {
-                stored.to_owned()
+                String::from(stored)
             }
         }
-        None => stored.to_owned(),
+        None => String::from(stored),
     }
 }
 
 fn ns_key_params(namespace: &str, key: &str) -> Params {
     Params {
-        positional: vec![
-            Value::Text(namespace.to_owned()),
-            Value::Text(key.to_owned()),
-        ],
+        positional: vec![Value::Text(namespace.into()), Value::Text(key.into())],
         named: Vec::new(),
     }
 }
 
-fn blob_of(row: &[Value]) -> Option<Vec<u8>> {
+fn blob_of(row: &Vec<Value>) -> Option<Vec<u8>> {
     row.first().and_then(|v| match v {
         Value::Blob(b) => Some(b.clone()),
         _ => None,
@@ -112,8 +109,8 @@ impl KeyValueBackend for SqliteStorage {
             "INSERT OR REPLACE INTO saikuro_kv (namespace, key, value) VALUES (?1, ?2, ?3)",
             Params {
                 positional: vec![
-                    Value::Text(ns),
-                    Value::Text(key.to_owned()),
+                    Value::Text(ns.into()),
+                    Value::Text(key.into()),
                     Value::Blob(value.to_vec()),
                 ],
                 named: Vec::new(),
@@ -139,7 +136,7 @@ impl KeyValueBackend for SqliteStorage {
             .query(
                 "SELECT key FROM saikuro_kv WHERE namespace = ?1 ORDER BY key",
                 Params {
-                    positional: vec![Value::Text(ns)],
+                    positional: vec![Value::Text(ns.into())],
                     named: Vec::new(),
                 },
             )
@@ -148,7 +145,7 @@ impl KeyValueBackend for SqliteStorage {
             .rows
             .iter()
             .filter_map(|row| match row.first() {
-                Some(Value::Text(t)) => Some(t.clone()),
+                Some(Value::Text(t)) => Some(String::from(t.as_str())),
                 _ => None,
             })
             .collect())
@@ -169,7 +166,7 @@ impl KeyValueBackend for SqliteStorage {
             .rows
             .iter()
             .filter_map(|row| match row.first() {
-                Some(Value::Text(t)) => Some(t.clone()),
+                Some(Value::Text(t)) => Some(String::from(t.as_str())),
                 _ => None,
             })
             .filter(|n| match &prefix {
@@ -189,7 +186,7 @@ impl KeyValueBackend for SqliteStorage {
         self.query(
             "DELETE FROM saikuro_kv WHERE namespace = ?1",
             Params {
-                positional: vec![Value::Text(ns)],
+                positional: vec![Value::Text(ns.into())],
                 named: Vec::new(),
             },
         )

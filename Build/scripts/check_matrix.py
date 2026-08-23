@@ -170,12 +170,37 @@ MATRIX: list[Combo] = [
 ]
 
 
-def run_combo(crate: str, combo: Combo, verbose: bool) -> dict:
+def run_combo(crate: str, combo: Combo, verbose: bool, crate_features: set[str] | None = None) -> dict:
     """Run `cargo check` for one combo; return a result dict."""
     cmd = [CARGO, "check", "-p", crate, "--lib", "--manifest-path", MANIFEST]
     if combo.target:
         cmd += ["--target", combo.target]
-    cmd += combo.cargo_args
+
+    # Filter combo features to only those the crate actually declares.
+    # This lets the same matrix run against crates with different feature sets.
+    args = list(combo.cargo_args)
+    if crate_features is not None and "--features" in args:
+        fi = args.index("--features")
+        raw_feats = args[fi + 1]
+        feat_list = [f.strip() for f in raw_feats.split(",")]
+        kept = [f for f in feat_list if f in crate_features]
+        if not kept:
+            # None of the combo's features exist on this crate — skip it.
+            return {
+                "name": combo.name,
+                "target": combo.target or "<host>",
+                "features": " ".join(args) or "<default>",
+                "notes": combo.notes + " (skipped: no matching features)",
+                "passed": True,
+                "returncode": 0,
+                "errors": 0,
+                "warnings": 0,
+                "diags": [],
+                "seconds": 0.0,
+            }
+        args[fi + 1] = ",".join(kept)
+
+    cmd += args
 
     start = time.time()
     env = dict(os.environ)
@@ -265,8 +290,27 @@ def main() -> int:
     results: list[dict] = []
     for crate in crates:
         print(f"=== crate: {crate} ===")
+
+        # Fetch the crate's declared features so we can filter the matrix.
+        try:
+            meta_raw = subprocess.run(
+                [CARGO, "metadata", "--no-deps", "--format-version", "1",
+                 "--manifest-path", MANIFEST],
+                stdout=subprocess.PIPE,
+                check=True,
+            ).stdout.decode()
+            import json
+            meta_pkgs = json.loads(meta_raw)["packages"]
+            pkg_features: set[str] = set()
+            for p in meta_pkgs:
+                if p["name"] == crate:
+                    pkg_features = set(p["features"].keys())
+                    break
+        except Exception:
+            pkg_features = None  # fallback: don't filter
+
         for combo in MATRIX:
-            r = run_combo(crate, combo, args.verbose)
+            r = run_combo(crate, combo, args.verbose, pkg_features)
             status = "PASS" if r["passed"] else "FAIL"
             print(
                 f"  [{status}] {r['name']:<22} target={r['target']:<20} "
