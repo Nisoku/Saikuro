@@ -64,6 +64,7 @@ static HEAP: talc::TalckWasm = unsafe { talc::TalckWasm::new_global() };
 pub fn init_heap() {}
 
 #[cfg(all(
+    feature = "default-panic-handler",
     not(feature = "std"),
     any(all(target_os = "wasi", feature = "wasi-preview1"), target_os = "none",)
 ))]

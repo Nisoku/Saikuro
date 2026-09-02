@@ -10,7 +10,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use saikuro_core::schema::{
     ArgumentDescriptor, FunctionSchema as CoreFunctionSchema,
     NamespaceSchema as CoreNamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
@@ -61,9 +61,6 @@ impl NamespaceSchema {
     }
 
     /// Convert to the core `NamespaceSchema` for announcement.
-    ///
-    /// Fails when the function count exceeds the core schema's fixed map
-    /// capacity, so a provider never announces a silently truncated namespace.
     pub fn to_core(&self) -> Result<CoreNamespaceSchema> {
         let mut functions = saikuro_core::schema::FunctionMap::new();
         for (name, fs) in &self.functions {
@@ -93,9 +90,7 @@ impl NamespaceSchema {
                 idempotent: fs.idempotent,
                 doc: fs.doc.clone(),
             };
-            functions
-                .insert(name.clone(), core_fn)
-                .map_err(|_| Error::SchemaCapacityExceeded)?;
+            functions.insert(name.clone(), core_fn);
         }
 
         Ok(CoreNamespaceSchema {
@@ -106,16 +101,10 @@ impl NamespaceSchema {
 }
 
 /// Build a full [`Schema`] from the given namespaces.
-///
-/// Fails when the namespace count exceeds the core schema's fixed map
-/// capacity, so a provider never announces a silently truncated schema.
 pub(crate) fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<Schema> {
     let mut schema = Schema::new();
     for (ns_name, ns) in namespaces {
-        schema
-            .namespaces
-            .insert(ns_name.clone(), ns.to_core()?)
-            .map_err(|_| Error::SchemaCapacityExceeded)?;
+        schema.namespaces.insert(ns_name.clone(), ns.to_core()?);
     }
     Ok(schema)
 }
@@ -123,17 +112,15 @@ pub(crate) fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use saikuro_core::schema::SCHEMA_NAMESPACES_CAPACITY;
 
     #[test]
-    fn build_schema_overflow_namespaces_returns_capacity_error() {
+    fn build_schema_round_trips_all_namespaces() {
         let mut namespaces = HashMap::new();
-        for i in 0..=SCHEMA_NAMESPACES_CAPACITY {
-            let mut ns = NamespaceSchema::new();
-            ns.insert("f", FunctionSchema::default());
-            namespaces.insert(format!("ns_{i}"), ns);
-        }
-        let err = build_schema(&namespaces).unwrap_err();
-        assert!(matches!(err, Error::SchemaCapacityExceeded));
+        let mut ns = NamespaceSchema::new();
+        ns.insert("f", FunctionSchema::default());
+        namespaces.insert("ns_0".to_owned(), ns);
+        let schema = build_schema(&namespaces).unwrap();
+        assert_eq!(schema.namespaces.len(), 1);
+        assert!(schema.namespaces.contains_key("ns_0"));
     }
 }

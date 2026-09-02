@@ -1,9 +1,9 @@
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;

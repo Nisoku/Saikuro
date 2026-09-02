@@ -185,7 +185,7 @@ def run_combo(crate: str, combo: Combo, verbose: bool, crate_features: set[str] 
         feat_list = [f.strip() for f in raw_feats.split(",")]
         kept = [f for f in feat_list if f in crate_features]
         if not kept:
-            # None of the combo's features exist on this crate — skip it.
+            # None of the combo's features exist on this crate, skip it.
             return {
                 "name": combo.name,
                 "target": combo.target or "<host>",

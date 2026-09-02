@@ -5,6 +5,8 @@
 //! - One `<namespace>_client.rs` per namespace with typed async wrappers over `saikuro::Client`.
 //! - A `mod.rs` that re-exports generated modules.
 
+use alloc::collections::BTreeMap;
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor,
 };
@@ -15,8 +17,6 @@ use crate::shared::{
     to_pascal_case,
 };
 
-use std::collections::HashMap;
-
 pub struct RustGenerator;
 
 impl BindingGenerator for RustGenerator {
@@ -26,9 +26,9 @@ impl BindingGenerator for RustGenerator {
         output.add("types.rs", self.generate_types(schema)?);
 
         let mut mods = vec!["pub mod types;".to_owned(), "pub use types::*;".to_owned()];
-        let mut module_names = HashMap::new();
-        let mut file_names = HashMap::new();
-        let mut class_names = HashMap::new();
+        let mut module_names = BTreeMap::new();
+        let mut file_names = BTreeMap::new();
+        let mut class_names = BTreeMap::new();
 
         let mut ns_keys: Vec<_> = schema.namespaces.keys().cloned().collect();
         ns_keys.sort();
@@ -70,7 +70,7 @@ impl RustGenerator {
 
         let mut type_keys: Vec<_> = schema.types.keys().cloned().collect();
         type_keys.sort();
-        let mut type_names = HashMap::new();
+        let mut type_names = BTreeMap::new();
         for type_name in type_keys {
             let type_def = &schema.types[&type_name];
             let safe_type_name = ensure_unique_name(
@@ -86,7 +86,7 @@ impl RustGenerator {
                             .to_owned(),
                     );
                     lines.push(format!("pub struct {safe_type_name} {{"));
-                    let mut field_names = HashMap::new();
+                    let mut field_names = BTreeMap::new();
                     let mut field_keys: Vec<_> = fields.keys().cloned().collect();
                     field_keys.sort();
                     for field_name in field_keys {
@@ -123,7 +123,7 @@ impl RustGenerator {
                             .to_owned(),
                     );
                     lines.push(format!("pub enum {safe_type_name} {{"));
-                    let mut variant_names = HashMap::new();
+                    let mut variant_names = BTreeMap::new();
                     for variant in variants {
                         let safe_variant = ensure_unique_name(
                             &format!("variant in enum {safe_type_name}"),
@@ -173,7 +173,7 @@ impl RustGenerator {
             "".to_owned(),
         ];
 
-        let mut method_names = HashMap::new();
+        let mut method_names = BTreeMap::new();
         for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let method_name = ensure_unique_name(
                 &format!("method in namespace {ns_name}"),
@@ -201,7 +201,7 @@ impl RustGenerator {
 
         let mut params = vec![];
         let mut arg_pushes = vec![];
-        let mut arg_names = HashMap::new();
+        let mut arg_names = BTreeMap::new();
 
         for arg in &schema.args {
             let arg_name = ensure_unique_name(
@@ -375,7 +375,7 @@ fn ensure_unique_name(
     scope: &str,
     raw_name: &str,
     sanitized_name: &str,
-    seen: &mut HashMap<String, String>,
+    seen: &mut BTreeMap<String, String>,
 ) -> Result<String> {
     if let Some(previous_raw) = seen.get(sanitized_name) {
         return Err(CodegenError::Schema(format!(
@@ -427,7 +427,7 @@ fn sanitize_pascal_preserve_leading(s: &str) -> String {
 fn sanitize_type_name(s: &str) -> String {
     let ident = sanitize_ident(s);
     if ident.is_empty() || ident == "_" {
-        "_".to_string()
+        "_".to_owned()
     } else {
         ident
     }

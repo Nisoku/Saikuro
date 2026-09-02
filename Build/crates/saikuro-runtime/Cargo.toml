@@ -20,7 +20,7 @@ required-features = ["native"]
 [[bin]]
 name = "saikuro-runtime-embedded"
 path = "bin/embedded.rs"
-required-features = ["embedded", "tcp"]
+required-features = ["embedded", "tcp", "net"]
 
 [[bin]]
 name = "saikuro-runtime-wasi"
@@ -28,7 +28,11 @@ path = "bin/wasi.rs"
 required-features = ["no_std"]
 
 [features]
-default = ["std", "native", "tcp", "unix"]
+default = ["std", "native", "tcp", "unix", "default-panic-handler"]
+
+# Provide a default #[panic_handler] for bare-metal and WASI targets.
+# Disable this when your application supplies its own panic handler.
+default-panic-handler = []
 
 # Engine axes (exactly one of native / no_std / wasm / embedded; std is orthogonal).
 std = []
@@ -79,8 +83,6 @@ embedded = [
     "saikuro-random/embedded",
     "saikuro-event/embedded",
     "saikuro-event/null",
-    "dep:embassy-executor",
-    "dep:saikuro-net",
 ]
 
 # Transport capability features (orthogonal to engine).
@@ -91,6 +93,9 @@ ws-wasi = ["saikuro-transport/ws-wasi"]
 wasm-host = ["saikuro-transport/wasm-host"]
 wasi-tcp = ["saikuro-transport/wasi-tcp"]
 wasi-host = ["saikuro-transport/wasi-host"]
+
+# Board-support networking (embassy-net TCP/UDP stack + executor).
+net = ["dep:saikuro-net", "dep:embassy-executor"]
 
 # WASI preview selection (no_std engine only).
 wasi-preview1 = ["saikuro-transport/wasi-preview1"]

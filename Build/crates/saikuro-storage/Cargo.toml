@@ -15,24 +15,18 @@ path = "lib.rs"
 default = ["std", "native", "inmemory"]
 std = ["saikuro-event/std"]
 
-# Engine features.
+# Engine features
 native   = [
     "std",
-    "dep:graphitesql",
-    "graphitesql/std",
-    "graphitesql/fts5",
     "dep:tokio",
     "saikuro-core/native",
     "saikuro-event/native",
 ]
 no_std   = [
-    "sqlite",
     "saikuro-core/no_std",
     "saikuro-event/no_std",
 ]
 wasm     = [
-    "sqlite",
-    "graphitesql/wasm",
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:js-sys",
@@ -41,7 +35,6 @@ wasm     = [
     "saikuro-event/wasm",
 ]
 embedded = [
-    "sqlite",
     "dep:embedded-storage-async",
     "saikuro-core/embedded",
     "saikuro-event/embedded",
@@ -55,6 +48,7 @@ inmemory = ["std", "dashmap"]
 fs    = ["native", "dep:tokio", "saikuro-core/std"]
 sled  = ["native", "dep:tokio", "dep:sled", "saikuro-core/std"]
 sqlite = ["dep:graphitesql", "graphitesql/fts5"]
+sqlite-native = ["sqlite", "graphitesql/std"]
 flash = [
     "embedded",
     "dep:embedded-storage-async",

@@ -1,10 +1,10 @@
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_event::{LogLevel, LogRecord};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 

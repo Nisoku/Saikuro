@@ -1,13 +1,15 @@
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use spin::Mutex;
 
 use graphitesql::exec::eval::Params;
 use graphitesql::Connection;
 use graphitesql::QueryResult;
+
+use alloc::vec::Vec;
 
 use crate::common::sqlite::{map_err, RawSqlite, CREATE_KV};
 use crate::shared::config::StorageConfig;
@@ -37,8 +39,16 @@ impl SqliteStorage {
 
 impl RawSqlite for SqliteStorage {
     async fn query(&self, sql: &str, params: Params) -> Result<QueryResult> {
-        let conn = self.conn.lock();
-        conn.query_params(sql, &params).map_err(map_err)
+        let mut conn = self.conn.lock();
+        if sql.trim_start().to_ascii_uppercase().starts_with("SELECT") {
+            conn.query_params(sql, &params).map_err(map_err)
+        } else {
+            conn.execute_params(sql, &params).map_err(map_err)?;
+            Ok(QueryResult {
+                columns: Vec::new(),
+                rows: Vec::new(),
+            })
+        }
     }
 
     async fn batch(&self, sql: &str) -> Result<()> {

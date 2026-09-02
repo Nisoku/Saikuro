@@ -1,9 +1,9 @@
 use alloc::string::{String, ToString};
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use saikuro_core::{
     capability::CapabilitySet, envelope::Envelope, schema::Schema, RegistrationToken,
@@ -26,6 +26,45 @@ use crate::config::RuntimeConfig;
 use crate::connection::ConnectionHandler;
 use crate::transport_adapter::RuntimeTransport;
 use saikuro_event::Result;
+use saikuro_exec::JoinHandle;
+
+/// Guard returned by [`RuntimeHandle::register_fn_provider`].
+///
+/// Dropping this handle deregisters the provider from routing but does
+/// **not** wait for the worker task to exit.  Call [`shutdown`](Self::shutdown)
+/// to deregister *and* await the worker's exit.
+#[must_use]
+pub struct FnProviderHandle {
+    provider_id: String,
+    registration_token: RegistrationToken,
+    provider_registry: ProviderRegistry,
+    schema_registry: SchemaRegistry,
+    join: JoinHandle<()>,
+}
+
+impl FnProviderHandle {
+    /// Deregister the provider from routing and wait for the worker task
+    /// to finish processing any in-flight requests.
+    pub async fn shutdown(self) {
+        self.provider_registry
+            .deregister(&self.provider_id, self.registration_token)
+            .await;
+        self.schema_registry
+            .deregister_provider(&self.provider_id, self.registration_token)
+            .await;
+        let _ = self.join.await;
+    }
+
+    /// The provider identity.
+    pub fn id(&self) -> &str {
+        &self.provider_id
+    }
+
+    /// The registration token for this provider.
+    pub fn registration_token(&self) -> RegistrationToken {
+        self.registration_token
+    }
+}
 
 /// A cheap, `Clone`-able handle to a running [`SaikuroRuntime`].
 ///
@@ -208,7 +247,7 @@ impl RuntimeHandle {
         provider_id: impl Into<String>,
         namespaces: Vec<String>,
         handler: F,
-    ) -> RegistrationToken
+    ) -> FnProviderHandle
     where
         F: Fn(Envelope) -> Fut + Send + Sync + 'static,
         Fut: core::future::Future<Output = ResponseEnvelope> + Send + 'static,
@@ -238,7 +277,7 @@ impl RuntimeHandle {
             self.log.emit(&record).await;
         }
 
-        saikuro_exec::spawn(async move {
+        let join = saikuro_exec::spawn(async move {
             while let Some(item) = work_rx.recv().await {
                 let handler = handler.clone();
                 saikuro_exec::spawn(async move {
@@ -250,7 +289,13 @@ impl RuntimeHandle {
             }
         });
 
-        registration_token
+        FnProviderHandle {
+            provider_id,
+            registration_token,
+            provider_registry: self.provider_registry.clone(),
+            schema_registry: self.schema_registry.clone(),
+            join,
+        }
     }
 
     // Helpers

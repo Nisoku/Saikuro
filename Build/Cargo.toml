@@ -13,8 +13,7 @@ members = [
     "crates/saikuro-random",
     "crates/saikuro-codegen",
     "adapters/c",
-    "adapters/rust",
-    "tests"
+    "adapters/rust"
 ]
 
 [workspace.package]

@@ -6,7 +6,8 @@
 //! - A `saikuro_generated.h` umbrella include.
 
 use saikuro_core::schema::{NamespaceSchema, Schema};
-use std::collections::HashMap;
+use alloc::collections::BTreeMap;
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use crate::shared::{
     error::{CodegenError, Result},
@@ -32,8 +33,8 @@ impl BindingGenerator for CGenerator {
         let mut ns_keys: Vec<_> = schema.namespaces.keys().collect();
         ns_keys.sort();
 
-        let mut stem_to_names: HashMap<String, Vec<String>> = HashMap::new();
-        let mut folded_stem_to_names: HashMap<String, Vec<String>> = HashMap::new();
+        let mut stem_to_names: BTreeMap<String, alloc::vec::Vec<String>> = BTreeMap::new();
+        let mut folded_stem_to_names: BTreeMap<String, alloc::vec::Vec<String>> = BTreeMap::new();
         for ns_name in &ns_keys {
             let stem = normalize_namespace_stem(ns_name);
             stem_to_names
@@ -117,7 +118,7 @@ impl CGenerator {
             String::new(),
         ];
 
-        let mut seen_names: HashMap<String, String> = HashMap::new();
+        let mut seen_names: BTreeMap<String, String> = BTreeMap::new();
         for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
             let c_fn_name = format!("{}_{}", safe, sanitize_ident(fn_name));
             if let Some(previous_raw) = seen_names.get(&c_fn_name) {
@@ -163,7 +164,7 @@ fn escape_c_string_literal(s: &str) -> String {
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
             _ if c.is_control() => {
-                use std::fmt::Write;
+                use alloc::fmt::Write;
                 let _ = write!(out, "\\x{:02X}", u32::from(c));
             }
             _ => out.push(c),

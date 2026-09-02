@@ -5,6 +5,7 @@
 //! - One `<Namespace>Client.cs` per namespace with a typed async client class.
 //! - A `Generated.cs` that lists each client class (summary comment).
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor,
 };

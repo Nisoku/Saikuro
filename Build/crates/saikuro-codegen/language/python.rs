@@ -5,6 +5,7 @@
 //! - One `<namespace>_client.py` per namespace with a typed async client class.
 //! - A `__init__.py` that re-exports everything.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };

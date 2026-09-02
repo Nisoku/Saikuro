@@ -1,9 +1,9 @@
 use crate::{impl_native_receiver, impl_native_sender};
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use async_trait::async_trait;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_event::{LogLevel, LogRecord};
 use saikuro_net::io::{split, ReadHalf, WriteHalf};
 use saikuro_net::net::{TcpListener, TcpStream};

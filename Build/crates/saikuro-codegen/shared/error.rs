@@ -1,3 +1,4 @@
+use alloc::string::String;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -8,11 +9,8 @@ pub enum CodegenError {
     #[error("schema error: {0}")]
     Schema(String),
 
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
     #[error("template error: {0}")]
     Template(String),
 }
 
-pub type Result<T> = std::result::Result<T, CodegenError>;
+pub type Result<T> = core::result::Result<T, CodegenError>;

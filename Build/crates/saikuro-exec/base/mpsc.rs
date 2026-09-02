@@ -1,13 +1,20 @@
 // mpsc
 
+use alloc::collections::VecDeque;
+use core::cell::RefCell;
+use core::task::{Context, Poll};
+
+use embassy_sync::blocking_mutex::CriticalSectionMutex;
+use embassy_sync::waitqueue::MultiWakerRegistration;
+
 use super::*;
 pub use crate::shared::mpsc::{SendError, TrySendError};
 use crate::ChannelCapacity;
 
-pub const CHANNEL_CAPACITY: usize = 256;
 const MAX_WAITING_SENDERS: usize = 16;
 
-struct ChannelState {
+struct ChannelData<T> {
+    queue: VecDeque<T>,
     capacity: usize,
     senders: usize,
     receivers: usize,
@@ -15,21 +22,8 @@ struct ChannelState {
     receivers_waiting: MultiWakerRegistration<1>,
 }
 
-impl ChannelState {
-    const fn new(capacity: usize) -> Self {
-        ChannelState {
-            capacity,
-            senders: 0,
-            receivers: 0,
-            senders_waiting: MultiWakerRegistration::new(),
-            receivers_waiting: MultiWakerRegistration::new(),
-        }
-    }
-}
-
 struct ChannelInner<T> {
-    state: CriticalSectionMutex<RefCell<ChannelState>>,
-    channel: EmbChannel<CriticalSectionRawMutex, T, CHANNEL_CAPACITY>,
+    data: CriticalSectionMutex<RefCell<ChannelData<T>>>,
 }
 
 pub struct Sender<T> {
@@ -38,7 +32,7 @@ pub struct Sender<T> {
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
-        self.inner.state.lock(|s| s.borrow_mut().senders += 1);
+        self.inner.data.lock(|s| s.borrow_mut().senders += 1);
         Sender {
             inner: self.inner.clone(),
         }
@@ -47,11 +41,11 @@ impl<T> Clone for Sender<T> {
 
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
-        self.inner.state.lock(|s| {
-            let mut state = s.borrow_mut();
-            state.senders -= 1;
-            if state.senders == 0 {
-                state.receivers_waiting.wake();
+        self.inner.data.lock(|s| {
+            let mut d = s.borrow_mut();
+            d.senders -= 1;
+            if d.senders == 0 {
+                d.receivers_waiting.wake();
             }
         });
     }
@@ -65,29 +59,28 @@ enum EnqueueOutcome<T> {
 
 impl<T> Sender<T> {
     pub fn is_closed(&self) -> bool {
-        self.inner.state.lock(|s| s.borrow().receivers == 0)
+        self.inner.data.lock(|s| s.borrow().receivers == 0)
     }
 
     fn enqueue(&self, value: T) -> EnqueueOutcome<T> {
-        self.inner.state.lock(|s| {
-            let state = s.borrow_mut();
-            if state.receivers == 0 {
+        self.inner.data.lock(|s| {
+            let mut d = s.borrow_mut();
+            if d.receivers == 0 {
                 return EnqueueOutcome::Disconnected(value);
             }
-            if self.inner.channel.len() >= state.capacity {
+            if d.queue.len() >= d.capacity {
                 return EnqueueOutcome::Full(value);
             }
-            match self.inner.channel.try_send(value) {
-                Ok(()) => EnqueueOutcome::Sent,
-                Err(EmbTrySendError::Full(value)) => EnqueueOutcome::Full(value),
-            }
+            d.queue.push_back(value);
+            d.receivers_waiting.wake();
+            EnqueueOutcome::Sent
         })
     }
 
     fn has_capacity(&self) -> bool {
-        self.inner.state.lock(|s| {
-            let state = s.borrow();
-            self.inner.channel.len() < state.capacity
+        self.inner.data.lock(|s| {
+            let d = s.borrow();
+            d.queue.len() < d.capacity
         })
     }
 
@@ -119,7 +112,7 @@ impl<T> Sender<T> {
                 EnqueueOutcome::Full(message) => {
                     pending = Some(message);
                     self.inner
-                        .state
+                        .data
                         .lock(|s| s.borrow_mut().senders_waiting.register(cx.waker()));
                     if self.is_closed() {
                         let message = pending
@@ -144,11 +137,11 @@ pub struct Receiver<T> {
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
-        self.inner.state.lock(|s| {
-            let mut state = s.borrow_mut();
-            state.receivers -= 1;
-            if state.receivers == 0 {
-                state.senders_waiting.wake();
+        self.inner.data.lock(|s| {
+            let mut d = s.borrow_mut();
+            d.receivers -= 1;
+            if d.receivers == 0 {
+                d.senders_waiting.wake();
             }
         });
     }
@@ -160,58 +153,52 @@ impl<T> Receiver<T> {
     }
 
     fn poll_recv(&self, cx: &mut Context<'_>) -> Poll<Option<T>> {
-        let all_senders_gone = self.inner.state.lock(|s| {
-            let mut state = s.borrow_mut();
-            state.receivers_waiting.register(cx.waker());
-            state.senders == 0
+        let all_senders_gone = self.inner.data.lock(|s| {
+            let mut d = s.borrow_mut();
+            d.receivers_waiting.register(cx.waker());
+            d.senders == 0
         });
 
-        if let Ok(value) = self.inner.channel.try_receive() {
-            self.inner
-                .state
-                .lock(|s| s.borrow_mut().senders_waiting.wake());
-            return Poll::Ready(Some(value));
+        let result = self.inner.data.lock(|s| {
+            let mut d = s.borrow_mut();
+            if let Some(value) = d.queue.pop_front() {
+                d.senders_waiting.wake();
+                return Poll::Ready(Some(value));
+            }
+            Poll::Pending
+        });
+
+        if result.is_ready() {
+            return result;
         }
 
         if all_senders_gone {
-            return Poll::Ready(None);
+            return self.inner.data.lock(|s| {
+                let mut d = s.borrow_mut();
+                match d.queue.pop_front() {
+                    Some(value) => {
+                        d.senders_waiting.wake();
+                        Poll::Ready(Some(value))
+                    }
+                    None => Poll::Ready(None),
+                }
+            });
         }
 
-        match self.inner.channel.poll_receive(cx) {
-            Poll::Ready(value) => {
-                self.inner
-                    .state
-                    .lock(|s| s.borrow_mut().senders_waiting.wake());
-                Poll::Ready(Some(value))
-            }
-            Poll::Pending => {
-                if self.inner.state.lock(|s| s.borrow().senders) == 0 {
-                    match self.inner.channel.try_receive() {
-                        Ok(value) => {
-                            self.inner
-                                .state
-                                .lock(|s| s.borrow_mut().senders_waiting.wake());
-                            Poll::Ready(Some(value))
-                        }
-                        Err(_) => Poll::Ready(None),
-                    }
-                } else {
-                    Poll::Pending
-                }
-            }
-        }
+        Poll::Pending
     }
 }
 
 pub fn channel<T>(capacity: ChannelCapacity) -> (Sender<T>, Receiver<T>) {
     let inner = Arc::new(ChannelInner {
-        state: CriticalSectionMutex::new(RefCell::new(ChannelState::new(capacity.get()))),
-        channel: EmbChannel::new(),
-    });
-    inner.state.lock(|s| {
-        let mut state = s.borrow_mut();
-        state.senders = 1;
-        state.receivers = 1;
+        data: CriticalSectionMutex::new(RefCell::new(ChannelData {
+            queue: VecDeque::new(),
+            capacity: capacity.get(),
+            senders: 1,
+            receivers: 1,
+            senders_waiting: MultiWakerRegistration::new(),
+            receivers_waiting: MultiWakerRegistration::new(),
+        })),
     });
     (
         Sender {

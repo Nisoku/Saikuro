@@ -1,9 +1,9 @@
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use alloc::{borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use async_trait::async_trait;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_core::{envelope::Envelope, RegistrationToken, ResponseEnvelope};
 use saikuro_exec::sync::RwLock;
 use saikuro_exec::{mpsc, oneshot};

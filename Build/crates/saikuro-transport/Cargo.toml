@@ -36,13 +36,13 @@ wasm = [
 ]
 embedded = [
     "saikuro-core/embedded",
-    "saikuro-net/embedded",
     "saikuro-exec/embedded",
     "saikuro-event/embedded",
     "dep:embedded-io-async",
     "dep:embassy-sync",
 ]
 tcp = []
+tcp-net = ["dep:saikuro-net", "saikuro-net/embedded"]
 unix = []
 ws = ["ws-native"]
 ws-native = ["tokio-tungstenite?/connect", "tokio-tungstenite?/handshake"]
@@ -56,7 +56,7 @@ wasi-preview1 = ["dep:wasip1"]
 
 [dependencies]
 saikuro-core = { path = "../saikuro-core", default-features = false }
-saikuro-net = { path = "../saikuro-net", default-features = false }
+saikuro-net = { path = "../saikuro-net", default-features = false, optional = true }
 saikuro-exec = { path = "../saikuro-exec", default-features = false }
 saikuro-random = { path = "../saikuro-random", default-features = false }
 saikuro-event = { path = "../saikuro-event", default-features = false }

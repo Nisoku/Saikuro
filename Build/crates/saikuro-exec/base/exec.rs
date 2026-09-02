@@ -1,19 +1,19 @@
 #![cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 
-use alloc::boxed::Box;
 #[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
+use crate::Arc;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::future::Future;
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 use core::mem::transmute;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
 
-#[cfg(feature = "no_std")]
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::ptr::null_mut;
 
 #[cfg(not(target_has_atomic = "ptr"))]
@@ -29,7 +29,7 @@ use futures::stream::StreamExt;
 
 use crate::shared::JoinError;
 
-#[cfg(feature = "no_std")]
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use embassy_executor::raw::Executor as ArchExecutor;
 #[cfg(feature = "wasm")]
 use embassy_executor::Executor as ArchExecutor;
@@ -150,41 +150,55 @@ where
 
 /// Run `fut` to completion on the embassy executor. Never returns on wasm
 /// (the JS event loop drives the executor); loops until `fut` resolves on
-/// no_std (arch-spin busy-poll) so the result can be returned.
+/// no_std/embedded (arch-spin busy-poll) so the result can be returned.
 #[cfg(feature = "no_std")]
 pub fn block_on<F>(fut: F) -> F::Output
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    block_on_inner(fut)
+}
+
+/// Embedded variant: single-threaded, futures need not be `Send`.
+#[cfg(feature = "embedded")]
+pub fn block_on<F>(fut: F) -> F::Output
+where
+    F: Future + 'static,
+    F::Output: 'static,
+{
+    block_on_inner(fut)
+}
+
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+fn block_on_inner<F>(mut fut: F) -> F::Output
+where
+    F: Future + 'static,
+    F::Output: 'static,
+{
     let executor = static_executor();
     let spawner = executor.spawner();
     start_runner(spawner);
 
-    let slot: Arc<JoinResultSlot<F::Output>> =
-        Arc::new(CriticalSectionMutex::new(RefCell::new(JoinSlot {
-            value: None,
-            closed: false,
-            wakers: MultiWakerRegistration::new(),
-        })));
-    let task_slot = slot.clone();
-    let boxed: Pin<Box<dyn Future<Output = ()> + Send + 'static>> = Box::pin(async move {
-        let result = fut.await;
-        task_slot.lock(|s| {
-            s.borrow_mut().value = Some(result);
-            s.borrow_mut().wakers.wake();
-        });
-    });
-    queue().lock(|q| q.borrow_mut().push(boxed));
-    NOTIFY.signal(());
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+    fn noop_waker_noop(_: *const ()) {}
+    static NOOP_WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
+        |p| RawWaker::new(p, &NOOP_WAKER_VTABLE),
+        noop_waker_noop,
+        noop_waker_noop,
+        noop_waker_noop,
+    );
+
+    let waker = unsafe { Waker::from_raw(RawWaker::new(core::ptr::null(), &NOOP_WAKER_VTABLE)) };
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
 
     loop {
-        // SAFETY: `executor` is `&'static` (see `static_executor`) and `poll` is
-        // only ever called from this single owner thread.
-        unsafe { executor.poll() };
-        if let Some(v) = slot.lock(|s| s.borrow_mut().value.take()) {
-            return v;
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => return val,
+            Poll::Pending => {}
         }
+        unsafe { executor.poll() };
     }
 }
 
@@ -193,7 +207,7 @@ pub fn run<F: Future + Send + 'static>(fut: F) {
     let executor = static_executor();
     executor.start(|spawner| {
         start_runner(spawner);
-        let boxed: Pin<Box<dyn Future<Output = ()> + Send + 'static>> = Box::pin(async move {
+        let boxed: Pin<Box<dyn Future<Output = ()> + 'static>> = Box::pin(async move {
             let _ = fut.await;
         });
         queue().lock(|q| q.borrow_mut().push(boxed));
@@ -214,10 +228,10 @@ pub fn block_on<F: Future + Send + 'static>(fut: F) -> F::Output {
 /// host entry no longer needs to pump manually.
 pub fn pump() {}
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 fn static_executor() -> &'static mut ArchExecutor {
     static mut EXECUTOR: Option<ArchExecutor> = None;
-    #[cfg(feature = "no_std")]
+    #[cfg(any(feature = "no_std", feature = "embedded"))]
     let ex = unsafe {
         (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut()))
     };
@@ -229,15 +243,15 @@ fn static_executor() -> &'static mut ArchExecutor {
     unsafe { transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) }
 }
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 pub fn new_runtime() -> Runtime {
     Runtime::new()
 }
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 pub struct Runtime;
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 impl Runtime {
     pub fn new() -> Self {
         Runtime
@@ -259,19 +273,19 @@ impl Runtime {
     }
 }
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 impl Default for Runtime {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 pub struct RuntimeBuilder {
     _private: (),
 }
 
-#[cfg(any(feature = "wasm", feature = "no_std"))]
+#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
 impl RuntimeBuilder {
     pub fn new_multi_thread() -> Self {
         RuntimeBuilder { _private: () }

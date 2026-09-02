@@ -45,3 +45,14 @@ compile_error!("saikuro-core: the `std` toolchain flag is incompatible with the 
 /// Wire-level protocol version. All envelopes carry this; the runtime
 /// rejects messages with an incompatible version.
 pub const PROTOCOL_VERSION: u32 = 1;
+
+/// Portable `Arc` that works on targets with and without hardware atomics.
+///
+/// On targets that support `target_has_atomic = "ptr"`, this is `alloc::sync::Arc`.
+/// On targets without atomics (e.g., thumbv6m, riscv32imc), this is
+/// `portable_atomic_util::Arc` which uses software reference counting.
+#[cfg(target_has_atomic = "ptr")]
+pub type Arc<T> = alloc::sync::Arc<T>;
+
+#[cfg(not(target_has_atomic = "ptr"))]
+pub type Arc<T> = portable_atomic_util::Arc<T>;

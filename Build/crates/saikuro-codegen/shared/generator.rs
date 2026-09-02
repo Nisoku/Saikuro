@@ -1,3 +1,4 @@
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{
     FieldMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDefinition,
     TypeDescriptor, Visibility,

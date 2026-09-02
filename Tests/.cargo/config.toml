@@ -1,0 +1,21 @@
+# QEMU embedded target configurations.
+
+[target.thumbv7m-none-eabi]
+runner = "qemu-system-arm -cpu cortex-m3 -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Larm"]
+
+[target.thumbv6m-none-eabi]
+runner = "qemu-system-arm -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Larm"]
+
+[target.thumbv8m.main-none-eabihf]
+runner = "qemu-system-arm -cpu cortex-m33 -machine mps2-an505 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Larm8"]
+
+[target.riscv32imac-unknown-none-elf]
+runner = "qemu-system-riscv32 -M virt -bios none -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tmemory.x", "-C", "link-arg=-Tlink.x", "-C", "link-arg=-Lriscv"]
+
+[target.riscv32imc-unknown-none-elf]
+runner = "qemu-system-riscv32 -M virt -bios none -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tmemory.x", "-C", "link-arg=-Tlink.x", "-C", "link-arg=-Lriscv"]

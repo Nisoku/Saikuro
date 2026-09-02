@@ -5,7 +5,7 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::sync::Arc;
+use saikuro_core::Arc;
 
 use saikuro_exec::watch;
 use saikuro_runtime::transport_adapter::{HostPipeListener, LocalRuntimeListener};

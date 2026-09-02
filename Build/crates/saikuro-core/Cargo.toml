@@ -33,3 +33,4 @@ strum = { workspace = true }
 heapless = { workspace = true }
 messagepack-serde = { workspace = true }
 portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }

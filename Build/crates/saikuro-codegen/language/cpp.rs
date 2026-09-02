@@ -4,8 +4,9 @@
 //! - One `<Namespace>Client.hpp` per namespace with schema-aware wrappers.
 //! - A `saikuro_generated.hpp` umbrella include.
 
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{NamespaceSchema, Schema};
-use std::collections::{HashMap, HashSet};
 
 use crate::shared::{
     error::{CodegenError, Result},
@@ -27,8 +28,8 @@ impl BindingGenerator for CppGenerator {
 
         let mut ns_items: Vec<_> = schema.namespaces.iter().collect();
         ns_items.sort_by_key(|(k, _)| *k);
-        let mut class_names: HashMap<String, String> = HashMap::new();
-        let mut file_names: HashMap<String, String> = HashMap::new();
+        let mut class_names: BTreeMap<String, String> = BTreeMap::new();
+        let mut file_names: BTreeMap<String, String> = BTreeMap::new();
         for (ns_name, ns_schema) in ns_items {
             let class_name = sanitize_ident(&format!("{}Client", to_pascal_case(ns_name)));
             if let Some(previous_ns) = class_names.get(&class_name) {
@@ -83,7 +84,7 @@ impl CppGenerator {
             String::new(),
         ];
 
-        let mut seen_methods: HashSet<String> = HashSet::new();
+        let mut seen_methods: BTreeSet<String> = BTreeSet::new();
         seen_methods.insert(sanitize_ident(class_name));
         seen_methods.insert("client_".to_owned());
         for (fn_name, fn_schema) in crate::shared::generator::namespace_public_functions(ns) {
@@ -272,7 +273,7 @@ fn escape_cpp_string_literal(s: &str) -> String {
             '\0' => out.push_str("\\0"),
             '\x0B' => out.push_str("\\v"),
             c if c.is_control() || u32::from(c) < 0x20 || u32::from(c) == 0x7F => {
-                use std::fmt::Write;
+                use alloc::fmt::Write;
                 let code = u32::from(c);
                 if code <= 0xFF {
                     let _ = write!(out, "\\x{code:02X}");

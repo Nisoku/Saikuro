@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
@@ -15,7 +15,7 @@ pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// Serialize the metadata map with keys sorted, so equivalent metadata always
 /// produces identical bytes regardless of the caller's insertion order.
-fn serialize_meta<S>(meta: &MetaMap, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_meta<S>(meta: &Box<MetaMap>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -93,7 +93,7 @@ pub struct Envelope {
         skip_serializing_if = "MetaMap::is_empty",
         serialize_with = "serialize_meta"
     )]
-    pub meta: MetaMap,
+    pub meta: Box<MetaMap>,
 
     /// Capability token presented by the caller. Required when the target
     /// function declares one or more `capabilities`.
@@ -147,7 +147,7 @@ impl Envelope {
             id: InvocationId::new()?,
             target: target.into(),
             args,
-            meta: MetaMap::new(),
+            meta: Box::new(MetaMap::new()),
             capability: None,
             batch_items: None,
             stream_control: None,

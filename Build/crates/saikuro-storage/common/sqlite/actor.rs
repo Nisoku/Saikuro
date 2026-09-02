@@ -1,4 +1,5 @@
 use alloc::string::String;
+use alloc::vec::Vec;
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender};
@@ -74,7 +75,7 @@ impl SqliteStorage {
 /// Own the connection on a dedicated thread and service requests serially.
 fn run_worker(target: OpenTarget, rx: mpsc::Receiver<Job>) {
     let opened = match &target {
-        OpenTarget::Path(p) => Connection::open(p),
+        OpenTarget::Path(p) => Connection::open(p.to_str().unwrap_or_default()),
         OpenTarget::Memory => Connection::open_memory(),
     };
     let mut conn = match opened {
@@ -93,7 +94,16 @@ fn run_worker(target: OpenTarget, rx: mpsc::Receiver<Job>) {
     loop {
         match rx.recv() {
             Ok(Job::Query { sql, params, resp }) => {
-                let r = conn.query_params(&sql, &params).map_err(map_err);
+                let r = if sql.trim_start().to_ascii_uppercase().starts_with("SELECT") {
+                    conn.query_params(&sql, &params).map_err(map_err)
+                } else {
+                    conn.execute_params(&sql, &params)
+                        .map_err(map_err)
+                        .map(|_| QueryResult {
+                            columns: Vec::new(),
+                            rows: Vec::new(),
+                        })
+                };
                 let _ = resp.send(r);
             }
             Ok(Job::Batch { sql, resp }) => {
@@ -122,7 +132,7 @@ impl RawSqlite for SqliteStorage {
             })
             .map_err(|_| SaikuroError::internal("sqlite worker thread is not running"))?;
         rx.await
-            .map_err(|_| SaikuroError::internal("sqlite worker dropped the response"))
+            .map_err(|_| SaikuroError::internal("sqlite worker dropped the response"))?
     }
 
     async fn batch(&self, sql: &str) -> Result<()> {
@@ -134,7 +144,7 @@ impl RawSqlite for SqliteStorage {
             })
             .map_err(|_| SaikuroError::internal("sqlite worker thread is not running"))?;
         rx.await
-            .map_err(|_| SaikuroError::internal("sqlite worker dropped the response"))
+            .map_err(|_| SaikuroError::internal("sqlite worker dropped the response"))?
     }
 }
 

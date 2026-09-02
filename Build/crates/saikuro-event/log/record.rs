@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 use core::fmt;
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ pub struct LogRecord {
 
     /// Additional structured context fields.
     #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
-    pub fields: ContextMap,
+    pub fields: Box<ContextMap>,
 }
 
 impl LogRecord {
@@ -41,7 +41,7 @@ impl LogRecord {
             level,
             name: name.into(),
             msg: msg.into(),
-            fields: ContextMap::new(),
+            fields: Box::new(ContextMap::new()),
         }
     }
 
@@ -119,7 +119,7 @@ impl TryFrom<Value> for LogRecord {
                     .unwrap_or(LogLevel::Info);
                 let name = take_string(&mut map, "name").unwrap_or_default();
                 let msg = take_string(&mut map, "msg").unwrap_or_default();
-                let mut fields = ContextMap::new();
+                let mut fields = Box::new(ContextMap::new());
                 for (k, v) in map.into_iter() {
                     fields
                         .insert(k, v)

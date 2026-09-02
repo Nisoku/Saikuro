@@ -5,6 +5,7 @@
 //! - One `<namespace>Client.ts` per namespace with a typed async client class.
 //! - An `index.ts` that re-exports everything.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor,
 };

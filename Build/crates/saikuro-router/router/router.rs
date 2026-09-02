@@ -1,10 +1,10 @@
 //! Invocation router
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use alloc::{borrow::ToOwned, boxed::Box, format, string::ToString, vec::Vec};
 use core::time::Duration;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
     invocation::InvocationId,

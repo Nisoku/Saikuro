@@ -62,7 +62,7 @@ storage = ["saikuro-storage"]
 inmemory = ["saikuro-storage/inmemory"]
 storage-fs = ["saikuro-storage/fs"]
 storage-sled = ["saikuro-storage/sled"]
-storage-sqlite = ["saikuro-storage/sqlite"]
+storage-sqlite = ["saikuro-storage/sqlite-native"]
 wasm-storage = ["saikuro-storage/wasm"]
 
 [dependencies]

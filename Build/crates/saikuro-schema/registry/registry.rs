@@ -1,5 +1,3 @@
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, vec::Vec};
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
@@ -7,6 +5,8 @@ use saikuro_core::schema::{
     FunctionSchema, NamespaceSchema, Schema, TypeDefinition, SCHEMA_NAMESPACES_CAPACITY,
     SCHEMA_TYPES_CAPACITY,
 };
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_core::RegistrationToken;
 use saikuro_exec::sync::RwLock;
 
@@ -250,17 +250,17 @@ impl SchemaRegistry {
     pub async fn snapshot(&self) -> Result<Schema, SaikuroError> {
         let mut schema = Schema::new();
         let schemata = self.inner.read().await;
+        if schemata.namespaces.len() > SCHEMA_NAMESPACES_CAPACITY {
+            return Err(SaikuroError::SchemaCapacity);
+        }
+        if schemata.types.len() > SCHEMA_TYPES_CAPACITY {
+            return Err(SaikuroError::SchemaCapacity);
+        }
         for (name, entry) in schemata.namespaces.iter() {
-            schema
-                .namespaces
-                .insert(name.clone(), entry.schema.clone())
-                .map_err(|_| SaikuroError::SchemaCapacity)?;
+            schema.namespaces.insert(name.clone(), entry.schema.clone());
         }
         for (name, type_def) in schemata.types.iter() {
-            schema
-                .types
-                .insert(name.clone(), type_def.clone())
-                .map_err(|_| SaikuroError::SchemaCapacity)?;
+            schema.types.insert(name.clone(), type_def.clone());
         }
         Ok(schema)
     }

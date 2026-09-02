@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use saikuro_core::Arc;
 
 use bytes::Bytes;
 use dashmap::DashMap;

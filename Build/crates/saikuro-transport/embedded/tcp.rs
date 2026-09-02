@@ -1,10 +1,10 @@
 use alloc::boxed::Box;
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex as AsyncMutex;

@@ -1,9 +1,9 @@
 use alloc::collections::BTreeMap;
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
 use saikuro_core::invocation::InvocationId;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_core::ResponseEnvelope;
 use saikuro_exec::{
     mpsc,

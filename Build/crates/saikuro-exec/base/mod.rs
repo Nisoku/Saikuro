@@ -1,5 +1,5 @@
 #[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
+use crate::Arc;
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::pin::Pin;
@@ -10,8 +10,6 @@ pub(crate) use portable_atomic_util::Arc;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
-use embassy_sync::channel::Channel as EmbChannel;
-use embassy_sync::channel::TrySendError as EmbTrySendError;
 use embassy_sync::waitqueue::MultiWakerRegistration;
 use embassy_time::{Duration as EmbDuration, Timer};
 use futures::future::{Fuse, FutureExt};

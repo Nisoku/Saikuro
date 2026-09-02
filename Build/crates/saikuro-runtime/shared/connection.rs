@@ -2,11 +2,11 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use bytes::Bytes;
 use futures::future::FutureExt;
@@ -604,16 +604,13 @@ where
                     .map(|(name, schema)| (name.clone(), schema.clone()))
                     .collect(),
             );
-            filtered
-                .namespaces
-                .insert(
-                    ns_name.clone(),
-                    saikuro_core::schema::NamespaceSchema {
-                        functions,
-                        doc: ns_schema.doc.clone(),
-                    },
-                )
-                .ok();
+            filtered.namespaces.insert(
+                ns_name.clone(),
+                saikuro_core::schema::NamespaceSchema {
+                    functions,
+                    doc: ns_schema.doc.clone(),
+                },
+            );
         }
 
         Some(filtered)

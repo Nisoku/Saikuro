@@ -1,4 +1,7 @@
-use alloc::string::{String, ToString};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -139,7 +142,7 @@ pub struct ErrorDetail {
 
     /// Optional structured context (stack traces, field paths, …).
     #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
-    pub details: ContextMap,
+    pub details: Box<ContextMap>,
 }
 
 impl ErrorDetail {
@@ -148,7 +151,7 @@ impl ErrorDetail {
         Self {
             code,
             message: message.into(),
-            details: ContextMap::new(),
+            details: Box::new(ContextMap::new()),
         }
     }
 

@@ -1,0 +1,227 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "saikuro-tests"
+description = "Unified Saikuro test suite: portable no_std cores plus native/wasm/embedded runners"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[[bin]]
+name = "native"
+path = "runners/native.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "thumbv6m"
+path = "runners/bin/thumbv6m.rs"
+required-features = ["arm"]
+
+[[bin]]
+name = "thumbv7m"
+path = "runners/bin/thumbv7m.rs"
+required-features = ["arm"]
+
+[[bin]]
+name = "thumbv8m"
+path = "runners/bin/thumbv8m.rs"
+required-features = ["arm"]
+
+[[bin]]
+name = "riscv32imc"
+path = "runners/bin/riscv32imc.rs"
+required-features = ["riscv"]
+
+[[bin]]
+name = "riscv32imac"
+path = "runners/bin/riscv32imac.rs"
+required-features = ["riscv"]
+
+[features]
+default = ["native"]
+native = [
+    "saikuro-core/native",
+    "saikuro-event/native",
+    "saikuro-schema/native",
+    "saikuro-router/native",
+    "saikuro-transport/native",
+    "saikuro-runtime/native",
+    "saikuro-exec/native",
+    "saikuro-storage/inmemory",
+    "saikuro-random/native",
+    "dep:saikuro",
+    "dep:saikuro-c",
+    "saikuro/native",
+    "saikuro-c/native",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-event/embedded",
+    "saikuro-schema/embedded",
+    "saikuro-router/embedded",
+    "saikuro-transport/embedded",
+    "saikuro-runtime/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-storage/embedded",
+    "saikuro-random/embedded",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-event/wasm",
+    "saikuro-schema/wasm",
+    "saikuro-router/wasm",
+    "saikuro-transport/wasm",
+    "saikuro-runtime/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-storage/inmemory",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:web-sys",
+    "dep:wasm-bindgen-test",
+]
+arm = [
+    "embedded",
+    "dep:cortex-m-rt",
+    "dep:cortex-m-semihosting",
+    "dep:cortex-m",
+    "dep:panic-semihosting",
+]
+riscv = [
+    "embedded",
+    "dep:riscv-rt",
+    "dep:riscv",
+]
+sqlite = ["saikuro-storage/sqlite"]
+flash = ["saikuro-storage/flash"]
+adapter = ["dep:saikuro", "dep:saikuro-c", "saikuro-c/native", "saikuro/native"]
+
+[dependencies]
+# Saikuro core crates
+saikuro-core = { workspace = true }
+saikuro-event = { workspace = true }
+saikuro-schema = { workspace = true }
+saikuro-router = { workspace = true }
+saikuro-transport = { workspace = true }
+saikuro-runtime = { workspace = true }
+saikuro-exec = { workspace = true }
+saikuro-storage = { workspace = true, default-features = false }
+saikuro-random = { workspace = true }
+saikuro-codegen = { workspace = true }
+saikuro = { workspace = true, optional = true }
+saikuro-c = { path = "../Build/adapters/c", default-features = false, optional = true }
+
+# External, target-agnostic
+serde = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
+heapless = { workspace = true }
+
+# wasm (wasm runner)
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true }
+wasm-bindgen-test = { workspace = true, optional = true }
+
+# Embedded / QEMU
+cortex-m-rt = { workspace = true, optional = true }
+cortex-m-semihosting = { workspace = true, optional = true }
+cortex-m = { workspace = true, optional = true }
+panic-semihosting = { workspace = true, optional = true }
+riscv-rt = { workspace = true, optional = true }
+riscv = { workspace = true, optional = true }
+critical-section = { workspace = true }
+spin = { workspace = true }
+linked_list_allocator = { workspace = true }
+embedded-storage-async = { workspace = true }
+embedded-io-async = { workspace = true }
+
+[profile.qemu]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["NellowTCS"]
+license = "Apache-2.0"
+repository = "https://github.com/Nisoku/Saikuro"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Saikuro crates
+saikuro-core = { path = "../Build/crates/saikuro-core", default-features = false }
+saikuro-event = { path = "../Build/crates/saikuro-event", default-features = false }
+saikuro-schema = { path = "../Build/crates/saikuro-schema", default-features = false }
+saikuro-router = { path = "../Build/crates/saikuro-router", default-features = false }
+saikuro-transport = { path = "../Build/crates/saikuro-transport", default-features = false }
+saikuro-runtime = { path = "../Build/crates/saikuro-runtime", default-features = false }
+saikuro-exec = { path = "../Build/crates/saikuro-exec", default-features = false }
+saikuro-storage = { path = "../Build/crates/saikuro-storage", default-features = false }
+saikuro-random = { path = "../Build/crates/saikuro-random", default-features = false }
+saikuro-codegen = { path = "../Build/crates/saikuro-codegen", default-features = false }
+saikuro = { path = "../Build/adapters/rust", default-features = false }
+
+# Serialization
+serde = { version = "1.0", default-features = false, features = [
+    "alloc",
+    "derive",
+] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+bytes = { version = "1.12", default-features = false, features = [
+    "extra-platforms",
+] }
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+async-trait = "0.1"
+portable-atomic = { version = "1", default-features = false, features = [
+    "fallback",
+    "critical-section",
+] }
+portable-atomic-util = { version = "0.2", default-features = false, features = [
+    "alloc",
+] }
+heapless = { version = "0.8", default-features = false, features = ["serde"] }
+
+embedded-storage-async = { version = "0.4", default-features = false }
+embedded-io-async = { version = "0.7", default-features = false }
+
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
+wasm-bindgen-test = "0.3"
+
+critical-section = { version = "1" }
+spin = { version = "0.12", default-features = false, features = [
+    "mutex",
+    "spin_mutex",
+    "rwlock",
+    "portable-atomic",
+] }
+linked_list_allocator = { version = "0.10", default-features = false }
+
+# Embedded QEMU
+cortex-m-rt = { version = "0.7", default-features = false }
+cortex-m-semihosting = { version = "0.6", default-features = false }
+cortex-m = { version = "0.7", default-features = false, features = [
+    "critical-section-single-core",
+] }
+panic-semihosting = { version = "0.7", default-features = false }
+riscv-rt = { version = "0.18", default-features = false }
+riscv = { version = "0.12", default-features = false }

@@ -17,16 +17,18 @@ path = "cli/main.rs"
 required-features = ["cli"]
 
 [features]
-cli = ["dep:clap"]
+default = []
+cli = ["dep:clap", "dep:anyhow", "dep:serde_json"]
 
 [dependencies]
-saikuro-core   = { workspace = true, default-features = false }
+saikuro-core = { workspace = true, default-features = false }
 saikuro-schema = { workspace = true }
 
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
-anyhow      = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true, optional = true, default-features = false, features = [
+    "alloc",
+] }
+anyhow = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
 

@@ -3,6 +3,13 @@
 
 extern crate alloc;
 
+/// Portable `Arc`: `alloc::sync::Arc` when atomics are available,
+/// `portable_atomic_util::Arc` on targets without hardware atomics.
+#[cfg(target_has_atomic = "ptr")]
+pub type Arc<T> = alloc::sync::Arc<T>;
+#[cfg(not(target_has_atomic = "ptr"))]
+pub type Arc<T> = portable_atomic_util::Arc<T>;
+
 // Exactly one engine must be selected
 #[cfg(any(
     all(

@@ -1,7 +1,7 @@
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 use crate::shared::error::{Result, TransportError};
 use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};

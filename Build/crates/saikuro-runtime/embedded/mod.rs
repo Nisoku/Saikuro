@@ -1,17 +1,23 @@
+use crate::handle::RuntimeHandle;
 use crate::SaikuroRuntime;
 use saikuro_exec::watch;
-use saikuro_net::net::Stack;
-use saikuro_transport::embedded::tcp::TcpTransportListener;
 
-/// Run the runtime against a host-provided network stack. The firmware is
-/// responsible for supplying the stack and endpoint (see `board` integration).
-pub async fn run(stack: &'static Stack<'static>, endpoint: saikuro_net::net::IpEndpoint) {
-    let runtime = SaikuroRuntime::builder().build().await;
+/// Build and serve the runtime with the provided listeners until the runtime
+/// signals shutdown.
+pub async fn serve_with<L: crate::transport_adapter::RuntimeListener + 'static>(
+    runtime: &SaikuroRuntime,
+    listeners: alloc::vec::Vec<L>,
+) {
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-    runtime
-        .serve(
-            vec![TcpTransportListener::new(stack, endpoint)],
-            shutdown_rx,
-        )
-        .await;
+    runtime.serve(listeners, shutdown_rx).await;
+}
+
+/// Accept a connected transport and spawn a connection handler on the runtime.
+pub fn accept(
+    handle: &RuntimeHandle,
+    transport: impl crate::transport_adapter::RuntimeTransport + 'static,
+    peer_id: impl Into<alloc::string::String>,
+    peer_caps: saikuro_core::capability::CapabilitySet,
+) {
+    handle.accept_transport(transport, peer_id, peer_caps);
 }

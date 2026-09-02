@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 use crate::capability::CapabilityToken;
@@ -16,14 +16,14 @@ pub const SCHEMA_TYPES_CAPACITY: usize = 256;
 /// Maximum number of fields a record type can declare.
 pub const RECORD_FIELDS_CAPACITY: usize = 64;
 
-/// Fixed-capacity, insertion-ordered map of function schemas.
-pub type FunctionMap = heapless::FnvIndexMap<String, FunctionSchema, SCHEMA_FUNCTIONS_CAPACITY>;
-/// Fixed-capacity, insertion-ordered map of namespace schemas.
-pub type NamespaceMap = heapless::FnvIndexMap<String, NamespaceSchema, SCHEMA_NAMESPACES_CAPACITY>;
-/// Fixed-capacity, insertion-ordered map of user-defined types.
-pub type TypeMap = heapless::FnvIndexMap<String, TypeDefinition, SCHEMA_TYPES_CAPACITY>;
-/// Fixed-capacity, insertion-ordered map of record fields.
-pub type FieldMap = heapless::FnvIndexMap<String, FieldDescriptor, RECORD_FIELDS_CAPACITY>;
+/// Heap-allocated map of function schemas, keyed by name.
+pub type FunctionMap = BTreeMap<String, FunctionSchema>;
+/// Heap-allocated map of namespace schemas, keyed by name.
+pub type NamespaceMap = BTreeMap<String, NamespaceSchema>;
+/// Heap-allocated map of user-defined types, keyed by name.
+pub type TypeMap = BTreeMap<String, TypeDefinition>;
+/// Heap-allocated map of record fields, keyed by name.
+pub type FieldMap = BTreeMap<String, FieldDescriptor>;
 
 // Primitive types
 
