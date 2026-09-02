@@ -115,6 +115,12 @@ talc = { version = "4", default-features = false, features = ["lock_api"] }
 
 # WebSocket
 tokio-tungstenite = { version = "0.30", default-features = false }
+
+# QUIC
+s2n-quic = { version = "1", default-features = false, features = [
+    "provider-tls-rustls",
+    "provider-address-token-default",
+] }
 embedded-websocket = { version = "0.9", default-features = false }
 rand_core_06 = { package = "rand_core", version = "0.6", default-features = false }
 

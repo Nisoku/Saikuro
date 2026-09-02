@@ -1,6 +1,6 @@
 [package]
 name = "saikuro-transport"
-description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, WASI, and WebSocket backends"
+description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, QUIC, WASI, and WebSocket backends"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -46,6 +46,7 @@ tcp-net = ["dep:saikuro-net", "saikuro-net/embedded"]
 unix = []
 ws = ["ws-native"]
 ws-native = ["tokio-tungstenite?/connect", "tokio-tungstenite?/handshake"]
+quic = ["dep:s2n-quic"]
 ws-wasm = []
 ws-wasi = ["dep:embedded-websocket", "dep:rand_core_06", "dep:getrandom", "wasi-tcp", "ws"]
 wasm-host = ["wasm"]
@@ -71,6 +72,7 @@ thiserror = { workspace = true }
 embedded-io-async = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
+s2n-quic = { workspace = true, optional = true }
 embedded-websocket = { workspace = true, optional = true }
 rand_core_06 = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }
