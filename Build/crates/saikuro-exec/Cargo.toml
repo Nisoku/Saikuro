@@ -17,7 +17,7 @@ native = ["std", "dep:tokio", "tokio/full", "dep:tokio-util", "futures/std"]
 no_std = [
     "dep:embassy-executor",
     "embassy-executor/executor-thread",
-    "embassy-executor/arch-spin",
+    "embassy-executor/platform-spin",
     "dep:embassy-sync",
     "dep:embassy-time",
     "dep:embassy-futures",
@@ -27,7 +27,7 @@ no_std = [
 wasm = [
     "dep:embassy-executor",
     "embassy-executor/executor-thread",
-    "embassy-executor/arch-wasm",
+    "embassy-executor/platform-wasm",
     "dep:embassy-sync",
     "dep:embassy-time",
     "embassy-time/wasm",
@@ -40,7 +40,7 @@ wasm = [
 embedded = [
     "dep:embassy-executor",
     "embassy-executor/executor-thread",
-    "embassy-executor/arch-spin",
+    "embassy-executor/platform-spin",
     "dep:embassy-sync",
     "dep:embassy-time",
     "dep:embassy-futures",

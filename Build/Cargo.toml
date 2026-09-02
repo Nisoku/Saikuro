@@ -94,7 +94,7 @@ tokio = { version = "1.53", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 
 # Embassy executor
-embassy-executor = { version = "0.8", default-features = false }
+embassy-executor = { version = "0.10", default-features = false }
 embassy-net-driver-channel = "0.4"
 critical-section = { version = "1" }
 

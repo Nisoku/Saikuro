@@ -89,7 +89,7 @@ impl Drbg {
             .ok_or(SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
         self.counter = end;
         for i in 0..blocks {
-            let block = keystream_block(&self.key, &self.nonce, start + i as u64)?;
+            let block = keystream_block(&self.key, &self.nonce, start + (i as u64))?;
             let from = i * BLOCK_LEN;
             let to = core::cmp::min(from + BLOCK_LEN, dest.len());
             dest[from..to].copy_from_slice(&block[..to - from]);
@@ -235,7 +235,7 @@ fn read_seed() -> ([u8; KEY_LEN], [u8; NONCE_LEN]) {
 
 /// Fill `dest` with cryptographically secure random bytes from the
 /// process-wide DRBG.
-#[allow(dead_code)]
+#[expect(unused)]
 pub fn fill(dest: &mut [u8]) -> Result<(), SaikuroError> {
     if !is_seeded() {
         crate::try_auto_seed()?;
@@ -249,7 +249,7 @@ pub fn fill(dest: &mut [u8]) -> Result<(), SaikuroError> {
     let blocks = dest.len().div_ceil(BLOCK_LEN);
     let start = reserve_blocks(blocks as u64)?;
     for i in 0..blocks {
-        let block = keystream_block(&key, &nonce, start + i as u64)?;
+        let block = keystream_block(&key, &nonce, start + (i as u64))?;
         let from = i * BLOCK_LEN;
         let to = core::cmp::min(from + BLOCK_LEN, dest.len());
         dest[from..to].copy_from_slice(&block[..to - from]);
@@ -298,8 +298,12 @@ fn reserve_blocks(blocks: u64) -> Result<u64, SaikuroError> {
             .filter(|&next| next <= MAX_BLOCKS)
             .ok_or(SaikuroError::Entropy("DRBG keystream exhausted".into()))?;
         match COUNTER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => return Ok(current),
-            Err(observed) => current = observed,
+            Ok(_) => {
+                return Ok(current);
+            }
+            Err(observed) => {
+                current = observed;
+            }
         }
     }
 }

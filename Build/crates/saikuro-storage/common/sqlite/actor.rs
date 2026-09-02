@@ -38,7 +38,7 @@ enum OpenTarget {
 pub struct SqliteStorage {
     pub(crate) config: StorageConfig,
     tx: SyncSender<Job>,
-    #[allow(dead_code)]
+    #[expect(unused)]
     worker: Option<JoinHandle<()>>,
 }
 
@@ -110,7 +110,9 @@ fn run_worker(target: OpenTarget, rx: mpsc::Receiver<Job>) {
                 let r = conn.execute_batch(&sql).map_err(map_err);
                 let _ = resp.send(r);
             }
-            Err(_) => break,
+            Err(_) => {
+                break;
+            }
         }
     }
 }
@@ -151,7 +153,7 @@ impl RawSqlite for SqliteStorage {
 impl SqliteStorage {
     /// Compile-time guarantee that the public handle is `Send + Sync`, so it can
     /// live inside the `Storage` enum alongside the other backends.
-    #[allow(dead_code)]
+    #[expect(unused)]
     fn _assert_send_sync() {
         fn is_send_sync<T: Send + Sync>() {}
         is_send_sync::<SqliteStorage>();

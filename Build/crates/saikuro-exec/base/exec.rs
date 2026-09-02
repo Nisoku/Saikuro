@@ -75,7 +75,7 @@ static NOTIFY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 /// Launch the single multiplexing task onto the supplied `Spawner`.
 pub fn start_runner(spawner: Spawner) {
-    spawner.spawn(task_runner()).ok();
+    spawner.spawn(task_runner().expect("task_runner"));
 }
 
 /// The one embassy task. It multiplexes every dynamically spawned future through
@@ -154,8 +154,8 @@ where
 #[cfg(feature = "no_std")]
 pub fn block_on<F>(fut: F) -> F::Output
 where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    F: Future + 'static,
+    F::Output: 'static,
 {
     block_on_inner(fut)
 }
@@ -203,7 +203,7 @@ where
 }
 
 #[cfg(feature = "wasm")]
-pub fn run<F: Future + Send + 'static>(fut: F) {
+pub fn run<F: Future + 'static>(fut: F) {
     let executor = static_executor();
     executor.start(|spawner| {
         start_runner(spawner);
@@ -216,7 +216,7 @@ pub fn run<F: Future + Send + 'static>(fut: F) {
 }
 
 #[cfg(feature = "wasm")]
-pub fn block_on<F: Future + Send + 'static>(fut: F) -> F::Output {
+pub fn block_on<F: Future + 'static>(fut: F) -> F::Output {
     run(fut);
     // `run` returns to the JS event loop, which drives the executor; for a server
     // future this never completes. Unused on wasm (the entry uses `run`).

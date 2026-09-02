@@ -1,11 +1,11 @@
-#![allow(dead_code)]
+#![allow(#[expect(unused)])]
 
-use std::ffi::{c_int, c_void, CStr, CString};
+use std::ffi::{ c_int, c_void, CStr, CString };
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use saikuro_c::{saikuro_last_error_message, saikuro_string_free};
+use saikuro_c::{ saikuro_last_error_message, saikuro_string_free };
 
 pub const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -21,8 +21,10 @@ pub fn take_c_string(ptr: *mut std::ffi::c_char) -> String {
     if ptr.is_null() {
         return String::new();
     }
-    let text = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().to_string();
-    unsafe { saikuro_string_free(ptr) };
+    let text = (unsafe { CStr::from_ptr(ptr) }).to_string_lossy().to_string();
+    unsafe {
+        saikuro_string_free(ptr);
+    }
     text
 }
 
@@ -56,8 +58,9 @@ pub extern "C" fn status_cb(status: c_int, user_data: *mut c_void) {
 
 /// `SaikuroItemCb = extern "C" fn(*mut c_char, c_int, *mut c_void)`
 pub extern "C" fn item_cb(item: *mut std::ffi::c_char, done: c_int, user_data: *mut c_void) {
-    let tx =
-        unsafe { Box::from_raw(user_data as *mut mpsc::Sender<(*mut std::ffi::c_char, c_int)>) };
+    let tx = unsafe {
+        Box::from_raw(user_data as *mut mpsc::Sender<(*mut std::ffi::c_char, c_int)>)
+    };
     tx.send((item, done)).ok();
 }
 

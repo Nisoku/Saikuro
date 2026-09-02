@@ -5,6 +5,7 @@
 #[macro_use]
 extern crate alloc;
 
+#[path = "tests/shared/mod.rs"]
 pub mod shared;
 
 pub use shared::{

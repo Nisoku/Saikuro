@@ -21,6 +21,21 @@ path = "runners/native.rs"
 required-features = ["native"]
 
 [[bin]]
+name = "wasi-preview1"
+path = "runners/wasi_preview1.rs"
+required-features = ["wasi-preview1"]
+
+[[bin]]
+name = "wasi-preview2"
+path = "runners/wasi_preview2.rs"
+required-features = ["wasi-preview2"]
+
+[[bin]]
+name = "wasm"
+path = "runners/wasm.rs"
+required-features = ["wasm"]
+
+[[bin]]
 name = "thumbv6m"
 path = "runners/bin/thumbv6m.rs"
 required-features = ["arm"]
@@ -79,6 +94,7 @@ wasm = [
     "saikuro-schema/wasm",
     "saikuro-router/wasm",
     "saikuro-transport/wasm",
+    "saikuro-transport/wasm-host",
     "saikuro-runtime/wasm",
     "saikuro-exec/wasm",
     "saikuro-storage/inmemory",
@@ -87,6 +103,31 @@ wasm = [
     "dep:js-sys",
     "dep:web-sys",
     "dep:wasm-bindgen-test",
+]
+wasi-preview1 = [
+    "saikuro-core/no_std",
+    "saikuro-event/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-router/no_std",
+    "saikuro-transport/no_std",
+    "saikuro-runtime/no_std",
+    "saikuro-runtime/default-panic-handler",
+    "saikuro-runtime/wasi-tcp",
+    "saikuro-runtime/wasi-preview1",
+    "saikuro-exec/no_std",
+    "saikuro-random/no_std",
+]
+wasi-preview2 = [
+    "saikuro-core/no_std",
+    "saikuro-event/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-router/no_std",
+    "saikuro-transport/no_std",
+    "saikuro-runtime/no_std",
+    "saikuro-runtime/wasi-tcp",
+    "saikuro-runtime/wasi-preview2",
+    "saikuro-exec/no_std",
+    "saikuro-random/no_std",
 ]
 arm = [
     "embedded",
@@ -144,6 +185,7 @@ panic-semihosting = { workspace = true, optional = true }
 riscv-rt = { workspace = true, optional = true }
 riscv = { workspace = true, optional = true }
 critical-section = { workspace = true }
+embassy-time-driver = { workspace = true }
 spin = { workspace = true }
 linked_list_allocator = { workspace = true }
 embedded-storage-async = { workspace = true }
@@ -208,6 +250,7 @@ web-sys = "0.3"
 wasm-bindgen-test = "0.3"
 
 critical-section = { version = "1" }
+embassy-time-driver = { version = "0.2", default-features = false }
 spin = { version = "0.12", default-features = false, features = [
     "mutex",
     "spin_mutex",

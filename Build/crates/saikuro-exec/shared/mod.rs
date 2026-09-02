@@ -63,7 +63,7 @@ impl From<ChannelCapacity> for usize {
 }
 
 // Unified error types
-#[allow(dead_code)]
+#[expect(unused)]
 pub mod mpsc {
     use core::fmt;
 
@@ -123,7 +123,7 @@ pub mod mpsc {
     impl<T: fmt::Debug> std::error::Error for TrySendError<T> {}
 }
 
-#[allow(dead_code)]
+#[expect(unused)]
 pub mod oneshot {
     use core::fmt;
 
@@ -140,7 +140,7 @@ pub mod oneshot {
     impl std::error::Error for RecvError {}
 }
 
-#[allow(dead_code)]
+#[expect(unused)]
 pub mod watch {
     use core::fmt;
 

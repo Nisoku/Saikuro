@@ -1,16 +1,37 @@
-//! Native (host) runner: runs the full portable suite plus host-only tests.
+//! WASI preview2 runner (`wasm32-wasip2`)
 
 use std::process::ExitCode;
+use std::sync::OnceLock;
+use std::time::Instant;
 
-#[path = "../tests/native/mod.rs"]
-mod native;
+use core::task::Waker;
 
+#[path = "../tests/wasi/mod.rs"]
+mod wasi;
+
+use embassy_time_driver::Driver;
 use saikuro_tests::{block_on, register_all, TestFn, TestSuite};
+
+/// Embassy time driver for the busy-poll engine.
+struct WasiTimeDriver;
+
+impl Driver for WasiTimeDriver {
+    fn now(&self) -> u64 {
+        static START: OnceLock<Instant> = OnceLock::new();
+        START.get_or_init(Instant::now).elapsed().as_micros() as u64
+    }
+
+    fn schedule_wake(&self, _at: u64, waker: &Waker) {
+        waker.wake_by_ref();
+    }
+}
+
+embassy_time_driver::time_driver_impl!(static WASI_TIME_DRIVER: WasiTimeDriver = WasiTimeDriver);
 
 fn main() -> ExitCode {
     let mut suite = TestSuite::new();
     register_all(&mut suite);
-    native::register(&mut suite);
+    wasi::register(&mut suite);
 
     let total_sync = suite.count_sync();
     let total_async = suite.count_async();

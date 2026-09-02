@@ -122,6 +122,7 @@ tracing = { workspace = true, default-features = false, features = [
 spin = { workspace = true }
 portable-atomic = { workspace = true }
 portable-atomic-util = { workspace = true }
+critical-section = { workspace = true }
 
 wasi = { workspace = true, optional = true }
 embassy-executor = { workspace = true, optional = true }

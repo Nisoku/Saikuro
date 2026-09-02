@@ -57,7 +57,7 @@ impl SledStorage {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(unused)]
     fn strip_prefix(&self, stored: &str) -> String {
         match &self.config.namespace_prefix {
             Some(prefix) => {

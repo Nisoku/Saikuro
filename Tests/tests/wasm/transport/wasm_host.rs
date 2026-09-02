@@ -1,48 +1,39 @@
-//! WasmHostTransport tests (wasm32 only).
-//!
-//! These tests create a pair of `BroadcastChannel`s with the same name,
-//! wrap each in a `WasmHostTransport`, and validate the full `Transport`
-//! trait contract.  For the connector/listener handshake, two channels
-//! with a well-known base name are used,  one as listener, one as
-//! connector, exercising the full rendezvous protocol.
-//!
-//! Because `BroadcastChannel` requires actual browser APIs, these tests
-//! only compile on `wasm32-unknown-unknown` and must be run in a WASM
-//! environment (e.g. `wasm-bindgen-test-runner` or a headless browser).
-
-#![cfg(target_arch = "wasm32")]
+//! WasmHostTransport tests
 
 use bytes::Bytes;
+use js_sys::{Object, Reflect};
+use saikuro_transport::wasm::{BroadcastChannelPipe, WasmHost};
 use saikuro_transport::{
-    traits::{
-        Transport, TransportConnector, TransportListener, TransportReceiver, TransportSender,
-    },
-    wasm_host::{WasmHostConnector, WasmHostListener, WasmHostTransport},
+    LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
+    LocalTransportSender, WasmHostConnector, WasmHostListener,
 };
 use wasm_bindgen_test::*;
 use web_sys::BroadcastChannel;
 
-// helpers
+/// Open a `WasmHostTransport` pair over the `BroadcastChannel` rendezvous.
+async fn make_transport_pair(channel: &str) -> (WasmHost, WasmHost) {
+    let mut listener = WasmHostListener::<BroadcastChannelPipe>::new(channel);
+    let connector = WasmHostConnector::<BroadcastChannelPipe>::new(channel);
 
-/// Create two WasmHostTransports that share a `BroadcastChannel` by name.
-fn make_transport_pair(
-    name: &str,
-    label_a: &str,
-    label_b: &str,
-) -> (WasmHostTransport, WasmHostTransport) {
-    let a = WasmHostTransport::new(BroadcastChannel::new(name).unwrap(), label_a);
-    let b = WasmHostTransport::new(BroadcastChannel::new(name).unwrap(), label_b);
-    (a, b)
+    let (tx, rx) = saikuro_exec::oneshot::channel();
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = tx.send(listener.accept().await);
+    });
+    saikuro_exec::yield_now().await;
+
+    let transport_a = connector.connect().await.expect("connect");
+    let transport_b = rx
+        .await
+        .expect("accept")
+        .expect("transport")
+        .expect("transport option");
+    (transport_a, transport_b)
 }
 
-fn make_raw_pair() -> (WasmHostTransport, WasmHostTransport) {
-    make_transport_pair("test-wasm-raw", "raw-a", "raw-b")
-}
-
-// WasmHostTransport basics (direct BroadcastChannel)
+// WasmHostTransport basics (frame shipping over BroadcastChannel)
 #[wasm_bindgen_test]
 async fn send_receive_single_frame() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-single").await;
     let (mut sender, _) = a.split();
     let (_, mut receiver) = b.split();
 
@@ -54,7 +45,7 @@ async fn send_receive_single_frame() {
 
 #[wasm_bindgen_test]
 async fn multiple_frames_in_order() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-multi").await;
     let (mut sender, _) = a.split();
     let (_, mut receiver) = b.split();
 
@@ -72,7 +63,7 @@ async fn multiple_frames_in_order() {
 
 #[wasm_bindgen_test]
 async fn bidirectional_exchange() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-bidi").await;
     let (mut a_tx, mut a_rx) = a.split();
     let (mut b_tx, mut b_rx) = b.split();
 
@@ -87,7 +78,7 @@ async fn bidirectional_exchange() {
 
 #[wasm_bindgen_test]
 async fn empty_frame() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-empty").await;
     let (mut sender, _) = a.split();
     let (_, mut receiver) = b.split();
 
@@ -98,7 +89,7 @@ async fn empty_frame() {
 
 #[wasm_bindgen_test]
 async fn large_frame() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-large").await;
     let (mut sender, _) = a.split();
     let (_, mut receiver) = b.split();
 
@@ -110,7 +101,7 @@ async fn large_frame() {
 
 #[wasm_bindgen_test]
 async fn close_sender_signals_eof_to_receiver() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-eof").await;
     let (mut sender, _) = a.split();
     let (_, mut receiver) = b.split();
 
@@ -131,41 +122,8 @@ async fn close_sender_signals_eof_to_receiver() {
 }
 
 #[wasm_bindgen_test]
-async fn concurrent_send_and_receive() {
-    let (a, b) = make_raw_pair();
-    let (mut sender, _) = a.split();
-    let (_, mut receiver) = b.split();
-
-    const N: usize = 50;
-
-    let sender_task = saikuro_exec::spawn(async move {
-        for i in 0..N {
-            sender.send(Bytes::from(vec![i as u8])).await.unwrap();
-            saikuro_exec::yield_now().await;
-        }
-    });
-
-    let recv_task = saikuro_exec::spawn(async move {
-        let mut received = Vec::with_capacity(N);
-        while received.len() < N {
-            if let Some(frame) = receiver.recv().await.unwrap() {
-                received.push(frame[0]);
-            }
-        }
-        received
-    });
-
-    sender_task.await.unwrap();
-    let received = recv_task.await.unwrap();
-    assert_eq!(received.len(), N);
-    let mut sorted = received.clone();
-    sorted.sort();
-    assert_eq!(sorted, (0..N).map(|i| i as u8).collect::<Vec<_>>());
-}
-
-#[wasm_bindgen_test]
 async fn recv_returns_none_after_transport_dropped() {
-    let (a, b) = make_raw_pair();
+    let (a, b) = make_transport_pair("wasm-raw-drop").await;
     let (_, mut receiver) = b.split();
     drop(a);
     for _ in 0..10 {
@@ -178,9 +136,45 @@ async fn recv_returns_none_after_transport_dropped() {
 }
 
 #[wasm_bindgen_test]
+async fn concurrent_send_and_receive() {
+    let (a, b) = make_transport_pair("wasm-raw-concurrent").await;
+    let (mut sender, _) = a.split();
+    let (_, mut receiver) = b.split();
+
+    const N: usize = 50;
+
+    let (send_tx, send_rx) = saikuro_exec::oneshot::channel();
+    let (recv_tx, recv_rx) = saikuro_exec::oneshot::channel();
+
+    wasm_bindgen_futures::spawn_local(async move {
+        for i in 0..N {
+            sender.send(Bytes::from(vec![i as u8])).await.unwrap();
+            saikuro_exec::yield_now().await;
+        }
+        let _ = send_tx.send(());
+    });
+    wasm_bindgen_futures::spawn_local(async move {
+        let mut received = Vec::with_capacity(N);
+        while received.len() < N {
+            if let Some(frame) = receiver.recv().await.unwrap() {
+                received.push(frame[0]);
+            }
+        }
+        let _ = recv_tx.send(received);
+    });
+
+    send_rx.await.expect("sender task finished");
+    let received = recv_rx.await.expect("receiver task finished");
+    assert_eq!(received.len(), N);
+    let mut sorted = received.clone();
+    sorted.sort();
+    assert_eq!(sorted, (0..N).map(|i| i as u8).collect::<Vec<_>>());
+}
+
+#[wasm_bindgen_test]
 async fn multiple_independent_transports() {
-    let (a1, b1) = make_transport_pair("multi-1", "pair1-a", "pair1-b");
-    let (a2, b2) = make_transport_pair("multi-2", "pair2-a", "pair2-b");
+    let (a1, b1) = make_transport_pair("wasm-multi-1").await;
+    let (a2, b2) = make_transport_pair("wasm-multi-2").await;
 
     let (mut a1_tx, _) = a1.split();
     let (_, mut b1_rx) = b1.split();
@@ -198,31 +192,17 @@ async fn multiple_independent_transports() {
 
 #[wasm_bindgen_test]
 async fn transport_description_returns_wasm_host() {
-    let (a, _b) = make_raw_pair();
+    let (a, _b) = make_transport_pair("wasm-raw-desc").await;
     assert_eq!(a.description(), "wasm-host");
 }
 
-// Connector / Listener integration
+// Connector / Listener rendezvous
 
 #[wasm_bindgen_test]
 async fn connector_listener_round_trip() {
-    let base = "cl-rt-test";
-    let mut listener = WasmHostListener::new(base).unwrap();
-    let connector = WasmHostConnector::new(base);
-
-    // Spawn accept in background, moving the listener in.
-    let (tx, rx) = saikuro_exec::oneshot::channel();
-    wasm_bindgen_futures::spawn_local(async move {
-        let result = listener.accept().await;
-        let _ = tx.send(result);
-    });
-    saikuro_exec::yield_now().await;
-
-    let transport_a = connector.connect().await.unwrap();
-    let transport_b = rx.await.unwrap().unwrap().unwrap();
-
-    let (mut a_tx, mut a_rx) = transport_a.split();
-    let (mut b_tx, mut b_rx) = transport_b.split();
+    let (a, b) = make_transport_pair("wasm-cl-rt").await;
+    let (mut a_tx, mut a_rx) = a.split();
+    let (mut b_tx, mut b_rx) = b.split();
 
     a_tx.send(Bytes::from_static(b"hello")).await.unwrap();
     let got = b_rx.recv().await.unwrap().unwrap();
@@ -235,24 +215,31 @@ async fn connector_listener_round_trip() {
 
 #[wasm_bindgen_test]
 async fn listener_accepts_queued_connect() {
-    let base = "lq-test";
-    let mut listener = WasmHostListener::new(base).unwrap();
+    let channel = "wasm-lq";
+    let mut listener = WasmHostListener::<BroadcastChannelPipe>::new(channel);
 
-    // Manually send a connect message on the base channel.
-    let base_ch = BroadcastChannel::new(base).unwrap();
-    let msg = make_connect_msg("queued-id");
-    base_ch.post_message(&msg).unwrap();
-
-    // Give the onmessage handler a moment to fire.
+    let (tx, rx) = saikuro_exec::oneshot::channel();
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = tx.send(listener.accept().await);
+    });
     saikuro_exec::yield_now().await;
 
-    let transport = listener.accept().await.unwrap().unwrap();
+    // Manually send a connect message on the base channel once the listener's
+    // handler is installed.
+    let base_ch = BroadcastChannel::new(channel).expect("base channel");
+    base_ch.post_message(&make_connect_msg("queued-id")).unwrap();
+
+    let transport = rx
+        .await
+        .expect("accept")
+        .expect("transport")
+        .expect("transport option");
     assert_eq!(transport.description(), "wasm-host");
 }
 
 fn make_connect_msg(conn_id: &str) -> wasm_bindgen::JsValue {
-    let obj = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&obj, &"type".into(), &"connect".into());
-    let _ = js_sys::Reflect::set(&obj, &"id".into(), &conn_id.into());
+    let obj = Object::new();
+    let _ = Reflect::set(&obj, &"type".into(), &"connect".into());
+    let _ = Reflect::set(&obj, &"id".into(), &conn_id.into());
     wasm_bindgen::JsValue::from(obj)
 }

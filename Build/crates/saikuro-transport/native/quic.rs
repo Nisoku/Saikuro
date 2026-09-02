@@ -1,15 +1,14 @@
 //! QUIC (RFC 9000) transport
 
-
 use crate::{impl_native_receiver, impl_native_sender};
 use async_trait::async_trait;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+use s2n_quic::stream::{ReceiveStream, SendStream};
+use s2n_quic::{Client, Server};
 #[cfg(target_has_atomic = "ptr")]
 use saikuro_core::Arc;
 use saikuro_event::{LogLevel, LogRecord};
-use s2n_quic::stream::{ReceiveStream, SendStream};
-use s2n_quic::{Client, Server};
 use std::net::SocketAddr;
 
 use crate::shared::{
@@ -105,26 +104,16 @@ impl TransportConnector for QuicConnector {
     type Output = QuicTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        let mut record = LogRecord::now(
-            LogLevel::Debug,
-            "saikuro.transport.quic",
-            "quic connecting",
-        );
+        let mut record =
+            LogRecord::now(LogLevel::Debug, "saikuro.transport.quic", "quic connecting");
         record.set_context("addr", alloc::format!("{}", self.addr));
         self.log.emit(&record).await;
-        let mut connection = self
-            .client
-            .connect(self.addr.into())
-            .await
-            .map_err(|e| {
-                TransportError::ConnectionRefused(format!("quic connect to {} failed: {e}", self.addr))
-            })?;
-        let stream = connection
-            .open_bidirectional_stream()
-            .await
-            .map_err(|e| {
-                TransportError::ConnectionLost(format!("quic open stream to {} failed: {e}", self.addr))
-            })?;
+        let mut connection = self.client.connect(self.addr.into()).await.map_err(|e| {
+            TransportError::ConnectionRefused(format!("quic connect to {} failed: {e}", self.addr))
+        })?;
+        let stream = connection.open_bidirectional_stream().await.map_err(|e| {
+            TransportError::ConnectionLost(format!("quic open stream to {} failed: {e}", self.addr))
+        })?;
         let (receiver, sender) = stream.split();
         Ok(QuicTransport {
             receiver,

@@ -5,9 +5,9 @@
 //! - One `<namespace>_client.h` per namespace with schema-aware C helper calls.
 //! - A `saikuro_generated.h` umbrella include.
 
-use saikuro_core::schema::{NamespaceSchema, Schema};
 use alloc::collections::BTreeMap;
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
+use saikuro_core::schema::{NamespaceSchema, Schema};
 
 use crate::shared::{
     error::{CodegenError, Result},

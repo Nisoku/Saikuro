@@ -10,7 +10,10 @@ use crate::error::{Error, Result};
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
-#[cfg(all(not(feature = "std"), any(feature = "tcp", feature = "ws", feature = "unix")))]
+#[cfg(all(
+    not(feature = "std"),
+    any(feature = "tcp", feature = "ws", feature = "unix")
+))]
 use alloc::string::{String, ToString};
 
 /// A trait-object-compatible trait for sending and receiving framed byte buffers.

@@ -5,7 +5,7 @@ extern crate alloc;
 #[cfg(all(
     not(feature = "std"),
     not(feature = "native"),
-    any(target_os = "none", all(target_os = "wasi", target_env = "p1"),),
+    any(target_os = "none", all(target_os = "wasi", target_env = "p1"))
 ))]
 mod embedded_rt {
     use core::alloc::{GlobalAlloc, Layout};
@@ -226,7 +226,7 @@ fn cstr_to_string(ptr: *const c_char, arg_name: &str) -> Result<String, String> 
     if ptr.is_null() {
         return Err(format!("{arg_name} must not be null"));
     }
-    let s = unsafe { CStr::from_ptr(ptr) }
+    let s = (unsafe { CStr::from_ptr(ptr) })
         .to_str()
         .map_err(|_| format!("{arg_name} must be valid UTF-8"))?;
     Ok(s.to_owned())
@@ -264,7 +264,9 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
         serde_json::from_str(raw).map_err(|e| format!("calls_json must be valid JSON: {e}"))?;
     let entries = match parsed {
         serde_json::Value::Array(items) => items,
-        _ => return Err("calls_json must be a JSON array".to_owned()),
+        _ => {
+            return Err("calls_json must be a JSON array".to_owned());
+        }
     };
 
     let mut calls = Vec::with_capacity(entries.len());
@@ -278,7 +280,9 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
                     .to_owned();
                 let args = match obj.get("args") {
                     Some(serde_json::Value::Array(items)) => items.clone(),
-                    _ => return Err("batch call object requires array 'args'".to_owned()),
+                    _ => {
+                        return Err("batch call object requires array 'args'".to_owned());
+                    }
                 };
                 calls.push((target, args));
             }
@@ -289,14 +293,16 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
                     .to_owned();
                 let args = match &tuple[1] {
                     serde_json::Value::Array(items) => items.clone(),
-                    _ => return Err("batch tuple[1] must be args array".to_owned()),
+                    _ => {
+                        return Err("batch tuple[1] must be args array".to_owned());
+                    }
                 };
                 calls.push((target, args));
             }
             _ => {
                 return Err(
                     "batch calls must be objects {target,args} or [target,args] tuples".to_owned(),
-                )
+                );
             }
         }
     }
@@ -388,6 +394,7 @@ fn next_outcome_parts(outcome: NextOutcome) -> (*mut c_char, c_int) {
 ///
 /// # Safety
 /// `out_item_json` and `out_done` must be valid writable pointers.
+#[expect(unused)]
 #[cfg(feature = "std")]
 unsafe fn next_outcome_to_out_params(
     outcome: NextOutcome,
@@ -1289,7 +1296,7 @@ async fn invoke_c_handler(
     let args_c = CString::new(args_json)
         .map_err(|_| saikuro::Error::InvalidState("args contain NUL byte".to_owned()))?;
 
-    let result_ptr = unsafe { (callback)(user_data_addr as *mut c_void, args_c.as_ptr()) };
+    let result_ptr = unsafe { callback(user_data_addr as *mut c_void, args_c.as_ptr()) };
     if result_ptr.is_null() {
         return Err(saikuro::Error::InvalidState(
             "C handler returned null".to_owned(),
@@ -1373,7 +1380,7 @@ pub extern "C" fn saikuro_provider_register_with_schema(
 ) -> c_int {
     clear_last_error();
 
-    let handle = match unsafe { (handle as *mut ProviderHandle).as_mut() } {
+    let handle = match (unsafe { (handle as *mut ProviderHandle).as_mut() }) {
         Some(h) => h,
         None => {
             set_last_error(ERR_HANDLE_NULL);
@@ -1560,7 +1567,9 @@ pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
     let handle_ref = unsafe { &mut *(handle as *mut ClientHandle) };
     let client = match handle_ref.client.take() {
         Some(c) => c,
-        None => return 0,
+        None => {
+            return 0;
+        }
     };
     int_saikuro(block_on_future(client.close()), "close")
 }

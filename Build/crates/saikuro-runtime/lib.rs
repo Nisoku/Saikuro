@@ -30,6 +30,23 @@ compile_error!("native engine requires the std toolchain");
 mod shared;
 pub use shared::*;
 
+// Wasm32-unknown-unknown cannot emit real atomic instructions (no `+atomics`
+// target feature), so `portable-atomic` routes through `critical-section`.
+#[cfg(target_arch = "wasm32")]
+mod wasm_critical_section {
+    struct NoopCriticalSection;
+
+    critical_section::set_impl!(NoopCriticalSection);
+
+    // SAFETY: wasm32 here has no shared memory, no threads, and no interrupt
+    // sources, so acquire/release pairs cannot be interleaved.
+    unsafe impl critical_section::Impl for NoopCriticalSection {
+        unsafe fn acquire() {}
+
+        unsafe fn release(_token: ()) {}
+    }
+}
+
 #[cfg(feature = "embedded")]
 pub mod embedded;
 #[cfg(feature = "native")]
@@ -60,13 +77,13 @@ static HEAP: talc::TalckWasm = unsafe { talc::TalckWasm::new_global() };
     not(feature = "embedded"),
     target_family = "wasm"
 ))]
-#[allow(dead_code)]
+#[expect(unused)]
 pub fn init_heap() {}
 
 #[cfg(all(
     feature = "default-panic-handler",
     not(feature = "std"),
-    any(all(target_os = "wasi", feature = "wasi-preview1"), target_os = "none",)
+    any(all(target_os = "wasi", feature = "wasi-preview1"), target_os = "none")
 ))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
