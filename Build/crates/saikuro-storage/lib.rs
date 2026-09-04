@@ -22,11 +22,7 @@ compile_error!("only one storage engine may be enabled (no_std vs embedded)");
 compile_error!("the native engine requires the std toolchain");
 
 // On WASI `std` is the libc base and `no_std` selects the engine.
-#[cfg(all(
-    feature = "no_std",
-    feature = "std",
-    not(target_os = "wasi")
-))]
+#[cfg(all(feature = "no_std", feature = "std", not(target_os = "wasi")))]
 compile_error!("the no_std engine must not be combined with the std toolchain");
 
 pub mod common;

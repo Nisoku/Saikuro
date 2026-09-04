@@ -14,12 +14,12 @@ std = []
 native = ["std"]
 no_std = []
 wasm = ["dep:wasm-bindgen"]
-embedded = ["dep:embedded-io-async", "dep:spin"]
+embedded = ["dep:embedded-io-async", "dep:spin", "dep:critical-section", "dep:portable-atomic"]
 stderr = ["native"]
 tracing = ["native", "dep:tracing"]
 console = ["wasm", "dep:web-sys"]
 serial = ["embedded"]
-collector = ["dep:spin"]
+collector = ["dep:spin", "dep:critical-section", "dep:portable-atomic"]
 null = []
 filter = []
 
@@ -41,3 +41,5 @@ wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = ["console"] }
 embedded-io-async = { workspace = true, optional = true }
 spin = { workspace = true, optional = true }
+critical-section = { workspace = true, optional = true }
+portable-atomic = { workspace = true, optional = true }

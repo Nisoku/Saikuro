@@ -31,11 +31,7 @@ pub type Arc<T> = portable_atomic_util::Arc<T>;
 ))]
 compile_error!("exactly one engine must be enabled: native | no_std | wasm | embedded");
 
-#[cfg(all(
-    feature = "std",
-    feature = "no_std",
-    not(target_os = "wasi")
-))]
+#[cfg(all(feature = "std", feature = "no_std", not(target_os = "wasi")))]
 compile_error!("the no_std engine cannot be combined with the std toolchain");
 
 mod shared;

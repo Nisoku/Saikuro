@@ -546,7 +546,7 @@ checksum = "2fc328bf943af66b80b98755db9106bf7e7471b0cf47dc8559cd9a6be504cc9c"
 [[package]]
 name = "embassy-executor-timer-queue"
 version = "0.1.1"
-source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
+source = "git+https://github.com/embassy-rs/embassy#73b44d7e867a371d0870a84624fea66a8b00f713"
 dependencies = [
  "unitrait",
 ]
@@ -597,7 +597,7 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.1"
-source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
+source = "git+https://github.com/embassy-rs/embassy#73b44d7e867a371d0870a84624fea66a8b00f713"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -616,7 +616,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.2"
-source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
+source = "git+https://github.com/embassy-rs/embassy#73b44d7e867a371d0870a84624fea66a8b00f713"
 dependencies = [
  "document-features",
 ]
@@ -624,7 +624,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-queue-utils"
 version = "0.3.2"
-source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
+source = "git+https://github.com/embassy-rs/embassy#73b44d7e867a371d0870a84624fea66a8b00f713"
 dependencies = [
  "embassy-executor-timer-queue 0.1.1",
  "heapless 0.9.3",
@@ -1807,10 +1807,12 @@ name = "saikuro-event"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "critical-section",
  "embedded-io-async 0.7.0",
  "getrandom 0.3.4",
  "heapless 0.8.0",
  "messagepack-serde",
+ "portable-atomic",
  "serde",
  "serde_bytes",
  "serde_json",
