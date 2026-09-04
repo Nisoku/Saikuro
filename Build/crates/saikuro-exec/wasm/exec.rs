@@ -1,8 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::Any;
 use core::future::Future;
-use core::sync::atomic::{AtomicBool, Ordering};
-use core::task::{Context, Poll};
 
 use embassy_executor::Executor as ArchExecutor;
 use futures::stream::StreamExt;
@@ -16,6 +15,8 @@ pub use crate::base::join::JoinHandle;
 use crate::base::queue::{queue, BoxedFuture, NOTIFY};
 pub use crate::base::runtime::{new_runtime, Runtime, RuntimeBuilder};
 pub use crate::base::spawn::spawn;
+
+use super::jspi::{ensure_executor, take_output, OutputCapture, OUTPUT_SLOT};
 
 pub fn start_runner(spawner: embassy_executor::Spawner) {
     spawner.spawn(task_runner().expect("task_runner"));
@@ -53,46 +54,66 @@ pub fn run<F: Future + 'static>(fut: F) {
     });
 }
 
-pub fn block_on<F: Future + 'static>(fut: F) -> F::Output {
-    // A synchronous, returning `block_on` on browser-wasm is only possible for
-    // futures that complete purely in-band, without yielding to the JS event loop.
-    // Futures that need the event loop will never complete, so this function will spin forever.
-    // The caller must ensure that the future is suitable for synchronous execution.
-    static WAKER_VTABLE: core::task::RawWakerVTable = core::task::RawWakerVTable::new(
-        |p| core::task::RawWaker::new(p, &WAKER_VTABLE),
-        |p| unsafe { (*(p as *const AtomicBool)).store(true, Ordering::SeqCst) },
-        |p| unsafe { (*(p as *const AtomicBool)).store(true, Ordering::SeqCst) },
-        |_| {},
-    );
+/// Block on `fut` using JSPI with a spin-loop fallback.
+///
+/// **JSPI path** (real async I/O): if the caller is inside a
+/// `#[wasm_bindgen(jspi)]` export, `jspi_block_on_promise` suspends the
+/// wasm stack until the future completes. JS pumps the executor while we
+/// are suspended.
+///
+/// **Spin fallback** (degraded): if JSPI is unavailable (not in a JSPI
+/// context), falls back to a busy-poll loop that drives the executor
+/// directly. Futures that need the JS event loop will never complete in
+/// this path.
+pub fn block_on<F>(fut: F) -> F::Output
+where
+    F: Future + 'static,
+    F::Output: Any,
+{
+    ensure_executor();
 
-    let woken = AtomicBool::new(true);
-    let mut fut = Box::pin(fut);
-    unsafe {
-        // SAFETY: `woken` outlives this function; the waker only reads/writes
-        // the boolean while we hold it on the stack.
-        let waker = core::task::Waker::from_raw(core::task::RawWaker::new(
-            &woken as *const AtomicBool as *const (),
-            &WAKER_VTABLE,
-        ));
-        let mut cx = Context::from_waker(&waker);
-        loop {
-            woken.store(false, Ordering::SeqCst);
-            if let Poll::Ready(val) = fut.as_mut().poll(&mut cx) {
-                return val;
-            }
-            // Busy-wait until a produced/signalled wake sets the flag. Futures
-            // that need the JS event loop will never set it and spin here.
-            while !woken.load(Ordering::SeqCst) {}
-        }
+    let (done_tx, done_rx) = futures::channel::oneshot::channel::<()>();
+
+    let wrapped = async move {
+        let _ = OutputCapture { inner: fut }.await;
+        let _ = done_tx.send(());
+    };
+
+    let boxed: BoxedFuture = Box::pin(wrapped);
+    queue().lock(|q| q.borrow_mut().push(boxed));
+    NOTIFY.signal(());
+
+    // Try JSPI first: suspend the wasm stack until the promise resolves.
+    let promise = wasm_bindgen_futures::future_to_promise(async {
+        done_rx
+            .await
+            .map_err(|_| wasm_bindgen::JsValue::undefined())
+            .map(|()| wasm_bindgen::JsValue::undefined())
+    });
+
+    #[allow(deprecated)]
+    if js_sys::futures::jspi_block_on_promise(&promise).is_ok() {
+        return unsafe { take_output::<F::Output>() };
     }
+
+    // JSPI unavailable: spin-poll the raw executor that ensure_executor()
+    // set up. The task_runner (running on this executor) will drive the
+    // spawned future to completion.
+    let executor = super::jspi::static_executor();
+    loop {
+        if unsafe { OUTPUT_SLOT.get() }.is_some() {
+            break;
+        }
+        unsafe { executor.poll() };
+        core::hint::spin_loop();
+    }
+
+    unsafe { take_output::<F::Output>() }
 }
 
 fn static_executor() -> &'static mut ArchExecutor {
     static mut EXECUTOR: Option<ArchExecutor> = None;
     let ex = unsafe { (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(ArchExecutor::new) };
-    // SAFETY: `EXECUTOR` is a `static mut` holding the sole executor instance; we
-    // upgrade its borrow to `'static` for the duration of the program. It is never
-    // moved or dropped, and `run`/`start`/`poll` are only called on this reference.
     unsafe { core::mem::transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) }
 }
 

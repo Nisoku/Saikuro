@@ -37,6 +37,8 @@ wasm = [
     "dep:critical-section",
     "dep:wasm-bindgen-futures",
     "dep:fluvio-wasm-timer",
+    "dep:wasm-bindgen",
+    "dep:js-sys",
 ]
 embedded = [
     "dep:embassy-executor",
@@ -67,6 +69,8 @@ embassy-net = { workspace = true, optional = true, features = [
     "tcp",
     "udp",
 ] }
+wasm-bindgen = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 fluvio-wasm-timer = { workspace = true, optional = true }
 portable-atomic-util = { workspace = true }
