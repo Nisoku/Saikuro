@@ -15,6 +15,9 @@ pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// Serialize the metadata map with keys sorted, so equivalent metadata always
 /// produces identical bytes regardless of the caller's insertion order.
+// `Box<MetaMap>` is required because serde's `serialize_with` passes `&T` where
+// T is the field type (`meta: Box<MetaMap>`).
+#[allow(clippy::borrowed_box)]
 fn serialize_meta<S>(meta: &Box<MetaMap>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

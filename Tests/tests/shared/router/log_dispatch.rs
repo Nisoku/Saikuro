@@ -55,7 +55,8 @@ struct CapturingSink {
     captured: Captured,
 }
 
-#[async_trait::async_trait]
+#[cfg_attr(not(feature = "embedded"), async_trait::async_trait)]
+#[cfg_attr(feature = "embedded", async_trait::async_trait(?Send))]
 impl LogSink for CapturingSink {
     async fn emit(&self, record: &LogRecord) {
         self.captured.lock().push(record.clone());

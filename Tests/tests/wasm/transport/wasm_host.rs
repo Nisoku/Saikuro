@@ -1,12 +1,15 @@
 //! WasmHostTransport tests
 
 use bytes::Bytes;
+use core::cell::Cell;
+use core::time::Duration;
 use js_sys::{Object, Reflect};
 use saikuro_transport::wasm::{BroadcastChannelPipe, WasmHost};
 use saikuro_transport::{
     LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
     LocalTransportSender, WasmHostConnector, WasmHostListener,
 };
+use std::rc::Rc;
 use wasm_bindgen_test::*;
 use web_sys::BroadcastChannel;
 
@@ -222,18 +225,28 @@ async fn listener_accepts_queued_connect() {
     wasm_bindgen_futures::spawn_local(async move {
         let _ = tx.send(listener.accept().await);
     });
-    saikuro_exec::yield_now().await;
 
-    // Manually send a connect message on the base channel once the listener's
-    // handler is installed.
+    // The base channel is a `BroadcastChannel`, which is not a queue (a connect
+    // announced before the accept handler is attached is silently dropped). So
+    // keep re-announcing (idempotent, keyed by `queued-id`) until the listener
+    // is wired up and accepts, then stop.
+    let stop = Rc::new(Cell::new(false));
+    let stop_flag = stop.clone();
     let base_ch = BroadcastChannel::new(channel).expect("base channel");
-    base_ch.post_message(&make_connect_msg("queued-id")).unwrap();
+    wasm_bindgen_futures::spawn_local(async move {
+        while !stop_flag.get() {
+            base_ch.post_message(&make_connect_msg("queued-id")).unwrap();
+            saikuro_exec::sleep(Duration::from_millis(25)).await;
+        }
+    });
 
-    let transport = rx
+    let transport = saikuro_exec::timeout(Duration::from_secs(5), rx)
         .await
+        .expect("listener did not accept a queued connect within 5s")
         .expect("accept")
         .expect("transport")
         .expect("transport option");
+    stop.set(true);
     assert_eq!(transport.description(), "wasm-host");
 }
 

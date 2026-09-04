@@ -150,6 +150,10 @@ saikuro-random = { path = "crates/saikuro-random", default-features = false }
 saikuro-event = { path = "crates/saikuro-event", default-features = false }
 saikuro = { path = "adapters/rust", default-features = false }
 
-[profile.dev]
-
-[profile.release]
+# Fork of embassy-time with a browser+Node wasm time driver (wasm_timer ->
+# web-time)
+# TODO: Remove once/if merged upstream.
+[patch.crates-io]
+embassy-time = { git = "https://github.com/NellowTCS/embassy" }
+embassy-time-driver = { git = "https://github.com/NellowTCS/embassy" }
+embassy-time-queue-utils = { git = "https://github.com/NellowTCS/embassy" }

@@ -41,9 +41,11 @@ mod wasm_critical_section {
     // SAFETY: wasm32 here has no shared memory, no threads, and no interrupt
     // sources, so acquire/release pairs cannot be interleaved.
     unsafe impl critical_section::Impl for NoopCriticalSection {
-        unsafe fn acquire() {}
+        unsafe fn acquire() -> critical_section::RawRestoreState {
+            Default::default()
+        }
 
-        unsafe fn release(_token: ()) {}
+        unsafe fn release(_restore_state: critical_section::RawRestoreState) {}
     }
 }
 
@@ -77,7 +79,6 @@ static HEAP: talc::TalckWasm = unsafe { talc::TalckWasm::new_global() };
     not(feature = "embedded"),
     target_family = "wasm"
 ))]
-#[expect(unused)]
 pub fn init_heap() {}
 
 #[cfg(all(

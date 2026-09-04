@@ -235,7 +235,6 @@ fn read_seed() -> ([u8; KEY_LEN], [u8; NONCE_LEN]) {
 
 /// Fill `dest` with cryptographically secure random bytes from the
 /// process-wide DRBG.
-#[expect(unused)]
 pub fn fill(dest: &mut [u8]) -> Result<(), SaikuroError> {
     if !is_seeded() {
         crate::try_auto_seed()?;

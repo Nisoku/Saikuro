@@ -18,7 +18,12 @@ extern crate std;
 ))]
 compile_error!("saikuro-event: enable exactly one engine (native / no_std / wasm / embedded)");
 
-#[cfg(all(feature = "no_std", feature = "std"))]
+// On WASI `std` is the libc base and `no_std` selects the engine.
+#[cfg(all(
+    feature = "no_std",
+    feature = "std",
+    not(target_os = "wasi")
+))]
 compile_error!("saikuro-event: the no_std engine cannot be combined with the std toolchain");
 
 /// Dynamically-typed value types used across the Saikuro wire protocol.

@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use async_trait::async_trait;
 use bytes::Bytes;
+use core::cell::{Cell, RefCell};
 use core::fmt::Write;
 use core::time::Duration;
 use js_sys::{ArrayBuffer, Reflect, Uint8Array};
@@ -11,8 +12,8 @@ use send_wrapper::SendWrapper;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{BroadcastChannel, Crypto, MessageEvent};
 
+use saikuro_core::Arc;
 use saikuro_exec::mpsc;
-use saikuro_exec::oneshot;
 use saikuro_exec::timeout;
 
 use crate::shared::error::{Result, TransportError};
@@ -22,19 +23,83 @@ use crate::DEFAULT_CHANNEL_CAPACITY;
 /// How long the active side waits for an accept reply before giving up.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How often the active side re-announces its `connect` while waiting.
+///
+/// A browser `BroadcastChannel` is not a queue: a message posted before any
+/// listener is attached is dropped. Re-posting on this cadence makes the
+/// rendezvous immune to the listener not having finished wiring up its
+/// `onmessage` handler when the connector first announces.
+const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(150);
+
+/// Control-message type tag carried in a JS object payload.
+const MSG_ACCEPT: &str = "accept";
+const MSG_CLOSE: &str = "close";
+const MSG_CONNECT: &str = "connect";
+
 /// Browser `BroadcastChannel` implementation of [`HostPipeFactory`].
 pub struct BroadcastChannelPipe;
 
+/// Shared, ref-counted private `BroadcastChannel` underlying one connection
+/// half. The port stays open while either the send or receive half is alive;
+/// it is closed, and the peer is told so, only once the last half drops.
+struct WasmChannel {
+    channel: BroadcastChannel,
+    halves: Cell<usize>,
+    closed: Cell<bool>,
+}
+
+impl WasmChannel {
+    fn new(channel: BroadcastChannel) -> Arc<Self> {
+        Arc::new(Self {
+            channel,
+            halves: Cell::new(2),
+            closed: Cell::new(false),
+        })
+    }
+
+    /// A send or receive half was dropped. Close the connection (posting a
+    /// close control frame to the peer) once no halves remain.
+    fn half_dropped(&self) {
+        let remaining = self.halves.get() - 1;
+        self.halves.set(remaining);
+        if remaining == 0 {
+            self.shutdown();
+        }
+    }
+
+    /// Single close on the last half: tell the peer and release the port.
+    fn shutdown(&self) {
+        if self.closed.replace(true) {
+            return;
+        }
+        let close = make_obj(&[("type", MSG_CLOSE)]);
+        let _ = self.channel.post_message(&close);
+        self.channel.close();
+    }
+}
+
 /// Sending half of a [`BroadcastChannelPipe`] connection.
 pub struct BroadcastChannelSend {
-    channel: SendWrapper<BroadcastChannel>,
+    shared: Arc<WasmChannel>,
 }
 
 /// Receiving half of a [`BroadcastChannelPipe`] connection.
 pub struct BroadcastChannelRecv {
-    channel: SendWrapper<BroadcastChannel>,
+    shared: Arc<WasmChannel>,
     rx: mpsc::Receiver<Bytes>,
     _handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>>,
+}
+
+impl Drop for BroadcastChannelSend {
+    fn drop(&mut self) {
+        self.shared.half_dropped();
+    }
+}
+
+impl Drop for BroadcastChannelRecv {
+    fn drop(&mut self) {
+        self.shared.half_dropped();
+    }
 }
 
 /// The browser `wasm` engine's `WasmHostTransport` concrete type.
@@ -57,7 +122,17 @@ impl HostPipeFactory for BroadcastChannelPipe {
 #[async_trait(?Send)]
 impl HostPipeSend for BroadcastChannelSend {
     async fn send(&mut self, frame: &[u8]) -> Result<()> {
-        send_buffer(&self.channel, frame)
+        if self.shared.closed.get() {
+            return Err(TransportError::ConnectionLost(
+                "connection is closed".into(),
+            ));
+        }
+        send_buffer(&self.shared.channel, frame)
+    }
+
+    async fn close(&mut self) -> Result<()> {
+        self.shared.shutdown();
+        Ok(())
     }
 }
 
@@ -71,13 +146,6 @@ impl HostPipeRecv for BroadcastChannelRecv {
     }
 }
 
-impl Drop for BroadcastChannelRecv {
-    fn drop(&mut self) {
-        self.channel.set_onmessage(None);
-        self.channel.close();
-    }
-}
-
 /// Active side: open a private channel, advertise connect, await accept.
 async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastChannelRecv)> {
     let conn_id = short_id()?;
@@ -85,53 +153,84 @@ async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastC
 
     let private = BroadcastChannel::new(&private_name)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
+    let shared = WasmChannel::new(private);
 
     let (data_tx, data_rx) = mpsc::channel::<Bytes>(DEFAULT_CHANNEL_CAPACITY);
-    let (accept_tx, accept_rx) = oneshot::channel::<()>();
+    // Capacity-1 signal that an accept arrived. `mpsc` rather than `oneshot` so
+    // the receiver can be re-polled across the re-announce loop below without
+    // being consumed (a `oneshot` receiver can only be awaited once).
+    let (accept_tx, mut accept_rx) = mpsc::channel::<()>(
+        saikuro_exec::ChannelCapacity::try_from(1).expect("1 is a valid channel capacity"),
+    );
+    let data_slot = RefCell::new(Some(data_tx));
 
-    let handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>> = SendWrapper::new(Closure::new({
-        let data_tx = data_tx;
-        let accept_tx = accept_tx;
-        let expected = conn_id.clone();
-        move |event: MessageEvent| {
+    let expected = conn_id.clone();
+    let handler: SendWrapper<Closure<dyn FnMut(MessageEvent)>> =
+        SendWrapper::new(Closure::new(move |event: MessageEvent| {
             let data = event.data();
-            // A handshake accept is a JS object, not a binary frame.
             if let Some(t) = get_field(&data, "type") {
-                if t == "accept" && get_field(&data, "id").as_deref() == Some(expected.as_str()) {
-                    let _ = accept_tx.try_send(());
-                    return;
+                match t.as_str() {
+                    MSG_ACCEPT if get_field(&data, "id").as_deref() == Some(expected.as_str()) => {
+                        let _ = accept_tx.try_send(());
+                        return;
+                    }
+                    MSG_CLOSE => {
+                        *data_slot.borrow_mut() = None;
+                        return;
+                    }
+                    _ => {}
                 }
             }
             if let Some(bytes) = extract_binary(&data) {
-                let _ = data_tx.try_send(Bytes::from(bytes));
+                if let Some(tx) = data_slot.borrow().as_ref() {
+                    let _ = tx.try_send(Bytes::from(bytes));
+                }
             }
-        }
-    }));
-    private.set_onmessage(Some((&*handler).as_ref().unchecked_ref()));
+        }));
+    shared
+        .channel
+        .set_onmessage(Some((&*handler).as_ref().unchecked_ref()));
 
+    // Announce `connect`, then keep re-announcing until accepted. Re-posting on
+    // a fixed cadence converges once the listener is wired up, bounded by
+    // `CONNECT_TIMEOUT`.
     let base = BroadcastChannel::new(channel)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
-    let msg = make_obj(&[("type", "connect"), ("id", &conn_id)]);
-    base.post_message(&msg)
-        .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
-    drop(base);
+    let msg = make_obj(&[("type", MSG_CONNECT), ("id", &conn_id)]);
+    let mut remaining = CONNECT_TIMEOUT;
+    loop {
+        base.post_message(&msg)
+            .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
 
-    match timeout(CONNECT_TIMEOUT, accept_rx.recv()).await {
-        Ok(Ok(())) => {
-            let send = BroadcastChannelSend {
-                channel: SendWrapper::new(private.clone()),
-            };
-            let recv = BroadcastChannelRecv {
-                channel: SendWrapper::new(private),
-                rx: data_rx,
-                _handler: handler,
-            };
-            Ok((send, recv))
+        // `accept_rx` is an `mpsc` receiver borrowed mutably, so a timed-out
+        // wait can be re-polled on the next loop iteration without consuming it.
+        match timeout(CONNECT_RETRY_INTERVAL.min(remaining), accept_rx.recv()).await {
+            Ok(Some(())) => {
+                drop(base);
+                let send = BroadcastChannelSend {
+                    shared: shared.clone(),
+                };
+                let recv = BroadcastChannelRecv {
+                    shared,
+                    rx: data_rx,
+                    _handler: handler,
+                };
+                return Ok((send, recv));
+            }
+            Ok(None) => {
+                drop(base);
+                return Err(TransportError::ConnectionLost(
+                    "accept channel closed".into(),
+                ));
+            }
+            Err(_) => {
+                remaining = remaining.saturating_sub(CONNECT_RETRY_INTERVAL);
+                if remaining.is_zero() {
+                    drop(base);
+                    return Err(TransportError::ConnectionLost("connect timeout".into()));
+                }
+            }
         }
-        Ok(Err(_)) => Err(TransportError::ConnectionLost(
-            "accept channel closed".into(),
-        )),
-        Err(_) => Err(TransportError::ConnectionLost("connect timeout".into())),
     }
 }
 
@@ -148,7 +247,7 @@ async fn open_accept(channel: &str) -> Result<(BroadcastChannelSend, BroadcastCh
             let conn_tx = conn_tx;
             move |event: MessageEvent| {
                 let data = event.data();
-                if get_field(&data, "type").as_deref() != Some("connect") {
+                if get_field(&data, "type").as_deref() != Some(MSG_CONNECT) {
                     return;
                 }
                 if let Some(id) = get_field(&data, "id") {
@@ -168,28 +267,38 @@ async fn open_accept(channel: &str) -> Result<(BroadcastChannelSend, BroadcastCh
     let private_name = format!("{}:{}", channel, conn_id);
     let private = BroadcastChannel::new(&private_name)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
+    let shared = WasmChannel::new(private);
 
     let (data_tx, data_rx) = mpsc::channel::<Bytes>(DEFAULT_CHANNEL_CAPACITY);
-    let data_handler: Closure<dyn FnMut(MessageEvent)> = Closure::new({
-        let data_tx = data_tx;
-        move |event: MessageEvent| {
-            if let Some(bytes) = extract_binary(&event.data()) {
-                let _ = data_tx.try_send(Bytes::from(bytes));
+    let data_slot = RefCell::new(Some(data_tx));
+    let data_handler: Closure<dyn FnMut(MessageEvent)> =
+        Closure::new(move |event: MessageEvent| {
+            let data = event.data();
+            if get_field(&data, "type").as_deref() == Some(MSG_CLOSE) {
+                *data_slot.borrow_mut() = None;
+                return;
             }
-        }
-    });
-    private.set_onmessage(Some(data_handler.as_ref().unchecked_ref()));
+            if let Some(bytes) = extract_binary(&data) {
+                if let Some(tx) = data_slot.borrow().as_ref() {
+                    let _ = tx.try_send(Bytes::from(bytes));
+                }
+            }
+        });
+    shared
+        .channel
+        .set_onmessage(Some(data_handler.as_ref().unchecked_ref()));
 
-    let msg = make_obj(&[("type", "accept"), ("id", &conn_id)]);
-    private
+    let msg = make_obj(&[("type", MSG_ACCEPT), ("id", &conn_id)]);
+    shared
+        .channel
         .post_message(&msg)
         .map_err(|e| TransportError::ConnectionLost(format!("{e:?}")))?;
 
     let send = BroadcastChannelSend {
-        channel: SendWrapper::new(private.clone()),
+        shared: shared.clone(),
     };
     let recv = BroadcastChannelRecv {
-        channel: SendWrapper::new(private),
+        shared,
         rx: data_rx,
         _handler: SendWrapper::new(data_handler),
     };

@@ -394,8 +394,7 @@ fn next_outcome_parts(outcome: NextOutcome) -> (*mut c_char, c_int) {
 ///
 /// # Safety
 /// `out_item_json` and `out_done` must be valid writable pointers.
-#[expect(unused)]
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "native"))]
 unsafe fn next_outcome_to_out_params(
     outcome: NextOutcome,
     out_item_json: *mut *mut c_char,
@@ -1380,7 +1379,7 @@ pub extern "C" fn saikuro_provider_register_with_schema(
 ) -> c_int {
     clear_last_error();
 
-    let handle = match (unsafe { (handle as *mut ProviderHandle).as_mut() }) {
+    let handle = match unsafe { (handle as *mut ProviderHandle).as_mut() } {
         Some(h) => h,
         None => {
             set_last_error(ERR_HANDLE_NULL);

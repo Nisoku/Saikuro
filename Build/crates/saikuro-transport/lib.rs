@@ -28,7 +28,7 @@ compile_error!(
     "saikuro-transport: enable exactly one engine feature (native, no_std, wasm, embedded), not more"
 );
 
-#[cfg(all(feature = "no_std", feature = "std"))]
+#[cfg(all(feature = "no_std", feature = "std", not(target_os = "wasi")))]
 compile_error!(
     "saikuro-transport: the no_std engine cannot be combined with the std toolchain feature"
 );

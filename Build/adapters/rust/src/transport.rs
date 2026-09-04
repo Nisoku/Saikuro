@@ -241,7 +241,7 @@ mod wasm_host_impl {
             let transport: saikuro_transport::wasm::WasmHost = connector
                 .connect()
                 .await
-                .map_err(|e| Error::Transport(e.to_string()))?;
+                .map_err(|e| Error::Transport(format!("{e}")))?;
             let (sender, receiver) = transport.split();
             Ok(Self { sender, receiver })
         }

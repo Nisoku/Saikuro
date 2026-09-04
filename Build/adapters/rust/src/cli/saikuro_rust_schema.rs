@@ -61,19 +61,19 @@ fn type_to_schema(ty: &Type) -> Value {
                     let item = first_type_arg(seg)
                         .map(type_to_schema)
                         .unwrap_or_else(|| primitive("any"));
-                    json!({ "kind": "list", "item": item })
+                    json!({ "kind": "array", "item": item })
                 }
                 "Option" => {
                     let inner = first_type_arg(seg)
                         .map(type_to_schema)
                         .unwrap_or_else(|| primitive("any"));
-                    json!({ "kind": "optional", "inner": inner })
+                    json!({ "kind": "option", "inner": inner })
                 }
                 "HashMap" | "BTreeMap" => {
-                    let (key, value) = two_type_args(seg)
-                        .map(|(k, v)| (type_to_schema(k), type_to_schema(v)))
+                    let (_, value) = two_type_args(seg)
+                        .map(|(_, v)| (primitive("unit"), type_to_schema(v)))
                         .unwrap_or_else(|| (primitive("any"), primitive("any")));
-                    json!({ "kind": "map", "key": key, "value": value })
+                    json!({ "kind": "map", "value": value })
                 }
                 "Result" => first_type_arg(seg)
                     .map(type_to_schema)

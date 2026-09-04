@@ -1,4 +1,4 @@
-#![allow(#[expect(unused)])]
+#![allow(unused)]
 
 use std::ffi::{ c_int, c_void, CStr, CString };
 use std::sync::mpsc;

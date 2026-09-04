@@ -268,3 +268,11 @@ cortex-m = { version = "0.7", default-features = false, features = [
 panic-semihosting = { version = "0.7", default-features = false }
 riscv-rt = { version = "0.18", default-features = false }
 riscv = { version = "0.12", default-features = false }
+
+# Fork of embassy-time with a browser+Node wasm time driver (wasm_timer ->
+# web-time)
+# TODO: Remove once/if merged upstream.
+[patch.crates-io]
+embassy-time = { git = "https://github.com/NellowTCS/embassy" }
+embassy-time-driver = { git = "https://github.com/NellowTCS/embassy" }
+embassy-time-queue-utils = { git = "https://github.com/NellowTCS/embassy" }

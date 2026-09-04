@@ -89,6 +89,15 @@ async fn task_runner() {
         for fut in batch {
             set.push(fut);
         }
+
+        // With an empty set, `FuturesUnordered::next()` yields `None` (Ready)
+        // immediately, so it must not be selected against `NOTIFY`: that would
+        // hot-loop forever. Block on `NOTIFY` directly instead.
+        if set.is_empty() {
+            NOTIFY.wait().await;
+            continue;
+        }
+
         // Wait until either a multiplexed future completes or a new one is queued.
         embassy_futures::select::select(set.next(), NOTIFY.wait()).await;
     }
@@ -177,8 +186,6 @@ where
     F::Output: 'static,
 {
     let executor = static_executor();
-    let spawner = executor.spawner();
-    start_runner(spawner);
 
     use core::task::{RawWaker, RawWakerVTable, Waker};
     fn noop_waker_noop(_: *const ()) {}
@@ -217,10 +224,40 @@ pub fn run<F: Future + 'static>(fut: F) {
 
 #[cfg(feature = "wasm")]
 pub fn block_on<F: Future + 'static>(fut: F) -> F::Output {
-    run(fut);
-    // `run` returns to the JS event loop, which drives the executor; for a server
-    // future this never completes. Unused on wasm (the entry uses `run`).
-    loop {}
+    // A synchronous, returning `block_on` on browser-wasm is only possible for
+    // futures that complete purely in-band, without yielding to the JS event loop.
+    // Futures that need the event loop will never complete, so this function will spin forever.
+    // The caller must ensure that the future is suitable for synchronous execution.
+    use core::sync::atomic::{AtomicBool, Ordering};
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+
+    static WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
+        |p| RawWaker::new(p, &WAKER_VTABLE),
+        |p| unsafe { (*(p as *const AtomicBool)).store(true, Ordering::SeqCst) },
+        |p| unsafe { (*(p as *const AtomicBool)).store(true, Ordering::SeqCst) },
+        |_| {},
+    );
+
+    let woken = AtomicBool::new(true);
+    let mut fut = Box::pin(fut);
+    unsafe {
+        // SAFETY: `woken` outlives this function; the waker only reads/writes
+        // the boolean while we hold it on the stack.
+        let waker = Waker::from_raw(RawWaker::new(
+            &woken as *const AtomicBool as *const (),
+            &WAKER_VTABLE,
+        ));
+        let mut cx = core::task::Context::from_waker(&waker);
+        loop {
+            woken.store(false, Ordering::SeqCst);
+            if let Poll::Ready(val) = fut.as_mut().poll(&mut cx) {
+                return val;
+            }
+            // Busy-wait until a produced/signalled wake sets the flag. Futures
+            // that need the JS event loop will never set it and spin here.
+            while !woken.load(Ordering::SeqCst) {}
+        }
+    }
 }
 
 /// No-op on embassy engines: the executor is driven by its arch pender (JS
@@ -240,7 +277,30 @@ fn static_executor() -> &'static mut ArchExecutor {
     // SAFETY: `EXECUTOR` is a `static mut` holding the sole executor instance; we
     // upgrade its borrow to `'static` for the duration of the program. It is never
     // moved or dropped, and `run`/`start`/`poll` are only called on this reference.
-    unsafe { transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) }
+    let ex: &'static mut ArchExecutor =
+        unsafe { transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) };
+    // The multiplexing task is a singleton: spawn it exactly once, at executor
+    // creation, so repeated `block_on` calls reuse the runner instead of
+    // re-arming the (permanently-resident) task pool slot.
+    #[cfg(any(feature = "no_std", feature = "embedded"))]
+    {
+        use core::sync::atomic::Ordering;
+        // `portable_atomic` provides `swap` on targets without native atomic
+        // support (e.g. thumbv6m/riscv32imc) via the critical-section fallback.
+        static RUNNER_STARTED: portable_atomic::AtomicBool =
+            portable_atomic::AtomicBool::new(false);
+        if !RUNNER_STARTED.swap(true, Ordering::SeqCst) {
+            // SAFETY: `ex` is the sole static executor alive for the program's
+            // duration; the shared reborrow is only live until `start_runner`
+            // returns, so it never overlaps with the mutable borrow aliasing
+            // the same single instance.
+            let exec_shared: &'static ArchExecutor = unsafe {
+                core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex)
+            };
+            start_runner(exec_shared.spawner());
+        }
+    }
+    ex
 }
 
 #[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
@@ -368,6 +428,10 @@ mod no_atomic_futures {
 
         pub fn push(&mut self, f: F) {
             self.futures.push(f);
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.futures.is_empty()
         }
     }
 

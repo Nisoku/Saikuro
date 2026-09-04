@@ -1,8 +1,8 @@
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parent.parent
-BUILD_ROOT = SCRIPTS.parent
-REPO_ROOT = BUILD_ROOT.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SCRIPTS = REPO_ROOT / "scripts"
+BUILD_ROOT = REPO_ROOT / "Build"
 
 RUST_DIR = BUILD_ROOT / "adapters" / "rust"
 PYTHON_DIR = BUILD_ROOT / "adapters" / "python"
@@ -16,6 +16,8 @@ CSHARP_TEST = CSHARP_DIR / "tests"
 
 C_FMT_DIRS = [C_DIR / "include"]
 CPP_FMT_DIRS = [CPP_DIR / "src", CPP_DIR / "include", CPP_DIR / "tests"]
+
+QEMU_DIR = REPO_ROOT / "Tests"
 
 DEMO_DIR = REPO_ROOT / "Demo"
 WASM_DIR = DEMO_DIR / "wasm"

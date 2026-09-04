@@ -17,8 +17,8 @@ path = "cli/main.rs"
 required-features = ["cli"]
 
 [features]
-default = []
-cli = ["dep:clap", "dep:anyhow", "dep:serde_json"]
+default = ["cli"]
+cli = ["dep:clap", "dep:anyhow", "dep:serde_json", "saikuro-core/native", "saikuro-schema/native"]
 
 [dependencies]
 saikuro-core = { workspace = true, default-features = false }

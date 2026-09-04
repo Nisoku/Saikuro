@@ -31,6 +31,7 @@ wasm = [
     "dep:embassy-sync",
     "dep:embassy-time",
     "embassy-time/wasm",
+    "embassy-time/generic-queue-32",
     "dep:embassy-futures",
     "futures/async-await",
     "dep:critical-section",
@@ -47,7 +48,7 @@ embedded = [
     "futures/async-await",
     "dep:critical-section",
 ]
-embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue-8"]
+embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue-32"]
 
 [dependencies]
 tokio = { workspace = true, optional = true }

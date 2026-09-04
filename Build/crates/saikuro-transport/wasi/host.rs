@@ -32,6 +32,10 @@ impl HostPipeSend for WasiHostSend {
     async fn send(&mut self, frame: &[u8]) -> Result<()> {
         self.0.send(Bytes::copy_from_slice(frame)).await
     }
+
+    async fn close(&mut self) -> Result<()> {
+        self.0.close().await
+    }
 }
 
 #[async_trait(?Send)]

@@ -520,7 +520,7 @@ dependencies = [
  "critical-section",
  "document-features",
  "embassy-executor-macros",
- "embassy-executor-timer-queue",
+ "embassy-executor-timer-queue 0.1.0",
  "js-sys",
  "wasm-bindgen",
 ]
@@ -542,6 +542,14 @@ name = "embassy-executor-timer-queue"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc328bf943af66b80b98755db9106bf7e7471b0cf47dc8559cd9a6be504cc9c"
+
+[[package]]
+name = "embassy-executor-timer-queue"
+version = "0.1.1"
+source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
+dependencies = [
+ "unitrait",
+]
 
 [[package]]
 name = "embassy-futures"
@@ -589,8 +597,7 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "592b0c143ec626e821d4d90da51a2bd91d559d6c442b7c74a47d368c9e23d97a"
+source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -603,14 +610,13 @@ dependencies = [
  "futures-core",
  "js-sys",
  "wasm-bindgen",
- "wasm-timer",
+ "web-time",
 ]
 
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ee71af1b3a0deaa53eaf2d39252f83504c853646e472400b763060389b9fcc9"
+source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
 dependencies = [
  "document-features",
 ]
@@ -618,10 +624,9 @@ dependencies = [
 [[package]]
 name = "embassy-time-queue-utils"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168297bf80aaf114b3c9ad589bf38b01b3009b9af7f97cd18086c5bbf96f5693"
+source = "git+https://github.com/NellowTCS/embassy#d83a67918c080403a2e177dc251ccb6b29c5932a"
 dependencies = [
- "embassy-executor-timer-queue",
+ "embassy-executor-timer-queue 0.1.1",
  "heapless 0.9.3",
 ]
 
@@ -2441,6 +2446,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "unitrait"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e1e3ee3aa62b245f34e2e52292a7dc2f97716f8d95f3ab384a6d9b19244ccdd"
+dependencies = [
+ "unitrait-macros",
+]
+
+[[package]]
+name = "unitrait-macros"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0707a2f7725395e3c1a4ef68ba9c02b7253c9e8f45045d791bf2056e965ab14"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2590,21 +2615,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-timer"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
-dependencies = [
- "futures",
- "js-sys",
- "parking_lot 0.11.2",
- "pin-utils",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "wasmparser"
 version = "0.239.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2621,6 +2631,16 @@ name = "web-sys"
 version = "0.3.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d621441cfc37b84979402712047321980c178f299193a3589d05b99e8763436"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "web-time"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

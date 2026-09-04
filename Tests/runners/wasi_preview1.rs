@@ -80,6 +80,7 @@ fn run_suite() -> (String, u32) {
         suite.count_sync(),
         suite.count_async()
     );
+    write_stdout(report.as_bytes());
 
     for test in &suite.tests {
         let result = match &test.run {

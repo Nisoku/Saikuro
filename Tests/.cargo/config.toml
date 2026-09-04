@@ -5,3 +5,8 @@ runner = "wasm-bindgen-test-runner"
 # CRT object (`crt1-command.o`) must not be linked.
 [target.wasm32-wasip1]
 rustflags = ["-C", "link-self-contained=no"]
+runner = "wasmtime --wasi common"
+
+# wasip2 uses wasmtime's preview2 component support.
+[target.wasm32-wasip2]
+runner = "wasmtime --wasi common"

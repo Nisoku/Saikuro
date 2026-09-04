@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Cross-compile saikuro-runtime (or any crate) across the full engine x target
-matrix and report a pass/fail table.
+"""Cross-compile adapter crates across the full engine x target matrix.
 
 Engines and their targets / feature sets:
 
   native      host (current)        default features            std
-  wasm        wasm32-unknown-unknown --no-default-features wasm no_std
-  embedded    thumbv7m-none-eabi    --no-default-features embedded,tcp  no_std
-  wasi p1     wasm32-wasip1         --no-default-features no_std,wasi-tcp,wasi-host,wasi-preview1  no_std
-  wasi p2     wasm32-wasip1         --no-default-features no_std,wasi-tcp,wasi-host,wasi-preview2  no_std
+  native (ws) host (current)        --features ws               std
+  wasm        wasm32-unknown-unknown --no-default-features       no_std / std
+  wasi p1     wasm32-wasip1         --no-default-features       no_std / std / ws
+  wasi p2     wasm32-wasip2         --no-default-features       no_std / std / ws
 
 Usage:
-  python3 scripts/check_matrix.py
-  python3 scripts/check_matrix.py --crate saikuro-transport
-  python3 scripts/check_matrix.py --all-crates
-  python3 scripts/check_matrix.py --json out.json
+  python3 scripts/check_adapter_matrix.py
+  python3 scripts/check_adapter_matrix.py --crate saikuro
+  python3 scripts/check_adapter_matrix.py --crate saikuro-c
+  python3 scripts/check_adapter_matrix.py --all-adapters
+  python3 scripts/check_adapter_matrix.py --json out.json
 """
 
 from __future__ import annotations
@@ -32,10 +32,12 @@ CARGO = shutil.which("cargo") or "/Users/neel/.cargo/bin/cargo"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if os.path.basename(ROOT) == "scripts":
     ROOT = os.path.dirname(ROOT)
-MANIFEST = os.path.join(ROOT, "Cargo.toml")
+MANIFEST = os.path.join(ROOT, "Build", "Cargo.toml")
 
-DEFAULT_CRATE = "saikuro-runtime"
+DEFAULT_CRATE = "saikuro-c"
 TIMEOUT = 600  # seconds per check
+
+ADAPTER_CRATES = ["saikuro", "saikuro-c"]
 
 
 @dataclass
@@ -167,6 +169,26 @@ MATRIX: list[Combo] = [
         ],
         "no_std wasi websocket client (preview2)",
     ),
+    Combo(
+        "wasi preview1 (std ws)",
+        "wasm32-wasip1",
+        [
+            "--no-default-features",
+            "--features",
+            "std,no_std,wasi-tcp,wasi-host,wasi-preview1,ws-wasi",
+        ],
+        "std wasi websocket client (preview1)",
+    ),
+    Combo(
+        "wasi preview2 (std ws)",
+        "wasm32-wasip2",
+        [
+            "--no-default-features",
+            "--features",
+            "std,no_std,wasi-tcp,wasi-host,wasi-preview2,ws-wasi",
+        ],
+        "std wasi websocket client (preview2)",
+    ),
 ]
 
 
@@ -177,7 +199,6 @@ def run_combo(crate: str, combo: Combo, verbose: bool, crate_features: set[str] 
         cmd += ["--target", combo.target]
 
     # Filter combo features to only those the crate actually declares.
-    # This lets the same matrix run against crates with different feature sets.
     args = list(combo.cargo_args)
     if crate_features is not None and "--features" in args:
         fi = args.index("--features")
@@ -185,7 +206,6 @@ def run_combo(crate: str, combo: Combo, verbose: bool, crate_features: set[str] 
         feat_list = [f.strip() for f in raw_feats.split(",")]
         kept = [f for f in feat_list if f in crate_features]
         if not kept:
-            # None of the combo's features exist on this crate, skip it.
             return {
                 "name": combo.name,
                 "target": combo.target or "<host>",
@@ -220,9 +240,6 @@ def run_combo(crate: str, combo: Combo, verbose: bool, crate_features: set[str] 
     warn_count = sum(
         1 for line in lines if line.startswith("warning") and "generated" not in line
     )
-    # Capture whole diagnostic blocks (headline + the `-->`, source-snippet and
-    # underline lines that follow) so the full error is preserved for display
-    # and for the JSON report instead of being discarded.
     diags = []
     in_diag = False
     for line in lines:
@@ -260,26 +277,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--crate", default=DEFAULT_CRATE, help="crate to check")
     ap.add_argument(
-        "--all-crates",
+        "--all-adapters",
         action="store_true",
-        help="check every workspace member across the matrix",
+        help="check all adapter crates (saikuro, saikuro-c)",
     )
     ap.add_argument("--json", metavar="PATH", help="write results as JSON")
     ap.add_argument("--verbose", action="store_true", help="print failing output")
     args = ap.parse_args()
 
     crates = []
-    if args.all_crates:
-        txt = subprocess.run(
-            [CARGO, "metadata", "--no-deps", "--format-version", "1",
-             "--manifest-path", MANIFEST],
-            stdout=subprocess.PIPE,
-            cwd=ROOT,
-            check=True,
-        ).stdout.decode()
-        import json
-
-        crates = [p["name"] for p in json.loads(txt)["packages"]]
+    if args.all_adapters:
+        crates = ADAPTER_CRATES
     else:
         crates = [args.crate]
 
@@ -307,7 +315,7 @@ def main() -> int:
                     pkg_features = set(p["features"].keys())
                     break
         except Exception:
-            pkg_features = None  # fallback: don't filter
+            pkg_features = None
 
         for combo in MATRIX:
             r = run_combo(crate, combo, args.verbose, pkg_features)
@@ -316,10 +324,6 @@ def main() -> int:
                 f"  [{status}] {r['name']:<22} target={r['target']:<20} "
                 f"errs={r['errors']:<3} warns={r['warnings']:<3} {r['seconds']}s"
             )
-            if (not r["passed"] or r["warnings"]) and r["diags"]:
-                tag = "FAIL" if not r["passed"] else "WARN"
-                for line in r["diags"]:
-                    print(f"      [{tag}] {line}")
             results.append({**r, "crate": crate})
 
     total = len(results)
@@ -330,12 +334,6 @@ def main() -> int:
         f"\n=== SUMMARY: {passed}/{total} passed "
         f"({warn_total} warnings, {err_total} errors) ==="
     )
-    for r in results:
-        if not r["passed"]:
-            print(
-                f"  FAIL {r['crate']} :: {r['name']} "
-                f"(target={r['target']}, features={r['features']})"
-            )
 
     diag_results = [r for r in results if r["warnings"] or r["errors"]]
     if diag_results:
@@ -353,6 +351,8 @@ def main() -> int:
                 print("  (no diagnostic lines captured)")
 
     if args.json:
+        import json
+
         with open(args.json, "w") as fh:
             json.dump(results, fh, indent=2)
         print(f"\nwrote {args.json}")

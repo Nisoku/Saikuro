@@ -1,12 +1,11 @@
 //! Wasm runner (`wasm32-unknown-unknown`).
 
-#[expect(unused)]
 #[path = "../tests/wasm/mod.rs"]
 pub mod wasm;
 
-use wasm_bindgen_test::wasm_bindgen_test_configure;
-
-wasm_bindgen_test_configure!(run_in_browser);
+// No `wasm_bindgen_test_configure!` call: Node.js is the default execution
+// target for wasm-bindgen-test. The same binary also runs headlessly in a
+// browser when driven through `wasm-pack test` with a browser flag.
 
 mod wasm_critical_section {
     struct NoopCriticalSection;
@@ -15,8 +14,10 @@ mod wasm_critical_section {
 
     // SAFETY: single-threaded wasm, no interrupts or preemption points.
     unsafe impl critical_section::Impl for NoopCriticalSection {
-        unsafe fn acquire() {}
+        unsafe fn acquire() -> critical_section::RawRestoreState {
+            Default::default()
+        }
 
-        unsafe fn release(_token: ()) {}
+        unsafe fn release(_restore_state: critical_section::RawRestoreState) {}
     }
 }

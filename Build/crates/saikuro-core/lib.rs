@@ -39,7 +39,12 @@ compile_error!(
 )))]
 compile_error!("saikuro-core: an engine feature (native/wasm/embedded/no_std) must be enabled");
 
-#[cfg(all(feature = "std", feature = "no_std"))]
+// On WASI `std` is the libc base and `no_std` selects the engine.
+#[cfg(all(
+    feature = "std",
+    feature = "no_std",
+    not(target_os = "wasi")
+))]
 compile_error!("saikuro-core: the `std` toolchain flag is incompatible with the `no_std` engine");
 
 /// Wire-level protocol version. All envelopes carry this; the runtime

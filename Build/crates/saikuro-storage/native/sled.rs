@@ -56,21 +56,6 @@ impl SledStorage {
             None => namespace.to_owned(),
         }
     }
-
-    #[expect(unused)]
-    fn strip_prefix(&self, stored: &str) -> String {
-        match &self.config.namespace_prefix {
-            Some(prefix) => {
-                let prefix_str = format!("{prefix}:");
-                if stored.starts_with(&prefix_str) {
-                    stored[prefix_str.len()..].to_owned()
-                } else {
-                    stored.to_owned()
-                }
-            }
-            None => stored.to_owned(),
-        }
-    }
 }
 
 impl KeyValueBackend for SledStorage {

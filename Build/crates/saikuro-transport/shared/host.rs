@@ -104,6 +104,8 @@ mod send_traits {
     pub trait HostPipeSend: Send + 'static {
         /// Send a single binary frame over the bus.
         async fn send(&mut self, frame: &[u8]) -> Result<()>;
+        /// Close the sending side gracefully, signaling EOF to the peer.
+        async fn close(&mut self) -> Result<()>;
     }
 
     /// The receiving half of a host message bus, abstracted over its backend.
@@ -132,7 +134,7 @@ mod send_traits {
         }
 
         async fn close(&mut self) -> Result<()> {
-            Ok(())
+            self.pipe.close().await
         }
     }
 
@@ -180,6 +182,8 @@ mod nosend_traits {
     pub trait HostPipeSend: 'static {
         /// Send a single binary frame over the bus.
         async fn send(&mut self, frame: &[u8]) -> Result<()>;
+        /// Close the sending side gracefully, signaling EOF to the peer.
+        async fn close(&mut self) -> Result<()>;
     }
 
     /// The receiving half of a host message bus, abstracted over its backend.
@@ -208,7 +212,7 @@ mod nosend_traits {
         }
 
         async fn close(&mut self) -> Result<()> {
-            Ok(())
+            self.pipe.close().await
         }
     }
 

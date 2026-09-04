@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, SyncSender};
-use std::thread::{self, JoinHandle};
+use std::thread;
 
 use tokio::sync::oneshot;
 
@@ -38,8 +38,6 @@ enum OpenTarget {
 pub struct SqliteStorage {
     pub(crate) config: StorageConfig,
     tx: SyncSender<Job>,
-    #[expect(unused)]
-    worker: Option<JoinHandle<()>>,
 }
 
 impl SqliteStorage {
@@ -60,15 +58,13 @@ impl SqliteStorage {
 
     fn spawn(target: OpenTarget, config: StorageConfig) -> Result<Self> {
         let (tx, rx) = mpsc::sync_channel::<Job>(0);
-        let worker = thread::Builder::new()
+        // The worker thread stays alive for as long as `tx` is held; dropping
+        // the JoinHandle detaches it rather than cancelling it.
+        thread::Builder::new()
             .name("saikuro-sqlite".into())
             .spawn(move || run_worker(target, rx))
             .map_err(|e| SaikuroError::internal(format!("spawn sqlite worker: {e}")))?;
-        Ok(Self {
-            config,
-            tx,
-            worker: Some(worker),
-        })
+        Ok(Self { config, tx })
     }
 }
 
@@ -153,7 +149,7 @@ impl RawSqlite for SqliteStorage {
 impl SqliteStorage {
     /// Compile-time guarantee that the public handle is `Send + Sync`, so it can
     /// live inside the `Storage` enum alongside the other backends.
-    #[expect(unused)]
+    #[allow(dead_code)]
     fn _assert_send_sync() {
         fn is_send_sync<T: Send + Sync>() {}
         is_send_sync::<SqliteStorage>();
