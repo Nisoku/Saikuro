@@ -1,5 +1,13 @@
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+pub(crate) mod block_on;
+
+pub(crate) mod join;
+pub(crate) mod queue;
+pub(crate) mod runtime;
+pub(crate) mod spawn;
+
 #[cfg(target_has_atomic = "ptr")]
-use crate::Arc;
+pub(crate) use crate::Arc;
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::pin::Pin;
@@ -54,7 +62,3 @@ pub mod signal {
         core::future::pending().await
     }
 }
-
-// Heap executor harness
-#[cfg(any(feature = "wasm", feature = "no_std", feature = "embedded"))]
-pub(crate) mod exec;

@@ -40,6 +40,14 @@ setup:
     cd {{scripts}} && python3 cpp.py setup
     cd {{scripts}} && python3 qemu.py setup
 
+lint:
+    cd {{scripts}} && python3 rust.py lint
+    cd {{scripts}} && python3 python.py lint
+    cd {{scripts}} && python3 typescript.py lint
+    # cd {{scripts}} && python3 csharp.py lint
+    # cd {{scripts}} && python3 c.py lint
+    # cd {{scripts}} && python3 cpp.py lint
+
 format:
     cd {{scripts}} && python3 rust.py fmt_check
     cd {{scripts}} && python3 typescript.py fmt_check
