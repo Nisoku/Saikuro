@@ -252,3 +252,19 @@ impl<T: Into<Value>> From<Option<T>> for Value {
         }
     }
 }
+
+/// Convert this core [`Value`] into a JSON-compatible [`serde_json::Value`].
+pub fn core_to_json(v: Value) -> serde_json::Value {
+    match serde_json::to_value(&v) {
+        Ok(j) => j,
+        Err(_) => serde_json::Value::Null,
+    }
+}
+
+/// Convert a JSON-compatible [`serde_json::Value`] into a core [`Value`].
+pub fn json_to_core(v: serde_json::Value) -> Value {
+    match serde_json::from_value(v) {
+        Ok(c) => c,
+        Err(_) => Value::Null,
+    }
+}

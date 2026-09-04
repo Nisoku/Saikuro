@@ -23,15 +23,12 @@ use saikuro_core::{
     invocation::InvocationId,
     schema::Schema,
 };
-use saikuro_event::{ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink};
+use saikuro_event::{core_to_json, json_to_core, ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, SaikuroError};
+use saikuro_event::Result;
+use saikuro_transport::{connect, AdapterTransport};
+use saikuro_schema::builder::{FunctionSchema, NamespaceSchema, build_schema};
 
-use crate::{
-    error::{Error, Result},
-    schema::{build_schema, FunctionSchema, NamespaceSchema},
-    transport::{connect, AdapterTransport},
-    value::{core_to_json, json_to_core},
-    Value,
-};
+use crate::Value;
 
 /// Arguments passed to a registered handler function.
 pub type HandlerArgs = Vec<Value>;
@@ -303,7 +300,7 @@ impl Provider {
                 );
                 record.set_context("error", alloc::format!("{e}"));
                 self.log.emit(&record).await;
-                return Err(Error::Codec(e.to_string()));
+                return Err(SaikuroError::Serialization(e.to_string()));
             }
         };
 
@@ -318,7 +315,7 @@ impl Provider {
                 );
                 record.set_context("error", alloc::format!("{e}"));
                 self.log.emit(&record).await;
-                return Err(Error::Codec(e.to_string()));
+                return Err(SaikuroError::Serialization(e.to_string()));
             }
         };
 
@@ -330,7 +327,7 @@ impl Provider {
             );
             record.set_context("error", alloc::format!("{e}"));
             self.log.emit(&record).await;
-            return Err(Error::Transport(e.to_string()));
+            return Err(SaikuroError::SendFailed(e.to_string()));
         }
 
         match saikuro_exec::timeout(core::time::Duration::from_millis(500), transport.recv()).await
@@ -429,7 +426,7 @@ async fn dispatch_call(
             let response = ResponseEnvelope::ok(id, json_to_core(result));
             send_response(transport, &response, log).await;
         }
-        Err(Error::Remote { code, message, .. }) => {
+        Err(SaikuroError::Remote { code, message, .. }) => {
             let error_code = parse_error_code(&code);
             send_error(transport, id, error_code, message).await;
         }
@@ -589,9 +586,9 @@ async fn send_response_raw(
 ) -> Result<()> {
     let bytes = response
         .to_msgpack()
-        .map_err(|e| Error::Codec(e.to_string()))?;
+        .map_err(|e| SaikuroError::Serialization(e.to_string()))?;
     transport
         .send(Bytes::from(bytes))
         .await
-        .map_err(|e| Error::Transport(e.to_string()))
+        .map_err(|e| SaikuroError::SendFailed(e.to_string()))
 }

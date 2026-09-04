@@ -16,9 +16,21 @@ name = "saikuro-codegen"
 path = "cli/main.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "saikuro-rust-schema"
+path = "cli/rust_schema.rs"
+required-features = ["cli"]
+
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:anyhow", "dep:serde_json", "saikuro-core/native", "saikuro-schema/native"]
+cli = [
+    "dep:clap",
+    "dep:anyhow",
+    "dep:serde_json",
+    "dep:syn",
+    "saikuro-core/native",
+    "saikuro-schema/native",
+]
 
 [dependencies]
 saikuro-core = { workspace = true, default-features = false }
@@ -31,5 +43,6 @@ serde_json = { workspace = true, optional = true, default-features = false, feat
 anyhow = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
+syn = { version = "2.0", features = ["full"], optional = true }
 
 [dev-dependencies]

@@ -1,39 +1,30 @@
-//! Saikuro Rust Adapter
+//! Saikuro Rust adapter.
 //!
-//! This crate provides [`Provider`] and [`Client`]: the two main building
-//! blocks for writing Rust services that connect to a Saikuro runtime.
+//! A re-export facade over all Saikuro crates.
 //!
-//! For testing without a live runtime use [`transport::InMemoryTransport`].
+//! For testing without a live runtime use [`MemoryAdapterTransport`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
 extern crate alloc;
 
-#[cfg(feature = "std")]
-pub mod client;
-pub mod error;
-pub mod provider;
-pub mod schema;
-pub mod transport;
-pub mod value;
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
-pub mod storage;
-
-#[cfg(feature = "std")]
-pub use client::{Client, ClientOptions, SaikuroChannel, SaikuroStream};
-pub use error::{Error, Result};
-pub use provider::{HandlerArgs, Provider, RegisterOptions};
-pub use saikuro_core::schema::{PrimitiveType, TypeDescriptor, Visibility};
-pub use schema::{ArgDescriptor, FunctionSchema, NamespaceSchema};
-pub use transport::InMemoryTransport;
-pub use value::Value;
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
-pub use saikuro_storage::traits::{
-    FileBackend, KeyValueBackend, KeyValueBackendExt, StorageBackend,
+// Client/Provider: named top-level types so `transport`/`schema`/`exec`
+// module names are reserved for the crates below.
+pub use saikuro_client::{
+    ArgDescriptor, Client, ClientOptions, Error, FunctionSchema, HandlerArgs,
+    MemoryAdapterTransport, NamespaceSchema, PrimitiveType, Provider, RegisterOptions, Result,
+    SaikuroChannel, SaikuroStream, TypeDescriptor, Value, Visibility, AdapterTransport, connect, build_schema,
 };
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage"))]
-pub use storage::{create_storage, create_transient_storage, Storage};
+pub mod core;
+pub mod event;
+pub mod exec;
+#[cfg(feature = "net")]
+pub mod net;
+pub mod random;
+pub mod router;
+pub mod runtime;
+pub mod schema;
+#[cfg(feature = "storage")]
+pub mod storage;
+pub mod transport;

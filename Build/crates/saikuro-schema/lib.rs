@@ -6,6 +6,8 @@
 #[macro_use]
 extern crate alloc;
 
+/// Ergonomic schema construction (FunctionSchema, NamespaceSchema, build_schema).
+pub mod builder;
 /// Capability enforcement engine.
 pub mod capability;
 /// Capability enforcement engine (re-exported module path).
@@ -16,6 +18,7 @@ pub mod registry;
 pub mod validator;
 
 pub use capability::engine::CapabilityEngine;
+pub use builder::{FunctionSchema, NamespaceSchema, ArgDescriptor, build_schema};
 pub use registry::{NamespaceRegistration, SchemaRegistry};
 pub use validator::{InvocationValidator, ValidationReport};
 

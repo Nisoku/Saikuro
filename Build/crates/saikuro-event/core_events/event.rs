@@ -269,6 +269,16 @@ pub enum SaikuroError {
     #[error("channel closed by remote side")]
     ChannelClosed,
 
+    #[error("remote error [{code}]: {message}")]
+    Remote {
+        /// Machine-readable code reported by the remote side.
+        code: String,
+        /// Human-readable description reported by the remote side.
+        message: String,
+        /// Optional structured detail supplied by the remote side.
+        details: Option<Value>,
+    },
+
     #[error("out-of-order sequence: expected {expected}, got {received}")]
     OutOfOrder { expected: u64, received: u64 },
 
@@ -375,6 +385,7 @@ impl SaikuroError {
             SaikuroError::ProviderPanic => ErrorCode::ProviderPanic,
             SaikuroError::StreamClosed => ErrorCode::StreamClosed,
             SaikuroError::ChannelClosed => ErrorCode::ChannelClosed,
+            SaikuroError::Remote { .. } => ErrorCode::ProviderError,
             SaikuroError::OutOfOrder { .. } => ErrorCode::OutOfOrder,
             SaikuroError::KeyNotFound(_) => ErrorCode::KeyNotFound,
             SaikuroError::KeyAlreadyExists(_) => ErrorCode::KeyAlreadyExists,
@@ -464,6 +475,19 @@ impl SaikuroError {
     /// Construct a [`SaikuroError::QuotaExceeded`].
     pub fn quota_exceeded(msg: impl Into<String>) -> Self {
         SaikuroError::QuotaExceeded(msg.into())
+    }
+
+    /// Construct a [`SaikuroError::Remote`] from wire fields.
+    pub fn remote(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        details: Option<Value>,
+    ) -> Self {
+        SaikuroError::Remote {
+            code: code.into(),
+            message: message.into(),
+            details,
+        }
     }
 }
 

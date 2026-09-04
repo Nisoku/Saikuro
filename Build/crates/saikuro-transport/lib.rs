@@ -66,6 +66,7 @@ pub mod wasi;
 #[allow(unused_imports)]
 pub use wasi::*;
 
+pub use shared::adapter::{AdapterTransport, MemoryAdapterTransport, connect};
 pub use shared::error::TransportError;
 pub use shared::host::{
     HostPipeFactory, HostPipeRecv, HostPipeSend, Role, WasmHostConnector, WasmHostListener,

@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod error;
 pub mod framing;
 pub mod host;

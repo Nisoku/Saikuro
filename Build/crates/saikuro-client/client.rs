@@ -22,15 +22,12 @@ use saikuro_core::{
     invocation::InvocationId,
     PROTOCOL_VERSION,
 };
-use saikuro_event::{ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, Value as CoreValue};
+use saikuro_event::{core_to_json, json_to_core, ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, SaikuroError};
+use saikuro_event::Result;
 use saikuro_exec::{mpsc, oneshot, sync::Mutex};
+use saikuro_transport::{connect, AdapterTransport};
 
-use crate::{
-    error::{Error, Result},
-    transport::{connect, AdapterTransport},
-    value::{core_to_json, json_to_core},
-    Value,
-};
+use crate::Value;
 
 /// Default capacity for the outbound frame channel and stream/channel buffers.
 const CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
@@ -99,14 +96,14 @@ impl SaikuroChannel {
     async fn send_channel_envelope(&self, envelope: &Envelope) -> Result<()> {
         let bytes = envelope
             .to_msgpack()
-            .map_err(|e| Error::Codec(e.to_string()))?;
+            .map_err(|e| SaikuroError::Serialization(e.to_string()))?;
         let send_tx = self.send_tx.lock().await.clone();
         let send_tx =
-            send_tx.ok_or_else(|| Error::Transport("client send channel closed".into()))?;
+            send_tx.ok_or_else(|| SaikuroError::SendFailed("client send channel closed".into()))?;
         send_tx
             .send(Bytes::from(bytes))
             .await
-            .map_err(|_| Error::Transport("client send channel closed".into()))
+            .map_err(|_| SaikuroError::SendFailed("client send channel closed".into()))
     }
 
     /// Close the channel by sending a StreamControl::End frame.
@@ -363,16 +360,13 @@ impl Client {
 
         let recv_fut = async {
             rx.await
-                .map_err(|_| Error::Transport("pending call dropped".into()))
+                .map_err(|_| SaikuroError::SendFailed("pending call dropped".into()))
         };
 
         let resp = match timeout {
             Some(t) => saikuro_exec::timeout(t, recv_fut)
                 .await
-                .map_err(|_| Error::Timeout {
-                    target: target.clone(),
-                    ms: t.as_millis() as u64,
-                })?,
+                .map_err(|_| SaikuroError::Timeout { millis: t.as_millis() as u64 })?,
             None => recv_fut.await,
         }?;
 
@@ -442,7 +436,7 @@ impl Client {
 
         let resp = rx
             .await
-            .map_err(|_| Error::Transport("batch pending call dropped".into()))?;
+            .map_err(|_| SaikuroError::SendFailed("batch pending call dropped".into()))?;
 
         let overall = response_to_result(resp)?;
 
@@ -494,7 +488,7 @@ impl Client {
 
         let resp = rx
             .await
-            .map_err(|_| Error::Transport("pending resource call dropped".into()))?;
+            .map_err(|_| SaikuroError::SendFailed("pending resource call dropped".into()))?;
 
         response_to_result(resp)
     }
@@ -525,11 +519,11 @@ impl Client {
     async fn send_envelope(&self, envelope: &Envelope) -> Result<()> {
         let bytes = envelope
             .to_msgpack()
-            .map_err(|e| Error::Codec(e.to_string()))?;
+            .map_err(|e| SaikuroError::Serialization(e.to_string()))?;
         self.send_tx
             .send(Bytes::from(bytes))
             .await
-            .map_err(|_| Error::Transport("client send channel closed".into()))
+            .map_err(|_| SaikuroError::SendFailed("client send channel closed".into()))
     }
 }
 // Background task helpers
@@ -609,7 +603,7 @@ async fn route_response(
                     .error
                     .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "stream error"));
                 let _ = tx
-                    .send(Err(Error::remote(
+                    .send(Err(SaikuroError::remote(
                         detail.code.to_string(),
                         detail.message,
                         None,
@@ -635,7 +629,7 @@ async fn route_response(
                 let detail = resp
                     .error
                     .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "channel error"));
-                let _ = tx.try_send(Err(Error::remote(
+                let _ = tx.try_send(Err(SaikuroError::remote(
                     detail.code.to_string(),
                     detail.message,
                     None,
@@ -665,10 +659,10 @@ fn teardown_pending(pending: &DashMap<InvocationId, PendingSlot>) {
             match slot {
                 PendingSlot::Call(tx) => drop(tx),
                 PendingSlot::Stream(tx) => {
-                    let _ = tx.try_send(Err(Error::Transport("connection lost".into())));
+                    let _ = tx.try_send(Err(SaikuroError::ConnectionLost("connection lost".into())));
                 }
                 PendingSlot::Channel(tx) => {
-                    let _ = tx.try_send(Err(Error::Transport("connection lost".into())));
+                    let _ = tx.try_send(Err(SaikuroError::ConnectionLost("connection lost".into())));
                 }
             }
         }
@@ -692,7 +686,7 @@ fn make_envelope_with_id(
     args: Vec<Value>,
     seq: Option<u64>,
 ) -> Envelope {
-    let core_args: Vec<CoreValue> = args.into_iter().map(json_to_core).collect();
+    let core_args: Vec<saikuro_event::Value> = args.into_iter().map(json_to_core).collect();
     Envelope {
         version: PROTOCOL_VERSION,
         invocation_type: inv_type,
@@ -715,6 +709,6 @@ fn response_to_result(resp: ResponseEnvelope) -> Result<Value> {
         let detail = resp
             .error
             .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "call failed with no detail"));
-        Err(Error::remote(detail.code.to_string(), detail.message, None))
+        Err(SaikuroError::remote(detail.code.to_string(), detail.message, None))
     }
 }

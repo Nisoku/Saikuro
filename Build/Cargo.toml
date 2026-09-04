@@ -12,6 +12,7 @@ members = [
     "crates/saikuro-net",
     "crates/saikuro-random",
     "crates/saikuro-codegen",
+    "crates/saikuro-client",
     "adapters/c",
     "adapters/rust",
 ]
