@@ -1,5 +1,6 @@
 use crate::common;
 use crate::Box;
+use crate::shared_test;
 use crate::TestSuite;
 use crate::ToString;
 use bytes::Bytes;
@@ -18,10 +19,10 @@ use saikuro_runtime::{RuntimeConfig, SaikuroRuntime};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("runtime::schema_round_trip", schema_round_trip);
-    suite.register("runtime::router_dispatch_direct", router_dispatch_direct);
-    suite.register("runtime::transport_round_trip", transport_round_trip);
-    suite.register("runtime::runtime_full_stack", runtime_full_stack);
+    shared_test!(suite, "runtime::schema_round_trip", schema_round_trip);
+    shared_test!(suite, "runtime::router_dispatch_direct", router_dispatch_direct);
+    shared_test!(suite, "runtime::transport_round_trip", transport_round_trip);
+    shared_test!(suite, "runtime::runtime_full_stack", runtime_full_stack);
     config_capacity::register(suite);
     schema_registration::register(suite);
 }

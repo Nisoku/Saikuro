@@ -2,4 +2,4 @@
 #[allow(clippy::module_inception)]
 pub mod value;
 
-pub use value::{Value, ValueMap, core_to_json, json_to_core};
+pub use value::{core_to_json, json_to_core, Value, ValueMap};

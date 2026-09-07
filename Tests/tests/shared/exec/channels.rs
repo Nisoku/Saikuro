@@ -1,4 +1,5 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use portable_atomic::{AtomicBool, Ordering};
 use saikuro_core::Arc;
@@ -9,83 +10,83 @@ fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
 }
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "exec::channel_capacity_enforces_shared_backend_bounds",
         channel_capacity_enforces_shared_backend_bounds,
     );
-    suite.register("exec::mpsc_send_recv_single", mpsc_send_recv_single);
-    suite.register(
+    shared_test!(suite, "exec::mpsc_send_recv_single", mpsc_send_recv_single);
+    shared_test!(suite,
         "exec::mpsc_send_recv_multiple_in_order",
         mpsc_send_recv_multiple_in_order,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::mpsc_backpressure_sender_waits",
         mpsc_backpressure_sender_waits,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::mpsc_try_send_on_full_channel",
         mpsc_try_send_on_full_channel,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::mpsc_try_send_on_closed_channel",
         mpsc_try_send_on_closed_channel,
     );
-    suite.register("exec::mpsc_sender_clone", mpsc_sender_clone);
-    suite.register(
+    shared_test!(suite, "exec::mpsc_sender_clone", mpsc_sender_clone);
+    shared_test!(suite,
         "exec::mpsc_send_after_all_receivers_dropped_errors",
         mpsc_send_after_all_receivers_dropped_errors,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::mpsc_recv_returns_none_when_all_senders_dropped",
         mpsc_recv_returns_none_when_all_senders_dropped,
     );
-    suite.register("exec::mpsc_large_message", mpsc_large_message);
-    suite.register(
+    shared_test!(suite, "exec::mpsc_large_message", mpsc_large_message);
+    shared_test!(suite,
         "exec::mpsc_many_messages_in_order",
         mpsc_many_messages_in_order,
     );
-    suite.register("exec::mpsc_is_closed", mpsc_is_closed);
-    suite.register(
+    shared_test!(suite, "exec::mpsc_is_closed", mpsc_is_closed);
+    shared_test!(suite,
         "exec::mpsc_multiple_concurrent_senders",
         mpsc_multiple_concurrent_senders,
     );
-    suite.register("exec::oneshot_send_recv", oneshot_send_recv);
-    suite.register(
+    shared_test!(suite, "exec::oneshot_send_recv", oneshot_send_recv);
+    shared_test!(suite,
         "exec::oneshot_dropped_sender_returns_err",
         oneshot_dropped_sender_returns_err,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::oneshot_dropped_receiver_returns_value",
         oneshot_dropped_receiver_returns_value,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::oneshot_send_after_recv_fails",
         oneshot_send_after_recv_fails,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::oneshot_multiple_independent_channels",
         oneshot_multiple_independent_channels,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::oneshot_cannot_call_send_twice",
         oneshot_cannot_call_send_twice,
     );
-    suite.register("exec::watch_send_and_borrow", watch_send_and_borrow);
-    suite.register("exec::watch_send_and_changed", watch_send_and_changed);
-    suite.register(
+    shared_test!(suite, "exec::watch_send_and_borrow", watch_send_and_borrow);
+    shared_test!(suite, "exec::watch_send_and_changed", watch_send_and_changed);
+    shared_test!(suite,
         "exec::watch_changed_blocks_until_next_update",
         watch_changed_blocks_until_next_update,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::watch_initial_value_available",
         watch_initial_value_available,
     );
-    suite.register("exec::watch_multiple_receivers", watch_multiple_receivers);
-    suite.register(
+    shared_test!(suite, "exec::watch_multiple_receivers", watch_multiple_receivers);
+    shared_test!(suite,
         "exec::watch_sender_drop_closes_channel",
         watch_sender_drop_closes_channel,
     );
-    suite.register(
+    shared_test!(suite,
         "exec::watch_borrow_returns_last_value",
         watch_borrow_returns_last_value,
     );
@@ -206,14 +207,16 @@ fn mpsc_recv_returns_none_when_all_senders_dropped() -> Result<(), &'static str>
 }
 
 fn mpsc_large_message() -> Result<(), &'static str> {
+    const BUFFER: usize = 1024 * 1024;
+    crate::capacity::require_capacity(BUFFER)?;
     crate::block_on(async {
         let (tx, mut rx) = mpsc::channel::<crate::Vec<u8>>(capacity(8));
-        let big = crate::vec![0xABu8; 1024 * 1024];
+        let big = crate::vec![0xABu8; BUFFER];
         tx.send(big.clone()).await.unwrap();
         let got = rx.recv().await.unwrap();
-        assert_eq!(got.len(), 1024 * 1024);
+        assert_eq!(got.len(), BUFFER);
         assert_eq!(got[0], 0xAB);
-        assert_eq!(got[1024 * 1024 - 1], 0xAB);
+        assert_eq!(got[BUFFER - 1], 0xAB);
         Ok(())
     })
 }

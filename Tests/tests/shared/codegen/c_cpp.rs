@@ -1,4 +1,5 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use crate::ToOwned;
 use saikuro_codegen::language::{c::CGenerator, cpp::CppGenerator};
@@ -37,11 +38,11 @@ fn has_file(output: &GeneratorOutput, name: &str) -> bool {
 }
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "codegen::c_generator_emits_expected_files",
         c_generator_emits_expected_files,
     );
-    suite.register(
+    shared_test!(suite,
         "codegen::cpp_generator_emits_expected_files",
         cpp_generator_emits_expected_files,
     );

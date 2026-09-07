@@ -9,6 +9,8 @@ extern crate alloc;
 pub mod shared;
 
 pub use shared::{
-    block_on, common, format, register_all, vec, AsyncTestFn, BTreeMap, Box, String, SyncTestFn,
-    Test, TestFn, TestSuite, ToOwned, ToString, Vec,
+    block_on, capacity, common, format, register_all, vec, AsyncTestFn, BTreeMap, Box, String,
+    SyncTestFn, Test, TestFn, TestSuite, ToOwned, ToString, Vec,
 };
+
+pub use shared::runner::run;

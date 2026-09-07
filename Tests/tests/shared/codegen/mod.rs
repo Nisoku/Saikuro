@@ -1,6 +1,7 @@
 use crate::TestSuite;
 
 mod binding_output {
+    use crate::shared_test;
     use crate::TestSuite;
     use crate::ToOwned;
     use saikuro_codegen::language::{
@@ -156,151 +157,151 @@ mod binding_output {
     }
 
     pub fn register(suite: &mut TestSuite) {
-        suite.register(
+        shared_test!(suite,
             "codegen::python_empty_schema_produces_required_files",
             python_empty_schema_produces_required_files,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_generates_client_per_namespace",
             python_generates_client_per_namespace,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_public_and_internal_functions_are_generated",
             python_public_and_internal_functions_are_generated,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_private_functions_are_omitted",
             python_private_functions_are_omitted,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_init_imports_all_clients",
             python_init_imports_all_clients,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_types_file_contains_record",
             python_types_file_contains_record,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_types_file_contains_enum",
             python_types_file_contains_enum,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_types_file_contains_alias",
             python_types_file_contains_alias,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_all_primitive_types_map_correctly",
             python_all_primitive_types_map_correctly,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_empty_schema_produces_required_files",
             typescript_empty_schema_produces_required_files,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_generates_client_per_namespace",
             typescript_generates_client_per_namespace,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_public_and_internal_functions_are_generated",
             typescript_public_and_internal_functions_are_generated,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_private_functions_are_omitted",
             typescript_private_functions_are_omitted,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_index_exports_all_clients",
             typescript_index_exports_all_clients,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_types_file_contains_interface",
             typescript_types_file_contains_interface,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_types_file_contains_enum_union",
             typescript_types_file_contains_enum_union,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_all_primitive_types_map_correctly",
             typescript_all_primitive_types_map_correctly,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_optional_arg_has_question_mark",
             typescript_optional_arg_has_question_mark,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_stream_method_calls_stream_not_call",
             python_stream_method_calls_stream_not_call,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::python_channel_method_calls_channel_not_call",
             python_channel_method_calls_channel_not_call,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_stream_method_calls_stream_not_call",
             typescript_stream_method_calls_stream_not_call,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::typescript_channel_method_calls_channel_not_call",
             typescript_channel_method_calls_channel_not_call,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_empty_schema_produces_required_files",
             csharp_empty_schema_produces_required_files,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_generates_client_per_namespace",
             csharp_generates_client_per_namespace,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_public_and_internal_functions_are_generated",
             csharp_public_and_internal_functions_are_generated,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_private_functions_are_omitted",
             csharp_private_functions_are_omitted,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_generated_file_lists_clients",
             csharp_generated_file_lists_clients,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_types_file_contains_record",
             csharp_types_file_contains_record,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_types_file_contains_enum",
             csharp_types_file_contains_enum,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_types_file_contains_alias",
             csharp_types_file_contains_alias,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_all_primitive_types_map_correctly",
             csharp_all_primitive_types_map_correctly,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_stream_method_uses_stream_async",
             csharp_stream_method_uses_stream_async,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::csharp_channel_method_uses_channel_async",
             csharp_channel_method_uses_channel_async,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::rust_empty_schema_produces_required_files",
             rust_empty_schema_produces_required_files,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::rust_generates_client_per_namespace",
             rust_generates_client_per_namespace,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::rust_private_functions_are_omitted",
             rust_private_functions_are_omitted,
         );
-        suite.register(
+        shared_test!(suite,
             "codegen::rust_stream_and_channel_methods_use_adapter_primitives",
             rust_stream_and_channel_methods_use_adapter_primitives,
         );

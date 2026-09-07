@@ -1291,13 +1291,13 @@ async fn invoke_c_handler(
     args: Vec<Value>,
 ) -> Result<Value, saikuro::Error> {
     let args_json = serde_json::to_string(&args)
-        .map_err(|e| saikuro::Error::InvalidState(format!("args encode failed: {e}")))?;
+        .map_err(|e| saikuro::Error::internal(format!("args encode failed: {e}")))?;
     let args_c = CString::new(args_json)
-        .map_err(|_| saikuro::Error::InvalidState("args contain NUL byte".to_owned()))?;
+        .map_err(|_| saikuro::Error::internal("args contain NUL byte".to_owned()))?;
 
     let result_ptr = unsafe { callback(user_data_addr as *mut c_void, args_c.as_ptr()) };
     if result_ptr.is_null() {
-        return Err(saikuro::Error::InvalidState(
+        return Err(saikuro::Error::internal(
             "C handler returned null".to_owned(),
         ));
     }
@@ -1305,11 +1305,11 @@ async fn invoke_c_handler(
     let result_owned = unsafe { CString::from_raw(result_ptr) };
     let result_str = result_owned
         .to_str()
-        .map_err(|_| saikuro::Error::InvalidState("C handler returned non-UTF8".to_owned()))?
+        .map_err(|_| saikuro::Error::internal("C handler returned non-UTF8".to_owned()))?
         .to_owned();
 
     let value: Value = serde_json::from_str(&result_str).map_err(|e| {
-        saikuro::Error::InvalidState(format!("C handler returned invalid JSON: {e}"))
+        saikuro::Error::internal(format!("C handler returned invalid JSON: {e}"))
     })?;
 
     Ok(value)

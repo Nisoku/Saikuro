@@ -1,8 +1,8 @@
 //! Rust adapter integration tests.
 //!
-//! All tests use [`InMemoryTransport`] so no network is required.
+//! All tests use [`MemoryAdapterTransport`] so no network is required.
 
-use saikuro::{Client, InMemoryTransport, Provider};
+use saikuro::{Client, MemoryAdapterTransport, Provider};
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
     ResponseEnvelope,
@@ -16,7 +16,7 @@ use serde_json::json;
 /// client on the other side.  The provider task is detached; it will stop when
 /// the client drops its side of the channel.
 async fn make_pair(provider: Provider) -> Client {
-    let (provider_t, client_t) = InMemoryTransport::pair();
+    let (provider_t, client_t) = MemoryAdapterTransport::pair();
 
     saikuro_exec::spawn(async move {
         // Ignore the error; the test ends when the client drops its side.
@@ -281,7 +281,7 @@ fn batch_returns_all_results() {
     })
 }
 
-// InMemoryTransport pair sanity check
+// MemoryAdapterTransport pair sanity check
 
 #[test]
 fn in_memory_transport_sends_and_receives() {
@@ -289,7 +289,7 @@ fn in_memory_transport_sends_and_receives() {
         use bytes::Bytes;
         use saikuro::transport::AdapterTransport;
 
-        let (mut a, mut b) = InMemoryTransport::pair();
+        let (mut a, mut b) = MemoryAdapterTransport::pair();
         let frame = Bytes::from_static(b"hello");
         a.send(frame.clone()).await.unwrap();
         let received = b.recv().await.unwrap();
@@ -302,7 +302,7 @@ fn resource_roundtrip_with_simulated_runtime() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let runtime_task = saikuro_exec::spawn(async move {
             let frame = runtime_side
@@ -340,7 +340,7 @@ fn stream_roundtrip_with_simulated_runtime() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let runtime_task = saikuro_exec::spawn(async move {
             let frame = runtime_side
@@ -401,7 +401,7 @@ fn channel_send_receive_and_close_with_simulated_runtime() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let runtime_task = saikuro_exec::spawn(async move {
             let open_frame = runtime_side
@@ -485,7 +485,7 @@ fn log_envelope_is_forwarded_to_runtime() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let runtime_task = saikuro_exec::spawn(async move {
             let frame = runtime_side
@@ -515,7 +515,7 @@ fn call_with_timeout_reports_timeout() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let _runtime_task = saikuro_exec::spawn(async move {
             // Receive one call envelope and intentionally do not respond.
@@ -545,7 +545,7 @@ fn client_acknowledges_announce_on_connect() {
     saikuro_exec::block_on(async {
         use saikuro::transport::AdapterTransport;
 
-        let (client_side, mut runtime_side) = InMemoryTransport::pair();
+        let (client_side, mut runtime_side) = MemoryAdapterTransport::pair();
 
         let announce_id = saikuro_core::invocation::InvocationId::new().expect("entropy available");
         let announce = Envelope {

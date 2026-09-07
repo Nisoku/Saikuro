@@ -4,6 +4,7 @@ use crate::format;
 use crate::vec;
 use crate::Box;
 use crate::String;
+use crate::shared_test;
 use crate::TestSuite;
 use crate::ToOwned;
 use crate::Vec;
@@ -22,55 +23,55 @@ use saikuro_runtime::SaikuroRuntime;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "wire::a_rust_provider_simulated_client_call",
         a_rust_provider_simulated_client_call,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::l_csharp_style_client_wire_fidelity",
         l_csharp_style_client_wire_fidelity,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::b_simulated_provider_rust_client_dispatch",
         b_simulated_provider_rust_client_dispatch,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::c_rust_and_simulated_providers_coexist",
         c_rust_and_simulated_providers_coexist,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::d_batch_call_from_simulated_client",
         d_batch_call_from_simulated_client,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::e_call_unknown_namespace_returns_error_on_wire",
         e_call_unknown_namespace_returns_error_on_wire,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::e_malformed_frame_returns_error_on_wire",
         e_malformed_frame_returns_error_on_wire,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::f_announce_then_client_call_round_trip",
         f_announce_then_client_call_round_trip,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::g_concurrent_simulated_clients",
         g_concurrent_simulated_clients,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::h_cast_fire_and_forget_returns_ok_empty",
         h_cast_fire_and_forget_returns_ok_empty,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::i_provider_reconnect_and_reannounce",
         i_provider_reconnect_and_reannounce,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::j_typescript_style_client_wire_fidelity",
         j_typescript_style_client_wire_fidelity,
     );
-    suite.register(
+    shared_test!(suite,
         "wire::k_response_id_always_matches_request_id",
         k_response_id_always_matches_request_id,
     );

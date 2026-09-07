@@ -1,5 +1,6 @@
 
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::envelope::Envelope;
 use saikuro_event::{ErrorCode, Value};
@@ -9,33 +10,33 @@ use saikuro_router::router::{InvocationRouter, RouterConfig};
 use core::time::Duration;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("router::call_returns_response", call_returns_response);
-    suite.register("router::cast_returns_ok_empty", cast_returns_ok_empty);
-    suite.register(
+    shared_test!(suite, "router::call_returns_response", call_returns_response);
+    shared_test!(suite, "router::cast_returns_ok_empty", cast_returns_ok_empty);
+    shared_test!(suite,
         "router::call_unknown_namespace_no_provider",
         call_unknown_namespace_no_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::call_dropped_provider_unavailable",
         call_dropped_provider_unavailable,
     );
-    suite.register(
+    shared_test!(suite,
         "router::multiple_sequential_calls",
         multiple_sequential_calls,
     );
-    suite.register(
+    shared_test!(suite,
         "router::cast_unknown_namespace_ok",
         cast_unknown_namespace_ok,
     );
-    suite.register(
+    shared_test!(suite,
         "router::call_null_target_malformed",
         call_null_target_malformed,
     );
-    suite.register(
+    shared_test!(suite,
         "router::call_times_out_when_provider_does_not_respond",
         call_times_out_when_provider_does_not_respond,
     );
-    suite.register(
+    shared_test!(suite,
         "router::concurrent_calls_all_succeed",
         concurrent_calls_all_succeed,
     );

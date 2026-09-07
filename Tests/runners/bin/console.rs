@@ -1,15 +1,26 @@
-//! Semihosting console output for the embedded QEMU runners.
+//! Semihosting console and host clock access for the embedded QEMU runners.
 
 use core::fmt;
 
+use portable_atomic::{AtomicU64, Ordering};
+
 #[cfg(target_arch = "riscv32")]
 const SYS_WRITE: usize = 0x05;
+#[cfg(target_arch = "riscv32")]
+const SYS_CLOCK: usize = 0x10;
 #[cfg(target_arch = "riscv32")]
 const SYS_EXIT: usize = 0x18;
 #[cfg(target_arch = "riscv32")]
 const STDOUT_FD: usize = 1;
 #[cfg(target_arch = "riscv32")]
 const ADP_STOPPED_APPLICATION_EXIT: usize = 0x20026;
+
+/// QEMU's `SYS_CLOCK` returns centiseconds; embassy-time runs at 1 MHz ticks.
+const MICROS_PER_CENTISEC: u64 = 10_000;
+
+/// Most recent monotonic timestamp in microsecond ticks, so the clock never
+/// reports a smaller value than a previous call.
+static LAST_NOW_US: AtomicU64 = AtomicU64::new(0);
 
 /// Console device writing to the QEMU semihosting debug channel.
 pub struct Console;
@@ -41,6 +52,31 @@ impl Default for Console {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Read QEMU's monotonic `SYS_CLOCK` (host CPU time, centiseconds) as
+/// microsecond embassy-time ticks.
+#[cfg(target_arch = "arm")]
+fn clock_us() -> u64 {
+    // SAFETY: SYS_CLOCK (0x10) takes no argument block; a null pointer is
+    // accepted by QEMU's `arm-compat-semi.c` handler.
+    unsafe { (cortex_m_semihosting::syscall1(cortex_m_semihosting::nr::CLOCK, 0) as u64)
+        .saturating_mul(MICROS_PER_CENTISEC) }
+}
+
+/// Read QEMU's monotonic `SYS_CLOCK` (host CPU time, centiseconds) as
+/// microsecond embassy-time ticks.
+#[cfg(target_arch = "riscv32")]
+fn clock_us() -> u64 {
+    (semihost(SYS_CLOCK, 0) as u64).saturating_mul(MICROS_PER_CENTISEC)
+}
+
+/// Monotonic microsecond clock for the embassy-time driver.
+///
+/// `SYS_CLOCK` never rolls backwards, but clamp through `LAST_NOW_US` anyway so
+/// the driver contract holds even if host time is adjusted mid-run.
+pub fn time_now_us() -> u64 {
+    LAST_NOW_US.fetch_max(clock_us(), Ordering::Relaxed)
 }
 
 #[cfg(target_arch = "riscv32")]

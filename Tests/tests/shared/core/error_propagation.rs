@@ -1,110 +1,111 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::{envelope::ResponseEnvelope, InvocationId};
 use saikuro_event::{ErrorCode, ErrorDetail, SaikuroError, Value};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "core::error_code_msgpack_roundtrip",
         error_code_msgpack_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "core::all_error_codes_survive_msgpack",
         all_error_codes_survive_msgpack,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_detail_display_includes_code",
         error_detail_display_includes_code,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_detail_with_context_accumulates",
         error_detail_with_context_accumulates,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_namespace_not_found",
         error_code_mapping_namespace_not_found,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_function_not_found",
         error_code_mapping_function_not_found,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_invalid_arguments",
         error_code_mapping_invalid_arguments,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_no_provider",
         error_code_mapping_no_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_provider_unavailable",
         error_code_mapping_provider_unavailable,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_timeout",
         error_code_mapping_timeout,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_capability_denied",
         error_code_mapping_capability_denied,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_message_too_large",
         error_code_mapping_message_too_large,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_malformed_envelope",
         error_code_mapping_malformed_envelope,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_internal_error",
         error_code_mapping_internal_error,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_buffer_overflow",
         error_code_mapping_buffer_overflow,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_stream_closed",
         error_code_mapping_stream_closed,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_channel_closed",
         error_code_mapping_channel_closed,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_connection_lost",
         error_code_mapping_connection_lost,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_code_mapping_incompatible_version",
         error_code_mapping_incompatible_version,
     );
-    suite.register(
+    shared_test!(suite,
         "core::saikuro_error_capability_invalid_maps",
         saikuro_error_capability_invalid_maps,
     );
-    suite.register(
+    shared_test!(suite,
         "core::saikuro_error_provider_error_maps",
         saikuro_error_provider_error_maps,
     );
-    suite.register(
+    shared_test!(suite,
         "core::saikuro_error_provider_panic_maps",
         saikuro_error_provider_panic_maps,
     );
-    suite.register(
+    shared_test!(suite,
         "core::saikuro_error_out_of_order_maps",
         saikuro_error_out_of_order_maps,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_detail_with_detail_accumulates",
         error_detail_with_detail_accumulates,
     );
-    suite.register(
+    shared_test!(suite,
         "core::error_response_survives_msgpack_roundtrip",
         error_response_survives_msgpack_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "core::provider_returns_error_response_to_caller",
         provider_returns_error_response_to_caller,
     );

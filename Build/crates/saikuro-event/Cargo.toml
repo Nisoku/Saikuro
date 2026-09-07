@@ -10,10 +10,10 @@ keywords = ["ipc", "cross-language", "saikuro", "error", "logging"]
 
 [features]
 default = ["std", "native", "stderr", "null", "filter"]
-std = []
+std = ["dep:web-time"]
 native = ["std"]
 no_std = []
-wasm = ["dep:wasm-bindgen"]
+wasm = ["dep:wasm-bindgen", "dep:web-time"]
 embedded = ["dep:embedded-io-async", "dep:spin", "dep:critical-section", "dep:portable-atomic"]
 stderr = ["native"]
 tracing = ["native", "dep:tracing"]
@@ -37,6 +37,7 @@ messagepack-serde = { workspace = true }
 async-trait = { workspace = true }
 getrandom = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = ["console"] }
 embedded-io-async = { workspace = true, optional = true }

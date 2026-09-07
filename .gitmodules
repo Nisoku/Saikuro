@@ -1,0 +1,3 @@
+[submodule "vendor/msgpack23"]
+	path = vendor/msgpack23
+	url = https://github.com/rwindegger/msgpack23

@@ -2,6 +2,7 @@
 
 use crate::check_test;
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use bytes::Bytes;
 use saikuro_core::{
@@ -15,31 +16,31 @@ use saikuro_schema::registry::{RegistryMode, SchemaRegistry};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::announce_registers_namespace_in_schema",
         announce_registers_namespace_in_schema,
     );
-    suite.register(
+    shared_test!(suite,
         "router::announce_allows_subsequent_calls_to_not_fail_schema_validation",
         announce_allows_subsequent_calls_to_not_fail_schema_validation,
     );
-    suite.register(
+    shared_test!(suite,
         "router::announce_in_production_mode_returns_error",
         announce_in_production_mode_returns_error,
     );
-    suite.register(
+    shared_test!(suite,
         "router::announce_with_invalid_schema_returns_error",
         announce_with_invalid_schema_returns_error,
     );
-    suite.register(
+    shared_test!(suite,
         "router::announce_with_no_args_returns_error",
         announce_with_no_args_returns_error,
     );
-    suite.register(
+    shared_test!(suite,
         "router::announce_does_not_route_to_provider",
         announce_does_not_route_to_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::multiple_announces_merge_all_namespaces",
         multiple_announces_merge_all_namespaces,
     );

@@ -1,4 +1,5 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use crate::Vec;
 use saikuro_core::capability::{CapabilitySet, CapabilityToken};
@@ -6,58 +7,58 @@ use saikuro_core::schema::{FunctionSchema, PrimitiveType, TypeDescriptor, Visibi
 use saikuro_schema::capability_engine::{CapabilityEngine, CapabilityOutcome};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "schema::empty_set_denies_required",
         empty_set_denies_required,
     );
-    suite.register("schema::exact_token_grants", exact_token_grants);
-    suite.register(
+    shared_test!(suite, "schema::exact_token_grants", exact_token_grants);
+    shared_test!(suite,
         "schema::wildcard_grants_everything",
         wildcard_grants_everything,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::grants_all_requires_every_token",
         grants_all_requires_every_token,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::empty_set_satisfies_no_requirements",
         empty_set_satisfies_no_requirements,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::engine_grants_no_required_caps",
         engine_grants_no_required_caps,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::engine_grants_when_holds_required",
         engine_grants_when_holds_required,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::engine_denies_when_missing",
         engine_denies_when_missing,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::engine_denies_first_missing",
         engine_denies_first_missing,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::engine_sandboxed_still_checks",
         engine_sandboxed_still_checks,
     );
-    suite.register("schema::cap_token_display_and_eq", cap_token_display_and_eq);
-    suite.register("schema::cap_set_insert_and_len", cap_set_insert_and_len);
-    suite.register(
+    shared_test!(suite, "schema::cap_token_display_and_eq", cap_token_display_and_eq);
+    shared_test!(suite, "schema::cap_set_insert_and_len", cap_set_insert_and_len);
+    shared_test!(suite,
         "schema::engine_grants_with_all_powerful_set",
         engine_grants_with_all_powerful_set,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::filter_accessible_functions_respects_caps",
         filter_accessible_functions_respects_caps,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::filter_accessible_functions_all_with_wildcard",
         filter_accessible_functions_all_with_wildcard,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::capability_set_iter_contains_all_tokens",
         capability_set_iter_contains_all_tokens,
     );

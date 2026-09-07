@@ -1,18 +1,16 @@
 //! Ergonomic builder types for constructing [`Schema`] values
 
 use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
 use saikuro_event::Result;
 
-pub use saikuro_core::{
-    schema::{TypeDescriptor, Visibility},
-};
+pub use saikuro_core::schema::{TypeDescriptor, Visibility};
 
 /// A simplified function schema used when registering functions.
 #[derive(Debug, Clone, Default)]
@@ -81,12 +79,9 @@ impl NamespaceSchema {
 
             let core_fn = saikuro_core::schema::FunctionSchema {
                 args,
-                returns: fs
-                    .returns
-                    .clone()
-                    .unwrap_or(TypeDescriptor::Primitive {
-                        r#type: saikuro_core::schema::PrimitiveType::Any,
-                    }),
+                returns: fs.returns.clone().unwrap_or(TypeDescriptor::Primitive {
+                    r#type: saikuro_core::schema::PrimitiveType::Any,
+                }),
                 visibility: fs.visibility.clone(),
                 capabilities: fs
                     .capabilities
@@ -108,7 +103,9 @@ impl NamespaceSchema {
 
 /// Build a full [`Schema`](saikuro_core::schema::Schema) from the given
 /// namespace map.
-pub fn build_schema(namespaces: &HashMap<String, NamespaceSchema>) -> Result<saikuro_core::schema::Schema> {
+pub fn build_schema(
+    namespaces: &HashMap<String, NamespaceSchema>,
+) -> Result<saikuro_core::schema::Schema> {
     let mut schema = saikuro_core::schema::Schema::new();
     for (ns_name, ns) in namespaces {
         schema.namespaces.insert(ns_name.clone(), ns.to_core()?);

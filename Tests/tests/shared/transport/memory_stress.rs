@@ -1,4 +1,5 @@
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use bytes::Bytes;
 use saikuro_core::Arc;
@@ -6,39 +7,39 @@ use saikuro_exec::sync::Barrier;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "transport::ten_thousand_frames_in_order",
         ten_thousand_frames_in_order,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::concurrent_bidirectional_stress",
         concurrent_bidirectional_stress,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::backpressure_sender_blocks_until_drain",
         backpressure_sender_blocks_until_drain,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::rapid_connect_disconnect_cycles",
         rapid_connect_disconnect_cycles,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::max_size_frame_just_under_limit",
         max_size_frame_just_under_limit,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::zero_length_frames_dont_confuse_ordering",
         zero_length_frames_dont_confuse_ordering,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::many_concurrent_senders_single_receiver",
         many_concurrent_senders_single_receiver,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::drop_receiver_while_sender_is_sending",
         drop_receiver_while_sender_is_sending,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::labels_do_not_cross_transports",
         labels_do_not_cross_transports,
     );
@@ -152,15 +153,17 @@ fn rapid_connect_disconnect_cycles() -> Result<(), &'static str> {
 }
 
 fn max_size_frame_just_under_limit() -> Result<(), &'static str> {
+    const BUFFER: usize = 16 * 1024 * 1024;
+    crate::capacity::require_capacity(BUFFER)?;
     saikuro_exec::block_on(async {
         let (a, b) = MemoryTransport::connected_pair(common::null_log());
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
 
-        let big = Bytes::from(crate::vec![0xFFu8; 16 * 1024 * 1024]);
+        let big = Bytes::from(crate::vec![0xFFu8; BUFFER]);
         sender.send(big.clone()).await.unwrap();
         let got = receiver.recv().await.unwrap().unwrap();
-        assert_eq!(got.len(), 16 * 1024 * 1024);
+        assert_eq!(got.len(), BUFFER);
         assert_eq!(got, big);
         Ok(())
     })

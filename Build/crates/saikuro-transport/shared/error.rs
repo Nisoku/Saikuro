@@ -42,7 +42,9 @@ impl From<TransportError> for saikuro_event::SaikuroError {
             TransportError::ConnectionLost(s) => SaikuroError::ConnectionLost(s),
             TransportError::SendFailed(s) => SaikuroError::SendFailed(s),
             TransportError::ReceiveFailed(s) => SaikuroError::ReceiveFailed(s),
-            TransportError::MessageTooLarge { size, limit } => SaikuroError::MessageTooLarge { size, limit },
+            TransportError::MessageTooLarge { size, limit } => {
+                SaikuroError::MessageTooLarge { size, limit }
+            }
             TransportError::FramingError(s) => SaikuroError::FramingError(s),
             TransportError::NotSupported => SaikuroError::TransportNotSupported,
             TransportError::ChannelClosed => SaikuroError::ChannelClosed,

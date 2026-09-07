@@ -5,8 +5,6 @@
 
 extern crate alloc;
 
-use alloc::fmt::Write as _;
-use alloc::format;
 use alloc::string::String;
 use core::task::Waker;
 
@@ -14,7 +12,7 @@ use core::task::Waker;
 mod wasi;
 
 use embassy_time_driver::Driver;
-use saikuro_tests::{block_on, register_all, TestFn, TestSuite};
+use saikuro_tests::{register_all, run, TestSuite};
 
 /// Layout-compatible with `__wasi_ciovec_t`.
 #[repr(C)]
@@ -69,52 +67,22 @@ fn write_stdout(bytes: &[u8]) {
     }
 }
 
-/// Run the full suite, returning the accumulated report and the failure count.
-fn run_suite() -> (String, u32) {
+/// Run the full suite, returning the number of failures.
+fn run_suite() -> u32 {
     let mut suite = TestSuite::new();
     register_all(&mut suite);
     wasi::register(&mut suite);
 
-    let mut report: String = format!(
-        "registered {} sync, {} async tests\n",
-        suite.count_sync(),
-        suite.count_async()
-    );
-    write_stdout(report.as_bytes());
-
-    for test in &suite.tests {
-        let result = match &test.run {
-            TestFn::Sync(f) => f(),
-            TestFn::Async(f) => block_on(f()),
-        };
-        match result {
-            Ok(()) => {
-                let _ = writeln!(report, "  PASS {}", test.name);
-            }
-            Err(e) => {
-                let _ = writeln!(report, "  FAIL {}: {}", test.name, e);
-                suite.failed += 1;
-                suite.failures.push(test.name);
-            }
-        }
-    }
-
-    let _ = writeln!(
-        report,
-        "Results: {} passed, {} failed",
-        suite.count_sync() + suite.count_async() - suite.failures.len() as u32,
-        suite.failed
-    );
-    if suite.failed > 0 {
-        let _ = writeln!(report, "failures: {:?}", suite.failures);
-    }
-    (report, suite.failed)
+    run(&mut suite, |line| {
+        let mut out = String::from(line);
+        out.push('\n');
+        write_stdout(out.as_bytes());
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn _start() {
-    let (report, failed) = run_suite();
-    write_stdout(report.as_bytes());
+    let failed = run_suite();
     let code = if failed == 0 { 0 } else { 1 };
     // SAFETY: terminating the WASI process is the intended final action.
     unsafe { proc_exit(code) }
@@ -124,11 +92,11 @@ pub extern "C" fn _start() {
 // `.cargo/config.toml`), so no libc provides the memcmp required by
 // alloc/serde code. Implement it against the same ABI as wasi-libc.
 #[no_mangle]
-pub unsafe extern "C" fn memcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
+pub unsafe extern "C" fn memcmp(a: *const core::ffi::c_void, b: *const core::ffi::c_void, n: usize) -> i32 {
     // SAFETY: callers pass valid, in-bounds buffers of length `n`.
     unsafe {
-        let sa = core::slice::from_raw_parts(a, n);
-        let sb = core::slice::from_raw_parts(b, n);
+        let sa = core::slice::from_raw_parts(a.cast::<u8>(), n);
+        let sb = core::slice::from_raw_parts(b.cast::<u8>(), n);
         for (x, y) in sa.iter().zip(sb.iter()) {
             if x != y {
                 return (*x as i32) - (*y as i32);

@@ -2,6 +2,7 @@
 
 use crate::check_test;
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
@@ -16,55 +17,55 @@ use saikuro_router::{
 use saikuro_schema::registry::SchemaRegistry;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::resource_envelope_constructor_sets_correct_type",
         resource_envelope_constructor_sets_correct_type,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_envelope_routes_as_call",
         resource_envelope_routes_as_call,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_envelope_returns_handle_from_provider",
         resource_envelope_returns_handle_from_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_to_unknown_namespace_returns_no_provider",
         resource_to_unknown_namespace_returns_no_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_to_dropped_provider_returns_unavailable",
         resource_to_dropped_provider_returns_unavailable,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_handle_minimal_roundtrips_through_value",
         resource_handle_minimal_roundtrips_through_value,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_handle_full_roundtrips_through_value",
         resource_handle_full_roundtrips_through_value,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_dispatch_through_connection_handler",
         resource_dispatch_through_connection_handler,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_to_unknown_namespace_via_handler_returns_namespace_not_found",
         resource_to_unknown_namespace_via_handler_returns_namespace_not_found,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_response_id_matches_request_id",
         resource_response_id_matches_request_id,
     );
-    suite.register(
+    shared_test!(suite,
         "router::concurrent_resource_invocations_all_succeed",
         concurrent_resource_invocations_all_succeed,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_handle_from_value_rejects_non_map",
         resource_handle_from_value_rejects_non_map,
     );
-    suite.register(
+    shared_test!(suite,
         "router::resource_handle_from_value_rejects_missing_id",
         resource_handle_from_value_rejects_missing_id,
     );

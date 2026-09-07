@@ -10,11 +10,16 @@ use linked_list_allocator::Heap;
 use riscv_rt::entry;
 use spin::Mutex;
 
+// The `riscv` crate provides the critical-section impl via `critical_section::set_impl!`.
+// Nothing in this app imports from it, so force linkage so the `_critical_section_1_0_*`
+// symbols reach the final image (required by portable-atomic's no-atomics CAS fallback).
+#[used]
+static KEEP_RISCV_CRITICAL_SECTION_IMPL: fn() = riscv::interrupt::disable;
+
 mod embedded_runner;
 
 static HEAP: Mutex<Heap> = Mutex::new(Heap::empty());
 static mut HEAP_MEM: [u8; 128 * 1024] = [0u8; 128 * 1024];
-static mut TICKS: u64 = 0;
 
 struct GlobalHeap;
 
@@ -34,14 +39,6 @@ unsafe impl GlobalAlloc for GlobalHeap {
 
 #[global_allocator]
 static ALLOCATOR: GlobalHeap = GlobalHeap;
-
-#[no_mangle]
-unsafe extern "C" fn _embassy_time_now() -> u64 {
-    TICKS
-}
-
-#[no_mangle]
-unsafe extern "C" fn _embassy_time_schedule_wake(_at: u64, _waker: *const ()) {}
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

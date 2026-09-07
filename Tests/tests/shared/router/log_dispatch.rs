@@ -1,6 +1,7 @@
 //! Log-envelope dispatch tests.
 
 use crate::check_test;
+use crate::shared_test;
 use crate::TestSuite;
 use crate::Box;
 use core::task::Poll;
@@ -21,31 +22,31 @@ use spin::Mutex;
 type Captured = Arc<Mutex<crate::Vec<LogRecord>>>;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::log_envelope_is_not_routed_to_provider",
         log_envelope_is_not_routed_to_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::log_envelope_delivers_record_to_sink",
         log_envelope_delivers_record_to_sink,
     );
-    suite.register(
+    shared_test!(suite,
         "router::log_all_levels_are_forwarded",
         log_all_levels_are_forwarded,
     );
-    suite.register(
+    shared_test!(suite,
         "router::log_envelope_with_no_args_returns_ok_without_panicking",
         log_envelope_with_no_args_returns_ok_without_panicking,
     );
-    suite.register(
+    shared_test!(suite,
         "router::log_envelope_with_invalid_args_returns_ok_without_panicking",
         log_envelope_with_invalid_args_returns_ok_without_panicking,
     );
-    suite.register(
+    shared_test!(suite,
         "router::router_with_custom_sink_still_routes_calls",
         router_with_custom_sink_still_routes_calls,
     );
-    suite.register(
+    shared_test!(suite,
         "router::multiple_log_envelopes_all_delivered_to_sink",
         multiple_log_envelopes_all_delivered_to_sink,
     );

@@ -1,4 +1,5 @@
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use bytes::Bytes;
 use saikuro_core::Arc;
@@ -16,7 +17,6 @@ where
     send_fails_when_receiver_dropped(factory())?;
     bidirectional_exchange(factory())?;
     empty_frame(factory())?;
-    large_frame(factory())?;
     close_sender_signals_eof(factory())?;
     concurrent_send_receive(factory())?;
     sender_receiver_independent_lifecycles(factory())?;
@@ -121,16 +121,25 @@ fn empty_frame(pair: (MemoryTransport, MemoryTransport)) -> Result<(), &'static 
 }
 
 fn large_frame(pair: (MemoryTransport, MemoryTransport)) -> Result<(), &'static str> {
+    const BUFFER: usize = 1024 * 1024;
+    crate::capacity::require_capacity(BUFFER)?;
     block_on(async {
         let (a, b) = pair;
         let (mut sender, _) = a.split();
         let (_, mut receiver) = b.split();
-        let big = Bytes::from(crate::vec![0xABu8; 1024 * 1024]);
+        let big = Bytes::from(crate::vec![0xABu8; BUFFER]);
         sender.send(big.clone()).await.unwrap();
         let got = receiver.recv().await.unwrap().unwrap();
         assert_eq!(got, big);
         Ok(())
     })
+}
+
+/// Standalone large-payload transport round-trip, kept out of the compliance bundle
+/// so only this sub-check skips on chips with less than 1 MB of budget.
+fn large_frame_round_trip() -> Result<(), &'static str> {
+    let log = common::null_log();
+    large_frame(MemoryTransport::connected_pair(log))
 }
 
 fn close_sender_signals_eof(pair: (MemoryTransport, MemoryTransport)) -> Result<(), &'static str> {
@@ -219,13 +228,17 @@ fn many_sequential_transports_correct(
 }
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "transport::memory_transport_compliance",
         memory_transport_compliance,
     );
-    suite.register(
+    shared_test!(suite,
         "transport::memory_transport_compliance_labeled",
         memory_transport_compliance_labeled,
+    );
+    shared_test!(suite,
+        "transport::large_frame_round_trip",
+        large_frame_round_trip,
     );
 }
 

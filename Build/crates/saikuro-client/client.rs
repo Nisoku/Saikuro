@@ -1,166 +1,33 @@
 //! Saikuro async client.
 //!
-//! Multiplexes call/cast/stream/channel/resource/log/batch over one transport connection using
-//! invocation IDs as correlation keys.
-//!
+//! Multiplexes call/cast/stream/channel/resource/log/batch over one transport
+//! connection using invocation IDs as correlation keys.
 
-use alloc::sync::Arc;
-use alloc::{
-    borrow::ToOwned,
-    boxed::Box,
-    string::{String, ToString},
-    vec::Vec,
-};
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::time::Duration;
 
 use bytes::Bytes;
-use dashmap::DashMap;
 use futures::future::FutureExt;
-use saikuro_core::{
-    envelope::{Envelope, InvocationType, ResponseEnvelope, StreamControl},
-    invocation::InvocationId,
-    PROTOCOL_VERSION,
-};
-use saikuro_event::{core_to_json, json_to_core, ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, SaikuroError};
+use saikuro_core::envelope::{Envelope, InvocationType};
+use saikuro_core::invocation::InvocationId;
 use saikuro_event::Result;
+use saikuro_event::{LogLevel, LogRecord, LogSink, SaikuroError};
 use saikuro_exec::{mpsc, oneshot, sync::Mutex};
 use saikuro_transport::{connect, AdapterTransport};
 
+use crate::shared::helpers::{
+    drain_announces, handle_inbound, make_envelope, response_to_result, teardown_pending,
+};
+use crate::shared::map::{ChannelSenderMap, PendingMap};
+use crate::shared::types::{
+    Arc, AtomicBool, ChannelSendTx, ClientOptions, Ordering, PendingSlot, SaikuroChannel,
+    SaikuroStream, CHANNEL_CAPACITY, STREAM_CHANNEL_CAPACITY,
+};
 use crate::Value;
 
-/// Default capacity for the outbound frame channel and stream/channel buffers.
-const CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
-
-/// Capacity for stream and channel pending item buffers.
-const STREAM_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
-    saikuro_exec::ChannelCapacity::DEFAULT;
-
-/// Options for [`Client`].
-#[derive(Debug, Clone, Default)]
-pub struct ClientOptions {
-    /// Default timeout for `call` invocations. `None` means no timeout.
-    pub default_timeout: Option<Duration>,
-}
-
-// An async stream of values received from a provider.
-
-type StreamItem = Result<Value>;
-type ChannelSendTx = Arc<Mutex<Option<mpsc::Sender<Bytes>>>>;
-
-/// An async stream of values yielded by a provider-side stream function.
-///
-/// Obtained from [`Client::stream`].
-pub struct SaikuroStream {
-    receiver: mpsc::Receiver<StreamItem>,
-}
-
-impl SaikuroStream {
-    fn new(receiver: mpsc::Receiver<StreamItem>) -> Self {
-        Self { receiver }
-    }
-
-    /// Receive the next item from the stream.
-    ///
-    /// Returns `None` when the stream is closed.
-    pub async fn next(&mut self) -> Option<StreamItem> {
-        self.receiver.recv().await
-    }
-}
-
-/// A bidirectional channel opened with [`Client::channel`].
-///
-/// Use [`SaikuroChannel::send`] to push items to the provider and
-/// [`SaikuroChannel::next`] to receive items from the provider.
-pub struct SaikuroChannel {
-    id: InvocationId,
-    send_tx: ChannelSendTx,
-    receiver: mpsc::Receiver<StreamItem>,
-    outbound_seq: AtomicU64,
-}
-
-impl SaikuroChannel {
-    fn new(id: InvocationId, send_tx: ChannelSendTx, receiver: mpsc::Receiver<StreamItem>) -> Self {
-        Self {
-            id,
-            send_tx,
-            receiver,
-            outbound_seq: AtomicU64::new(0),
-        }
-    }
-
-    fn next_seq(&self) -> u64 {
-        self.outbound_seq.fetch_add(1, Ordering::Relaxed)
-    }
-
-    async fn send_channel_envelope(&self, envelope: &Envelope) -> Result<()> {
-        let bytes = envelope
-            .to_msgpack()
-            .map_err(|e| SaikuroError::Serialization(e.to_string()))?;
-        let send_tx = self.send_tx.lock().await.clone();
-        let send_tx =
-            send_tx.ok_or_else(|| SaikuroError::SendFailed("client send channel closed".into()))?;
-        send_tx
-            .send(Bytes::from(bytes))
-            .await
-            .map_err(|_| SaikuroError::SendFailed("client send channel closed".into()))
-    }
-
-    /// Close the channel by sending a StreamControl::End frame.
-    pub async fn close(&self) -> Result<()> {
-        let mut envelope = make_envelope_with_id(
-            self.id,
-            InvocationType::Channel,
-            "",
-            vec![],
-            Some(self.next_seq()),
-        );
-        envelope.stream_control = Some(StreamControl::End);
-        self.send_channel_envelope(&envelope).await
-    }
-
-    /// Abort the channel by sending a StreamControl::Abort frame.
-    pub async fn abort(&self) -> Result<()> {
-        let mut envelope = make_envelope_with_id(
-            self.id,
-            InvocationType::Channel,
-            "",
-            vec![],
-            Some(self.next_seq()),
-        );
-        envelope.stream_control = Some(StreamControl::Abort);
-        self.send_channel_envelope(&envelope).await
-    }
-
-    /// Send a value to the provider side of this channel.
-    pub async fn send(&self, value: Value) -> Result<()> {
-        let envelope = make_envelope_with_id(
-            self.id,
-            InvocationType::Channel,
-            "",
-            vec![value],
-            Some(self.next_seq()),
-        );
-        self.send_channel_envelope(&envelope).await
-    }
-
-    /// Receive the next inbound channel item.
-    ///
-    /// Returns `None` when the channel is closed.
-    pub async fn next(&mut self) -> Option<StreamItem> {
-        self.receiver.recv().await
-    }
-}
-// Internal routing
-enum PendingSlot {
-    /// A one-shot call waiting for a single response.
-    Call(oneshot::Sender<ResponseEnvelope>),
-    /// An open stream accumulating items.
-    Stream(mpsc::Sender<StreamItem>),
-    /// An open bidirectional channel accumulating inbound items.
-    Channel(mpsc::Sender<StreamItem>),
-}
-// Client
 /// Async Saikuro client over a single transport connection.
 ///
 /// The client spawns a background I/O task that drives outbound sends and
@@ -171,9 +38,9 @@ pub struct Client {
     /// Send half of the outbound frame channel.
     send_tx: mpsc::Sender<Bytes>,
     /// Pending calls and open streams, keyed by invocation ID.
-    pending: Arc<DashMap<InvocationId, PendingSlot>>,
+    pending: Arc<PendingMap>,
     /// Channel-specific outbound sender handles to invalidate on shutdown.
-    channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>>,
+    channel_senders: Arc<ChannelSenderMap>,
     /// Background I/O task handle.
     recv_task: Option<saikuro_exec::JoinHandle<()>>,
     /// Whether the client is still connected.
@@ -223,7 +90,11 @@ impl Client {
         transport: Box<dyn AdapterTransport>,
         options: Option<ClientOptions>,
     ) -> Result<Self> {
-        Self::from_transport_with_log(transport, options, Arc::new(saikuro_event::NullSink))
+        Self::from_transport_with_log(
+            transport,
+            options,
+            Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn LogSink>),
+        )
     }
 
     /// Construct a client from an already-connected transport with a log sink.
@@ -233,8 +104,8 @@ impl Client {
         log: Arc<dyn LogSink>,
     ) -> Result<Self> {
         let options = options.unwrap_or_default();
-        let pending: Arc<DashMap<InvocationId, PendingSlot>> = Arc::new(DashMap::new());
-        let channel_senders: Arc<DashMap<InvocationId, ChannelSendTx>> = Arc::new(DashMap::new());
+        let pending = Arc::new(PendingMap::new());
+        let channel_senders = Arc::new(ChannelSenderMap::new());
         let connected = Arc::new(AtomicBool::new(true));
 
         let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(CHANNEL_CAPACITY);
@@ -314,11 +185,7 @@ impl Client {
 
     /// Gracefully close the client.
     pub async fn close(mut self) -> Result<()> {
-        let channels: Vec<ChannelSendTx> = self
-            .channel_senders
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect();
+        let channels: Vec<ChannelSendTx> = self.channel_senders.clone_values();
         for channel_send in channels {
             let _ = channel_send.lock().await.take();
         }
@@ -364,9 +231,13 @@ impl Client {
         };
 
         let resp = match timeout {
-            Some(t) => saikuro_exec::timeout(t, recv_fut)
-                .await
-                .map_err(|_| SaikuroError::Timeout { millis: t.as_millis() as u64 })?,
+            Some(t) => {
+                saikuro_exec::timeout(t, recv_fut)
+                    .await
+                    .map_err(|_| SaikuroError::Timeout {
+                        millis: t.as_millis() as u64,
+                    })?
+            }
             None => recv_fut.await,
         }?;
 
@@ -403,10 +274,6 @@ impl Client {
     }
 
     /// Execute multiple calls in a single batch envelope and return all results.
-    ///
-    /// Results are returned in the same order as `calls`.  Individual item
-    /// failures are represented as `null` in the result array (matching the
-    /// provider-side batch semantics).
     pub async fn batch(&self, calls: Vec<(String, Vec<Value>)>) -> Result<Vec<Value>> {
         let batch_items: Vec<Envelope> = calls
             .into_iter()
@@ -414,11 +281,11 @@ impl Client {
             .collect::<Result<_>>()?;
 
         let batch_env = Envelope {
-            version: PROTOCOL_VERSION,
+            version: saikuro_core::PROTOCOL_VERSION,
             invocation_type: InvocationType::Batch,
             id: InvocationId::new()?,
             target: "$batch".into(),
-            args: vec![],
+            args: alloc::vec![],
             meta: Default::default(),
             capability: None,
             batch_items: Some(batch_items),
@@ -440,16 +307,13 @@ impl Client {
 
         let overall = response_to_result(resp)?;
 
-        // The provider returns the batch result as a JSON array.
         match overall {
             Value::Array(items) => Ok(items),
-            other => Ok(vec![other]),
+            other => Ok(alloc::vec![other]),
         }
     }
 
     /// Open a bidirectional channel.
-    ///
-    /// Use the returned [`SaikuroChannel`] to send and receive values.
     pub async fn channel(
         &self,
         target: impl Into<String>,
@@ -494,8 +358,6 @@ impl Client {
     }
 
     /// Forward a structured log record to the runtime log sink.
-    ///
-    /// This is fire-and-forget and does not wait for a response.
     pub async fn log(
         &self,
         level: impl Into<String>,
@@ -511,7 +373,11 @@ impl Client {
             record.insert("fields".to_owned(), extra);
         }
 
-        let envelope = make_envelope(InvocationType::Log, "$log", vec![Value::Object(record)])?;
+        let envelope = make_envelope(
+            InvocationType::Log,
+            "$log",
+            alloc::vec![Value::Object(record)],
+        )?;
         self.send_envelope(&envelope).await
     }
 
@@ -524,191 +390,5 @@ impl Client {
             .send(Bytes::from(bytes))
             .await
             .map_err(|_| SaikuroError::SendFailed("client send channel closed".into()))
-    }
-}
-// Background task helpers
-
-/// Drain announce envelopes that arrived before the client's I/O task starts.
-async fn drain_announces(transport: &mut dyn AdapterTransport) {
-    const POLL_TIMEOUT: Duration = Duration::from_millis(20);
-
-    while let Ok(Ok(Some(frame))) = saikuro_exec::timeout(POLL_TIMEOUT, transport.recv()).await {
-        if let Ok(env) = Envelope::from_msgpack(&frame) {
-            if env.invocation_type == InvocationType::Announce {
-                let ack = ResponseEnvelope::ok_empty(env.id);
-                if let Ok(ack_bytes) = ack.to_msgpack() {
-                    let _ = transport.send(Bytes::from(ack_bytes)).await;
-                }
-                continue;
-            }
-        }
-    }
-}
-
-/// Process a single inbound frame from the transport.
-///
-/// Tries to decode it as a [`ResponseEnvelope`] and route it to its pending
-/// slot.  If decoding fails, logs a warning.  Announce frames that slip
-/// through after the handshake phase (should not happen in practice) are
-/// acked so that a misbehaving peer does not stall.
-async fn handle_inbound(
-    frame: Bytes,
-    transport: &mut dyn AdapterTransport,
-    pending: &DashMap<InvocationId, PendingSlot>,
-    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
-) {
-    if let Ok(resp) = ResponseEnvelope::from_msgpack(&frame) {
-        route_response(resp, pending, channel_senders).await;
-        return;
-    }
-
-    // Fall back to Envelope: this catches late/duplicate announces.
-    if let Ok(env) = Envelope::from_msgpack(&frame) {
-        if env.invocation_type == InvocationType::Announce {
-            let ack = ResponseEnvelope::ok_empty(env.id);
-            if let Ok(ack_bytes) = ack.to_msgpack() {
-                let _ = transport.send(Bytes::from(ack_bytes)).await;
-            }
-        }
-    }
-}
-
-async fn route_response(
-    resp: ResponseEnvelope,
-    pending: &DashMap<InvocationId, PendingSlot>,
-    channel_senders: &DashMap<InvocationId, ChannelSendTx>,
-) {
-    let id = resp.id;
-    let is_stream_end = resp
-        .stream_control
-        .as_ref()
-        .is_some_and(|c| matches!(c, StreamControl::End | StreamControl::Abort));
-    let is_error = !resp.ok;
-
-    let slot = pending.get(&id);
-    match slot.as_deref() {
-        Some(PendingSlot::Call(_)) => {
-            drop(slot);
-            if let Some((_, PendingSlot::Call(tx))) = pending.remove(&id) {
-                let _ = tx.send(resp);
-            }
-        }
-        Some(PendingSlot::Stream(tx)) => {
-            let tx = tx.clone();
-            drop(slot);
-            if is_stream_end {
-                pending.remove(&id);
-            } else if is_error {
-                let detail = resp
-                    .error
-                    .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "stream error"));
-                let _ = tx
-                    .send(Err(SaikuroError::remote(
-                        detail.code.to_string(),
-                        detail.message,
-                        None,
-                    )))
-                    .await;
-                pending.remove(&id);
-            } else {
-                let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                if tx.send(Ok(value)).await.is_err() {
-                    pending.remove(&id);
-                }
-            }
-        }
-        Some(PendingSlot::Channel(tx)) => {
-            let tx = tx.clone();
-            drop(slot);
-            if is_stream_end {
-                pending.remove(&id);
-                if let Some((_, sender)) = channel_senders.remove(&id) {
-                    let _ = sender.lock().await.take();
-                }
-            } else if is_error {
-                let detail = resp
-                    .error
-                    .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "channel error"));
-                let _ = tx.try_send(Err(SaikuroError::remote(
-                    detail.code.to_string(),
-                    detail.message,
-                    None,
-                )));
-                pending.remove(&id);
-                if let Some((_, sender)) = channel_senders.remove(&id) {
-                    let _ = sender.lock().await.take();
-                }
-            } else {
-                let value = resp.result.map(core_to_json).unwrap_or(Value::Null);
-                if tx.try_send(Ok(value)).is_err() {
-                    pending.remove(&id);
-                    if let Some((_, sender)) = channel_senders.remove(&id) {
-                        let _ = sender.lock().await.take();
-                    }
-                }
-            }
-        }
-        None => {}
-    }
-}
-
-fn teardown_pending(pending: &DashMap<InvocationId, PendingSlot>) {
-    let keys: Vec<InvocationId> = pending.iter().map(|e| *e.key()).collect();
-    for key in keys {
-        if let Some((_, slot)) = pending.remove(&key) {
-            match slot {
-                PendingSlot::Call(tx) => drop(tx),
-                PendingSlot::Stream(tx) => {
-                    let _ = tx.try_send(Err(SaikuroError::ConnectionLost("connection lost".into())));
-                }
-                PendingSlot::Channel(tx) => {
-                    let _ = tx.try_send(Err(SaikuroError::ConnectionLost("connection lost".into())));
-                }
-            }
-        }
-    }
-}
-// Helpers
-fn make_envelope(inv_type: InvocationType, target: &str, args: Vec<Value>) -> Result<Envelope> {
-    Ok(make_envelope_with_id(
-        InvocationId::new()?,
-        inv_type,
-        target,
-        args,
-        None,
-    ))
-}
-
-fn make_envelope_with_id(
-    id: InvocationId,
-    inv_type: InvocationType,
-    target: &str,
-    args: Vec<Value>,
-    seq: Option<u64>,
-) -> Envelope {
-    let core_args: Vec<saikuro_event::Value> = args.into_iter().map(json_to_core).collect();
-    Envelope {
-        version: PROTOCOL_VERSION,
-        invocation_type: inv_type,
-        id,
-        target: target.to_owned(),
-        args: core_args,
-        meta: Default::default(),
-        capability: None,
-        batch_items: None,
-        stream_control: None,
-        seq,
-    }
-}
-
-/// Convert a [`ResponseEnvelope`] into a `Result<Value>`.
-fn response_to_result(resp: ResponseEnvelope) -> Result<Value> {
-    if resp.ok {
-        Ok(resp.result.map(core_to_json).unwrap_or(Value::Null))
-    } else {
-        let detail = resp
-            .error
-            .unwrap_or_else(|| ErrorDetail::new(ErrorCode::Internal, "call failed with no detail"));
-        Err(SaikuroError::remote(detail.code.to_string(), detail.message, None))
     }
 }

@@ -11,9 +11,11 @@ pub use alloc::vec::Vec;
 use ::core::future::Future;
 use ::core::pin::Pin;
 
+pub mod capacity;
 pub mod codegen;
 pub mod common;
 pub mod core;
+pub mod runner;
 pub mod exec;
 pub mod router;
 pub mod runtime;
@@ -40,6 +42,45 @@ where
     F::Output: 'static,
 {
     saikuro_exec::block_on(fut)
+}
+
+/// Register a sync shared test and, on wasm, expose it as its own
+/// `wasm-bindgen-test` entry.
+#[macro_export]
+macro_rules! shared_test {
+    ($suite:expr, $name:literal, $run:ident $(,)?) => {
+        $suite.register($name, $run);
+
+        #[cfg(all(target_arch = "wasm32", test))]
+        mod $run {
+            #[wasm_bindgen_test::wasm_bindgen_test]
+            fn $run() {
+                match super::$run() {
+                    Ok(()) => {}
+                    Err(e) => panic!("{} failed: {}", $name, e),
+                }
+            }
+        }
+    };
+}
+
+/// Async counterpart to [`shared_test`]
+#[macro_export]
+macro_rules! shared_test_async {
+    ($suite:expr, $name:literal, $run:ident $(,)?) => {
+        $suite.register_async($name, $run);
+
+        #[cfg(all(target_arch = "wasm32", test))]
+        mod $run {
+            #[wasm_bindgen_test::wasm_bindgen_test]
+            async fn $run() {
+                match crate::block_on(super::$run()) {
+                    Ok(()) => {}
+                    Err(e) => panic!("{} failed: {}", $name, e),
+                }
+            }
+        }
+    };
 }
 
 pub type SyncTestFn = fn() -> Result<(), &'static str>;

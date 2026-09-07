@@ -23,7 +23,6 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
 
 fn m_rust_adapter_client_calls_runtime_provider() -> Result<(), &'static str> {
     saikuro_tests::block_on(async {
-        use saikuro::transport::InMemoryTransport;
         use saikuro::Client;
 
         let runtime = SaikuroRuntime::builder().build().await;
@@ -46,10 +45,10 @@ fn m_rust_adapter_client_calls_runtime_provider() -> Result<(), &'static str> {
             })
             .await;
 
-        let (client_side, bridge_side) = InMemoryTransport::pair();
+        let bridge_log = saikuro_tests::shared::common::null_log();
+        let (client_side, bridge_side) = saikuro_transport::MemoryAdapterTransport::pair();
 
         let (mut bridge_sender, mut bridge_receiver) = {
-            let bridge_log = saikuro_tests::shared::common::null_log();
             let (ts, tr) =
                 saikuro_transport::MemoryTransport::pair("m-bridge", "m-bridge-rt", bridge_log);
             handle.accept_transport(tr, "m-rust-client".to_owned(), CapabilitySet::empty());
@@ -100,16 +99,15 @@ fn m_rust_adapter_client_calls_runtime_provider() -> Result<(), &'static str> {
 
 fn n_rust_adapter_provider_serves_simulated_client() -> Result<(), &'static str> {
     saikuro_tests::block_on(async {
-        use saikuro::transport::InMemoryTransport;
         use saikuro::{ArgDescriptor, FunctionSchema, Provider, RegisterOptions};
 
         let runtime = SaikuroRuntime::builder().build().await;
         let handle = runtime.handle();
 
-        let (provider_side, bridge_side) = InMemoryTransport::pair();
+        let bridge_log = saikuro_tests::shared::common::null_log();
+        let (provider_side, bridge_side) = saikuro_transport::MemoryAdapterTransport::pair();
 
         let (mut bridge_sender, mut bridge_receiver) = {
-            let bridge_log = saikuro_tests::shared::common::null_log();
             let (ts, tr) =
                 saikuro_transport::MemoryTransport::pair("n-bridge", "n-bridge-rt", bridge_log);
             handle.accept_transport(tr, "n-rust-provider".to_owned(), CapabilitySet::empty());

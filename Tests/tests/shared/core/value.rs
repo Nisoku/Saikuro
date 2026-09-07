@@ -1,5 +1,6 @@
 
 use crate::Box;
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::schema::{
     FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
@@ -8,17 +9,17 @@ use saikuro_core::schema::{
 use saikuro_event::Value;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "core::schema_round_trip_via_value",
         schema_round_trip_via_value,
     );
-    suite.register(
+    shared_test!(suite,
         "core::array_not_confused_with_bytes",
         array_not_confused_with_bytes,
     );
-    suite.register("core::bytes_round_trip", bytes_round_trip);
-    suite.register("core::simple_map_round_trip", simple_map_round_trip);
-    suite.register(
+    shared_test!(suite, "core::bytes_round_trip", bytes_round_trip);
+    shared_test!(suite, "core::simple_map_round_trip", simple_map_round_trip);
+    shared_test!(suite,
         "core::map_equality_ignores_insertion_order",
         map_equality_ignores_insertion_order,
     );

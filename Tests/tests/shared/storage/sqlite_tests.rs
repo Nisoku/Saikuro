@@ -1,16 +1,17 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_storage::KeyValueBackend;
 use saikuro_storage::SqliteStorage;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("sqlite::temporary", temporary);
-    suite.register("sqlite::put_get", put_get);
-    suite.register("sqlite::delete", delete);
-    suite.register("sqlite::list_keys", list_keys);
-    suite.register("sqlite::namespaces", namespaces);
-    suite.register("sqlite::exists", exists);
-    suite.register("sqlite::overwrite", overwrite);
+    shared_test!(suite, "sqlite::temporary", temporary);
+    shared_test!(suite, "sqlite::put_get", put_get);
+    shared_test!(suite, "sqlite::delete", delete);
+    shared_test!(suite, "sqlite::list_keys", list_keys);
+    shared_test!(suite, "sqlite::namespaces", namespaces);
+    shared_test!(suite, "sqlite::exists", exists);
+    shared_test!(suite, "sqlite::overwrite", overwrite);
 }
 
 fn temporary() -> Result<(), &'static str> {

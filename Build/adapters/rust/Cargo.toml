@@ -12,7 +12,7 @@ categories = ["network-programming", "asynchronous"]
 
 [features]
 default = ["std", "native", "tcp", "unix", "ws", "storage", "inmemory"]
-std = []
+std = ["saikuro-runtime/std"]
 native = [
     "std",
     "saikuro-client/native",
@@ -69,8 +69,9 @@ ws = ["saikuro-client/ws"]
 ws-wasi = ["saikuro-client/ws-wasi"]
 wasi-tcp = ["saikuro-client/wasi-tcp"]
 wasi-host = ["saikuro-client/wasi-host"]
-wasi-preview1 = ["saikuro-client/wasi-preview1"]
+wasi-preview1 = ["saikuro-client/wasi-preview1", "saikuro-runtime/wasi-preview1"]
 wasi-preview2 = ["saikuro-client/wasi-preview2"]
+default-panic-handler = ["saikuro-runtime/default-panic-handler"]
 storage = ["saikuro-storage"]
 inmemory = ["saikuro-storage/inmemory"]
 storage-fs = ["saikuro-storage/fs"]

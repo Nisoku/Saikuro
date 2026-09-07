@@ -11,9 +11,9 @@ extern crate alloc;
 // Client/Provider: named top-level types so `transport`/`schema`/`exec`
 // module names are reserved for the crates below.
 pub use saikuro_client::{
-    ArgDescriptor, Client, ClientOptions, Error, FunctionSchema, HandlerArgs,
-    MemoryAdapterTransport, NamespaceSchema, PrimitiveType, Provider, RegisterOptions, Result,
-    SaikuroChannel, SaikuroStream, TypeDescriptor, Value, Visibility, AdapterTransport, connect, build_schema,
+    build_schema, connect, AdapterTransport, ArgDescriptor, Client, ClientOptions, Error,
+    FunctionSchema, HandlerArgs, MemoryAdapterTransport, NamespaceSchema, PrimitiveType, Provider,
+    RegisterOptions, Result, SaikuroChannel, SaikuroStream, TypeDescriptor, Value, Visibility,
 };
 
 pub mod core;

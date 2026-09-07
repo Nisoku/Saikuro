@@ -2,6 +2,7 @@
 
 use crate::check_test;
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use bytes::Bytes;
 use saikuro_core::{
@@ -18,35 +19,35 @@ use saikuro_schema::registry::SchemaRegistry;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_announce_pushes_filtered_schema_frame",
         sandbox_announce_pushes_filtered_schema_frame,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_filtered_schema_excludes_internal_functions",
         sandbox_filtered_schema_excludes_internal_functions,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_filtered_schema_excludes_private_functions",
         sandbox_filtered_schema_excludes_private_functions,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_filtered_schema_includes_public_no_cap_functions",
         sandbox_filtered_schema_includes_public_no_cap_functions,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for",
         sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_filtered_schema_includes_functions_peer_has_caps_for",
         sandbox_filtered_schema_includes_functions_peer_has_caps_for,
     );
-    suite.register(
+    shared_test!(suite,
         "router::non_sandbox_announce_produces_single_response_frame",
         non_sandbox_announce_produces_single_response_frame,
     );
-    suite.register(
+    shared_test!(suite,
         "router::sandbox_handler_denies_internal_function_invocation",
         sandbox_handler_denies_internal_function_invocation,
     );

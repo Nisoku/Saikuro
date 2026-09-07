@@ -1,13 +1,14 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::resource::ResourceHandle;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "core::resource_handle_roundtrips_through_value",
         resource_handle_roundtrips_through_value,
     );
-    suite.register(
+    shared_test!(suite,
         "core::resource_handle_minimal_roundtrip",
         resource_handle_minimal_roundtrip,
     );

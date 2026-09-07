@@ -1,6 +1,7 @@
 //! `RuntimeConfig` channel-capacity validation through serde_json.
 
 use crate::check_test;
+use crate::shared_test;
 use crate::TestSuite;
 use crate::String;
 use crate::ToString;
@@ -8,15 +9,15 @@ use saikuro_exec::ChannelCapacity;
 use saikuro_runtime::RuntimeConfig;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "runtime::config_rejects_capacity_below_minimum",
         config_rejects_capacity_below_minimum,
     );
-    suite.register(
+    shared_test!(suite,
         "runtime::config_rejects_capacity_above_maximum",
         config_rejects_capacity_above_maximum,
     );
-    suite.register(
+    shared_test!(suite,
         "runtime::config_preserves_valid_capacity",
         config_preserves_valid_capacity,
     );

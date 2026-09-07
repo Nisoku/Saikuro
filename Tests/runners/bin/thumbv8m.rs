@@ -15,7 +15,6 @@ use spin::Mutex;
 mod embedded_runner;
 
 static HEAP: Mutex<Heap> = Mutex::new(Heap::empty());
-static mut TICKS: u64 = 0;
 
 struct GlobalHeap;
 
@@ -35,14 +34,6 @@ unsafe impl GlobalAlloc for GlobalHeap {
 
 #[global_allocator]
 static ALLOCATOR: GlobalHeap = GlobalHeap;
-
-#[no_mangle]
-unsafe extern "C" fn _embassy_time_now() -> u64 {
-    TICKS
-}
-
-#[no_mangle]
-unsafe extern "C" fn _embassy_time_schedule_wake(_at: u64, _waker: *const ()) {}
 
 #[entry]
 fn main() -> ! {

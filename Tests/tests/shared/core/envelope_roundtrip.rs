@@ -1,37 +1,38 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::envelope::{Envelope, InvocationType};
 use saikuro_core::ResponseEnvelope;
 use saikuro_event::Value;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("core::call_envelope_roundtrip", call_envelope_roundtrip);
-    suite.register("core::cast_envelope_roundtrip", cast_envelope_roundtrip);
-    suite.register("core::stream_open_roundtrip", stream_open_roundtrip);
-    suite.register("core::channel_open_roundtrip", channel_open_roundtrip);
-    suite.register(
+    shared_test!(suite, "core::call_envelope_roundtrip", call_envelope_roundtrip);
+    shared_test!(suite, "core::cast_envelope_roundtrip", cast_envelope_roundtrip);
+    shared_test!(suite, "core::stream_open_roundtrip", stream_open_roundtrip);
+    shared_test!(suite, "core::channel_open_roundtrip", channel_open_roundtrip);
+    shared_test!(suite,
         "core::envelope_with_meta_roundtrip",
         envelope_with_meta_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "core::envelope_meta_canonical_order",
         envelope_meta_canonical_order,
     );
-    suite.register("core::batch_envelope_roundtrip", batch_envelope_roundtrip);
-    suite.register(
+    shared_test!(suite, "core::batch_envelope_roundtrip", batch_envelope_roundtrip);
+    shared_test!(suite,
         "core::stream_item_with_seq_roundtrip",
         stream_item_with_seq_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "core::stream_end_sentinel_roundtrip",
         stream_end_sentinel_roundtrip,
     );
-    suite.register("core::error_response_roundtrip", error_response_roundtrip);
-    suite.register(
+    shared_test!(suite, "core::error_response_roundtrip", error_response_roundtrip);
+    shared_test!(suite,
         "core::value_all_variants_roundtrip",
         value_all_variants_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "core::envelope_with_capability_roundtrip",
         envelope_with_capability_roundtrip,
     );

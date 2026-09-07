@@ -124,7 +124,7 @@ pub fn make_handler(
         capability_engine: CapabilityEngine::default(),
         router: InvocationRouter::new(provider_registry.clone(), RouterConfig::default()),
         peer_capabilities: CapabilitySet::empty(),
-        max_message_size: 4 * 1024 * 1024,
+        max_message_size: core::cmp::min(4 * 1024 * 1024, crate::capacity::TEST_CAPACITY),
         schema_registry,
         provider_registry,
         log,

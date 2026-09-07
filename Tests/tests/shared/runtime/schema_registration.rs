@@ -1,5 +1,6 @@
 //! Runtime-level schema registration and stale-token cleanup tests.
 
+use crate::shared_test;
 use crate::TestSuite;
 use crate::Box;
 use saikuro_core::schema::{FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility};
@@ -8,11 +9,11 @@ use saikuro_router::provider::{Provider, ProviderHandle, ProviderWorkItem};
 use saikuro_runtime::SaikuroRuntime;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "runtime::schema_registration_roundtrip",
         schema_registration_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "runtime::stale_same_id_cleanup_preserves_new_provider_and_schema",
         stale_same_id_cleanup_preserves_new_provider_and_schema,
     );

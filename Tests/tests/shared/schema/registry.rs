@@ -1,6 +1,7 @@
 //! Schema registry lifecycle tests.
 
 use crate::check_test;
+use crate::shared_test;
 use crate::TestSuite;
 use crate::Box;
 use saikuro_core::schema::{NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor};
@@ -9,11 +10,11 @@ use saikuro_event::SaikuroError;
 use saikuro_schema::registry::SchemaRegistry;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "schema::frozen_registry_rejects_type_only_merge",
         frozen_registry_rejects_type_only_merge,
     );
-    suite.register(
+    shared_test!(suite,
         "schema::stale_same_id_deregistration_preserves_new_schema",
         stale_same_id_deregistration_preserves_new_schema,
     );

@@ -12,6 +12,7 @@ use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::time::Duration;
 #[cfg(not(target_has_atomic = "ptr"))]
 pub(crate) use portable_atomic_util::Arc;
@@ -19,19 +20,25 @@ pub(crate) use portable_atomic_util::Arc;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::waitqueue::MultiWakerRegistration;
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use embassy_time::{Duration as EmbDuration, Timer};
 use futures::future::{Fuse, FutureExt};
 
 pub use embassy_futures::yield_now;
 
+// The native and wasm engines override `sleep`/`timeout` with their own time
+// drivers, so base's embassy-time versions exist only on embedded targets.
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 fn emb_duration(dur: Duration) -> EmbDuration {
     EmbDuration::from_micros(dur.as_micros().min(u64::MAX as u128) as u64)
 }
 
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 pub async fn sleep(dur: Duration) {
     Timer::after(emb_duration(dur)).await;
 }
 
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
 where
     F: Future<Output = T>,

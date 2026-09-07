@@ -1,61 +1,33 @@
 //! Saikuro provider: register Rust functions and serve them to the runtime.
-//!
+
+mod dispatch;
+mod handler;
+mod send;
+
+#[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]
+mod base;
+#[cfg(feature = "native")]
+mod native;
+
+pub use handler::{HandlerArgs, RegisterOptions};
+
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+
+use bytes::Bytes;
+use saikuro_core::envelope::{Envelope, InvocationType, ResponseEnvelope};
+use saikuro_core::schema::Schema;
+use saikuro_event::{json_to_core, LogLevel, LogRecord, LogSink, Result, SaikuroError};
+use saikuro_schema::builder::{build_schema, NamespaceSchema};
+use saikuro_transport::{connect, AdapterTransport};
 
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
-#[cfg(target_has_atomic = "ptr")]
-use alloc::sync::Arc;
-use alloc::{
-    borrow::ToOwned,
-    boxed::Box,
-    string::{String, ToString},
-    vec::Vec,
-};
-use core::{future::Future, pin::Pin};
-#[cfg(not(target_has_atomic = "ptr"))]
-use portable_atomic_util::Arc;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use bytes::Bytes;
-use saikuro_core::{
-    envelope::{Envelope, InvocationType, ResponseEnvelope},
-    invocation::InvocationId,
-    schema::Schema,
-};
-use saikuro_event::{core_to_json, json_to_core, ErrorCode, ErrorDetail, LogLevel, LogRecord, LogSink, SaikuroError};
-use saikuro_event::Result;
-use saikuro_transport::{connect, AdapterTransport};
-use saikuro_schema::builder::{FunctionSchema, NamespaceSchema, build_schema};
-
-use crate::Value;
-
-/// Arguments passed to a registered handler function.
-pub type HandlerArgs = Vec<Value>;
-
-/// A boxed future returned by handler closures.
-#[cfg(not(feature = "wasm"))]
-type HandlerFuture = Pin<Box<dyn Future<Output = Result<Value>> + Send>>;
-#[cfg(feature = "wasm")]
-type HandlerFuture = Pin<Box<dyn Future<Output = Result<Value>>>>;
-
-/// A boxed handler that accepts args and returns a result.
-#[cfg(not(feature = "wasm"))]
-type BoxedHandler = Arc<dyn Fn(HandlerArgs) -> HandlerFuture + Send + Sync>;
-#[cfg(feature = "wasm")]
-type BoxedHandler = Arc<dyn Fn(HandlerArgs) -> HandlerFuture>;
-
-/// Options that can be supplied when registering a function.
-#[derive(Debug, Clone, Default)]
-pub struct RegisterOptions {
-    pub schema: Option<FunctionSchema>,
-}
-
-/// Internal handler entry.
-struct HandlerEntry {
-    handler: BoxedHandler,
-    schema: Option<FunctionSchema>,
-}
+use crate::shared::types::Arc;
 
 /// A Saikuro provider that exposes Rust functions as invokable functions.
 ///
@@ -63,7 +35,7 @@ struct HandlerEntry {
 /// its schema, then enters a serve loop dispatching inbound invocations.
 pub struct Provider {
     namespace: String,
-    handlers: HashMap<String, HandlerEntry>,
+    handlers: HashMap<String, handler::HandlerEntry>,
     log: Arc<dyn LogSink>,
 }
 
@@ -83,77 +55,9 @@ impl Provider {
         self
     }
 
-    /// The namespace this provider publishes under.
+    /// Returns the namespace this provider operates under.
     pub fn namespace(&self) -> &str {
         &self.namespace
-    }
-
-    // Registration
-
-    /// Register a function handler.
-    #[cfg(not(feature = "wasm"))]
-    pub fn register<F, Fut>(&mut self, name: impl Into<String>, handler: F)
-    where
-        F: Fn(HandlerArgs) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value>> + Send + 'static,
-    {
-        self.register_with_options(name, handler, RegisterOptions::default());
-    }
-
-    #[cfg(feature = "wasm")]
-    pub fn register<F, Fut>(&mut self, name: impl Into<String>, handler: F)
-    where
-        F: Fn(HandlerArgs) -> Fut + 'static,
-        Fut: Future<Output = Result<Value>> + 'static,
-    {
-        self.register_with_options(name, handler, RegisterOptions::default());
-    }
-
-    /// Register a function handler with schema metadata.
-    #[cfg(not(feature = "wasm"))]
-    pub fn register_with_options<F, Fut>(
-        &mut self,
-        name: impl Into<String>,
-        handler: F,
-        options: RegisterOptions,
-    ) where
-        F: Fn(HandlerArgs) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value>> + Send + 'static,
-    {
-        let name = name.into();
-        let handler = move |args| Box::pin(handler(args)) as HandlerFuture;
-        let boxed: BoxedHandler =
-            Arc::from(Box::new(handler) as Box<dyn Fn(HandlerArgs) -> HandlerFuture + Send + Sync>);
-        self.handlers.insert(
-            name,
-            HandlerEntry {
-                handler: boxed,
-                schema: options.schema,
-            },
-        );
-    }
-
-    #[cfg(feature = "wasm")]
-    pub fn register_with_options<F, Fut>(
-        &mut self,
-        name: impl Into<String>,
-        handler: F,
-        options: RegisterOptions,
-    ) where
-        F: Fn(HandlerArgs) -> Fut + 'static,
-        Fut: Future<Output = Result<Value>> + 'static,
-    {
-        let name = name.into();
-        let handler = move |args| Box::pin(handler(args)) as HandlerFuture;
-        let boxed: BoxedHandler =
-            Arc::from(Box::new(handler) as Box<dyn Fn(HandlerArgs) -> HandlerFuture>);
-        self.handlers.insert(
-            name,
-            HandlerEntry {
-                handler: boxed,
-                schema: options.schema,
-            },
-        );
     }
 
     // Schema
@@ -175,8 +79,8 @@ impl Provider {
 
     // Serving
 
-    /// Connect to the runtime at `address` and serve invocations until the
-    /// connection is closed or an unrecoverable error occurs.
+    /// Connect to the runtime at `address` and serve until the connection
+    /// closes or an unrecoverable error occurs.
     pub async fn serve(self, address: impl AsRef<str>) -> Result<()> {
         let addr = address.as_ref();
         {
@@ -206,6 +110,7 @@ impl Provider {
             record.set_context("namespace", self.namespace.clone());
             self.log.emit(&record).await;
         }
+
         let handlers = Arc::new(self.handlers);
         let namespace = Arc::new(self.namespace);
         let log = self.log.clone();
@@ -249,13 +154,13 @@ impl Provider {
 
             match envelope.invocation_type {
                 InvocationType::Call => {
-                    dispatch_call(envelope, &handlers, &mut *transport, &*log).await;
+                    dispatch::dispatch_call(envelope, &handlers, &mut *transport, &*log).await;
                 }
                 InvocationType::Cast => {
-                    dispatch_cast(envelope, &handlers, &*log).await;
+                    dispatch::dispatch_cast(envelope, &handlers, &*log).await;
                 }
                 InvocationType::Batch => {
-                    dispatch_batch(envelope, &handlers, &mut *transport, &*log).await;
+                    dispatch::dispatch_batch(envelope, &handlers, &mut *transport, &*log).await;
                 }
                 other => {
                     let mut record = LogRecord::now(
@@ -392,203 +297,4 @@ impl Provider {
 
         Ok(())
     }
-}
-
-async fn dispatch_call(
-    envelope: Envelope,
-    handlers: &HashMap<String, HandlerEntry>,
-    transport: &mut dyn AdapterTransport,
-    log: &dyn LogSink,
-) {
-    let id = envelope.id;
-    let target = envelope.target.clone();
-
-    let fn_name = local_name(&target);
-    let entry = match handlers.get(fn_name) {
-        Some(e) => e,
-        None => {
-            send_error(
-                transport,
-                id,
-                ErrorCode::FunctionNotFound,
-                format!("no handler registered for '{target}'"),
-            )
-            .await;
-            return;
-        }
-    };
-
-    let args: Vec<Value> = envelope.args.into_iter().map(core_to_json).collect();
-    let handler = entry.handler.clone();
-
-    match handler(args).await {
-        Ok(result) => {
-            let response = ResponseEnvelope::ok(id, json_to_core(result));
-            send_response(transport, &response, log).await;
-        }
-        Err(SaikuroError::Remote { code, message, .. }) => {
-            let error_code = parse_error_code(&code);
-            send_error(transport, id, error_code, message).await;
-        }
-        Err(e) => {
-            send_error(transport, id, ErrorCode::ProviderError, e.to_string()).await;
-        }
-    }
-}
-
-async fn dispatch_cast(
-    envelope: Envelope,
-    handlers: &HashMap<String, HandlerEntry>,
-    log: &dyn LogSink,
-) {
-    let fn_name = local_name(&envelope.target);
-    let entry = match handlers.get(fn_name) {
-        Some(e) => e,
-        None => return,
-    };
-
-    let args: Vec<Value> = envelope.args.into_iter().map(core_to_json).collect();
-    let handler = entry.handler.clone();
-
-    if let Err(e) = handler(args).await {
-        let mut record = LogRecord::now(
-            LogLevel::Warn,
-            "saikuro.rust.provider",
-            "cast handler returned error",
-        );
-        record.set_context("target", envelope.target.clone());
-        record.set_context("error", alloc::format!("{e}"));
-        log.emit(&record).await;
-    }
-}
-
-async fn dispatch_batch(
-    envelope: Envelope,
-    handlers: &HashMap<String, HandlerEntry>,
-    transport: &mut dyn AdapterTransport,
-    log: &dyn LogSink,
-) {
-    use saikuro_event::Value as CoreValue;
-
-    let id = envelope.id;
-    let items = match envelope.batch_items {
-        Some(items) => items,
-        None => {
-            send_error(
-                transport,
-                id,
-                ErrorCode::MalformedEnvelope,
-                "batch envelope missing batch_items field",
-            )
-            .await;
-            return;
-        }
-    };
-
-    let mut results: Vec<CoreValue> = Vec::with_capacity(items.len());
-
-    for item in items {
-        match item.invocation_type {
-            InvocationType::Call => {
-                let fn_name = local_name(&item.target).to_owned();
-                match handlers.get(&fn_name) {
-                    Some(entry) => {
-                        let args: Vec<Value> = item.args.into_iter().map(core_to_json).collect();
-                        let handler = entry.handler.clone();
-                        match handler(args).await {
-                            Ok(v) => results.push(json_to_core(v)),
-                            Err(e) => {
-                                let mut record = LogRecord::now(
-                                    LogLevel::Warn,
-                                    "saikuro.rust.provider",
-                                    "batch item handler error",
-                                );
-                                record.set_context("target", item.target.clone());
-                                record.set_context("error", alloc::format!("{e}"));
-                                log.emit(&record).await;
-                                results.push(CoreValue::Null);
-                            }
-                        }
-                    }
-                    None => {
-                        results.push(CoreValue::Null);
-                    }
-                }
-            }
-            InvocationType::Cast => {
-                dispatch_cast(item, handlers, log).await;
-                results.push(CoreValue::Null);
-            }
-            _other => {
-                results.push(CoreValue::Null);
-            }
-        }
-    }
-
-    let response = ResponseEnvelope::ok(id, CoreValue::Array(results));
-    send_response(transport, &response, log).await;
-}
-
-fn local_name(target: &str) -> &str {
-    match target.rsplit_once('.') {
-        Some((_, name)) => name,
-        None => target,
-    }
-}
-
-fn parse_error_code(s: &str) -> ErrorCode {
-    serde_json::from_value(serde_json::Value::String(s.to_owned())).unwrap_or(ErrorCode::Internal)
-}
-
-async fn send_response(
-    transport: &mut dyn AdapterTransport,
-    response: &ResponseEnvelope,
-    log: &dyn LogSink,
-) {
-    match response.to_msgpack() {
-        Ok(bytes) => {
-            if let Err(e) = transport.send(Bytes::from(bytes)).await {
-                let mut record = LogRecord::now(
-                    LogLevel::Error,
-                    "saikuro.rust.provider",
-                    "failed to send response",
-                );
-                record.set_context("error", alloc::format!("{e}"));
-                log.emit(&record).await;
-            }
-        }
-        Err(e) => {
-            let mut record = LogRecord::now(
-                LogLevel::Error,
-                "saikuro.rust.provider",
-                "failed to encode response",
-            );
-            record.set_context("error", alloc::format!("{e}"));
-            log.emit(&record).await;
-        }
-    }
-}
-
-async fn send_error(
-    transport: &mut dyn AdapterTransport,
-    id: InvocationId,
-    code: ErrorCode,
-    message: impl Into<String>,
-) {
-    let detail = ErrorDetail::new(code, message);
-    let response = ResponseEnvelope::err(id, detail);
-    let _ = send_response_raw(transport, &response).await;
-}
-
-async fn send_response_raw(
-    transport: &mut dyn AdapterTransport,
-    response: &ResponseEnvelope,
-) -> Result<()> {
-    let bytes = response
-        .to_msgpack()
-        .map_err(|e| SaikuroError::Serialization(e.to_string()))?;
-    transport
-        .send(Bytes::from(bytes))
-        .await
-        .map_err(|e| SaikuroError::SendFailed(e.to_string()))
 }

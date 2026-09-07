@@ -507,8 +507,6 @@ dependencies = [
  "document-features",
  "embassy-executor-macros",
  "embassy-executor-timer-queue 0.1.0",
- "js-sys",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -594,9 +592,6 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "futures-core",
- "js-sys",
- "wasm-bindgen",
- "web-time",
 ]
 
 [[package]]
@@ -741,21 +736,6 @@ name = "find-msvc-tools"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
-
-[[package]]
-name = "fluvio-wasm-timer"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b768c170dc045fa587a8f948c91f9bcfb87f774930477c6215addf54317f137f"
-dependencies = [
- "futures",
- "js-sys",
- "parking_lot 0.11.2",
- "pin-utils",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
 
 [[package]]
 name = "fnv"
@@ -1105,9 +1085,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -1378,12 +1355,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
-name = "pin-utils"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
-
-[[package]]
 name = "pkg-config"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1495,18 +1466,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags 2.13.1",
-]
-
-[[package]]
-name = "regex"
-version = "1.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-automata",
- "regex-syntax",
 ]
 
 [[package]]
@@ -1723,24 +1682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "saikuro-c"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "regex",
- "saikuro",
- "saikuro-core",
- "saikuro-event",
- "saikuro-exec",
- "saikuro-runtime",
- "saikuro-transport",
- "serde_json",
- "spin 0.12.3",
- "tokio",
-]
-
-[[package]]
 name = "saikuro-client"
 version = "0.1.0"
 dependencies = [
@@ -1748,6 +1689,7 @@ dependencies = [
  "bytes",
  "dashmap",
  "futures",
+ "portable-atomic",
  "portable-atomic-util",
  "saikuro-core",
  "saikuro-event",
@@ -1755,6 +1697,7 @@ dependencies = [
  "saikuro-schema",
  "saikuro-transport",
  "serde_json",
+ "spin 0.12.3",
  "thiserror",
 ]
 
@@ -1809,6 +1752,7 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "web-sys",
+ "web-time",
 ]
 
 [[package]]
@@ -1821,7 +1765,6 @@ dependencies = [
  "embassy-net",
  "embassy-sync",
  "embassy-time",
- "fluvio-wasm-timer",
  "futures",
  "js-sys",
  "portable-atomic",
@@ -1830,6 +1773,7 @@ dependencies = [
  "tokio-util",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
@@ -2182,7 +2126,6 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0134f9043ed38b087ac4f7d4af44c79e2c9e5094421fe3164f435ce585953b10"
 dependencies = [
- "lock_api",
  "portable-atomic",
 ]
 

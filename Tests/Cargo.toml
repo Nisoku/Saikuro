@@ -145,6 +145,10 @@ sqlite = ["saikuro-storage/sqlite"]
 flash = ["saikuro-storage/flash"]
 adapter = ["dep:saikuro", "dep:saikuro-c", "saikuro-c/native", "saikuro/native"]
 
+[lints.rust]
+# Only the embedded targets set `saikuro_test_capacity`; register the cfg so `rustc --check-cfg` stays quiet.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(saikuro_test_capacity, values("small", "rpx-class", "m33-class"))'] }
+
 [dependencies]
 # Saikuro core crates
 saikuro-core = { workspace = true }
@@ -193,10 +197,15 @@ embedded-io-async = { workspace = true }
 
 [profile.qemu]
 inherits = "release"
-opt-level = 3
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
 
 [workspace.package]
 version = "0.1.0"
@@ -243,11 +252,12 @@ heapless = { version = "0.8", default-features = false, features = ["serde"] }
 embedded-storage-async = { version = "0.4", default-features = false }
 embedded-io-async = { version = "0.7", default-features = false }
 
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
-web-sys = "0.3"
-wasm-bindgen-test = "0.3"
+# WASM (pinned for JSPI support)
+wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-test = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 
 critical-section = { version = "1" }
 embassy-time-driver = { version = "0.2", default-features = false }
@@ -267,10 +277,20 @@ cortex-m = { version = "0.7", default-features = false, features = [
 ] }
 panic-semihosting = { version = "0.7", default-features = false }
 riscv-rt = { version = "0.18", default-features = false }
-riscv = { version = "0.12", default-features = false }
+riscv = { version = "0.12", default-features = false, features = [
+    "critical-section-single-hart",
+] }
 
 # TODO: waiting for release of `embassy-time` 
 [patch.crates-io]
-embassy-time = { git = "https://github.com/embassy-rs/embassy", sha = "73b44d7e867a371d0870a84624fea66a8b00f713" }
-embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", sha = "73b44d7e867a371d0870a84624fea66a8b00f713" }
-embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", sha = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+# wasm-bindgen (JSPI support)
+wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-macro = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-macro-support = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-shared = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }

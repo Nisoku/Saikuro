@@ -51,6 +51,8 @@ pub use native::*;
 #[cfg(feature = "wasm")]
 mod wasm;
 #[cfg(feature = "wasm")]
+pub use wasm::time::{sleep, timeout};
+#[cfg(feature = "wasm")]
 pub use wasm::*;
 
 #[cfg(feature = "no_std")]

@@ -13,7 +13,7 @@ members = [
     "crates/saikuro-random",
     "crates/saikuro-codegen",
     "crates/saikuro-client",
-    "adapters/c",
+    # "adapters/c",
     "adapters/rust",
 ]
 
@@ -113,8 +113,8 @@ wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd
 wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-fluvio-wasm-timer = "0.2"
 send_wrapper = "0.6"
+web-time = { version = "1.1.0", default-features = false }
 
 # Embedded
 embedded-io-async = { version = "0.7", default-features = false }
@@ -174,3 +174,16 @@ wasm-bindgen-shared = { git = "https://github.com/wasm-bindgen/wasm-bindgen", re
 wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+
+[profile.qemu]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
+

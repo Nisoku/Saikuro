@@ -27,18 +27,15 @@ no_std = [
 wasm = [
     "dep:embassy-executor",
     "embassy-executor/executor-thread",
-    "embassy-executor/platform-wasm",
+    "embassy-executor/platform-spin",
     "dep:embassy-sync",
-    "dep:embassy-time",
-    "embassy-time/wasm",
-    "embassy-time/generic-queue-32",
     "dep:embassy-futures",
     "futures/async-await",
     "dep:critical-section",
-    "dep:wasm-bindgen-futures",
-    "dep:fluvio-wasm-timer",
     "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
     "dep:js-sys",
+    "dep:web-time",
 ]
 embedded = [
     "dep:embassy-executor",
@@ -57,7 +54,6 @@ tokio = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 
 futures = { workspace = true }
-
 embassy-executor = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
 critical-section = { workspace = true, optional = true }
@@ -70,8 +66,8 @@ embassy-net = { workspace = true, optional = true, features = [
     "udp",
 ] }
 wasm-bindgen = { workspace = true, optional = true }
-js-sys = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-fluvio-wasm-timer = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 portable-atomic-util = { workspace = true }
 portable-atomic = { workspace = true }

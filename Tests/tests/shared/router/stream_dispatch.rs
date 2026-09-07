@@ -2,6 +2,7 @@
 
 use crate::check_test;
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use core::task::Poll;
 use futures::{pin_mut, poll};
@@ -18,39 +19,39 @@ use saikuro_router::{
 };
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::stream_open_returns_ok_empty",
         stream_open_returns_ok_empty,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_stream_item_delivers_to_state",
         route_stream_item_delivers_to_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_stream_end_removes_state",
         route_stream_end_removes_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_to_unknown_stream_returns_error",
         route_to_unknown_stream_returns_error,
     );
-    suite.register(
+    shared_test!(suite,
         "router::stream_open_to_unknown_namespace_returns_no_provider",
         stream_open_to_unknown_namespace_returns_no_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::multiple_streams_are_independent",
         multiple_streams_are_independent,
     );
-    suite.register(
+    shared_test!(suite,
         "router::out_of_order_item_is_dropped_not_panicked",
         out_of_order_item_is_dropped_not_panicked,
     );
-    suite.register(
+    shared_test!(suite,
         "router::stream_abort_control_removes_state",
         stream_abort_control_removes_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::concurrent_stream_delivery_preserves_order_and_terminal_closure",
         concurrent_stream_delivery_preserves_order_and_terminal_closure,
     );

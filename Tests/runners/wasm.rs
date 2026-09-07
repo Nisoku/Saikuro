@@ -1,11 +1,12 @@
 //! Wasm runner (`wasm32-unknown-unknown`).
+//!
+//! This module provides a test runner for the wasm32-unknown-unknown target.
+//! Node.js is the default execution target for wasm-bindgen-test; the same
+//! binary also runs headlessly in a browser via `wasm-bindgen-test` with the
+//! browser flag.
 
 #[path = "../tests/wasm/mod.rs"]
 pub mod wasm;
-
-// No `wasm_bindgen_test_configure!` call: Node.js is the default execution
-// target for wasm-bindgen-test. The same binary also runs headlessly in a
-// browser when driven through `wasm-pack test` with a browser flag.
 
 mod wasm_critical_section {
     struct NoopCriticalSection;

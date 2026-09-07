@@ -1,51 +1,52 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_storage::util;
 use saikuro_storage::StorageConfig;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("storage::encode_decode_empty", encode_decode_empty);
-    suite.register("storage::encode_decode_ascii", encode_decode_ascii);
-    suite.register("storage::encode_decode_binary", encode_decode_binary);
-    suite.register("storage::make_key_joins", make_key_joins);
-    suite.register(
+    shared_test!(suite, "storage::encode_decode_empty", encode_decode_empty);
+    shared_test!(suite, "storage::encode_decode_ascii", encode_decode_ascii);
+    shared_test!(suite, "storage::encode_decode_binary", encode_decode_binary);
+    shared_test!(suite, "storage::make_key_joins", make_key_joins);
+    shared_test!(suite,
         "storage::make_key_empty_namespace",
         make_key_empty_namespace,
     );
-    suite.register("storage::make_key_empty_key", make_key_empty_key);
-    suite.register(
+    shared_test!(suite, "storage::make_key_empty_key", make_key_empty_key);
+    shared_test!(suite,
         "storage::apply_prefix_none_is_identity",
         apply_prefix_none_is_identity,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::strip_prefix_none_is_identity",
         strip_prefix_none_is_identity,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::apply_then_strip_roundtrip",
         apply_then_strip_roundtrip,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::apply_with_prefix_prepends",
         apply_with_prefix_prepends,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::strip_with_prefix_removes",
         strip_with_prefix_removes,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::key_prefix_ends_with_separator",
         key_prefix_ends_with_separator,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::key_prefix_empty_namespace",
         key_prefix_empty_namespace,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::strip_prefix_does_not_strip_unprefixed",
         strip_prefix_does_not_strip_unprefixed,
     );
-    suite.register(
+    shared_test!(suite,
         "storage::apply_prefix_then_strip_prefix_no_prefix",
         apply_prefix_then_strip_prefix_no_prefix,
     );

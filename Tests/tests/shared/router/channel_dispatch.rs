@@ -2,6 +2,7 @@
 
 use crate::check_test;
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use core::task::Poll;
 use futures::{pin_mut, poll};
@@ -19,55 +20,55 @@ use saikuro_router::{
 };
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::channel_open_returns_ok_empty",
         channel_open_returns_ok_empty,
     );
-    suite.register(
+    shared_test!(suite,
         "router::channel_open_to_unknown_namespace_returns_no_provider",
         channel_open_to_unknown_namespace_returns_no_provider,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_inbound_delivers_to_state",
         route_channel_inbound_delivers_to_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_outbound_delivers_to_state",
         route_channel_outbound_delivers_to_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_inbound_end_removes_state",
         route_channel_inbound_end_removes_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_outbound_end_removes_state",
         route_channel_outbound_end_removes_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_abort_removes_state",
         route_channel_abort_removes_state,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_inbound_to_unknown_channel_fails",
         route_channel_inbound_to_unknown_channel_fails,
     );
-    suite.register(
+    shared_test!(suite,
         "router::route_channel_outbound_to_unknown_channel_fails",
         route_channel_outbound_to_unknown_channel_fails,
     );
-    suite.register(
+    shared_test!(suite,
         "router::multiple_channels_are_independent",
         multiple_channels_are_independent,
     );
-    suite.register(
+    shared_test!(suite,
         "router::channel_open_to_dropped_provider_returns_unavailable",
         channel_open_to_dropped_provider_returns_unavailable,
     );
-    suite.register(
+    shared_test!(suite,
         "router::channel_pause_resume_round_trips",
         channel_pause_resume_round_trips,
     );
-    suite.register(
+    shared_test!(suite,
         "router::concurrent_channel_delivery_preserves_order_and_terminal_closure",
         concurrent_channel_delivery_preserves_order_and_terminal_closure,
     );

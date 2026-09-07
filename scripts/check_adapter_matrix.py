@@ -115,7 +115,7 @@ MATRIX: list[Combo] = [
         [
             "--no-default-features",
             "--features",
-            "no_std,wasi-tcp,wasi-host,wasi-preview1",
+            "no_std,wasi-tcp,wasi-host,wasi-preview1,default-panic-handler",
         ],
         "no_std wasi (preview1)",
     ),
@@ -125,7 +125,7 @@ MATRIX: list[Combo] = [
         [
             "--no-default-features",
             "--features",
-            "std,no_std,wasi-tcp,wasi-host,wasi-preview1",
+            "std,no_std,wasi-tcp,wasi-host,wasi-preview1,default-panic-handler",
         ],
         "std wasi (preview1)",
     ),
@@ -155,7 +155,7 @@ MATRIX: list[Combo] = [
         [
             "--no-default-features",
             "--features",
-            "no_std,wasi-tcp,wasi-host,wasi-preview1,ws-wasi",
+            "no_std,wasi-tcp,wasi-host,wasi-preview1,ws-wasi,default-panic-handler",
         ],
         "no_std wasi websocket client (preview1)",
     ),
@@ -175,7 +175,7 @@ MATRIX: list[Combo] = [
         [
             "--no-default-features",
             "--features",
-            "std,no_std,wasi-tcp,wasi-host,wasi-preview1,ws-wasi",
+            "std,no_std,wasi-tcp,wasi-host,wasi-preview1,ws-wasi,default-panic-handler",
         ],
         "std wasi websocket client (preview1)",
     ),

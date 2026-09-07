@@ -17,8 +17,8 @@ pub mod registry;
 /// Invocation validator.
 pub mod validator;
 
+pub use builder::{build_schema, ArgDescriptor, FunctionSchema, NamespaceSchema};
 pub use capability::engine::CapabilityEngine;
-pub use builder::{FunctionSchema, NamespaceSchema, ArgDescriptor, build_schema};
 pub use registry::{NamespaceRegistration, SchemaRegistry};
 pub use validator::{InvocationValidator, ValidationReport};
 

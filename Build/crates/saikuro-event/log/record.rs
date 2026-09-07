@@ -47,11 +47,13 @@ impl LogRecord {
 
     /// Construct a log record with an auto-generated ISO-8601 timestamp.
     ///
-    /// On `std` targets the current wall-clock time is used.  On `no_std` /
-    /// `embedded` targets the timestamp is empty.
+    /// On `std` targets the current wall-clock time is used; on
+    /// `wasm32-unknown-unknown` it is sourced from the JS `Date.now()`
+    /// clock via `web-time`.  On `no_std` / `embedded` targets the
+    /// timestamp is empty.
     #[cfg(feature = "std")]
     pub fn now(level: LogLevel, name: impl Into<String>, msg: impl Into<String>) -> Self {
-        use std::time::SystemTime;
+        use web_time::SystemTime;
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| {

@@ -1,5 +1,6 @@
 
 use crate::common;
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::envelope::{Envelope, InvocationType};
 use saikuro_core::ResponseEnvelope;
@@ -9,18 +10,18 @@ use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkIte
 use saikuro_router::router::InvocationRouter;
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register("router::batch_single_item", batch_single_item);
-    suite.register("router::batch_multiple_items", batch_multiple_items);
-    suite.register("router::batch_result_ordered", batch_result_ordered);
-    suite.register(
+    shared_test!(suite, "router::batch_single_item", batch_single_item);
+    shared_test!(suite, "router::batch_multiple_items", batch_multiple_items);
+    shared_test!(suite, "router::batch_result_ordered", batch_result_ordered);
+    shared_test!(suite,
         "router::batch_no_items_field_malformed",
         batch_no_items_field_malformed,
     );
-    suite.register(
+    shared_test!(suite,
         "router::batch_items_different_namespaces",
         batch_items_different_namespaces,
     );
-    suite.register(
+    shared_test!(suite,
         "router::batch_item_unknown_namespace_null_result",
         batch_item_unknown_namespace_null_result,
     );

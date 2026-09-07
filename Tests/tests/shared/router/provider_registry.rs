@@ -1,4 +1,5 @@
 
+use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::RegistrationToken;
 use saikuro_exec::mpsc;
@@ -7,27 +8,27 @@ use saikuro_router::provider::{Provider, ProviderHandle, ProviderRegistry, Provi
 use crate::{ToOwned, ToString};
 
 pub fn register(suite: &mut TestSuite) {
-    suite.register(
+    shared_test!(suite,
         "router::stale_deregister_preserves_new",
         stale_deregister_preserves_new,
     );
-    suite.register(
+    shared_test!(suite,
         "router::register_fewer_ns_releases_routes",
         register_fewer_ns_releases_routes,
     );
-    suite.register(
+    shared_test!(suite,
         "router::register_fewer_ns_keeps_taken_routes",
         register_fewer_ns_keeps_taken_routes,
     );
-    suite.register(
+    shared_test!(suite,
         "router::same_id_reregister_fewer_ns_releases_routes",
         same_id_reregister_fewer_ns_releases_routes,
     );
-    suite.register(
+    shared_test!(suite,
         "router::stale_same_id_deregister_preserves_new_token",
         stale_same_id_deregister_preserves_new_token,
     );
-    suite.register(
+    shared_test!(suite,
         "router::same_token_reregister_keeps_taken_over_routes",
         same_token_reregister_keeps_taken_over_routes,
     );

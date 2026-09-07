@@ -1,6 +1,6 @@
 //! Unified transport handle for client/provider.
 //!
-//! Provides [`AdapterTransport`] which is a single 
+//! Provides [`AdapterTransport`] which is a single
 //! trait-object-compatible interface that bundles send + receive + close
 //!
 //! The [`connect`] function constructs a connected [`AdapterTransport`] from a
@@ -10,18 +10,18 @@
 use bytes::Bytes;
 use saikuro_event::{LogSink, NullSink};
 
-use super::error::{TransportError, Result};
-use super::memory::{MemorySender, MemoryReceiver, MemoryTransport};
-use super::selector::{TransportSelector, TransportKind};
-use super::traits::{Transport, TransportReceiver, TransportSender};
+use super::error::{Result, TransportError};
+use super::memory::{MemoryReceiver, MemorySender, MemoryTransport};
+use super::selector::{TransportKind, TransportSelector};
 #[cfg(feature = "tcp")]
 use super::traits::TransportConnector;
+use super::traits::{Transport, TransportReceiver, TransportSender};
 
 use alloc::boxed::Box;
-#[cfg(target_has_atomic = "ptr")]
-use saikuro_core::Arc;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 
 /// A trait-object-compatible transport providing both send and receive.
 #[cfg(feature = "native")]
@@ -124,15 +124,27 @@ impl MemoryAdapterTransport {
         let (a_tx, a_rx) = a.split();
         let (b_tx, b_rx) = b.split();
         (
-            Self { sender: a_tx, receiver: a_rx, _peer: None },
-            Self { sender: b_tx, receiver: b_rx, _peer: None },
+            Self {
+                sender: a_tx,
+                receiver: a_rx,
+                _peer: None,
+            },
+            Self {
+                sender: b_tx,
+                receiver: b_rx,
+                _peer: None,
+            },
         )
     }
 
     /// Wrap a [`MemoryTransport`] into a single [`AdapterTransport`] handle.
     pub fn from_transport(transport: MemoryTransport) -> Self {
         let (sender, receiver) = transport.split();
-        Self { sender, receiver, _peer: None }
+        Self {
+            sender,
+            receiver,
+            _peer: None,
+        }
     }
 
     /// Wrap a [`MemoryTransport`] pair, returning one side as an
@@ -140,7 +152,11 @@ impl MemoryAdapterTransport {
     pub fn from_pair(a: MemoryTransport, b: MemoryTransport) -> Self {
         let (a_tx, a_rx) = a.split();
         let (b_tx, b_rx) = b.split();
-        Self { sender: a_tx, receiver: a_rx, _peer: Some((b_tx, b_rx)) }
+        Self {
+            sender: a_tx,
+            receiver: a_rx,
+            _peer: Some((b_tx, b_rx)),
+        }
     }
 }
 
@@ -183,18 +199,19 @@ impl AdapterTransport for MemoryAdapterTransport {
 ///
 /// # Supported address formats
 ///
-/// - `memory` — in-memory channel (no network I/O)
-/// - `tcp://host:port` — TCP stream
-/// - `unix:///path/to/socket` — Unix domain socket
-/// - `ws://host:port/path` or `wss://...` — WebSocket
+/// - `memory` - in-memory channel (no network I/O)
+/// - `tcp://host:port` - TCP stream
+/// - `unix:///path/to/socket` - Unix domain socket
+/// - `ws://host:port/path` or `wss://...` - WebSocket
 pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     let log: Arc<dyn LogSink> = Arc::from(Box::new(NullSink) as Box<dyn LogSink>);
-        let (kind, addr) = TransportSelector::select(Some(address), None);
+    let (kind, addr) = TransportSelector::select(Some(address), None);
 
-        #[allow(unreachable_patterns)]
-        match kind {
-            TransportKind::Memory => {
-                let pair = MemoryTransport::connected_pair(Arc::from(Box::new(NullSink) as Box<dyn LogSink>));
+    #[allow(unreachable_patterns)]
+    match kind {
+        TransportKind::Memory => {
+            let pair =
+                MemoryTransport::connected_pair(Arc::from(Box::new(NullSink) as Box<dyn LogSink>));
             let transport = MemoryAdapterTransport::from_pair(pair.0, pair.1);
             Ok(Box::new(transport))
         }
@@ -204,9 +221,10 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
             let addr_str = addr.as_deref().ok_or(TransportError::ConnectionRefused(
                 "tcp requires a host:port address".into(),
             ))?;
-            let sock_addr: std::net::SocketAddr = addr_str.parse().map_err(|e: std::net::AddrParseError| {
-                TransportError::ConnectionRefused(e.to_string())
-            })?;
+            let sock_addr: std::net::SocketAddr =
+                addr_str.parse().map_err(|e: std::net::AddrParseError| {
+                    TransportError::ConnectionRefused(e.to_string())
+                })?;
             let connector = crate::native::tcp::TcpConnector::new(sock_addr, log);
             let transport = connector.connect().await?;
             let (sender, receiver) = transport.split();

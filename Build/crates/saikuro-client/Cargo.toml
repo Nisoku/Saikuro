@@ -65,6 +65,8 @@ saikuro-schema = { path = "../saikuro-schema", default-features = false }
 serde_json = { workspace = true, features = ["alloc"] }
 bytes = { workspace = true }
 portable-atomic-util = { workspace = true, features = ["alloc"] }
+portable-atomic = { workspace = true }
+spin = { workspace = true }
 futures = { workspace = true, features = ["async-await"] }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
