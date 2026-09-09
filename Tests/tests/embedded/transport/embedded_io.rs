@@ -98,7 +98,10 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "transport::embedded_io_roundtrip_preserves_order_with_partial_io",
         roundtrip_preserves_order_with_partial_io,
     );
-    suite.register("transport::embedded_io_clean_eof_returns_none", clean_eof_returns_none);
+    suite.register(
+        "transport::embedded_io_clean_eof_returns_none",
+        clean_eof_returns_none,
+    );
     suite.register(
         "transport::embedded_io_oversized_header_is_rejected_before_payload_read",
         oversized_header_is_rejected_before_payload_read,
@@ -107,9 +110,18 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "transport::embedded_io_constructor_rejects_limit_above_crate_maximum",
         constructor_rejects_limit_above_crate_maximum,
     );
-    suite.register("transport::embedded_io_truncated_header_is_an_error", truncated_header_is_an_error);
-    suite.register("transport::embedded_io_truncated_payload_is_an_error", truncated_payload_is_an_error);
-    suite.register("transport::embedded_io_write_zero_is_an_error", write_zero_is_an_error);
+    suite.register(
+        "transport::embedded_io_truncated_header_is_an_error",
+        truncated_header_is_an_error,
+    );
+    suite.register(
+        "transport::embedded_io_truncated_payload_is_an_error",
+        truncated_payload_is_an_error,
+    );
+    suite.register(
+        "transport::embedded_io_write_zero_is_an_error",
+        write_zero_is_an_error,
+    );
 }
 
 fn roundtrip_preserves_order_with_partial_io() -> Result<(), &'static str> {

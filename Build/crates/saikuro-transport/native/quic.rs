@@ -27,6 +27,7 @@ pub struct QuicTransport {
     sender: SendStream,
     peer_addr: SocketAddr,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl Transport for QuicTransport {
@@ -36,6 +37,7 @@ impl Transport for QuicTransport {
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let peer = self.peer_addr;
         let log = self.log;
+        let max_frame_size = self.max_frame_size;
         (
             QuicSender {
                 inner: self.sender,
@@ -46,6 +48,7 @@ impl Transport for QuicTransport {
                 inner: self.receiver,
                 peer_addr: peer,
                 log,
+                max_frame_size,
             },
         )
     }
@@ -68,6 +71,7 @@ pub struct QuicReceiver {
     inner: ReceiveStream,
     peer_addr: SocketAddr,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl_native_receiver!(QuicReceiver, peer_addr, "quic");
@@ -120,6 +124,7 @@ impl TransportConnector for QuicConnector {
             sender,
             peer_addr: self.addr,
             log: self.log.clone(),
+            max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
         })
     }
 }
@@ -203,6 +208,7 @@ impl TransportListener for QuicTransportListener {
                         sender,
                         peer_addr,
                         log: self.log.clone(),
+                        max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
                     }));
                 }
                 Ok(None) => {

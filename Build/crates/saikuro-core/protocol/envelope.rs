@@ -1,4 +1,9 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
+use messagepack_serde::messagepack_core::{
+    decode::{DecodeBorrowed, NbyteReader},
+    io::{IoRead, SliceReader},
+    Format,
+};
 use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
@@ -223,6 +228,213 @@ pub fn split_target(target: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((&target[..dot], &target[dot + 1..]))
+}
+
+// Frame discrimination
+
+/// Classify a serialized envelope frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameKind {
+    /// The frame is a [`ResponseEnvelope`].
+    Response,
+    /// The frame is a non-response [`Envelope`].
+    NonResponse,
+}
+
+/// Classify a frame by scanning its top-level MessagePack map keys.
+///
+/// Unparseable or non-map frames classify as [`FrameKind::NonResponse`] so the
+/// regular decode path reports the malformed-envelope error.
+pub fn classify_frame(frame: &[u8]) -> FrameKind {
+    let mut reader = SliceReader::new(frame);
+    let format = match <Format as DecodeBorrowed>::decode_borrowed(&mut reader) {
+        Ok(f) => f,
+        Err(_) => return FrameKind::NonResponse,
+    };
+    let entries = match format {
+        Format::FixMap(n) => n as usize,
+        Format::Map16 => match NbyteReader::<2>::read(&mut reader) {
+            Ok(n) => n,
+            Err(_) => return FrameKind::NonResponse,
+        },
+        Format::Map32 => match NbyteReader::<4>::read(&mut reader) {
+            Ok(n) => n,
+            Err(_) => return FrameKind::NonResponse,
+        },
+        _ => return FrameKind::NonResponse,
+    };
+
+    for _ in 0..entries {
+        let key_format = match <Format as DecodeBorrowed>::decode_borrowed(&mut reader) {
+            Ok(f) => f,
+            Err(_) => return FrameKind::NonResponse,
+        };
+        let decided = match key_format {
+            Format::FixStr(n) => read_str_key(&mut reader, n as usize),
+            Format::Str8 => read_str_key_n(&mut reader, 1),
+            Format::Str16 => read_str_key_n(&mut reader, 2),
+            Format::Str32 => read_str_key_n(&mut reader, 4),
+            // A non-string top-level key is not required by the protocol; skip
+            // it as an arbitrary value and continue scanning.
+            _ => {
+                if !skip_value_with_format(&mut reader, key_format) {
+                    return FrameKind::NonResponse;
+                }
+                None
+            }
+        };
+        match decided {
+            Some(kind) => return kind,
+            None => {
+                if !skip_value(&mut reader) {
+                    return FrameKind::NonResponse;
+                }
+            }
+        }
+    }
+
+    FrameKind::NonResponse
+}
+
+/// Read a string map key and decide the frame kind it identifies.
+fn read_str_key(reader: &mut SliceReader<'_>, len: usize) -> Option<FrameKind> {
+    let key = reader.read_slice(len).ok()?;
+    match key.as_bytes() {
+        b"ok" => Some(FrameKind::Response),
+        b"version" | b"type" => Some(FrameKind::NonResponse),
+        _ => None,
+    }
+}
+
+/// Read a length-prefixed string map key and decide the frame kind.
+fn read_str_key_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> Option<FrameKind> {
+    read_len(reader, len_bytes)
+        .ok()
+        .and_then(|len| read_str_key(reader, len))
+}
+
+/// Skip one MessagePack value, reading its format marker first.
+fn skip_value(reader: &mut SliceReader<'_>) -> bool {
+    let format = match <Format as DecodeBorrowed>::decode_borrowed(reader) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    skip_value_with_format(reader, format)
+}
+
+/// Skip one MessagePack value whose format marker is already known.
+fn skip_value_with_format(reader: &mut SliceReader<'_>, format: Format) -> bool {
+    match format {
+        Format::PositiveFixInt(_)
+        | Format::NegativeFixInt(_)
+        | Format::Uint8
+        | Format::Uint16
+        | Format::Uint32
+        | Format::Uint64
+        | Format::Int8
+        | Format::Int16
+        | Format::Int32
+        | Format::Int64
+        | Format::Nil
+        | Format::NeverUsed
+        | Format::False
+        | Format::True => true,
+
+        Format::FixMap(n) => skip_map_entries(reader, n as usize),
+        Format::Map16 => skip_map_n(reader, 2),
+        Format::Map32 => skip_map_n(reader, 4),
+        Format::FixArray(n) => skip_values(reader, n as usize),
+        Format::Array16 => skip_array_n(reader, 2),
+        Format::Array32 => skip_array_n(reader, 4),
+
+        Format::FixStr(n) => reader.read_slice(n as usize).is_ok(),
+        Format::Str8 => skip_sized(reader, 1),
+        Format::Str16 => skip_sized(reader, 2),
+        Format::Str32 => skip_sized(reader, 4),
+
+        Format::Bin8 => skip_sized(reader, 1),
+        Format::Bin16 => skip_sized(reader, 2),
+        Format::Bin32 => skip_sized(reader, 4),
+
+        Format::Float32 => reader.read_slice(4).is_ok(),
+        Format::Float64 => reader.read_slice(8).is_ok(),
+
+        Format::FixExt1 => skip_ext(reader, 1),
+        Format::FixExt2 => skip_ext(reader, 2),
+        Format::FixExt4 => skip_ext(reader, 4),
+        Format::FixExt8 => skip_ext(reader, 8),
+        Format::FixExt16 => skip_ext(reader, 16),
+        Format::Ext8 => skip_ext_n(reader, 1),
+        Format::Ext16 => skip_ext_n(reader, 2),
+        Format::Ext32 => skip_ext_n(reader, 4),
+    }
+}
+
+/// Skip `count` consecutive MessagePack values.
+fn skip_values(reader: &mut SliceReader<'_>, count: usize) -> bool {
+    for _ in 0..count {
+        if !skip_value(reader) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Skip `count` map entries (each entry is a key/value pair).
+fn skip_map_entries(reader: &mut SliceReader<'_>, count: usize) -> bool {
+    for _ in 0..count {
+        if !skip_value(reader) || !skip_value(reader) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Skip a map whose entry count is a `len_bytes`-wide unsigned integer.
+fn skip_map_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> bool {
+    match read_len(reader, len_bytes) {
+        Ok(n) => skip_map_entries(reader, n),
+        Err(_) => false,
+    }
+}
+
+/// Skip an array whose length is a `len_bytes`-wide unsigned integer.
+fn skip_array_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> bool {
+    match read_len(reader, len_bytes) {
+        Ok(n) => skip_values(reader, n),
+        Err(_) => false,
+    }
+}
+
+/// Skip a bin/str whose length is a `len_bytes`-wide unsigned integer.
+fn skip_sized(reader: &mut SliceReader<'_>, len_bytes: usize) -> bool {
+    match read_len(reader, len_bytes) {
+        Ok(len) => reader.read_slice(len).is_ok(),
+        Err(_) => false,
+    }
+}
+
+/// Skip an extension of `len` data bytes plus its one type byte.
+fn skip_ext(reader: &mut SliceReader<'_>, len: usize) -> bool {
+    reader.read_slice(len).is_ok() && reader.read_slice(1).is_ok()
+}
+
+/// Skip an extension whose data length is a `len_bytes`-wide unsigned integer.
+fn skip_ext_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> bool {
+    match read_len(reader, len_bytes) {
+        Ok(len) => skip_ext(reader, len),
+        Err(_) => false,
+    }
+}
+
+/// Read a big-endian `len_bytes`-wide unsigned integer used as a length field.
+fn read_len(reader: &mut SliceReader<'_>, len_bytes: usize) -> Result<usize, ()> {
+    match len_bytes {
+        1 => NbyteReader::<1>::read(reader).map_err(|_| ()),
+        2 => NbyteReader::<2>::read(reader).map_err(|_| ()),
+        4 => NbyteReader::<4>::read(reader).map_err(|_| ()),
+        _ => Err(()),
+    }
 }
 
 /// The envelope carrying a response back to a caller.

@@ -12,9 +12,9 @@ use bytes::Bytes;
 use futures::future::FutureExt;
 use saikuro_core::{
     capability::CapabilitySet,
-    envelope::{Envelope, InvocationType},
+    envelope::{classify_frame, Envelope, FrameKind, InvocationType},
     invocation::InvocationId,
-    schema::Schema,
+    schema::{Schema, Visibility},
     RegistrationToken, ResponseEnvelope,
 };
 use saikuro_event::{ErrorDetail, LogLevel, LogRecord, LogSink, Value};
@@ -38,6 +38,17 @@ use crate::transport_adapter::{RuntimeReceiver, RuntimeSender};
 /// Tracks in-flight `Call` invocations forwarded to a wire-connected provider.
 /// Maps `InvocationId -> oneshot::Sender<ResponseEnvelope>`.
 type PendingCalls = Arc<Mutex<BTreeMap<InvocationId, oneshot::Sender<ResponseEnvelope>>>>;
+
+/// Capacity of the per-connection wire queues (outbound forward frames and
+/// the wire-provider work queue).
+#[cfg(saikuro_test_capacity = "small")]
+const WIRE_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
+    match saikuro_exec::ChannelCapacity::new(4) {
+        Ok(cap) => cap,
+        Err(_) => panic!(),
+    };
+#[cfg(not(saikuro_test_capacity = "small"))]
+const WIRE_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity = saikuro_exec::ChannelCapacity::MAX;
 
 /// Encode a serializable value as MessagePack `Bytes`.
 fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
@@ -115,8 +126,7 @@ where
 
         // Channel through which the ForwardTask sends frames TO the peer.
         // The recv loop serialises all outbound writes through `self.sender`.
-        let (forward_tx, mut forward_rx) =
-            mpsc::channel::<Bytes>(saikuro_exec::ChannelCapacity::MAX);
+        let (forward_tx, mut forward_rx) = mpsc::channel::<Bytes>(WIRE_CHANNEL_CAPACITY);
 
         loop {
             saikuro_exec::select! {
@@ -251,7 +261,7 @@ where
             }
             InvocationType::Log => {
                 // Let the router's log sink handle it:  no validation needed.
-                return Some((self.router.dispatch(envelope).await, None));
+                return Some((self.router.dispatch_with(envelope, Some(frame)).await, None));
             }
             _ => {}
         }
@@ -287,8 +297,9 @@ where
             }
         }
 
-        // 5. Route to provider.
-        Some((self.router.dispatch(envelope).await, None))
+        // 5. Route to provider.  The raw frame travels with the invocation so
+        // a wire provider forwards it verbatim instead of re-encoding.
+        Some((self.router.dispatch_with(envelope, Some(frame)).await, None))
     }
 
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
@@ -366,11 +377,14 @@ where
             return true;
         }
 
-        // Try to decode as ResponseEnvelope first.
-        if let Ok(resp) = saikuro_core::msgpack::from_slice::<ResponseEnvelope>(&frame) {
-            if let Some(sender) = pending.lock().remove(&resp.id) {
-                let _ = sender.send(resp);
-                return true;
+        // Responses carry an `ok` key and requests carry `version`/`type`;
+        // classify by scanning the top-level map keys in a single pass
+        if classify_frame(&frame) == FrameKind::Response {
+            if let Ok(resp) = saikuro_core::msgpack::from_slice::<ResponseEnvelope>(&frame) {
+                if let Some(sender) = pending.lock().remove(&resp.id) {
+                    let _ = sender.send(resp);
+                    return true;
+                }
             }
         }
 
@@ -494,8 +508,7 @@ where
         pending: &PendingCalls,
         forward_tx: &mpsc::Sender<Bytes>,
     ) {
-        let (work_tx, mut work_rx) =
-            mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MAX);
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(WIRE_CHANNEL_CAPACITY);
         let handle = ProviderHandle::with_registration_token(
             self.peer_id.clone(),
             self.registration_token,
@@ -511,28 +524,31 @@ where
 
         spawn(async move {
             while let Some(item) = work_rx.recv().await {
-                let frame = match encode_bytes(&item.envelope) {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        let mut record = LogRecord::now(
-                            LogLevel::Warn,
-                            "saikuro.runtime.connection",
-                            "failed to encode forwarded call",
-                        );
-                        record.set_context("peer", peer_id.clone());
-                        record.set_context("error", e.to_string());
-                        log.emit(&record).await;
-                        if let Some(tx) = item.response_tx {
-                            let _ = tx.send(ResponseEnvelope::err(
-                                item.envelope.id,
-                                ErrorDetail::new(
-                                    saikuro_event::ErrorCode::Internal,
-                                    format!("encode error: {e}"),
-                                ),
-                            ));
+                let frame = match item.raw {
+                    Some(raw) => raw,
+                    None => match encode_bytes(&item.envelope) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            let mut record = LogRecord::now(
+                                LogLevel::Warn,
+                                "saikuro.runtime.connection",
+                                "failed to encode forwarded call",
+                            );
+                            record.set_context("peer", peer_id.clone());
+                            record.set_context("error", e.to_string());
+                            log.emit(&record).await;
+                            if let Some(tx) = item.response_tx {
+                                let _ = tx.send(ResponseEnvelope::err(
+                                    item.envelope.id,
+                                    ErrorDetail::new(
+                                        saikuro_event::ErrorCode::Internal,
+                                        format!("encode error: {e}"),
+                                    ),
+                                ));
+                            }
+                            continue;
                         }
-                        continue;
-                    }
+                    },
                 };
 
                 // Register before sending so an incoming response can find the
@@ -570,50 +586,33 @@ where
     /// Only namespaces and functions visible to `peer_capabilities` (and not
     /// `Internal` or `Private`) are included.
     async fn build_filtered_schema(&self) -> Option<Schema> {
-        let full = match self.schema_registry.snapshot().await {
-            Ok(schema) => schema,
+        match self
+            .schema_registry
+            .snapshot_filtered(|_ns_name, _fn_name, schema| {
+                // Private functions are never visible; `check` additionally
+                // rejects `Internal` functions in sandbox mode.
+                schema.visibility != Visibility::Private
+                    && matches!(
+                        self.capability_engine
+                            .check(&self.peer_capabilities, schema),
+                        CapabilityOutcome::Granted
+                    )
+            })
+            .await
+        {
+            Ok(schema) => Some(schema),
             Err(e) => {
                 let mut record = LogRecord::now(
                     LogLevel::Error,
                     "saikuro.runtime.connection",
-                    "schema snapshot capacity exceeded",
+                    "filtered schema snapshot capacity exceeded",
                 );
                 record.set_context("peer", self.peer_id.clone());
                 record.set_context("error", alloc::format!("{}", e));
                 self.log.emit(&record).await;
-                return None;
+                None
             }
-        };
-        let mut filtered = Schema::new();
-        // Copy types:  they are passive descriptors and always included.
-        filtered.types = full.types.clone();
-
-        for (ns_name, ns_schema) in full.namespaces.iter() {
-            let accessible = self.capability_engine.filter_accessible_functions(
-                ns_schema.functions.iter().map(|(n, s)| (n.as_str(), s)),
-                &self.peer_capabilities,
-            );
-            if accessible.is_empty() {
-                continue;
-            }
-            let functions = Box::new(
-                ns_schema
-                    .functions
-                    .iter()
-                    .filter(|(name, _)| accessible.contains(name))
-                    .map(|(name, schema)| (name.clone(), schema.clone()))
-                    .collect(),
-            );
-            filtered.namespaces.insert(
-                ns_name.clone(),
-                saikuro_core::schema::NamespaceSchema {
-                    functions,
-                    doc: ns_schema.doc.clone(),
-                },
-            );
         }
-
-        Some(filtered)
     }
 
     /// Encode `filtered_schema` as a `Value` and push it as an unsolicited

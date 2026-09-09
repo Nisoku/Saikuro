@@ -1,4 +1,3 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use saikuro_exec::{mpsc, oneshot, select};
@@ -8,43 +7,53 @@ fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
 }
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_first_ready_branch_wins",
         select_first_ready_branch_wins,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_with_oneshot_and_mpsc",
         select_with_oneshot_and_mpsc,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_pattern_matching_extracts_value",
         select_pattern_matching_extracts_value,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_non_exhaustive_pattern_skipped",
         select_non_exhaustive_pattern_skipped,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_first_branch_preferred_when_both_ready",
         select_first_branch_preferred_when_both_ready,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_yields_when_no_branch_ready",
         select_yields_when_no_branch_ready,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_one_branch_never_ready_other_receives",
         select_one_branch_never_ready_other_receives,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_with_three_branches",
         select_with_three_branches,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_on_closed_channel_picks_other_branch",
         select_on_closed_channel_picks_other_branch,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::select_mpsc_then_oneshot_sequentially",
         select_mpsc_then_oneshot_sequentially,
     );

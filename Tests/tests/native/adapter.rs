@@ -34,15 +34,17 @@ fn m_rust_adapter_client_calls_runtime_provider() -> Result<(), &'static str> {
             .await
             .map_err(|_| "register schema")?;
         let _ = handle
-            .register_fn_provider("nums-provider", saikuro_tests::vec!["nums".to_owned()], |env| {
-                async move {
+            .register_fn_provider(
+                "nums-provider",
+                saikuro_tests::vec!["nums".to_owned()],
+                |env| async move {
                     let n = match env.args.first() {
                         Some(Value::Int(n)) => *n,
                         _ => 0,
                     };
                     ResponseEnvelope::ok(env.id, Value::Int(-n))
-                }
-            })
+                },
+            )
             .await;
 
         let bridge_log = saikuro_tests::shared::common::null_log();
@@ -177,19 +179,18 @@ fn n_rust_adapter_provider_serves_simulated_client() -> Result<(), &'static str>
         let (mut client_tx, mut client_rx) =
             saikuro_tests::shared::wire::wire::connect_simulated_peer(&handle, "n-sim-client");
 
-        let call = Envelope::call("words.reverse", saikuro_tests::vec![Value::String("saikuro".into())])
-            .map_err(|_| "entropy available")?;
+        let call = Envelope::call(
+            "words.reverse",
+            saikuro_tests::vec![Value::String("saikuro".into())],
+        )
+        .map_err(|_| "entropy available")?;
         let call_id = call.id;
         client_tx
             .send(saikuro_tests::shared::wire::wire::encode_envelope(&call))
             .await
             .map_err(|_| "send call")?;
 
-        let frame = client_rx
-            .recv()
-            .await
-            .map_err(|_| "recv")?
-            .ok_or("frame")?;
+        let frame = client_rx.recv().await.map_err(|_| "recv")?.ok_or("frame")?;
         let resp = saikuro_tests::shared::wire::wire::decode_response(frame);
 
         assert!(resp.ok, "words.reverse must succeed: {:?}", resp.error);

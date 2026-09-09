@@ -36,6 +36,7 @@ type SharedSocket = Arc<AsyncMutex<NoopRawMutex, TcpSocket<'static>>>;
 /// A TCP transport connection (embedded / embassy-net).
 pub struct TcpTransport {
     socket: SharedSocket,
+    max_frame_size: usize,
 }
 
 impl TcpTransport {
@@ -43,7 +44,14 @@ impl TcpTransport {
     pub fn new(socket: TcpSocket<'static>) -> Self {
         Self {
             socket: Arc::new(AsyncMutex::new(socket)),
+            max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
         }
+    }
+
+    /// Raise the inbound frame limit above the transport default.
+    pub fn max_frame_size(mut self, limit: usize) -> Self {
+        self.max_frame_size = limit;
+        self
     }
 }
 
@@ -53,11 +61,15 @@ impl Transport for TcpTransport {
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let socket = self.socket.clone();
+        let max_frame_size = self.max_frame_size;
         (
             TcpSender {
                 socket: socket.clone(),
             },
-            TcpReceiver { socket },
+            TcpReceiver {
+                socket,
+                max_frame_size,
+            },
         )
     }
 
@@ -86,13 +98,14 @@ impl TransportSender for TcpSender {
 /// Receiving half of an embedded TCP transport.
 pub struct TcpReceiver {
     socket: SharedSocket,
+    max_frame_size: usize,
 }
 
 #[async_trait(?Send)]
 impl TransportReceiver for TcpReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
         let mut socket = self.socket.lock().await;
-        read_frame(&mut *socket).await
+        read_frame(&mut *socket, self.max_frame_size).await
     }
 }
 

@@ -9,38 +9,45 @@ use saikuro_core::{
     envelope::{Envelope, InvocationType},
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
-use saikuro_exec::mpsc;
 use saikuro_event::Value;
+use saikuro_exec::mpsc;
 use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
 use saikuro_schema::registry::{RegistryMode, SchemaRegistry};
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_registers_namespace_in_schema",
         announce_registers_namespace_in_schema,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_allows_subsequent_calls_to_not_fail_schema_validation",
         announce_allows_subsequent_calls_to_not_fail_schema_validation,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_in_production_mode_returns_error",
         announce_in_production_mode_returns_error,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_with_invalid_schema_returns_error",
         announce_with_invalid_schema_returns_error,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_with_no_args_returns_error",
         announce_with_no_args_returns_error,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::announce_does_not_route_to_provider",
         announce_does_not_route_to_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::multiple_announces_merge_all_namespaces",
         multiple_announces_merge_all_namespaces,
     );
@@ -58,8 +65,7 @@ async fn round_trip_while_alive(
     envelope: Envelope,
 ) -> Result<ResponseEnvelope, &'static str> {
     let log = common::null_log();
-    let (test_transport, handler_transport) =
-        MemoryTransport::pair("test", "handler", log.clone());
+    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
     let handler = common::make_handler(

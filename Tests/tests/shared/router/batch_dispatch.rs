@@ -1,4 +1,3 @@
-
 use crate::common;
 use crate::shared_test;
 use crate::TestSuite;
@@ -13,25 +12,24 @@ pub fn register(suite: &mut TestSuite) {
     shared_test!(suite, "router::batch_single_item", batch_single_item);
     shared_test!(suite, "router::batch_multiple_items", batch_multiple_items);
     shared_test!(suite, "router::batch_result_ordered", batch_result_ordered);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::batch_no_items_field_malformed",
         batch_no_items_field_malformed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::batch_items_different_namespaces",
         batch_items_different_namespaces,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::batch_item_unknown_namespace_null_result",
         batch_item_unknown_namespace_null_result,
     );
 }
 
-async fn register_echo_provider(
-    registry: &ProviderRegistry,
-    namespace: &str,
-    response: Value,
-) {
+async fn register_echo_provider(registry: &ProviderRegistry, namespace: &str, response: Value) {
     let (work_tx, work_rx) = mpsc::channel::<ProviderWorkItem>(common::capacity(64));
     let handle = ProviderHandle::new(
         format!("{namespace}-provider"),

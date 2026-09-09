@@ -10,7 +10,7 @@ use saikuro_net::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
 use crate::shared::{
-    error::Result,
+    error::{Result, TransportError},
     traits::{Transport, TransportConnector, TransportListener},
 };
 
@@ -19,12 +19,30 @@ pub struct UnixTransport {
     stream: UnixStream,
     path: PathBuf,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl UnixTransport {
     /// Wrap an already-connected [`UnixStream`].
     pub fn new(stream: UnixStream, path: PathBuf, log: Arc<dyn saikuro_event::LogSink>) -> Self {
-        Self { stream, path, log }
+        Self {
+            stream,
+            path,
+            log,
+            max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
+        }
+    }
+
+    /// Raise the inbound frame limit above the transport default.
+    pub fn max_frame_size(mut self, limit: usize) -> Result<Self> {
+        if limit > crate::MAX_FRAME_SIZE {
+            return Err(TransportError::MessageTooLarge {
+                size: limit,
+                limit: crate::MAX_FRAME_SIZE,
+            });
+        }
+        self.max_frame_size = limit;
+        Ok(self)
     }
 }
 
@@ -36,6 +54,7 @@ impl Transport for UnixTransport {
         let (read, write) = split(self.stream);
         let path = self.path.clone();
         let log = self.log;
+        let max_frame_size = self.max_frame_size;
         (
             UnixSender {
                 inner: write,
@@ -46,6 +65,7 @@ impl Transport for UnixTransport {
                 inner: read,
                 path,
                 log,
+                max_frame_size,
             },
         )
     }
@@ -68,6 +88,7 @@ pub struct UnixReceiver {
     inner: ReadHalf<UnixStream>,
     path: PathBuf,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl_native_receiver!(UnixReceiver, path, "unix");

@@ -1,19 +1,23 @@
 //! Runtime-level schema registration and stale-token cleanup tests.
 
 use crate::shared_test;
-use crate::TestSuite;
 use crate::Box;
-use saikuro_core::schema::{FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility};
+use crate::TestSuite;
+use saikuro_core::schema::{
+    FunctionMap, FunctionSchema, NamespaceSchema, PrimitiveType, Schema, TypeDescriptor, Visibility,
+};
 use saikuro_core::RegistrationToken;
 use saikuro_router::provider::{Provider, ProviderHandle, ProviderWorkItem};
 use saikuro_runtime::SaikuroRuntime;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "runtime::schema_registration_roundtrip",
         schema_registration_roundtrip,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "runtime::stale_same_id_cleanup_preserves_new_provider_and_schema",
         stale_same_id_cleanup_preserves_new_provider_and_schema,
     );
@@ -93,8 +97,7 @@ fn stale_same_id_cleanup_preserves_new_provider_and_schema() -> Result<(), &'sta
         let new_token = RegistrationToken::new();
         let capacity = saikuro_exec::ChannelCapacity::try_from(4).map_err(|_| "capacity 4")?;
         let (old_sender, _old_receiver) = saikuro_exec::mpsc::channel::<ProviderWorkItem>(capacity);
-        let (new_sender, _new_receiver) =
-            saikuro_exec::mpsc::channel::<ProviderWorkItem>(capacity);
+        let (new_sender, _new_receiver) = saikuro_exec::mpsc::channel::<ProviderWorkItem>(capacity);
 
         handle
             .register_provider(ProviderHandle::with_registration_token(

@@ -3,6 +3,10 @@ use alloc::{
     boxed::Box,
     string::{String, ToString},
 };
+#[cfg(not(target_has_atomic = "ptr"))]
+use portable_atomic_util::Arc;
+#[cfg(target_has_atomic = "ptr")]
+use saikuro_core::Arc;
 use saikuro_core::{
     envelope::{Envelope, InvocationType},
     schema::{ArgumentDescriptor, PrimitiveType, TypeDescriptor, Visibility},
@@ -18,6 +22,24 @@ use crate::registry::{FunctionRef, SchemaRegistry};
 pub struct ValidationReport {
     /// The fully resolved function and its owning provider.
     pub function_ref: FunctionRef,
+}
+
+/// Lazily-rendered path of an argument, used to name it in error messages.
+enum ValueName<'a> {
+    Root(&'a str),
+    ArrayElement {
+        parent: &'a ValueName<'a>,
+        index: usize,
+    },
+}
+
+impl core::fmt::Display for ValueName<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Root(name) => f.write_str(name),
+            Self::ArrayElement { parent, index } => write!(f, "{parent}[{index}]"),
+        }
+    }
 }
 
 /// Stateless invocation validator.
@@ -65,7 +87,7 @@ impl InvocationValidator {
                 function_ref: crate::registry::FunctionRef {
                     namespace: String::new(),
                     function: String::new(),
-                    schema: saikuro_core::schema::FunctionSchema {
+                    schema: Arc::new(saikuro_core::schema::FunctionSchema {
                         args: vec![],
                         returns: saikuro_core::schema::TypeDescriptor::primitive(
                             saikuro_core::schema::PrimitiveType::Unit,
@@ -74,7 +96,7 @@ impl InvocationValidator {
                         capabilities: vec![],
                         idempotent: false,
                         doc: None,
-                    },
+                    }),
                     provider_id: String::new(),
                 },
             }),
@@ -130,21 +152,25 @@ impl InvocationValidator {
         })?;
 
         // Validate each item; collect the first error with its index.
+        let mut first_report: Option<ValidationReport> = None;
         for (index, item) in items.iter().enumerate() {
-            Box::pin(self.validate(item)).await.map_err(|source| {
+            let report = Box::pin(self.validate(item)).await.map_err(|source| {
                 SaikuroError::BatchItemFailed {
                     index,
                     reason: source.to_string(),
                 }
             })?;
+            if first_report.is_none() {
+                first_report = Some(report);
+            }
         }
 
-        // For batch we return a synthetic report. The router will dispatch each
-        // item individually and collect results.
-        let first_ref = self.registry.lookup_function(&items[0].target).await?;
-
         Ok(ValidationReport {
-            function_ref: first_ref,
+            // `check_structural` guarantees a non-empty batch, so the first
+            // report always exists here.
+            function_ref: first_report
+                .expect("batch validated non-empty by check_structural")
+                .function_ref,
         })
     }
 
@@ -197,7 +223,7 @@ impl InvocationValidator {
             self.check_value_type(
                 target,
                 position,
-                &arg_schema.name,
+                &ValueName::Root(arg_schema.name.as_str()),
                 &arg_schema.r#type,
                 provided_value,
             )?;
@@ -211,12 +237,12 @@ impl InvocationValidator {
         &self,
         target: &str,
         position: usize,
-        name: &str,
+        name: &ValueName<'_>,
         descriptor: &TypeDescriptor,
         value: &Value,
     ) -> Result<(), SaikuroError> {
         let type_error = |expected: &str| SaikuroError::ArgumentType {
-            name: name.to_owned(),
+            name: name.to_string(),
             position,
             expected: expected.to_owned(),
             received: value.type_name().to_owned(),
@@ -246,8 +272,11 @@ impl InvocationValidator {
             TypeDescriptor::Array { item } => {
                 let items = value.as_array().ok_or_else(|| type_error("array"))?;
                 for (i, item_value) in items.iter().enumerate() {
-                    let inner_name = format!("{name}[{i}]");
-                    self.check_value_type(target, i, &inner_name, item, item_value)?;
+                    let element = ValueName::ArrayElement {
+                        parent: name,
+                        index: i,
+                    };
+                    self.check_value_type(target, i, &element, item, item_value)?;
                 }
                 Ok(())
             }
@@ -255,7 +284,7 @@ impl InvocationValidator {
             TypeDescriptor::Map { value: val_type } => {
                 let map = value.as_map().ok_or_else(|| type_error("map"))?;
                 for (k, v) in map {
-                    self.check_value_type(target, position, k, val_type, v)?;
+                    self.check_value_type(target, position, &ValueName::Root(k), val_type, v)?;
                 }
                 Ok(())
             }
@@ -274,7 +303,7 @@ impl InvocationValidator {
         &self,
         _target: &str,
         position: usize,
-        name: &str,
+        name: &ValueName<'_>,
         prim: &PrimitiveType,
         value: &Value,
     ) -> Result<(), SaikuroError> {
@@ -297,7 +326,7 @@ impl InvocationValidator {
             Ok(())
         } else {
             Err(SaikuroError::ArgumentType {
-                name: name.to_owned(),
+                name: name.to_string(),
                 position,
                 expected: prim.to_string(),
                 received: value.type_name().to_owned(),

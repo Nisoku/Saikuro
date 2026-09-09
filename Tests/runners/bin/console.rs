@@ -60,8 +60,10 @@ impl Default for Console {
 fn clock_us() -> u64 {
     // SAFETY: SYS_CLOCK (0x10) takes no argument block; a null pointer is
     // accepted by QEMU's `arm-compat-semi.c` handler.
-    unsafe { (cortex_m_semihosting::syscall1(cortex_m_semihosting::nr::CLOCK, 0) as u64)
-        .saturating_mul(MICROS_PER_CENTISEC) }
+    unsafe {
+        (cortex_m_semihosting::syscall1(cortex_m_semihosting::nr::CLOCK, 0) as u64)
+            .saturating_mul(MICROS_PER_CENTISEC)
+    }
 }
 
 /// Read QEMU's monotonic `SYS_CLOCK` (host CPU time, centiseconds) as

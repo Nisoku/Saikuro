@@ -17,7 +17,9 @@ mod mock {
     use alloc::vec::Vec;
     use core::cell::RefCell;
 
-    use embedded_storage_async::nor_flash::{ErrorType as EmbeddedStorageAsync, NorFlash, ReadNorFlash};
+    use embedded_storage_async::nor_flash::{
+        ErrorType as EmbeddedStorageAsync, NorFlash, ReadNorFlash,
+    };
 
     pub const ERASE_SIZE: usize = 256;
     pub const WRITE_SIZE: usize = 4;
@@ -142,9 +144,18 @@ fn config(auto_create: bool) -> StorageConfig {
 }
 
 pub fn register(suite: &mut saikuro_tests::TestSuite) {
-    suite.register("storage::flash_config_validates_geometry", flash_config_validates_geometry);
-    suite.register("storage::flash_store_rejects_item_over_64kib", store_rejects_item_over_64kib);
-    suite.register("storage::flash_operations_do_not_require_open", operations_do_not_require_open);
+    suite.register(
+        "storage::flash_config_validates_geometry",
+        flash_config_validates_geometry,
+    );
+    suite.register(
+        "storage::flash_store_rejects_item_over_64kib",
+        store_rejects_item_over_64kib,
+    );
+    suite.register(
+        "storage::flash_operations_do_not_require_open",
+        operations_do_not_require_open,
+    );
     suite.register("storage::flash_get_put_roundtrip", get_put_roundtrip);
     suite.register(
         "storage::flash_rejects_value_exceeding_max_value_len",
@@ -158,7 +169,10 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "storage::flash_rejects_namespace_exceeding_255_bytes",
         rejects_namespace_exceeding_255_bytes,
     );
-    suite.register("storage::flash_accepts_item_at_exact_limits", accepts_item_at_exact_limits);
+    suite.register(
+        "storage::flash_accepts_item_at_exact_limits",
+        accepts_item_at_exact_limits,
+    );
     suite.register(
         "storage::flash_auto_create_creates_namespace_implicitly",
         auto_create_creates_namespace_implicitly,
@@ -168,9 +182,18 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         auto_create_disabled_returns_not_found,
     );
     suite.register("storage::flash_prefix_isolation", prefix_isolation);
-    suite.register("storage::flash_namespaces_are_independent", namespaces_are_independent);
-    suite.register("storage::flash_durability_survives_reboot", durability_survives_reboot);
-    suite.register("storage::flash_mount_tolerates_tail_corruption", mount_tolerates_tail_corruption);
+    suite.register(
+        "storage::flash_namespaces_are_independent",
+        namespaces_are_independent,
+    );
+    suite.register(
+        "storage::flash_durability_survives_reboot",
+        durability_survives_reboot,
+    );
+    suite.register(
+        "storage::flash_mount_tolerates_tail_corruption",
+        mount_tolerates_tail_corruption,
+    );
     suite.register(
         "storage::flash_compaction_rolls_over_without_data_loss",
         compaction_rolls_over_without_data_loss,
@@ -180,8 +203,14 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         quota_exceeded_when_region_full_then_recoverable,
     );
     suite.register("storage::flash_delete_is_idempotent", delete_is_idempotent);
-    suite.register("storage::flash_list_keys_returns_only_live", list_keys_returns_only_live);
-    suite.register("storage::flash_list_namespaces_includes_all", list_namespaces_includes_all);
+    suite.register(
+        "storage::flash_list_keys_returns_only_live",
+        list_keys_returns_only_live,
+    );
+    suite.register(
+        "storage::flash_list_namespaces_includes_all",
+        list_namespaces_includes_all,
+    );
     suite.register(
         "storage::flash_namespace_marker_records_existence",
         namespace_marker_records_existence,
@@ -190,9 +219,18 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "storage::flash_tombstone_distinguishes_present_from_absent",
         tombstone_distinguishes_present_from_absent,
     );
-    suite.register("storage::flash_clear_namespace_keeps_namespace", clear_namespace_keeps_namespace);
-    suite.register("storage::flash_delete_namespace_removes_all", delete_namespace_removes_all);
-    suite.register("storage::flash_deleting_unknown_namespace_is_ok", deleting_unknown_namespace_is_ok);
+    suite.register(
+        "storage::flash_clear_namespace_keeps_namespace",
+        clear_namespace_keeps_namespace,
+    );
+    suite.register(
+        "storage::flash_delete_namespace_removes_all",
+        delete_namespace_removes_all,
+    );
+    suite.register(
+        "storage::flash_deleting_unknown_namespace_is_ok",
+        deleting_unknown_namespace_is_ok,
+    );
 }
 
 fn flash_config_validates_geometry() -> Result<(), &'static str> {

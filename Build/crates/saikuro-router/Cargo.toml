@@ -50,6 +50,7 @@ saikuro-schema = { workspace = true, default-features = false }
 saikuro-exec   = { workspace = true, default-features = false }
 saikuro-event  = { workspace = true, default-features = false }
 
+bytes = { workspace = true }
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
 portable-atomic = { workspace = true }

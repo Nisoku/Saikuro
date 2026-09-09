@@ -1,15 +1,16 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use crate::ToString;
 use saikuro_core::{envelope::Envelope, InvocationId};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::msgpack_roundtrip_uses_binary_uuid",
         msgpack_roundtrip_uses_binary_uuid,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::msgpack_accepts_uuid_string",
         msgpack_accepts_uuid_string,
     );

@@ -7,7 +7,10 @@ use std::time::Duration;
 pub fn register(suite: &mut saikuro_tests::TestSuite) {
     suite.register("exec::spawn_and_join", spawn_and_join);
     suite.register("exec::spawn_multiple_tasks", spawn_multiple_tasks);
-    suite.register("exec::spawn_task_with_side_effect", spawn_task_with_side_effect);
+    suite.register(
+        "exec::spawn_task_with_side_effect",
+        spawn_task_with_side_effect,
+    );
     suite.register("exec::spawn_nested_tasks", spawn_nested_tasks);
     suite.register("exec::sleep_basic", sleep_basic);
     suite.register("exec::sleep_zero_duration", sleep_zero_duration);
@@ -19,10 +22,7 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "exec::timeout_completes_before_deadline",
         timeout_completes_before_deadline,
     );
-    suite.register(
-        "exec::timeout_exceeds_deadline",
-        timeout_exceeds_deadline,
-    );
+    suite.register("exec::timeout_exceeds_deadline", timeout_exceeds_deadline);
     suite.register("exec::yield_now_does_not_block", yield_now_does_not_block);
     suite.register(
         "exec::yield_now_allows_other_tasks_to_progress",
@@ -40,7 +40,10 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
         "exec::rwlock_read_allows_concurrent_reads",
         rwlock_read_allows_concurrent_reads,
     );
-    suite.register("exec::rwlock_write_excludes_read", rwlock_write_excludes_read);
+    suite.register(
+        "exec::rwlock_write_excludes_read",
+        rwlock_write_excludes_read,
+    );
 }
 
 fn spawn_and_join() -> Result<(), &'static str> {

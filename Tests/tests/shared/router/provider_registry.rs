@@ -1,4 +1,3 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::RegistrationToken;
@@ -8,27 +7,33 @@ use saikuro_router::provider::{Provider, ProviderHandle, ProviderRegistry, Provi
 use crate::{ToOwned, ToString};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::stale_deregister_preserves_new",
         stale_deregister_preserves_new,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::register_fewer_ns_releases_routes",
         register_fewer_ns_releases_routes,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::register_fewer_ns_keeps_taken_routes",
         register_fewer_ns_keeps_taken_routes,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::same_id_reregister_fewer_ns_releases_routes",
         same_id_reregister_fewer_ns_releases_routes,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::stale_same_id_deregister_preserves_new_token",
         stale_same_id_deregister_preserves_new_token,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::same_token_reregister_keeps_taken_over_routes",
         same_token_reregister_keeps_taken_over_routes,
     );
@@ -39,8 +44,7 @@ fn handle_with_token(
     registration_token: RegistrationToken,
     namespaces: &[&str],
 ) -> ProviderHandle {
-    let (sender, _receiver) =
-        mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
+    let (sender, _receiver) = mpsc::channel::<ProviderWorkItem>(saikuro_exec::ChannelCapacity::MIN);
     ProviderHandle::with_registration_token(
         id.to_owned(),
         registration_token,
@@ -158,7 +162,9 @@ fn same_token_reregister_keeps_taken_over_routes() -> Result<(), &'static str> {
         registry
             .register(handle_with_token("p", registration_token, &["a", "b"]))
             .await;
-        registry.register(handle_with_token("q", RegistrationToken::new(), &["b"])).await;
+        registry
+            .register(handle_with_token("q", RegistrationToken::new(), &["b"]))
+            .await;
         registry
             .register(handle_with_token("p", registration_token, &["a"]))
             .await;
@@ -168,7 +174,11 @@ fn same_token_reregister_keeps_taken_over_routes() -> Result<(), &'static str> {
             .get("b")
             .await
             .expect("'b' is owned by q after p drops it");
-        assert_eq!(b.id(), "q", "taken-over namespace 'b' must still route to q");
+        assert_eq!(
+            b.id(),
+            "q",
+            "taken-over namespace 'b' must still route to q"
+        );
         Ok(())
     })
 }

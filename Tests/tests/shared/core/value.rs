@@ -1,6 +1,5 @@
-
-use crate::Box;
 use crate::shared_test;
+use crate::Box;
 use crate::TestSuite;
 use saikuro_core::schema::{
     FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,
@@ -9,17 +8,20 @@ use saikuro_core::schema::{
 use saikuro_event::Value;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::schema_round_trip_via_value",
         schema_round_trip_via_value,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::array_not_confused_with_bytes",
         array_not_confused_with_bytes,
     );
     shared_test!(suite, "core::bytes_round_trip", bytes_round_trip);
     shared_test!(suite, "core::simple_map_round_trip", simple_map_round_trip);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::map_equality_ignores_insertion_order",
         map_equality_ignores_insertion_order,
     );
@@ -78,9 +80,8 @@ fn bytes_round_trip() -> Result<(), &'static str> {
 
 fn simple_map_round_trip() -> Result<(), &'static str> {
     let mut m = saikuro_event::ValueMap::new();
-    m.insert("key".into(), Value::Int(42))
-        .map_err(|_| "insert")?;
-    let val = Value::Map(Box::new(m));
+    m.insert("key".into(), Value::Int(42));
+    let val = Value::Map(m);
     let bytes = saikuro_core::to_vec(&val).map_err(|_| "serialize")?;
     let decoded: Value = saikuro_core::from_slice(&bytes).map_err(|_| "deserialize")?;
     assert_eq!(decoded, val);
@@ -89,11 +90,11 @@ fn simple_map_round_trip() -> Result<(), &'static str> {
 
 fn map_equality_ignores_insertion_order() -> Result<(), &'static str> {
     let mut m1 = saikuro_event::ValueMap::new();
-    m1.insert("a".into(), Value::Int(1)).map_err(|_| "insert")?;
-    m1.insert("b".into(), Value::Int(2)).map_err(|_| "insert")?;
+    m1.insert("a".into(), Value::Int(1));
+    m1.insert("b".into(), Value::Int(2));
     let mut m2 = saikuro_event::ValueMap::new();
-    m2.insert("b".into(), Value::Int(2)).map_err(|_| "insert")?;
-    m2.insert("a".into(), Value::Int(1)).map_err(|_| "insert")?;
-    assert_eq!(Value::Map(Box::new(m1)), Value::Map(Box::new(m2)));
+    m2.insert("b".into(), Value::Int(2));
+    m2.insert("a".into(), Value::Int(1));
+    assert_eq!(Value::Map(m1), Value::Map(m2));
     Ok(())
 }

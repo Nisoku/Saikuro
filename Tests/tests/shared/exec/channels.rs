@@ -1,4 +1,3 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use portable_atomic::{AtomicBool, Ordering};
@@ -10,83 +9,109 @@ fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
 }
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::channel_capacity_enforces_shared_backend_bounds",
         channel_capacity_enforces_shared_backend_bounds,
     );
     shared_test!(suite, "exec::mpsc_send_recv_single", mpsc_send_recv_single);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_send_recv_multiple_in_order",
         mpsc_send_recv_multiple_in_order,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_backpressure_sender_waits",
         mpsc_backpressure_sender_waits,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_try_send_on_full_channel",
         mpsc_try_send_on_full_channel,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_try_send_on_closed_channel",
         mpsc_try_send_on_closed_channel,
     );
     shared_test!(suite, "exec::mpsc_sender_clone", mpsc_sender_clone);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_send_after_all_receivers_dropped_errors",
         mpsc_send_after_all_receivers_dropped_errors,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_recv_returns_none_when_all_senders_dropped",
         mpsc_recv_returns_none_when_all_senders_dropped,
     );
     shared_test!(suite, "exec::mpsc_large_message", mpsc_large_message);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_many_messages_in_order",
         mpsc_many_messages_in_order,
     );
     shared_test!(suite, "exec::mpsc_is_closed", mpsc_is_closed);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::mpsc_multiple_concurrent_senders",
         mpsc_multiple_concurrent_senders,
     );
     shared_test!(suite, "exec::oneshot_send_recv", oneshot_send_recv);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::oneshot_dropped_sender_returns_err",
         oneshot_dropped_sender_returns_err,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::oneshot_dropped_receiver_returns_value",
         oneshot_dropped_receiver_returns_value,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::oneshot_send_after_recv_fails",
         oneshot_send_after_recv_fails,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::oneshot_multiple_independent_channels",
         oneshot_multiple_independent_channels,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::oneshot_cannot_call_send_twice",
         oneshot_cannot_call_send_twice,
     );
     shared_test!(suite, "exec::watch_send_and_borrow", watch_send_and_borrow);
-    shared_test!(suite, "exec::watch_send_and_changed", watch_send_and_changed);
-    shared_test!(suite,
+    shared_test!(
+        suite,
+        "exec::watch_send_and_changed",
+        watch_send_and_changed
+    );
+    shared_test!(
+        suite,
         "exec::watch_changed_blocks_until_next_update",
         watch_changed_blocks_until_next_update,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::watch_initial_value_available",
         watch_initial_value_available,
     );
-    shared_test!(suite, "exec::watch_multiple_receivers", watch_multiple_receivers);
-    shared_test!(suite,
+    shared_test!(
+        suite,
+        "exec::watch_multiple_receivers",
+        watch_multiple_receivers
+    );
+    shared_test!(
+        suite,
         "exec::watch_sender_drop_closes_channel",
         watch_sender_drop_closes_channel,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "exec::watch_borrow_returns_last_value",
         watch_borrow_returns_last_value,
     );

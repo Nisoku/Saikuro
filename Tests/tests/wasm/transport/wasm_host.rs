@@ -235,7 +235,9 @@ async fn listener_accepts_queued_connect() {
     let base_ch = BroadcastChannel::new(channel).expect("base channel");
     wasm_bindgen_futures::spawn_local(async move {
         while !stop_flag.get() {
-            base_ch.post_message(&make_connect_msg("queued-id")).unwrap();
+            base_ch
+                .post_message(&make_connect_msg("queued-id"))
+                .unwrap();
             saikuro_exec::sleep(Duration::from_millis(25)).await;
         }
     });

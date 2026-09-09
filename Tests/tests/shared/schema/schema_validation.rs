@@ -1,7 +1,6 @@
-
 use crate::common;
-use crate::Box;
 use crate::shared_test;
+use crate::Box;
 use crate::TestSuite;
 use saikuro_core::envelope::Envelope;
 use saikuro_event::{ErrorCode, Value};
@@ -9,27 +8,51 @@ use saikuro_schema::registry::SchemaRegistry;
 use saikuro_schema::validator::InvocationValidator;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite, "schema::lookup_existing_function", lookup_existing_function);
-    shared_test!(suite, "schema::lookup_unknown_namespace", lookup_unknown_namespace);
-    shared_test!(suite,
+    shared_test!(
+        suite,
+        "schema::lookup_existing_function",
+        lookup_existing_function
+    );
+    shared_test!(
+        suite,
+        "schema::lookup_unknown_namespace",
+        lookup_unknown_namespace
+    );
+    shared_test!(
+        suite,
         "schema::lookup_unknown_function_in_known_ns",
         lookup_unknown_function_in_known_ns,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "schema::valid_call_passes_validation",
         valid_call_passes_validation,
     );
     shared_test!(suite, "schema::wrong_arity_fails", wrong_arity_fails);
     shared_test!(suite, "schema::wrong_type_fails", wrong_type_fails);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "schema::internal_visibility_denied",
         internal_visibility_denied,
     );
-    shared_test!(suite, "schema::private_function_denied", private_function_denied);
+    shared_test!(
+        suite,
+        "schema::private_function_denied",
+        private_function_denied
+    );
     shared_test!(suite, "schema::batch_no_items_fails", batch_no_items_fails);
-    shared_test!(suite, "schema::batch_empty_items_fails", batch_empty_items_fails);
-    shared_test!(suite, "schema::malformed_target_no_dot", malformed_target_no_dot);
-    shared_test!(suite,
+    shared_test!(
+        suite,
+        "schema::batch_empty_items_fails",
+        batch_empty_items_fails
+    );
+    shared_test!(
+        suite,
+        "schema::malformed_target_no_dot",
+        malformed_target_no_dot
+    );
+    shared_test!(
+        suite,
         "schema::optional_argument_may_be_omitted",
         optional_argument_may_be_omitted,
     );

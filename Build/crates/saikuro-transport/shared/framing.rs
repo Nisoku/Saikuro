@@ -11,6 +11,9 @@ use crate::MAX_FRAME_SIZE;
 /// Number of big-endian length bytes that prefix every frame.
 pub(crate) const HEADER_LEN: usize = 4;
 
+/// Default inbound frame limit for transports that do not configure one.
+pub const DEFAULT_MAX_FRAME_LEN: usize = 64 * 1024;
+
 fn message_too_large(size: usize) -> TransportError {
     TransportError::MessageTooLarge {
         size,
@@ -72,16 +75,26 @@ async fn read_header_or_eof<R: AsyncByteRead>(
 }
 
 /// Receive one length-prefixed frame, or `None` on a clean peer close.
-pub async fn read_frame<R: AsyncByteRead>(reader: &mut R) -> Result<Option<Bytes>> {
+pub async fn read_frame<R: AsyncByteRead>(reader: &mut R, max_len: usize) -> Result<Option<Bytes>> {
     let mut header = [0u8; HEADER_LEN];
     if read_header_or_eof(reader, &mut header).await? {
         return Ok(None);
     }
     let frame_len = decode_length_prefix(&header);
-    if frame_len > MAX_FRAME_SIZE {
+    if frame_len > crate::MAX_FRAME_SIZE {
         return Err(message_too_large(frame_len));
     }
-    let mut payload = BytesMut::zeroed(frame_len);
+    if frame_len > max_len {
+        return Err(TransportError::MessageTooLarge {
+            size: frame_len,
+            limit: max_len,
+        });
+    }
+    let mut payload = BytesMut::with_capacity(frame_len);
+    // SAFETY: the buffer is uninitialized until read_exact writes into every
+    // byte below; the only other use is the Drop on the error path, which
+    // never reads the contents.
+    unsafe { payload.set_len(frame_len) };
     read_exact(reader, &mut payload).await?;
     Ok(Some(payload.freeze()))
 }

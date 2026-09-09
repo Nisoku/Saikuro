@@ -20,55 +20,68 @@ use saikuro_router::{
 };
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::channel_open_returns_ok_empty",
         channel_open_returns_ok_empty,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::channel_open_to_unknown_namespace_returns_no_provider",
         channel_open_to_unknown_namespace_returns_no_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_inbound_delivers_to_state",
         route_channel_inbound_delivers_to_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_outbound_delivers_to_state",
         route_channel_outbound_delivers_to_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_inbound_end_removes_state",
         route_channel_inbound_end_removes_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_outbound_end_removes_state",
         route_channel_outbound_end_removes_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_abort_removes_state",
         route_channel_abort_removes_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_inbound_to_unknown_channel_fails",
         route_channel_inbound_to_unknown_channel_fails,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_channel_outbound_to_unknown_channel_fails",
         route_channel_outbound_to_unknown_channel_fails,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::multiple_channels_are_independent",
         multiple_channels_are_independent,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::channel_open_to_dropped_provider_returns_unavailable",
         channel_open_to_dropped_provider_returns_unavailable,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::channel_pause_resume_round_trips",
         channel_pause_resume_round_trips,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::concurrent_channel_delivery_preserves_order_and_terminal_closure",
         concurrent_channel_delivery_preserves_order_and_terminal_closure,
     );
@@ -145,8 +158,8 @@ fn route_channel_inbound_delivers_to_state() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("pipe").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("pipe.connect", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("pipe.connect", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -164,7 +177,10 @@ fn route_channel_inbound_delivers_to_state() -> Result<(), &'static str> {
         // Route an inbound item from the client.
         let item = channel_item(channel_id, 0, Value::String("hello".into()));
         let result = router.route_channel_inbound(item).await;
-        check_test!(result.is_ok(), "routing a valid inbound item should succeed");
+        check_test!(
+            result.is_ok(),
+            "routing a valid inbound item should succeed"
+        );
 
         // Confirm the item arrived on the inbound queue.
         let received = inbound_rx
@@ -180,8 +196,8 @@ fn route_channel_outbound_delivers_to_state() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("pipe2").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("pipe2.connect", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("pipe2.connect", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -213,8 +229,8 @@ fn route_channel_inbound_end_removes_state() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("fin_chan").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("fin_chan.open", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("fin_chan.open", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -245,8 +261,8 @@ fn route_channel_outbound_end_removes_state() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("fin_out").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("fin_out.open", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("fin_out.open", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -274,8 +290,8 @@ fn route_channel_abort_removes_state() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("abort_chan").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("abort_chan.open", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("abort_chan.open", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
@@ -337,10 +353,8 @@ fn multiple_channels_are_independent() -> Result<(), &'static str> {
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });
 
-        let env1 =
-            Envelope::channel_open("multi_chan.ch1", crate::vec![]).map_err(|_| "create")?;
-        let env2 =
-            Envelope::channel_open("multi_chan.ch2", crate::vec![]).map_err(|_| "create")?;
+        let env1 = Envelope::channel_open("multi_chan.ch1", crate::vec![]).map_err(|_| "create")?;
+        let env2 = Envelope::channel_open("multi_chan.ch2", crate::vec![]).map_err(|_| "create")?;
         let id1 = env1.id;
         let id2 = env2.id;
 
@@ -352,11 +366,17 @@ fn multiple_channels_are_independent() -> Result<(), &'static str> {
 
         // Route items to channel 1.
         let item1 = channel_item(id1, 0, Value::Int(1));
-        check_test!(router.route_channel_inbound(item1).await.is_ok(), "ch1 item");
+        check_test!(
+            router.route_channel_inbound(item1).await.is_ok(),
+            "ch1 item"
+        );
 
         // Route items to channel 2.
         let item2 = channel_item(id2, 0, Value::Int(2));
-        check_test!(router.route_channel_inbound(item2).await.is_ok(), "ch2 item");
+        check_test!(
+            router.route_channel_inbound(item2).await.is_ok(),
+            "ch2 item"
+        );
 
         // Close channel 1; channel 2 must still be alive.
         let end1 = channel_end(id1, 1);
@@ -405,8 +425,8 @@ fn channel_pause_resume_round_trips() -> Result<(), &'static str> {
     crate::block_on(async {
         let (registry, mut work_rx) = common::make_provider("bpressure").await;
         let router = InvocationRouter::with_providers(registry);
-        let open_env = Envelope::channel_open("bpressure.stream", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env =
+            Envelope::channel_open("bpressure.stream", crate::vec![]).map_err(|_| "create")?;
         let channel_id = open_env.id;
 
         saikuro_exec::spawn(async move { while (work_rx.recv().await).is_some() {} });

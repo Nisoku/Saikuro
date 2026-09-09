@@ -1,5 +1,6 @@
 //! Invocation router
 use alloc::{borrow::ToOwned, boxed::Box, format, string::ToString, vec::Vec};
+use bytes::Bytes;
 use core::time::Duration;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
@@ -103,18 +104,24 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         &self.streams
     }
 
-    /// Dispatch an envelope and return the response
+    /// Dispatch an envelope and return the response.
     pub async fn dispatch(&self, envelope: Envelope) -> ResponseEnvelope {
+        self.dispatch_with(envelope, None).await
+    }
+
+    /// Dispatch an envelope, optionally carrying the exact transport frame it
+    /// arrived in.
+    pub async fn dispatch_with(&self, envelope: Envelope, raw: Option<Bytes>) -> ResponseEnvelope {
         match envelope.invocation_type {
-            InvocationType::Call => self.dispatch_call(envelope).await,
-            InvocationType::Cast => self.dispatch_cast(envelope).await,
-            InvocationType::Stream => self.dispatch_stream_open(envelope).await,
-            InvocationType::Channel => self.dispatch_channel_open(envelope).await,
+            InvocationType::Call => self.dispatch_call(envelope, raw).await,
+            InvocationType::Cast => self.dispatch_cast(envelope, raw).await,
+            InvocationType::Stream => self.dispatch_stream_open(envelope, raw).await,
+            InvocationType::Channel => self.dispatch_channel_open(envelope, raw).await,
             InvocationType::Batch => self.dispatch_batch(envelope).await,
             InvocationType::Resource => {
                 // Resource handles are provider-specific; route the same way
                 // as a call and let the provider interpret the args.
-                self.dispatch_call(envelope).await
+                self.dispatch_call(envelope, raw).await
             }
             InvocationType::Log => self.dispatch_log(envelope).await,
             InvocationType::Announce => {
@@ -138,7 +145,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Call
-    async fn dispatch_call(&self, envelope: Envelope) -> ResponseEnvelope {
+    async fn dispatch_call(&self, envelope: Envelope, raw: Option<Bytes>) -> ResponseEnvelope {
         let id = envelope.id;
 
         let provider = match self.resolve_namespace(&envelope.target).await {
@@ -148,7 +155,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
 
         let (resp_tx, resp_rx) = oneshot::channel();
 
-        if let Err(e) = provider.send_invocation(envelope, Some(resp_tx)).await {
+        if let Err(e) = provider.send_invocation(envelope, Some(resp_tx), raw).await {
             return error_response(id, e.into());
         }
 
@@ -196,7 +203,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Cast
-    async fn dispatch_cast(&self, envelope: Envelope) -> ResponseEnvelope {
+    async fn dispatch_cast(&self, envelope: Envelope, raw: Option<Bytes>) -> ResponseEnvelope {
         let id = envelope.id;
 
         let provider = match self.resolve_namespace(&envelope.target).await {
@@ -205,7 +212,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         };
 
         // Fire-and-forget: we don't wait for any response.
-        if let Err(e) = provider.send_invocation(envelope, None).await {
+        if let Err(e) = provider.send_invocation(envelope, None, raw).await {
             self.log_sink
                 .emit(&LogRecord::new(
                     "",
@@ -221,7 +228,11 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Stream
-    async fn dispatch_stream_open(&self, envelope: Envelope) -> ResponseEnvelope {
+    async fn dispatch_stream_open(
+        &self,
+        envelope: Envelope,
+        raw: Option<Bytes>,
+    ) -> ResponseEnvelope {
         let id = envelope.id;
 
         let provider = match self.resolve_namespace(&envelope.target).await {
@@ -234,7 +245,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
         self.streams.insert_stream(id, state, item_rx).await;
 
         // Send the open request; the provider will start sending items.
-        if let Err(e) = provider.send_invocation(envelope, None).await {
+        if let Err(e) = provider.send_invocation(envelope, None, raw).await {
             self.streams.remove_stream(&id).await;
             return error_response(id, e.into());
         }
@@ -251,7 +262,11 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
     }
 
     // Channel
-    async fn dispatch_channel_open(&self, envelope: Envelope) -> ResponseEnvelope {
+    async fn dispatch_channel_open(
+        &self,
+        envelope: Envelope,
+        raw: Option<Bytes>,
+    ) -> ResponseEnvelope {
         let id = envelope.id;
 
         // If a channel with this id already exists, treat as data frame
@@ -310,7 +325,7 @@ impl<S: LogSink + Send + Sync + 'static> InvocationRouter<S> {
             .insert_channel(id, state, inbound_rx, outbound_rx)
             .await;
 
-        if let Err(e) = provider.send_invocation(envelope, None).await {
+        if let Err(e) = provider.send_invocation(envelope, None, raw).await {
             self.streams.remove_channel(&id).await;
             return error_response(id, e.into());
         }

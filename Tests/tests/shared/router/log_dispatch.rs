@@ -2,8 +2,8 @@
 
 use crate::check_test;
 use crate::shared_test;
-use crate::TestSuite;
 use crate::Box;
+use crate::TestSuite;
 use core::task::Poll;
 use futures::{pin_mut, poll};
 use saikuro_core::Arc;
@@ -22,31 +22,38 @@ use spin::Mutex;
 type Captured = Arc<Mutex<crate::Vec<LogRecord>>>;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::log_envelope_is_not_routed_to_provider",
         log_envelope_is_not_routed_to_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::log_envelope_delivers_record_to_sink",
         log_envelope_delivers_record_to_sink,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::log_all_levels_are_forwarded",
         log_all_levels_are_forwarded,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::log_envelope_with_no_args_returns_ok_without_panicking",
         log_envelope_with_no_args_returns_ok_without_panicking,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::log_envelope_with_invalid_args_returns_ok_without_panicking",
         log_envelope_with_invalid_args_returns_ok_without_panicking,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::router_with_custom_sink_still_routes_calls",
         router_with_custom_sink_still_routes_calls,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::multiple_log_envelopes_all_delivered_to_sink",
         multiple_log_envelopes_all_delivered_to_sink,
     );
@@ -277,7 +284,8 @@ fn multiple_log_envelopes_all_delivered_to_sink() -> Result<(), &'static str> {
         let router = make_router_with_sink(sink);
 
         for i in 0..10u32 {
-            let env = make_log_envelope(LogLevel::Info, "bulk.test", &crate::format!("message {i}"));
+            let env =
+                make_log_envelope(LogLevel::Info, "bulk.test", &crate::format!("message {i}"));
             let resp = router.dispatch(env).await;
             check_test!(resp.ok, "log dispatch should succeed");
         }

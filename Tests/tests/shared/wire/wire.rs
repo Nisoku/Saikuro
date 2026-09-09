@@ -1,10 +1,9 @@
-
 use crate::common;
 use crate::format;
+use crate::shared_test;
 use crate::vec;
 use crate::Box;
 use crate::String;
-use crate::shared_test;
 use crate::TestSuite;
 use crate::ToOwned;
 use crate::Vec;
@@ -23,57 +22,75 @@ use saikuro_runtime::SaikuroRuntime;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::a_rust_provider_simulated_client_call",
         a_rust_provider_simulated_client_call,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::l_csharp_style_client_wire_fidelity",
         l_csharp_style_client_wire_fidelity,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::b_simulated_provider_rust_client_dispatch",
         b_simulated_provider_rust_client_dispatch,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::c_rust_and_simulated_providers_coexist",
         c_rust_and_simulated_providers_coexist,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::d_batch_call_from_simulated_client",
         d_batch_call_from_simulated_client,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::e_call_unknown_namespace_returns_error_on_wire",
         e_call_unknown_namespace_returns_error_on_wire,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::e_malformed_frame_returns_error_on_wire",
         e_malformed_frame_returns_error_on_wire,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::f_announce_then_client_call_round_trip",
         f_announce_then_client_call_round_trip,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::g_concurrent_simulated_clients",
         g_concurrent_simulated_clients,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::h_cast_fire_and_forget_returns_ok_empty",
         h_cast_fire_and_forget_returns_ok_empty,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::i_provider_reconnect_and_reannounce",
         i_provider_reconnect_and_reannounce,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::j_typescript_style_client_wire_fidelity",
         j_typescript_style_client_wire_fidelity,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "wire::k_response_id_always_matches_request_id",
         k_response_id_always_matches_request_id,
+    );
+    shared_test!(
+        suite,
+        "wire::raw_frame_relay_byte_faithful",
+        raw_frame_relay_byte_faithful,
     );
 }
 
@@ -236,7 +253,6 @@ fn l_csharp_style_client_wire_fidelity() -> Result<(), &'static str> {
         Ok(())
     })
 }
-
 
 fn b_simulated_provider_rust_client_dispatch() -> Result<(), &'static str> {
     crate::block_on(async {
@@ -804,6 +820,102 @@ fn k_response_id_always_matches_request_id() -> Result<(), &'static str> {
         );
 
         drop(tx);
+        Ok(())
+    })
+}
+
+fn raw_frame_relay_byte_faithful() -> Result<(), &'static str> {
+    crate::block_on(async {
+        let runtime = SaikuroRuntime::builder().build().await;
+        let handle = runtime.handle();
+        let schema = make_schema_with_args("math", "add", 5);
+        let (mut provider_tx, mut provider_rx) =
+            connect_simulated_peer(&handle, "relay-provider-peer");
+        let announce =
+            Envelope::announce(common::schema_to_value(&schema)).map_err(|_| "announce id")?;
+        provider_tx
+            .send(encode_envelope(&announce))
+            .await
+            .map_err(|_| "send announce")?;
+        let ack = decode_response(provider_rx.recv().await.map_err(|_| "recv")?.ok_or("ack")?);
+        assert!(ack.ok, "provider announce must succeed: {:?}", ack.error);
+
+        // Client peer sends a call whose frame exercises int widths that are
+        // observable in the encoded bytes (fixint vs int64/uint64).
+        let (mut client_tx, mut client_rx) = connect_simulated_peer(&handle, "relay-client-peer");
+        let call = Envelope::call(
+            "math.add",
+            vec![
+                Value::UInt(7),
+                Value::UInt(u64::MAX),
+                Value::Int(-7),
+                Value::Int(i64::MIN),
+                Value::Float(1.5),
+            ],
+        )
+        .map_err(|_| "call id")?;
+        let call_id = call.id;
+        let raw = encode_envelope(&call);
+        client_tx.send(raw.clone()).await.map_err(|_| "send call")?;
+
+        // The relayed frame must be byte-identical to the origin frame
+        let relayed = provider_rx
+            .recv()
+            .await
+            .map_err(|_| "recv relay")?
+            .ok_or("relay frame")?;
+        assert!(
+            relayed.as_ref() == raw.as_ref(),
+            "relayed frame must be byte-identical to the origin frame (raw forward)"
+        );
+        // Compare against the *decoded* origin
+        let origin_env = decode_envelope(raw);
+        let relayed_env = decode_envelope(relayed);
+        assert_eq!(
+            relayed_env.id, origin_env.id,
+            "relayed id must match origin"
+        );
+        assert_eq!(
+            relayed_env.target, origin_env.target,
+            "relayed target must match origin"
+        );
+        assert_eq!(
+            relayed_env.args, origin_env.args,
+            "relayed args must match the decoded origin (int widths preserved)"
+        );
+        assert_eq!(
+            origin_env.args[1],
+            Value::UInt(u64::MAX),
+            "uint64 width must survive the relay"
+        );
+        assert_eq!(
+            origin_env.args[3],
+            Value::Int(i64::MIN),
+            "int64 width must survive the relay"
+        );
+
+        // Provider replies so the client call completes through the relay.
+        let resp = ResponseEnvelope::ok(call_id, Value::Int(7));
+        provider_tx
+            .send(Bytes::from(resp.to_msgpack().expect("encode response")))
+            .await
+            .map_err(|_| "send response")?;
+        let resp = decode_response(
+            client_rx
+                .recv()
+                .await
+                .map_err(|_| "recv resp")?
+                .ok_or("resp")?,
+        );
+        assert!(
+            resp.ok,
+            "call must complete through the relay: {:?}",
+            resp.error
+        );
+        assert_eq!(resp.result, Some(Value::Int(7)));
+
+        drop(client_tx);
+        drop(provider_tx);
         Ok(())
     })
 }

@@ -1,4 +1,4 @@
-use alloc::collections::BTreeMap;
+use alloc::{boxed::Box, collections::BTreeMap};
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
 use saikuro_core::invocation::InvocationId;
@@ -129,7 +129,7 @@ async fn deliver_locked(
         Some(saikuro_core::envelope::StreamControl::End)
             | Some(saikuro_core::envelope::StreamControl::Abort)
     );
-    if tx.send(response).await.is_err() {
+    if Box::pin(tx.send(response)).await.is_err() {
         *closed = true;
         return DeliveryOutcome::Closed;
     }

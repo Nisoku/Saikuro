@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, collections::BTreeMap, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
 use saikuro_core::schema::{
@@ -48,7 +48,10 @@ struct Schemata {
 
 #[derive(Debug, Clone)]
 struct NamespaceEntry {
-    schema: NamespaceSchema,
+    /// Function schemas stored behind `Arc` so [`SchemaRegistry::lookup_function`]
+    /// can hand out function references without deep-cloning the schema.
+    functions: BTreeMap<String, Arc<FunctionSchema>>,
+    doc: Option<String>,
     provider_id: String,
     registration_token: RegistrationToken,
 }
@@ -81,10 +84,12 @@ impl SchemaRegistry {
         };
         let frozen_token = RegistrationToken::new();
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
+            let (functions, doc) = into_arc_functions(ns_schema);
             schemata.namespaces.insert(
                 ns_name,
                 NamespaceEntry {
-                    schema: ns_schema,
+                    functions,
+                    doc,
                     provider_id: "frozen".to_owned(),
                     registration_token: frozen_token,
                 },
@@ -112,10 +117,12 @@ impl SchemaRegistry {
         {
             return Err(SaikuroError::SchemaCapacity);
         }
+        let (functions, doc) = into_arc_functions(registration.schema);
         schemata.namespaces.insert(
             ns,
             NamespaceEntry {
-                schema: registration.schema,
+                functions,
+                doc,
                 provider_id: registration.provider_id,
                 registration_token: registration.registration_token,
             },
@@ -173,10 +180,12 @@ impl SchemaRegistry {
         }
         for (ns_name, ns_schema) in (*schema.namespaces).into_iter() {
             let ns = ns_name.clone();
+            let (functions, doc) = into_arc_functions(ns_schema);
             schemata.namespaces.insert(
                 ns,
                 NamespaceEntry {
-                    schema: ns_schema,
+                    functions,
+                    doc,
                     provider_id: provider_id.clone(),
                     registration_token,
                 },
@@ -212,7 +221,6 @@ impl SchemaRegistry {
             .ok_or_else(|| SaikuroError::NamespaceNotFound(ns_name.to_owned()))?;
 
         let fn_schema = entry
-            .schema
             .functions
             .get(fn_name)
             .ok_or_else(|| SaikuroError::FunctionNotFound(target.to_owned()))?
@@ -248,21 +256,21 @@ impl SchemaRegistry {
 
     /// Export a snapshot of the full schema at this instant.
     pub async fn snapshot(&self) -> Result<Schema, SaikuroError> {
-        let mut schema = Schema::new();
         let schemata = self.inner.read().await;
-        if schemata.namespaces.len() > SCHEMA_NAMESPACES_CAPACITY {
-            return Err(SaikuroError::SchemaCapacity);
-        }
-        if schemata.types.len() > SCHEMA_TYPES_CAPACITY {
-            return Err(SaikuroError::SchemaCapacity);
-        }
-        for (name, entry) in schemata.namespaces.iter() {
-            schema.namespaces.insert(name.clone(), entry.schema.clone());
-        }
-        for (name, type_def) in schemata.types.iter() {
-            schema.types.insert(name.clone(), type_def.clone());
-        }
-        Ok(schema)
+        check_capacity(&schemata)?;
+        collect_snapshot(&schemata, |_, _, _| true)
+    }
+
+    /// Export a schema containing only the function schemas that satisfy
+    /// `keep(-> namespace, -> function, -> schema)`, plus all shared type
+    /// definitions.
+    pub async fn snapshot_filtered(
+        &self,
+        keep: impl Fn(&str, &str, &FunctionSchema) -> bool,
+    ) -> Result<Schema, SaikuroError> {
+        let schemata = self.inner.read().await;
+        check_capacity(&schemata)?;
+        collect_snapshot(&schemata, keep)
     }
 
     /// Freeze the registry, preventing any further schema changes.
@@ -289,14 +297,70 @@ pub struct FunctionRef {
     pub namespace: String,
     /// Function name within the namespace.
     pub function: String,
-    /// Resolved function schema.
-    pub schema: FunctionSchema,
+    /// Resolved function schema, shared with the registry (O(1) clone).
+    pub schema: Arc<FunctionSchema>,
     /// Provider that registered the namespace.
     pub provider_id: String,
+}
+
+/// Reject the operation when the registry has grown past its fixed capacities.
+fn check_capacity(schemata: &Schemata) -> Result<(), SaikuroError> {
+    if schemata.namespaces.len() > SCHEMA_NAMESPACES_CAPACITY
+        || schemata.types.len() > SCHEMA_TYPES_CAPACITY
+    {
+        Err(SaikuroError::SchemaCapacity)
+    } else {
+        Ok(())
+    }
+}
+
+/// Deep-clone the registry into a plain [`Schema`], keeping only the function
+/// schemas accepted by `keep` (called with namespace, function name, schema).
+/// Namespaces that end up with no kept functions are omitted.
+fn collect_snapshot(
+    schemata: &Schemata,
+    keep: impl Fn(&str, &str, &FunctionSchema) -> bool,
+) -> Result<Schema, SaikuroError> {
+    let mut schema = Schema::new();
+    for (ns_name, entry) in schemata.namespaces.iter() {
+        let mut functions = BTreeMap::new();
+        for (fn_name, fn_schema) in entry.functions.iter() {
+            if !keep(ns_name, fn_name, fn_schema) {
+                continue;
+            }
+            functions.insert(fn_name.clone(), (**fn_schema).clone());
+        }
+        if functions.is_empty() {
+            continue;
+        }
+        schema.namespaces.insert(
+            ns_name.clone(),
+            saikuro_core::schema::NamespaceSchema {
+                functions: Box::new(functions),
+                doc: entry.doc.clone(),
+            },
+        );
+    }
+    for (name, type_def) in schemata.types.iter() {
+        schema.types.insert(name.clone(), type_def.clone());
+    }
+    Ok(schema)
 }
 
 /// Split a `"namespace.function"` target into its two components.
 fn split_target(target: &str) -> Result<(&str, &str), SaikuroError> {
     saikuro_core::split_target(target)
         .ok_or_else(|| SaikuroError::MalformedTarget(target.to_owned()))
+}
+
+/// Move a namespace schema into reference-counted function entries
+fn into_arc_functions(
+    ns: NamespaceSchema,
+) -> (BTreeMap<String, Arc<FunctionSchema>>, Option<String>) {
+    let functions = ns
+        .functions
+        .into_iter()
+        .map(|(name, schema)| (name, Arc::new(schema)))
+        .collect();
+    (functions, ns.doc)
 }

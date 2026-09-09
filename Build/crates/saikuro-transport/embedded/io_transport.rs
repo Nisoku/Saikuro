@@ -23,6 +23,7 @@ pub struct EmbeddedIoSender<W> {
 /// The reader half of [`EmbeddedIoTransport`].
 pub struct EmbeddedIoReceiver<R> {
     reader: R,
+    max_frame_size: usize,
 }
 
 impl<R, W> EmbeddedIoTransport<R, W> {
@@ -53,6 +54,7 @@ impl<R, W> EmbeddedIoTransport<R, W> {
             },
             EmbeddedIoReceiver {
                 reader: self.reader,
+                max_frame_size: self.max_frame_size,
             },
         )
     }
@@ -78,6 +80,6 @@ impl<W: Write + 'static> LocalTransportSender for EmbeddedIoSender<W> {
 #[async_trait(?Send)]
 impl<R: Read + 'static> LocalTransportReceiver for EmbeddedIoReceiver<R> {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
-        read_frame(&mut self.reader).await
+        read_frame(&mut self.reader, self.max_frame_size).await
     }
 }

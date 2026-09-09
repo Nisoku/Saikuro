@@ -1,4 +1,3 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use saikuro_storage::util;
@@ -9,44 +8,54 @@ pub fn register(suite: &mut TestSuite) {
     shared_test!(suite, "storage::encode_decode_ascii", encode_decode_ascii);
     shared_test!(suite, "storage::encode_decode_binary", encode_decode_binary);
     shared_test!(suite, "storage::make_key_joins", make_key_joins);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::make_key_empty_namespace",
         make_key_empty_namespace,
     );
     shared_test!(suite, "storage::make_key_empty_key", make_key_empty_key);
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::apply_prefix_none_is_identity",
         apply_prefix_none_is_identity,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::strip_prefix_none_is_identity",
         strip_prefix_none_is_identity,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::apply_then_strip_roundtrip",
         apply_then_strip_roundtrip,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::apply_with_prefix_prepends",
         apply_with_prefix_prepends,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::strip_with_prefix_removes",
         strip_with_prefix_removes,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::key_prefix_ends_with_separator",
         key_prefix_ends_with_separator,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::key_prefix_empty_namespace",
         key_prefix_empty_namespace,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::strip_prefix_does_not_strip_unprefixed",
         strip_prefix_does_not_strip_unprefixed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "storage::apply_prefix_then_strip_prefix_no_prefix",
         apply_prefix_then_strip_prefix_no_prefix,
     );

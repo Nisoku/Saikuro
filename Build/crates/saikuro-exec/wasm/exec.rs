@@ -6,7 +6,7 @@ use core::time::Duration;
 pub use crate::base::join::JoinHandle;
 use crate::base::queue::{queue, BoxedFuture, NOTIFY};
 pub use crate::base::runtime::{new_runtime, Runtime, RuntimeBuilder};
-pub use crate::base::spawn::spawn;
+pub use crate::base::spawn::{active_tasks, spawn};
 use wasm_bindgen::prelude::*;
 
 use super::jspi::{ensure_executor, static_executor, take_output, OutputCapture, OUTPUT_SLOT};

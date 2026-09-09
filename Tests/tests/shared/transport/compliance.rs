@@ -228,15 +228,18 @@ fn many_sequential_transports_correct(
 }
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::memory_transport_compliance",
         memory_transport_compliance,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::memory_transport_compliance_labeled",
         memory_transport_compliance_labeled,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::large_frame_round_trip",
         large_frame_round_trip,
     );

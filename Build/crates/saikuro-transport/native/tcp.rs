@@ -10,7 +10,7 @@ use saikuro_net::net::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 
 use crate::shared::{
-    error::Result,
+    error::{Result, TransportError},
     traits::{Transport, TransportConnector, TransportListener},
 };
 
@@ -19,6 +19,7 @@ pub struct TcpTransport {
     stream: TcpStream,
     peer_addr: SocketAddr,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl TcpTransport {
@@ -32,7 +33,20 @@ impl TcpTransport {
             stream,
             peer_addr,
             log,
+            max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
         })
+    }
+
+    /// Raise the inbound frame limit above the transport default.
+    pub fn max_frame_size(mut self, limit: usize) -> Result<Self> {
+        if limit > crate::MAX_FRAME_SIZE {
+            return Err(TransportError::MessageTooLarge {
+                size: limit,
+                limit: crate::MAX_FRAME_SIZE,
+            });
+        }
+        self.max_frame_size = limit;
+        Ok(self)
     }
 }
 
@@ -44,6 +58,7 @@ impl Transport for TcpTransport {
         let (read, write) = split(self.stream);
         let peer = self.peer_addr;
         let log = self.log;
+        let max_frame_size = self.max_frame_size;
         (
             TcpSender {
                 inner: write,
@@ -54,6 +69,7 @@ impl Transport for TcpTransport {
                 inner: read,
                 peer_addr: peer,
                 log,
+                max_frame_size,
             },
         )
     }
@@ -76,6 +92,7 @@ pub struct TcpReceiver {
     inner: ReadHalf<TcpStream>,
     peer_addr: SocketAddr,
     log: Arc<dyn saikuro_event::LogSink>,
+    max_frame_size: usize,
 }
 
 impl_native_receiver!(TcpReceiver, peer_addr, "tcp");

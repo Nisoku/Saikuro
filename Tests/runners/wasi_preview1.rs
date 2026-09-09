@@ -92,7 +92,11 @@ pub extern "C" fn _start() {
 // `.cargo/config.toml`), so no libc provides the memcmp required by
 // alloc/serde code. Implement it against the same ABI as wasi-libc.
 #[no_mangle]
-pub unsafe extern "C" fn memcmp(a: *const core::ffi::c_void, b: *const core::ffi::c_void, n: usize) -> i32 {
+pub unsafe extern "C" fn memcmp(
+    a: *const core::ffi::c_void,
+    b: *const core::ffi::c_void,
+    n: usize,
+) -> i32 {
     // SAFETY: callers pass valid, in-bounds buffers of length `n`.
     unsafe {
         let sa = core::slice::from_raw_parts(a.cast::<u8>(), n);

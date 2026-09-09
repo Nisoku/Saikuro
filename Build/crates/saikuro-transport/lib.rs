@@ -131,7 +131,9 @@ macro_rules! impl_native_receiver {
         #[async_trait::async_trait]
         impl $crate::shared::traits::TransportReceiver for $ty {
             async fn recv(&mut self) -> $crate::shared::error::Result<Option<::bytes::Bytes>> {
-                match $crate::shared::framing::read_frame(&mut self.inner).await {
+                match $crate::shared::framing::read_frame(&mut self.inner, self.max_frame_size)
+                    .await
+                {
                     Ok(bytes) => {
                         match &bytes {
                             Some(b) => {

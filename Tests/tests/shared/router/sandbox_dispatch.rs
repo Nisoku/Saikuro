@@ -19,35 +19,43 @@ use saikuro_schema::registry::SchemaRegistry;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_announce_pushes_filtered_schema_frame",
         sandbox_announce_pushes_filtered_schema_frame,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_filtered_schema_excludes_internal_functions",
         sandbox_filtered_schema_excludes_internal_functions,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_filtered_schema_excludes_private_functions",
         sandbox_filtered_schema_excludes_private_functions,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_filtered_schema_includes_public_no_cap_functions",
         sandbox_filtered_schema_includes_public_no_cap_functions,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for",
         sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_filtered_schema_includes_functions_peer_has_caps_for",
         sandbox_filtered_schema_includes_functions_peer_has_caps_for,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::non_sandbox_announce_produces_single_response_frame",
         non_sandbox_announce_produces_single_response_frame,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::sandbox_handler_denies_internal_function_invocation",
         sandbox_handler_denies_internal_function_invocation,
     );
@@ -126,8 +134,7 @@ async fn run_and_collect(
     envelope: Envelope,
 ) -> crate::Vec<Bytes> {
     let log = common::null_log();
-    let (test_transport, handler_transport) =
-        MemoryTransport::pair("test", "handler", log.clone());
+    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
     let (mut test_sender, mut test_receiver) = test_transport.split();
 
     let providers = ProviderRegistry::new();
@@ -168,12 +175,12 @@ fn sandbox_announce_pushes_filtered_schema_frame() -> Result<(), &'static str> {
         // Frame 1: unsolicited Announce with the filtered schema.
         assert_eq!(frames.len(), 2, "sandbox mode must produce 2 frames");
 
-        let resp =
-            ResponseEnvelope::from_msgpack(&frames[0]).map_err(|_| "decode ok response")?;
+        let resp = ResponseEnvelope::from_msgpack(&frames[0]).map_err(|_| "decode ok response")?;
         check_test!(resp.ok, "announce response must be ok");
 
         // Second frame is an Announce envelope.
-        let push: Envelope = saikuro_core::from_slice(&frames[1]).map_err(|_| "decode pushed announce")?;
+        let push: Envelope =
+            saikuro_core::from_slice(&frames[1]).map_err(|_| "decode pushed announce")?;
         assert_eq!(
             push.invocation_type,
             InvocationType::Announce,
@@ -234,10 +241,12 @@ fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() -> Result<(), 
         let frames = run_and_collect(registry, caps, true, env).await;
         assert_eq!(frames.len(), 2);
 
-        let push: Envelope = saikuro_core::from_slice(&frames[1]).map_err(|_| "decode pushed announce")?;
+        let push: Envelope =
+            saikuro_core::from_slice(&frames[1]).map_err(|_| "decode pushed announce")?;
         let schema_value = push.args.into_iter().next().ok_or("args[0]")?;
         let schema_bytes = saikuro_core::to_vec(&schema_value).map_err(|_| "re-encode")?;
-        let filtered: Schema = saikuro_core::from_slice(&schema_bytes).map_err(|_| "decode filtered schema")?;
+        let filtered: Schema =
+            saikuro_core::from_slice(&schema_bytes).map_err(|_| "decode filtered schema")?;
 
         let svc = filtered.namespaces.get("svc").ok_or("svc namespace")?;
         check_test!(
@@ -270,7 +279,10 @@ fn sandbox_filtered_schema_asserts(
         let filtered: Schema =
             saikuro_core::from_slice(&schema_bytes).map_err(|_| "decode filtered schema")?;
 
-        let svc = filtered.namespaces.get(namespace).ok_or("namespace present")?;
+        let svc = filtered
+            .namespaces
+            .get(namespace)
+            .ok_or("namespace present")?;
         assert(svc)
     })
 }

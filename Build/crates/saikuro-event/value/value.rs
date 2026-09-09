@@ -1,11 +1,154 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
-use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
+use core::fmt;
+use serde::{
+    de::{Deserializer, MapAccess, Visitor},
+    ser::{SerializeMap, Serializer},
+    Deserialize, Serialize,
+};
 
-/// Maximum number of entries a [`Value::Map`] can hold.
-pub const VALUE_MAP_CAPACITY: usize = 64;
+/// Mutable string-keyed map of [`Value`]s.
+///
+/// Backed by a `Vec<(String, Value)>` kept sorted by key.
+#[derive(Debug, Clone, Default)]
+pub struct ValueMap {
+    entries: Vec<(String, Value)>,
+}
 
-/// Fixed-capacity map backing [`Value::Map`].
-pub type ValueMap = heapless::FnvIndexMap<String, Value, VALUE_MAP_CAPACITY>;
+impl ValueMap {
+    /// Create an empty map. The memory model treats this as free: nothing is
+    /// reserved until the first entry is inserted.
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    /// Insert or replace the entry for `key`, returning the previous value if
+    /// one was present.
+    #[inline]
+    pub fn insert(&mut self, key: String, value: Value) -> Option<Value> {
+        match self
+            .entries
+            .binary_search_by(|(existing, _)| existing.as_str().cmp(key.as_str()))
+        {
+            Ok(position) => Some(core::mem::replace(&mut self.entries[position].1, value)),
+            Err(position) => {
+                self.entries.insert(position, (key, value));
+                None
+            }
+        }
+    }
+
+    /// Borrow the value stored under `key`, if present.
+    #[inline]
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        let position = self
+            .entries
+            .binary_search_by(|(existing, _)| existing.as_str().cmp(key))
+            .ok()?;
+        Some(&self.entries[position].1)
+    }
+
+    /// Remove and return the value stored under `key`, if present.
+    #[inline]
+    pub fn remove(&mut self, key: &str) -> Option<Value> {
+        let position = self
+            .entries
+            .binary_search_by(|(existing, _)| existing.as_str().cmp(key))
+            .ok()?;
+        Some(self.entries.remove(position).1)
+    }
+
+    /// Number of entries held by the map.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// True when the map holds no entries.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Iterate over `(key, value)` pairs in sorted key order.
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.entries.iter().map(pair_ref)
+    }
+}
+
+fn pair_ref<'a>(pair: &'a (String, Value)) -> (&'a String, &'a Value) {
+    (&pair.0, &pair.1)
+}
+
+impl IntoIterator for ValueMap {
+    type Item = (String, Value);
+    type IntoIter = alloc::vec::IntoIter<(String, Value)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ValueMap {
+    type Item = (&'a String, &'a Value);
+    type IntoIter = core::iter::Map<
+        core::slice::Iter<'a, (String, Value)>,
+        fn(&'a (String, Value)) -> (&'a String, &'a Value),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.iter().map(pair_ref)
+    }
+}
+
+impl Serialize for ValueMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut output = serializer.serialize_map(Some(self.entries.len()))?;
+        for (key, value) in &self.entries {
+            output.serialize_entry(key, value)?;
+        }
+        output.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ValueMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ValueMapVisitor;
+
+        impl<'de> Visitor<'de> for ValueMapVisitor {
+            type Value = ValueMap;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string-keyed map of values")
+            }
+
+            fn visit_map<A>(self, mut access: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut entries = Vec::with_capacity(access.size_hint().unwrap_or(0));
+                while let Some((key, value)) = access.next_entry::<String, Value>()? {
+                    entries.push((key, value));
+                }
+                // Sorted key order makes re-encoding canonical regardless of
+                // the wire order the frame arrived in.
+                entries.sort_unstable_by(|(left, _), (right, _)| left.as_str().cmp(right.as_str()));
+                Ok(ValueMap { entries })
+            }
+        }
+
+        deserializer.deserialize_map(ValueMapVisitor)
+    }
+}
 
 /// A dynamically-typed value that can appear in an invocation argument list,
 /// a return value, an error detail bag, or a schema default.
@@ -39,20 +182,7 @@ pub enum Value {
     Bytes(Vec<u8>),
 
     /// String-keyed mapping of values.
-    Map(#[serde(serialize_with = "serialize_value_map")] Box<ValueMap>),
-}
-
-fn serialize_value_map<S>(map: &ValueMap, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let mut entries: Vec<_> = map.iter().collect();
-    entries.sort_unstable_by_key(|(key, _)| *key);
-    let mut output = serializer.serialize_map(Some(entries.len()))?;
-    for (key, value) in entries {
-        output.serialize_entry(key, value)?;
-    }
-    output.end()
+    Map(ValueMap),
 }
 
 /// Equality for [`Value`].

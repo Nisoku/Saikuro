@@ -2,19 +2,23 @@
 
 use crate::check_test;
 use crate::shared_test;
-use crate::TestSuite;
 use crate::Box;
-use saikuro_core::schema::{NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor};
+use crate::TestSuite;
+use saikuro_core::schema::{
+    NamespaceSchema, PrimitiveType, Schema, TypeDefinition, TypeDescriptor,
+};
 use saikuro_core::RegistrationToken;
 use saikuro_event::SaikuroError;
 use saikuro_schema::registry::SchemaRegistry;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "schema::frozen_registry_rejects_type_only_merge",
         frozen_registry_rejects_type_only_merge,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "schema::stale_same_id_deregistration_preserves_new_schema",
         stale_same_id_deregistration_preserves_new_schema,
     );
@@ -45,10 +49,7 @@ fn frozen_registry_rejects_type_only_merge() -> Result<(), &'static str> {
             ),
             "frozen registry must reject any merge"
         );
-        let snapshot = registry
-            .snapshot()
-            .await
-            .map_err(|_| "snapshot")?;
+        let snapshot = registry.snapshot().await.map_err(|_| "snapshot")?;
         check_test!(
             snapshot.types.is_empty(),
             "rejected merge must not mutate the frozen schema"
@@ -63,9 +64,13 @@ fn stale_same_id_deregistration_preserves_new_schema() -> Result<(), &'static st
         let old_token = RegistrationToken::new();
         let new_token = RegistrationToken::new();
         let mut old_schema = Schema::new();
-        old_schema.namespaces.insert("service".into(), empty_namespace());
+        old_schema
+            .namespaces
+            .insert("service".into(), empty_namespace());
         let mut new_schema = Schema::new();
-        new_schema.namespaces.insert("service".into(), empty_namespace());
+        new_schema
+            .namespaces
+            .insert("service".into(), empty_namespace());
 
         registry
             .merge_schema_with_token(old_schema, "provider", old_token)

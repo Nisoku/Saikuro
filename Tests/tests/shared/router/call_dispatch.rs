@@ -1,42 +1,56 @@
-
 use crate::common;
 use crate::shared_test;
 use crate::TestSuite;
+use core::time::Duration;
 use saikuro_core::envelope::Envelope;
 use saikuro_event::{ErrorCode, Value};
 use saikuro_exec::mpsc;
 use saikuro_router::provider::{ProviderHandle, ProviderRegistry, ProviderWorkItem};
 use saikuro_router::router::{InvocationRouter, RouterConfig};
-use core::time::Duration;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite, "router::call_returns_response", call_returns_response);
-    shared_test!(suite, "router::cast_returns_ok_empty", cast_returns_ok_empty);
-    shared_test!(suite,
+    shared_test!(
+        suite,
+        "router::call_returns_response",
+        call_returns_response
+    );
+    shared_test!(
+        suite,
+        "router::cast_returns_ok_empty",
+        cast_returns_ok_empty
+    );
+    shared_test!(
+        suite,
         "router::call_unknown_namespace_no_provider",
         call_unknown_namespace_no_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::call_dropped_provider_unavailable",
         call_dropped_provider_unavailable,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::multiple_sequential_calls",
         multiple_sequential_calls,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::cast_unknown_namespace_ok",
         cast_unknown_namespace_ok,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::call_null_target_malformed",
         call_null_target_malformed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::call_times_out_when_provider_does_not_respond",
         call_times_out_when_provider_does_not_respond,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::concurrent_calls_all_succeed",
         concurrent_calls_all_succeed,
     );

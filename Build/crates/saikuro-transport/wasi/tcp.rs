@@ -66,17 +66,28 @@ impl<'a, C: WasiConn> AsyncByteWrite for WasiWriter<'a, C> {
 pub struct WasiTcpTransport {
     conn: Arc<Connection>,
     peer: String,
+    max_frame_size: usize,
 }
 
 impl WasiTcpTransport {
     /// Wrap an already-connected socket.
     pub fn new(conn: Arc<Connection>, peer: String) -> Self {
-        Self { conn, peer }
+        Self {
+            conn,
+            peer,
+            max_frame_size: crate::shared::framing::DEFAULT_MAX_FRAME_LEN,
+        }
     }
 
     /// Return the address this transport is connected to.
     pub fn peer_addr(&self) -> &str {
         &self.peer
+    }
+
+    /// Raise the inbound frame limit above the transport default.
+    pub fn max_frame_size(mut self, limit: usize) -> Self {
+        self.max_frame_size = limit;
+        self
     }
 }
 
@@ -85,11 +96,15 @@ impl LocalTransport for WasiTcpTransport {
     type Receiver = WasiTcpReceiver;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
+        let max_frame_size = self.max_frame_size;
         (
             WasiTcpSender {
                 conn: self.conn.clone(),
             },
-            WasiTcpReceiver { conn: self.conn },
+            WasiTcpReceiver {
+                conn: self.conn,
+                max_frame_size,
+            },
         )
     }
 
@@ -117,12 +132,13 @@ impl LocalTransportSender for WasiTcpSender {
 /// Receiving half of a [`WasiTcpTransport`].
 pub struct WasiTcpReceiver {
     conn: Arc<Connection>,
+    max_frame_size: usize,
 }
 
 #[async_trait(?Send)]
 impl LocalTransportReceiver for WasiTcpReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
-        read_frame(&mut WasiReader(self.conn.as_ref())).await
+        read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
     }
 }
 

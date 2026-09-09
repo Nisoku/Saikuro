@@ -31,10 +31,15 @@ pub trait Provider: Send + Sync + 'static {
     /// For `Call` invocations the caller attaches a `response_tx` oneshot
     /// sender; the provider must eventually call `response_tx.send(...)` to
     /// complete the call.
+    ///
+    /// `raw` is the exact transport frame the invocation arrived in, when one
+    /// exists.  Wire providers forward it verbatim; in-process
+    /// providers receive `None` and operate on `envelope` alone.
     async fn send_invocation(
         &self,
         envelope: Envelope,
         response_tx: Option<PendingCallSender>,
+        raw: Option<bytes::Bytes>,
     ) -> Result<()>;
 
     /// Returns `true` if this provider is still alive and can accept work.
@@ -49,6 +54,10 @@ pub struct ProviderWorkItem {
     pub envelope: Envelope,
     /// Optional oneshot sender used to complete a `Call` invocation.
     pub response_tx: Option<PendingCallSender>,
+    /// The exact transport frame this invocation arrived in, when it came over
+    /// the wire.  `None` for in-process invocations (e.g. executor dispatch or
+    /// batch sub-invocations).
+    pub raw: Option<bytes::Bytes>,
 }
 
 /// A cheap, cloneable handle to a connected provider.
@@ -105,11 +114,13 @@ impl Provider for ProviderHandle {
         &self,
         envelope: Envelope,
         response_tx: Option<PendingCallSender>,
+        raw: Option<bytes::Bytes>,
     ) -> Result<()> {
         self.sender
             .send(ProviderWorkItem {
                 envelope,
                 response_tx,
+                raw,
             })
             .await
             .map_err(|_| SaikuroError::ProviderUnavailable(self.id.clone()))

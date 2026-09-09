@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::String};
+use alloc::{borrow::ToOwned, string::String};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -64,23 +64,18 @@ impl ResourceHandle {
     /// Convert this handle into a [`Value`] map suitable for embedding in an
     /// envelope `result` field.
     pub fn to_value(&self) -> Value {
-        // A handle serialises to at most 4 fields, well under VALUE_MAP_CAPACITY.
         let mut map = ValueMap::new();
-        map.insert("id".to_owned(), Value::String(self.id.clone()))
-            .expect("resource handle map fits in VALUE_MAP_CAPACITY");
+        map.insert("id".to_owned(), Value::String(self.id.clone()));
         if let Some(mime) = &self.mime_type {
-            map.insert("mime_type".to_owned(), Value::String(mime.clone()))
-                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
+            map.insert("mime_type".to_owned(), Value::String(mime.clone()));
         }
         if let Some(size) = self.size {
-            map.insert("size".to_owned(), Value::UInt(size))
-                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
+            map.insert("size".to_owned(), Value::UInt(size));
         }
         if let Some(uri) = &self.uri {
-            map.insert("uri".to_owned(), Value::String(uri.clone()))
-                .expect("resource handle map fits in VALUE_MAP_CAPACITY");
+            map.insert("uri".to_owned(), Value::String(uri.clone()));
         }
-        Value::Map(Box::new(map))
+        Value::Map(map)
     }
 
     /// Attempt to deserialise a [`ResourceHandle`] from a [`Value`].

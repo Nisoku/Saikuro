@@ -1,111 +1,136 @@
-
 use crate::shared_test;
 use crate::TestSuite;
 use saikuro_core::{envelope::ResponseEnvelope, InvocationId};
 use saikuro_event::{ErrorCode, ErrorDetail, SaikuroError, Value};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_msgpack_roundtrip",
         error_code_msgpack_roundtrip,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::all_error_codes_survive_msgpack",
         all_error_codes_survive_msgpack,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_detail_display_includes_code",
         error_detail_display_includes_code,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_detail_with_context_accumulates",
         error_detail_with_context_accumulates,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_namespace_not_found",
         error_code_mapping_namespace_not_found,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_function_not_found",
         error_code_mapping_function_not_found,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_invalid_arguments",
         error_code_mapping_invalid_arguments,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_no_provider",
         error_code_mapping_no_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_provider_unavailable",
         error_code_mapping_provider_unavailable,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_timeout",
         error_code_mapping_timeout,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_capability_denied",
         error_code_mapping_capability_denied,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_message_too_large",
         error_code_mapping_message_too_large,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_malformed_envelope",
         error_code_mapping_malformed_envelope,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_internal_error",
         error_code_mapping_internal_error,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_buffer_overflow",
         error_code_mapping_buffer_overflow,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_stream_closed",
         error_code_mapping_stream_closed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_channel_closed",
         error_code_mapping_channel_closed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_connection_lost",
         error_code_mapping_connection_lost,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_code_mapping_incompatible_version",
         error_code_mapping_incompatible_version,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::saikuro_error_capability_invalid_maps",
         saikuro_error_capability_invalid_maps,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::saikuro_error_provider_error_maps",
         saikuro_error_provider_error_maps,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::saikuro_error_provider_panic_maps",
         saikuro_error_provider_panic_maps,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::saikuro_error_out_of_order_maps",
         saikuro_error_out_of_order_maps,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_detail_with_detail_accumulates",
         error_detail_with_detail_accumulates,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::error_response_survives_msgpack_roundtrip",
         error_response_survives_msgpack_roundtrip,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "core::provider_returns_error_response_to_caller",
         provider_returns_error_response_to_caller,
     );
@@ -329,8 +354,7 @@ fn provider_returns_error_response_to_caller() -> Result<(), &'static str> {
             router::InvocationRouter,
         };
 
-        let (work_tx, mut work_rx) =
-            mpsc::channel::<ProviderWorkItem>(crate::common::capacity(4));
+        let (work_tx, mut work_rx) = mpsc::channel::<ProviderWorkItem>(crate::common::capacity(4));
         let handle = ProviderHandle::new("failing", vec!["fail".into()], work_tx);
         let registry = ProviderRegistry::new();
         registry.register(handle).await;

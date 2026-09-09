@@ -17,55 +17,68 @@ use saikuro_router::{
 use saikuro_schema::registry::SchemaRegistry;
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_envelope_constructor_sets_correct_type",
         resource_envelope_constructor_sets_correct_type,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_envelope_routes_as_call",
         resource_envelope_routes_as_call,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_envelope_returns_handle_from_provider",
         resource_envelope_returns_handle_from_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_to_unknown_namespace_returns_no_provider",
         resource_to_unknown_namespace_returns_no_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_to_dropped_provider_returns_unavailable",
         resource_to_dropped_provider_returns_unavailable,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_handle_minimal_roundtrips_through_value",
         resource_handle_minimal_roundtrips_through_value,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_handle_full_roundtrips_through_value",
         resource_handle_full_roundtrips_through_value,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_dispatch_through_connection_handler",
         resource_dispatch_through_connection_handler,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_to_unknown_namespace_via_handler_returns_namespace_not_found",
         resource_to_unknown_namespace_via_handler_returns_namespace_not_found,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_response_id_matches_request_id",
         resource_response_id_matches_request_id,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::concurrent_resource_invocations_all_succeed",
         concurrent_resource_invocations_all_succeed,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_handle_from_value_rejects_non_map",
         resource_handle_from_value_rejects_non_map,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::resource_handle_from_value_rejects_missing_id",
         resource_handle_from_value_rejects_missing_id,
     );
@@ -94,9 +107,11 @@ fn handle_to_value(handle: &ResourceHandle) -> Value {
 }
 
 fn resource_envelope_constructor_sets_correct_type() -> Result<(), &'static str> {
-    let env =
-        Envelope::resource("files.open", crate::vec![Value::String("/tmp/data.csv".into())])
-            .map_err(|_| "create")?;
+    let env = Envelope::resource(
+        "files.open",
+        crate::vec![Value::String("/tmp/data.csv".into())],
+    )
+    .map_err(|_| "create")?;
     assert_eq!(env.invocation_type, InvocationType::Resource);
     assert_eq!(env.target, "files.open");
     assert_eq!(env.args.len(), 1);
@@ -115,8 +130,11 @@ fn resource_envelope_routes_as_call() -> Result<(), &'static str> {
         let _responder = spawn_responder(work_rx, result_value);
 
         let router = InvocationRouter::with_providers(registry);
-        let env = Envelope::resource("files.open", crate::vec![Value::String("/tmp/data.csv".into())])
-            .map_err(|_| "create")?;
+        let env = Envelope::resource(
+            "files.open",
+            crate::vec![Value::String("/tmp/data.csv".into())],
+        )
+        .map_err(|_| "create")?;
         let resp = router.dispatch(env).await;
 
         check_test!(resp.ok, "resource dispatch should succeed");
@@ -248,13 +266,13 @@ fn resource_dispatch_through_connection_handler() -> Result<(), &'static str> {
     })
 }
 
-fn resource_to_unknown_namespace_via_handler_returns_namespace_not_found() -> Result<(), &'static str> {
+fn resource_to_unknown_namespace_via_handler_returns_namespace_not_found(
+) -> Result<(), &'static str> {
     crate::block_on(async {
         let schema_registry = SchemaRegistry::new();
         let provider_registry = ProviderRegistry::new();
 
-        let env =
-            Envelope::resource("unknown_ns.open", crate::vec![]).map_err(|_| "create")?;
+        let env = Envelope::resource("unknown_ns.open", crate::vec![]).map_err(|_| "create")?;
         let resp = common::round_trip_via_handler(schema_registry, provider_registry, env).await;
 
         check_test!(!resp.ok, "should fail for unregistered namespace");
@@ -330,8 +348,8 @@ fn resource_handle_from_value_rejects_non_map() -> Result<(), &'static str> {
 
 fn resource_handle_from_value_rejects_missing_id() -> Result<(), &'static str> {
     let mut map = ValueMap::new();
-    map.insert("size".into(), Value::Int(100)).ok();
-    let v = Value::Map(crate::Box::new(map));
+    map.insert("size".into(), Value::Int(100));
+    let v = Value::Map(map);
     check_test!(
         ResourceHandle::from_value(&v).is_none(),
         "from_value must return None when 'id' is absent"

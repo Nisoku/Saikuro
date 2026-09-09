@@ -19,39 +19,48 @@ use saikuro_router::{
 };
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::stream_open_returns_ok_empty",
         stream_open_returns_ok_empty,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_stream_item_delivers_to_state",
         route_stream_item_delivers_to_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_stream_end_removes_state",
         route_stream_end_removes_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::route_to_unknown_stream_returns_error",
         route_to_unknown_stream_returns_error,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::stream_open_to_unknown_namespace_returns_no_provider",
         stream_open_to_unknown_namespace_returns_no_provider,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::multiple_streams_are_independent",
         multiple_streams_are_independent,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::out_of_order_item_is_dropped_not_panicked",
         out_of_order_item_is_dropped_not_panicked,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::stream_abort_control_removes_state",
         stream_abort_control_removes_state,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "router::concurrent_stream_delivery_preserves_order_and_terminal_closure",
         concurrent_stream_delivery_preserves_order_and_terminal_closure,
     );
@@ -83,8 +92,7 @@ fn route_stream_item_delivers_to_state() -> Result<(), &'static str> {
         let router = InvocationRouter::with_providers(registry);
 
         // Open the stream to register it in the state store.
-        let open_env = Envelope::stream_open("data.feed", crate::vec![])
-            .map_err(|_| "create")?;
+        let open_env = Envelope::stream_open("data.feed", crate::vec![]).map_err(|_| "create")?;
         let stream_id = open_env.id;
 
         saikuro_exec::spawn(async move { while work_rx.recv().await.is_some() {} });

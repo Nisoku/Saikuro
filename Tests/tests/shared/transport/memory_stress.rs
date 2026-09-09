@@ -7,39 +7,48 @@ use saikuro_exec::sync::Barrier;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
 pub fn register(suite: &mut TestSuite) {
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::ten_thousand_frames_in_order",
         ten_thousand_frames_in_order,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::concurrent_bidirectional_stress",
         concurrent_bidirectional_stress,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::backpressure_sender_blocks_until_drain",
         backpressure_sender_blocks_until_drain,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::rapid_connect_disconnect_cycles",
         rapid_connect_disconnect_cycles,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::max_size_frame_just_under_limit",
         max_size_frame_just_under_limit,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::zero_length_frames_dont_confuse_ordering",
         zero_length_frames_dont_confuse_ordering,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::many_concurrent_senders_single_receiver",
         many_concurrent_senders_single_receiver,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::drop_receiver_while_sender_is_sending",
         drop_receiver_while_sender_is_sending,
     );
-    shared_test!(suite,
+    shared_test!(
+        suite,
         "transport::labels_do_not_cross_transports",
         labels_do_not_cross_transports,
     );
