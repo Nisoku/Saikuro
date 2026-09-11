@@ -290,7 +290,6 @@ riscv = { version = "0.12", default-features = false, features = [
 [patch.crates-io]
 embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
 embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
-embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
 # wasm-bindgen (JSPI support)
 wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 wasm-bindgen-macro = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }

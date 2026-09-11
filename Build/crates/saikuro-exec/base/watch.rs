@@ -10,7 +10,7 @@ struct WatchState<T> {
     version: u64,
     senders: usize,
     receivers: usize,
-    waiting: MultiWakerRegistration<MAX_WAITING_RECEIVERS>,
+    waiting: super::WakerList<MAX_WAITING_RECEIVERS>,
 }
 
 struct WatchInner<T> {
@@ -120,7 +120,7 @@ pub fn channel<T: Clone>(initial: T) -> (Sender<T>, Receiver<T>) {
             version: 0,
             senders: 1,
             receivers: 1,
-            waiting: MultiWakerRegistration::new(),
+            waiting: super::WakerList::new(),
         })),
     });
     let receiver = Receiver {

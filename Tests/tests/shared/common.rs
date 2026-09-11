@@ -1,7 +1,6 @@
 use bytes::Bytes;
 use saikuro_core::Arc;
 use saikuro_core::{
-    capability::CapabilitySet,
     envelope::Envelope,
     schema::{
         FunctionMap, FunctionSchema, NamespaceMap, NamespaceSchema, PrimitiveType, Schema,

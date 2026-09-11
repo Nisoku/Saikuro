@@ -1,6 +1,7 @@
 #[cfg(any(feature = "no_std", feature = "embedded"))]
 pub(crate) mod block_on;
 
+pub mod heap_stats;
 pub(crate) mod join;
 pub(crate) mod queue;
 pub(crate) mod runtime;
@@ -19,12 +20,47 @@ pub(crate) use portable_atomic_util::Arc;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
-use embassy_sync::waitqueue::MultiWakerRegistration;
 #[cfg(any(feature = "no_std", feature = "embedded"))]
 use embassy_time::{Duration as EmbDuration, Timer};
 use futures::future::{Fuse, FutureExt};
 
 pub use embassy_futures::yield_now;
+
+/// Heap-backed list of wakers with embassy `MultiWakerRegistration`
+pub struct WakerList<const N: usize> {
+    wakers: alloc::vec::Vec<Waker>,
+}
+
+impl<const N: usize> WakerList<N> {
+    pub const fn new() -> Self {
+        Self {
+            wakers: alloc::vec::Vec::new(),
+        }
+    }
+
+    /// Register a waker, deduplicating against an existing waker for the same
+    /// task. When `N` distinct waiters are already registered, wake them all
+    /// and reregister.
+    pub fn register(&mut self, w: &Waker) {
+        for existing in self.wakers.iter() {
+            if w.will_wake(existing) {
+                return;
+            }
+        }
+        if self.wakers.len() >= N {
+            self.wake();
+        }
+        self.wakers.push(w.clone());
+    }
+
+    /// Wake every registered waker and clear the list.
+    pub fn wake(&mut self) {
+        let wakers = core::mem::take(&mut self.wakers);
+        for w in wakers {
+            w.wake();
+        }
+    }
+}
 
 // The native and wasm engines override `sleep`/`timeout` with their own time
 // drivers, so base's embassy-time versions exist only on embedded targets.

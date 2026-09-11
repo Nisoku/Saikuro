@@ -4,7 +4,6 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
-use embassy_sync::waitqueue::MultiWakerRegistration;
 
 #[cfg(target_has_atomic = "ptr")]
 use crate::Arc;
@@ -16,7 +15,7 @@ use crate::shared::JoinError;
 pub(crate) struct JoinSlot<T> {
     pub(crate) value: Option<T>,
     pub(crate) closed: bool,
-    pub(crate) wakers: MultiWakerRegistration<8>,
+    pub(crate) wakers: super::WakerList<8>,
 }
 
 pub(crate) type JoinResultSlot<T> = CriticalSectionMutex<RefCell<JoinSlot<T>>>;
@@ -62,7 +61,7 @@ pub(crate) fn new_join_handle<T>() -> (Arc<JoinResultSlot<T>>, JoinHandle<T>) {
         Arc::new(CriticalSectionMutex::new(RefCell::new(JoinSlot {
             value: None,
             closed: false,
-            wakers: MultiWakerRegistration::new(),
+            wakers: super::WakerList::new(),
         })));
     let handle = JoinHandle { slot: slot.clone() };
     (slot, handle)

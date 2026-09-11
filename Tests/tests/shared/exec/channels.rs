@@ -250,7 +250,7 @@ fn mpsc_drop_after_blocked_recv_releases_task() -> Result<(), &'static str> {
         tx.send(7).await.unwrap();
         // `waiter` is now blocked inside `rx.recv()`
         drop(tx);
-        let got = waiter.await.map_err(|_| "waiter join failed")?;
+        let _got = waiter.await.map_err(|_| "waiter join failed")?;
         Ok(())
     })
 }

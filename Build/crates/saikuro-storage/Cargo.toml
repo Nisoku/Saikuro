@@ -47,7 +47,7 @@ wasi-kv        = ["no_std"]
 inmemory = ["std", "dashmap"]
 fs    = ["native", "dep:tokio", "saikuro-core/std"]
 sled  = ["native", "dep:tokio", "dep:sled", "saikuro-core/std"]
-sqlite = ["dep:graphitesql", "graphitesql/fts5"]
+sqlite = ["dep:graphitesql"]
 sqlite-native = ["sqlite", "graphitesql/std"]
 flash = [
     "embedded",

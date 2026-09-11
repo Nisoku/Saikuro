@@ -29,6 +29,7 @@ where
     F: Future + 'static,
     F::Output: 'static,
 {
+    super::block_on::ensure_runner_started();
     ACTIVE_TASKS.fetch_add(1, Ordering::Relaxed);
     let (slot, handle) = new_join_handle::<F::Output>();
     let task_slot = slot;

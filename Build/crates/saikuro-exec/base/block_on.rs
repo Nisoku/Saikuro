@@ -17,6 +17,24 @@ pub fn start_runner(spawner: embassy_executor::Spawner) {
     spawner.spawn(task_runner().expect("task_runner"));
 }
 
+/// Ensure the task-runner singleton has been spawned. Called lazily.
+pub(crate) fn ensure_runner_started() {
+    use core::sync::atomic::Ordering;
+    static RUNNER_STARTED: portable_atomic::AtomicBool =
+        portable_atomic::AtomicBool::new(false);
+    if !RUNNER_STARTED.swap(true, Ordering::SeqCst) {
+        let ex = static_executor();
+        // SAFETY: `ex` is the sole static executor alive for the program's
+        // duration; the shared reborrow is only live until `start_runner`
+        // returns, so it never overlaps with the mutable borrow aliasing
+        // the same single instance.
+        let exec_shared: &'static ArchExecutor = unsafe {
+            core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex)
+        };
+        start_runner(exec_shared.spawner());
+    }
+}
+
 /// No-op: the executor is driven by its arch pender (the
 /// `#[embassy_executor::main]` loop on cortex-m). The wasm host entry no
 /// longer needs to pump manually.
@@ -28,6 +46,8 @@ async fn task_runner() {
     loop {
         let batch: alloc::vec::Vec<BoxedFuture> =
             queue().lock(|q| q.borrow_mut().drain(..).collect());
+        // Reclaim the QUEUE Vec's retained capacity after draining.
+        queue().lock(|q| q.borrow_mut().shrink_to_fit());
         for fut in batch {
             set.push(fut);
         }
@@ -91,24 +111,5 @@ fn static_executor() -> &'static mut ArchExecutor {
     // moved or dropped, and `run`/`start`/`poll` are only called on this reference.
     let ex: &'static mut ArchExecutor =
         unsafe { core::mem::transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) };
-    // The multiplexing task is a singleton: spawn it exactly once, at executor
-    // creation, so repeated `block_on` calls reuse the runner instead of
-    // re-arming the (permanently-resident) task pool slot.
-    {
-        use core::sync::atomic::Ordering;
-
-        static RUNNER_STARTED: portable_atomic::AtomicBool =
-            portable_atomic::AtomicBool::new(false);
-        if !RUNNER_STARTED.swap(true, Ordering::SeqCst) {
-            // SAFETY: `ex` is the sole static executor alive for the program's
-            // duration; the shared reborrow is only live until `start_runner`
-            // returns, so it never overlaps with the mutable borrow aliasing
-            // the same single instance.
-            let exec_shared: &'static ArchExecutor = unsafe {
-                core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex)
-            };
-            start_runner(exec_shared.spawner());
-        }
-    }
     ex
 }

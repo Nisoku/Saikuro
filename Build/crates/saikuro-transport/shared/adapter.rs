@@ -55,12 +55,13 @@ pub trait AdapterTransport: 'static {
     async fn close(&mut self) -> Result<()>;
 }
 
+#[cfg(any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi"))]
 struct CombinedAdapter<S, R> {
     sender: S,
     receiver: R,
 }
 
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")))]
 #[async_trait::async_trait]
 impl<S, R> AdapterTransport for CombinedAdapter<S, R>
 where
@@ -80,7 +81,7 @@ where
     }
 }
 
-#[cfg(not(feature = "native"))]
+#[cfg(all(not(feature = "native"), any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")))]
 #[async_trait::async_trait(?Send)]
 impl<S, R> AdapterTransport for CombinedAdapter<S, R>
 where
@@ -203,6 +204,7 @@ impl AdapterTransport for MemoryAdapterTransport {
 /// - `tcp://host:port` - TCP stream
 /// - `unix:///path/to/socket` - Unix domain socket
 /// - `ws://host:port/path` or `wss://...` - WebSocket
+#[allow(unused_variables)]
 pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     let log: Arc<dyn LogSink> = Arc::from(Box::new(NullSink) as Box<dyn LogSink>);
     let (kind, addr) = TransportSelector::select(Some(address), None);

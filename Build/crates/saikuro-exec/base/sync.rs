@@ -103,7 +103,7 @@ struct BarrierState {
     count: usize,
     arrived: usize,
     generation: u64,
-    waiting: MultiWakerRegistration<MAX_BARRIER_WAITERS>,
+    waiting: super::WakerList<MAX_BARRIER_WAITERS>,
 }
 
 impl Barrier {
@@ -114,7 +114,7 @@ impl Barrier {
                 count: n,
                 arrived: 0,
                 generation: 0,
-                waiting: MultiWakerRegistration::new(),
+                waiting: super::WakerList::new(),
             })),
         });
         Barrier { inner }

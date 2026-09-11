@@ -2143,8 +2143,3 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "embassy-time-queue-utils"
-version = "0.3.2"
-source = "git+https://github.com/embassy-rs/embassy?rev=73b44d7e867a371d0870a84624fea66a8b00f713#73b44d7e867a371d0870a84624fea66a8b00f713"

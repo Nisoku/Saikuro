@@ -2,77 +2,77 @@
 
 use alloc::format;
 use core::alloc::{GlobalAlloc, Layout};
+use core::cell::{Cell, RefCell};
 use core::fmt::Write as _;
 use core::ptr::NonNull;
 use core::task::Waker;
 
+use critical_section::Mutex as CsMutex;
 use embassy_time_driver::{time_driver_impl, Driver};
 use linked_list_allocator::Heap;
 use saikuro_event::log::LogLevel;
 use saikuro_event::LogRecord;
 use saikuro_event::SaikuroError;
 use saikuro_random::EntropySource;
-use spin::Mutex;
 
 use saikuro_tests::{register_all, run, TestSuite};
 
-/// Heap backing every allocation, with a live/peak watermark.
-static LIVE: Mutex<usize> = Mutex::new(0);
-static PEAK: Mutex<usize> = Mutex::new(0);
-static HEAP_SIZE: Mutex<usize> = Mutex::new(0);
-
-pub(crate) static HEAP: Mutex<Heap> = Mutex::new(Heap::empty());
+/// Heap backing every allocation. Protected by a critical section so an
+/// interrupt that allocates can never spin against a main-context holder.
+pub(crate) static HEAP: CsMutex<RefCell<Heap>> = CsMutex::new(RefCell::new(Heap::empty()));
+static HEAP_SIZE: CsMutex<Cell<usize>> = CsMutex::new(Cell::new(0));
 
 /// Reserved bytes between the top of the heap and `_stack_start`.
 pub(crate) const STACK_GUARD: usize = 0x5400;
 
 /// Heap region size recorded at init.
 pub(crate) fn heap_size_allocated() -> usize {
-    *HEAP_SIZE.lock()
+    critical_section::with(|cs| HEAP_SIZE.borrow(cs).get())
 }
 
 /// Initialize the heap to the region `[start, start + size)`, which the
 /// runner binaries carve just below `_stack_start - STACK_GUARD`.
 pub(crate) fn init_heap(start: *mut u8, size: usize) {
-    *HEAP_SIZE.lock() = size;
-    unsafe {
-        HEAP.lock().init(start, size);
-    }
+    critical_section::with(|cs| {
+        HEAP_SIZE.borrow(cs).set(size);
+        // SAFETY: the region is reserved by the linker and never accessed
+        // elsewhere; the critical section keeps initialization atomic with
+        // any ISR allocation.
+        unsafe {
+            let mut heap = HEAP.borrow(cs).borrow_mut();
+            heap.init(start, size);
+        }
+    });
 }
 
 pub(crate) struct GlobalHeap;
 
 unsafe impl GlobalAlloc for GlobalHeap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr;
-        {
-            let mut heap = HEAP.lock();
-            ptr = heap
-                .allocate_first_fit(layout)
-                .map_or(core::ptr::null_mut(), |ptr| ptr.as_ptr());
-            if ptr.is_null() {
-                // Release the spin guard before `log_oom`: it re-locks `HEAP`
-                // (for `free()`) and would deadlock on the spin lock otherwise.
-                drop(heap);
-                log_oom(layout.size(), *HEAP_SIZE.lock());
-            }
-        }
-        if !ptr.is_null() {
-            let mut live = LIVE.lock();
-            *live += layout.size();
-            let mut peak = PEAK.lock();
-            if *live > *peak {
-                *peak = *live;
-            }
+        let ptr = critical_section::with(|cs| {
+            let mut heap = HEAP.borrow(cs).borrow_mut();
+            heap.allocate_first_fit(layout)
+                .map_or(core::ptr::null_mut(), |ptr| ptr.as_ptr())
+        });
+        if ptr.is_null() {
+            log_oom(layout.size(), heap_size_allocated());
+        } else {
+            saikuro_exec::heap_stats::add(layout.size());
         }
         ptr
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         if let Some(ptr) = NonNull::new(ptr) {
-            HEAP.lock().deallocate(ptr, layout);
-            let mut live = LIVE.lock();
-            *live = live.saturating_sub(layout.size());
+            critical_section::with(|cs| {
+                // SAFETY: `ptr` was returned by `alloc` with the same layout
+                // and is not aliased while the allocator region is locked.
+                unsafe {
+                    let mut heap = HEAP.borrow(cs).borrow_mut();
+                    heap.deallocate(ptr, layout);
+                }
+            });
+            saikuro_exec::heap_stats::sub(layout.size());
         }
     }
 }
@@ -82,19 +82,19 @@ pub(crate) static ALLOCATOR: GlobalHeap = GlobalHeap;
 
 /// Live heap bytes at this instant.
 pub(crate) fn live_allocated_bytes() -> usize {
-    *LIVE.lock()
+    saikuro_exec::heap_stats::live()
 }
 
 /// Highest live-heap watermark observed by the allocator.
 pub(crate) fn peak_allocated_bytes() -> usize {
-    *PEAK.lock()
+    saikuro_exec::heap_stats::peak()
 }
 
 /// Log from inside the allocator on OOM.
 fn log_oom(wanted: usize, heap_size: usize) -> ! {
-    let live = *LIVE.lock();
-    let peak = *PEAK.lock();
-    let free = HEAP.lock().free();
+    let live = saikuro_exec::heap_stats::live();
+    let peak = saikuro_exec::heap_stats::peak();
+    let free = critical_section::with(|cs| HEAP.borrow(cs).borrow().free());
     let mut console = Console::new();
     let _ = writeln!(
         console,

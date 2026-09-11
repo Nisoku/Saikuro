@@ -59,15 +59,33 @@ fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
 
 /// The shared, process-wide empty peer-capability set.
 pub fn empty_peer_capabilities() -> saikuro_core::Arc<CapabilitySet> {
-    static EMPTY: spin::Mutex<Option<saikuro_core::Arc<CapabilitySet>>> = spin::Mutex::new(None);
-    let mut guard = EMPTY.lock();
-    if guard.is_none() {
-        *guard = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
+    #[cfg(any(feature = "no_std", feature = "embedded"))]
+    {
+        static EMPTY: critical_section::Mutex<
+            core::cell::RefCell<Option<saikuro_core::Arc<CapabilitySet>>>,
+        > = critical_section::Mutex::new(core::cell::RefCell::new(None));
+        critical_section::with(|cs| {
+            let mut slot = EMPTY.borrow_ref_mut(cs);
+            if slot.is_none() {
+                *slot = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
+            }
+            slot.as_ref()
+                .expect("empty caps initialized above")
+                .clone()
+        })
     }
-    guard
-        .as_ref()
-        .expect("empty caps initialized above")
-        .clone()
+    #[cfg(not(any(feature = "no_std", feature = "embedded")))]
+    {
+        static EMPTY: spin::Mutex<Option<saikuro_core::Arc<CapabilitySet>>> =
+            spin::Mutex::new(None);
+        let mut slot = EMPTY.lock();
+        if slot.is_none() {
+            *slot = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
+        }
+        slot.as_ref()
+            .expect("empty caps initialized above")
+            .clone()
+    }
 }
 
 /// A handler for a single connected peer.
@@ -179,7 +197,12 @@ where
                 incoming = self.receiver.recv().fuse() => {
                     match incoming {
                         Ok(Some(frame)) => {
-                            if !self.handle_incoming(frame, &pending, &forward_tx).await {
+                            // Pin-box the handler processing so run()`s
+                            // persistent frame holds only the box pointer
+                            let processing = Box::pin(async {
+                                self.handle_incoming(frame, &pending, &forward_tx).await
+                            });
+                            if !processing.await {
                                 break;
                             }
                         }
@@ -278,7 +301,7 @@ where
         match envelope.invocation_type {
             InvocationType::Log => {
                 // Let the router's log sink handle it:  no validation needed.
-                return Some((self.router.dispatch_with(envelope, Some(frame)).await, None));
+                return Some((self.dispatch_spawned(id, envelope, frame).await, None));
             }
             _ => {}
         }
@@ -316,7 +339,49 @@ where
 
         // 5. Route to provider.  The raw frame travels with the invocation so
         // a wire provider forwards it verbatim instead of re-encoding.
-        Some((self.router.dispatch_with(envelope, Some(frame)).await, None))
+        Some((self.dispatch_spawned(id, envelope, frame).await, None))
+    }
+
+    /// Run dispatch on its own task so the connection-handler's persistent
+    /// frame never embeds the full dispatch state machine
+    async fn dispatch_spawned(
+        &self,
+        id: InvocationId,
+        envelope: Envelope,
+        frame: Bytes,
+    ) -> ResponseEnvelope {
+        let router = self.router.clone();
+        match spawn(Box::pin(async move {
+            router.dispatch_with(envelope, Some(frame)).await
+        }))
+        .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                let mut record = LogRecord::now(
+                    LogLevel::Error,
+                    "saikuro.runtime.connection",
+                    if error.is_panic() {
+                        "dispatch task panicked"
+                    } else {
+                        "dispatch task cancelled"
+                    },
+                );
+                record.set_context("peer", self.peer_id.clone());
+                record.set_context("id", alloc::format!("{id}"));
+                record.set_context("error", alloc::format!("{error}"));
+                self.log.emit(&record).await;
+                let code = if error.is_panic() {
+                    saikuro_event::ErrorCode::ProviderPanic
+                } else {
+                    saikuro_event::ErrorCode::ProviderUnavailable
+                };
+                ResponseEnvelope::err(
+                    id,
+                    ErrorDetail::new(code, "dispatch task failed before responding"),
+                )
+            }
+        }
     }
 
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
@@ -556,7 +621,7 @@ where
         let peer_id = self.peer_id.clone();
         let log = self.log.clone();
 
-        spawn(async move {
+        spawn(Box::pin(async move {
             while let Some(item) = work_rx.recv().await {
                 let frame = match item.raw {
                     Some(raw) => raw,
@@ -612,7 +677,7 @@ where
             );
             record.set_context("peer", peer_id.clone());
             log.emit(&record).await;
-        });
+        }));
     }
 
     /// Build a capability-filtered schema snapshot for a sandboxed peer.

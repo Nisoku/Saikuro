@@ -5,7 +5,7 @@ use core::cell::RefCell;
 use core::task::{Context, Poll};
 
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
-use embassy_sync::waitqueue::MultiWakerRegistration;
+use embassy_sync::waitqueue::WakerRegistration;
 
 use super::*;
 pub use crate::shared::mpsc::{SendError, TrySendError};
@@ -18,8 +18,8 @@ struct ChannelData<T> {
     capacity: usize,
     senders: usize,
     receivers: usize,
-    senders_waiting: MultiWakerRegistration<MAX_WAITING_SENDERS>,
-    receivers_waiting: MultiWakerRegistration<1>,
+    senders_waiting: super::WakerList<MAX_WAITING_SENDERS>,
+    receivers_waiting: WakerRegistration,
 }
 
 struct ChannelInner<T> {
@@ -196,8 +196,8 @@ pub fn channel<T>(capacity: ChannelCapacity) -> (Sender<T>, Receiver<T>) {
             capacity: capacity.get(),
             senders: 1,
             receivers: 1,
-            senders_waiting: MultiWakerRegistration::new(),
-            receivers_waiting: MultiWakerRegistration::new(),
+            senders_waiting: super::WakerList::new(),
+            receivers_waiting: WakerRegistration::new(),
         })),
     });
     (

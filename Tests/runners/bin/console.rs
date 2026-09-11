@@ -5,15 +5,23 @@ use core::fmt;
 use portable_atomic::{AtomicU64, Ordering};
 
 #[cfg(target_arch = "riscv32")]
+const SYS_OPEN: usize = 0x01;
+#[cfg(target_arch = "riscv32")]
 const SYS_WRITE: usize = 0x05;
 #[cfg(target_arch = "riscv32")]
 const SYS_CLOCK: usize = 0x10;
 #[cfg(target_arch = "riscv32")]
 const SYS_EXIT: usize = 0x18;
 #[cfg(target_arch = "riscv32")]
-const STDOUT_FD: usize = 1;
+const O_WRONLY: usize = 4;
 #[cfg(target_arch = "riscv32")]
 const ADP_STOPPED_APPLICATION_EXIT: usize = 0x20026;
+
+#[cfg(target_arch = "riscv32")]
+use portable_atomic::AtomicUsize;
+
+#[cfg(target_arch = "riscv32")]
+static STDOUT_GUESTFD: AtomicUsize = AtomicUsize::new(0);
 
 /// QEMU's `SYS_CLOCK` returns centiseconds; embassy-time runs at 1 MHz ticks.
 const MICROS_PER_CENTISEC: u64 = 10_000;
@@ -28,6 +36,13 @@ pub struct Console;
 impl Console {
     /// Open the semihosting console.
     pub fn new() -> Self {
+        #[cfg(target_arch = "riscv32")]
+        {
+            let name = b":tt\0";
+            let block = [name.as_ptr() as usize, O_WRONLY, 0];
+            let fd = semihost(SYS_OPEN, block.as_ptr() as usize);
+            STDOUT_GUESTFD.store(fd, Ordering::Relaxed);
+        }
         Console
     }
 
@@ -43,7 +58,7 @@ impl Console {
     /// Write all `bytes` to the console.
     #[cfg(target_arch = "riscv32")]
     pub fn write_all(bytes: &[u8]) {
-        let block = [STDOUT_FD, bytes.as_ptr() as usize, bytes.len()];
+        let block = [STDOUT_GUESTFD.load(Ordering::Relaxed), bytes.as_ptr() as usize, bytes.len()];
         semihost(SYS_WRITE, block.as_ptr() as usize);
     }
 }

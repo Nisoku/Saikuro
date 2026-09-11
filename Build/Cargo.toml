@@ -134,9 +134,7 @@ rand_core_06 = { package = "rand_core", version = "0.6", default-features = fals
 
 # Storage backends
 sled = "0.34"
-graphitesql = { version = "0.1.7", default-features = false, features = [
-    "fts5",
-] }
+graphitesql = { version = "0.1.7", default-features = false }
 wit-bindgen = "0.46"
 wasi = "0.14"
 wasip1 = "1"
