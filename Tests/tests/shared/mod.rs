@@ -41,7 +41,7 @@ where
     F: Future + 'static,
     F::Output: 'static,
 {
-    saikuro_exec::block_on(fut)
+    saikuro_exec::block_on(Box::pin(fut))
 }
 
 /// Register a sync shared test and, on wasm, expose it as its own

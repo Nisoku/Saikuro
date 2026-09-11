@@ -74,6 +74,7 @@ async fn round_trip_while_alive(
         provider_registry,
         log,
         handler_transport,
+        false,
     );
 
     // Spawn the handler so we can interleave reads/writes.

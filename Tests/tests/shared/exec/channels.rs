@@ -46,6 +46,11 @@ pub fn register(suite: &mut TestSuite) {
         "exec::mpsc_recv_returns_none_when_all_senders_dropped",
         mpsc_recv_returns_none_when_all_senders_dropped,
     );
+    shared_test!(
+        suite,
+        "exec::mpsc_drop_after_blocked_recv_releases_task",
+        mpsc_drop_after_blocked_recv_releases_task,
+    );
     shared_test!(suite, "exec::mpsc_large_message", mpsc_large_message);
     shared_test!(
         suite,
@@ -227,6 +232,25 @@ fn mpsc_recv_returns_none_when_all_senders_dropped() -> Result<(), &'static str>
         drop(tx);
         assert_eq!(rx.recv().await, Some(1));
         assert_eq!(rx.recv().await, None);
+        Ok(())
+    })
+}
+
+fn mpsc_drop_after_blocked_recv_releases_task() -> Result<(), &'static str> {
+    crate::block_on(async {
+        let (tx, mut rx) = mpsc::channel::<u8>(capacity(4));
+        let waiter = saikuro_exec::spawn(async move {
+            let mut got = crate::Vec::new();
+            while let Some(v) = rx.recv().await {
+                got.push(v);
+            }
+            got
+        });
+
+        tx.send(7).await.unwrap();
+        // `waiter` is now blocked inside `rx.recv()`
+        drop(tx);
+        let got = waiter.await.map_err(|_| "waiter join failed")?;
         Ok(())
     })
 }

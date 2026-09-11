@@ -200,7 +200,7 @@ fn error_detail_with_context_accumulates() -> Result<(), &'static str> {
         .map_err(|_| "with_context")?;
     let s = alloc::format!("{}", detail);
     assert!(s.contains("initial"));
-    assert!(detail.details.get("key").is_some());
+    assert!(detail.details().expect("context present").get("key").is_some());
     Ok(())
 }
 
@@ -321,8 +321,9 @@ fn error_detail_with_detail_accumulates() -> Result<(), &'static str> {
         .with_context("line", Value::Int(42))
         .map_err(|_| "with_context")?;
 
-    assert_eq!(detail.details["field"], Value::String("arg_a".into()));
-    assert_eq!(detail.details["line"], Value::Int(42));
+    let details = detail.details().expect("context present");
+    assert_eq!(details["field"], Value::String("arg_a".into()));
+    assert_eq!(details["line"], Value::Int(42));
     Ok(())
 }
 
@@ -341,7 +342,7 @@ fn error_response_survives_msgpack_roundtrip() -> Result<(), &'static str> {
     let err = decoded.error.as_ref().expect("error should be present");
     assert_eq!(err.code, ErrorCode::InvalidArguments);
     assert_eq!(err.message, "bad types");
-    assert_eq!(err.details["arg"], Value::String("x".into()));
+    assert_eq!(err.details().expect("context present")["arg"], Value::String("x".into()));
     Ok(())
 }
 

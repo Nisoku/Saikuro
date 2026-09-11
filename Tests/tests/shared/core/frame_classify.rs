@@ -35,6 +35,11 @@ pub fn register(suite: &mut TestSuite) {
         "core::classify_skips_ext_and_bin_values",
         classify_skips_ext_and_bin_values,
     );
+    shared_test!(
+        suite,
+        "core::classify_announce_type_after_other_keys",
+        classify_announce_type_after_other_keys,
+    );
 }
 
 fn classify_call_frame() -> Result<(), &'static str> {
@@ -49,13 +54,13 @@ fn classify_announce_frame() -> Result<(), &'static str> {
     let schema_value = crate::common::schema_to_value(&saikuro_core::schema::Schema::new());
     let env = Envelope::announce(schema_value).map_err(|_| "entropy unavailable")?;
     let frame = env.to_msgpack().map_err(|_| "encode")?;
-    assert_eq!(classify_frame(&frame), FrameKind::NonResponse);
+    assert_eq!(classify_frame(&frame), FrameKind::Announce);
     Ok(())
 }
 
 fn classify_batch_frame() -> Result<(), &'static str> {
     let inner = Envelope::call("a.b", vec![]).map_err(|_| "entropy unavailable")?;
-    let env = Envelope {
+    let env: Envelope = Envelope {
         version: saikuro_core::PROTOCOL_VERSION,
         invocation_type: InvocationType::Batch,
         id: InvocationId::new().map_err(|_| "entropy unavailable")?,
@@ -161,6 +166,22 @@ fn classify_out_of_order_map_skips_values() -> Result<(), &'static str> {
     ]);
     let frame = saikuro_core::msgpack::to_vec(&request).map_err(|_| "encode")?;
     assert_eq!(classify_frame(&frame), FrameKind::NonResponse);
+    Ok(())
+}
+
+fn classify_announce_type_after_other_keys() -> Result<(), &'static str> {
+    // The decisive `type` key comes after `target`; the parser must skip the
+    // earlier string value, then read the `type` value and see `announce`.
+    let announce = OrderedMap(vec![
+        ("target", Value::String("$saikuro.announce".into())),
+        ("type", Value::String("announce".into())),
+        (
+            "version",
+            Value::UInt(saikuro_core::PROTOCOL_VERSION as u64),
+        ),
+    ]);
+    let frame = saikuro_core::msgpack::to_vec(&announce).map_err(|_| "encode")?;
+    assert_eq!(classify_frame(&frame), FrameKind::Announce);
     Ok(())
 }
 

@@ -23,12 +23,16 @@ static HEAP_SIZE: Mutex<usize> = Mutex::new(0);
 
 pub(crate) static HEAP: Mutex<Heap> = Mutex::new(Heap::empty());
 
+/// Reserved bytes between the top of the heap and `_stack_start`.
+pub(crate) const STACK_GUARD: usize = 0x5400;
+
 /// Heap region size recorded at init.
 pub(crate) fn heap_size_allocated() -> usize {
     *HEAP_SIZE.lock()
 }
 
-/// Initialize the heap.
+/// Initialize the heap to the region `[start, start + size)`, which the
+/// runner binaries carve just below `_stack_start - STACK_GUARD`.
 pub(crate) fn init_heap(start: *mut u8, size: usize) {
     *HEAP_SIZE.lock() = size;
     unsafe {
@@ -46,6 +50,12 @@ unsafe impl GlobalAlloc for GlobalHeap {
             ptr = heap
                 .allocate_first_fit(layout)
                 .map_or(core::ptr::null_mut(), |ptr| ptr.as_ptr());
+            if ptr.is_null() {
+                // Release the spin guard before `log_oom`: it re-locks `HEAP`
+                // (for `free()`) and would deadlock on the spin lock otherwise.
+                drop(heap);
+                log_oom(layout.size(), *HEAP_SIZE.lock());
+            }
         }
         if !ptr.is_null() {
             let mut live = LIVE.lock();
@@ -54,8 +64,6 @@ unsafe impl GlobalAlloc for GlobalHeap {
             if *live > *peak {
                 *peak = *live;
             }
-        } else {
-            log_oom(layout.size(), *HEAP_SIZE.lock());
         }
         ptr
     }

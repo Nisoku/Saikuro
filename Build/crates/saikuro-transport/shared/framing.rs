@@ -99,14 +99,32 @@ pub async fn read_frame<R: AsyncByteRead>(reader: &mut R, max_len: usize) -> Res
     Ok(Some(payload.freeze()))
 }
 
+/// Write every byte of `buf`, looping over partial writes.
+///
+/// `AsyncByteWrite::write` may accept fewer bytes than offered, so callers must
+/// keep writing until everything lands. A writer that reports zero bytes
+/// accepted is stuck; fail instead of spinning.
+async fn write_all<W: AsyncByteWrite>(writer: &mut W, buf: &[u8]) -> Result<()> {
+    let mut written = 0;
+    while written < buf.len() {
+        let n = writer.write(&buf[written..]).await?;
+        if n == 0 {
+            return Err(TransportError::FramingError(
+                "write made no progress".into(),
+            ));
+        }
+        written += n;
+    }
+    Ok(())
+}
+
 /// Send one length-prefixed frame.
 pub async fn write_frame<W: AsyncByteWrite>(writer: &mut W, frame: &[u8]) -> Result<()> {
     if frame.len() > MAX_FRAME_SIZE {
         return Err(message_too_large(frame.len()));
     }
-    let header = encode_length_prefix(frame.len());
-    writer.write(&header).await?;
-    writer.write(frame).await?;
+    write_all(writer, &encode_length_prefix(frame.len())).await?;
+    write_all(writer, frame).await?;
     writer.flush().await?;
     Ok(())
 }

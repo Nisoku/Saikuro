@@ -24,8 +24,14 @@ pub struct LogRecord {
     pub msg: String,
 
     /// Additional structured context fields.
-    #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
-    pub fields: Box<ContextMap>,
+    #[serde(default, skip_serializing_if = "context_is_empty")]
+    pub fields: Option<Box<ContextMap>>,
+}
+
+/// `true` when the context bag is absent or empty, so the field is omitted
+/// from the wire format.
+fn context_is_empty(bag: &Option<Box<ContextMap>>) -> bool {
+    bag.as_deref().map_or(true, ContextMap::is_empty)
 }
 
 impl LogRecord {
@@ -41,7 +47,7 @@ impl LogRecord {
             level,
             name: name.into(),
             msg: msg.into(),
-            fields: Box::new(ContextMap::new()),
+            fields: None,
         }
     }
 
@@ -77,7 +83,17 @@ impl LogRecord {
     ///
     /// If the field bag is full the field is silently dropped.
     pub fn set_context(&mut self, key: impl Into<String>, value: impl Into<Value>) {
-        let _ = self.fields.insert(key.into(), value.into());
+        let _ = self.fields_mut().insert(key.into(), value.into());
+    }
+
+    /// Borrow the structured field bag, if present.
+    pub fn fields(&self) -> Option<&ContextMap> {
+        self.fields.as_deref()
+    }
+
+    /// Mutably borrow the structured field bag, allocating it on first write.
+    pub fn fields_mut(&mut self) -> &mut ContextMap {
+        self.fields.get_or_insert_with(|| Box::new(ContextMap::new()))
     }
 
     /// Add a structured field and return `self` for chaining.
@@ -90,9 +106,11 @@ impl LogRecord {
         value: impl Into<Value>,
     ) -> Result<Self, SaikuroError> {
         let key = key.into();
-        self.fields.insert(key.clone(), value.into()).map_err(|_| {
-            SaikuroError::CapacityExceeded(format!("log field bag full at key '{key}'"))
-        })?;
+        self.fields_mut()
+            .insert(key.clone(), value.into())
+            .map_err(|_| {
+                SaikuroError::CapacityExceeded(format!("log field bag full at key '{key}'"))
+            })?;
         Ok(self)
     }
 }
@@ -121,12 +139,16 @@ impl TryFrom<Value> for LogRecord {
                     .unwrap_or(LogLevel::Info);
                 let name = take_string(&mut map, "name").unwrap_or_default();
                 let msg = take_string(&mut map, "msg").unwrap_or_default();
-                let mut fields = Box::new(ContextMap::new());
-                for (k, v) in map.into_iter() {
-                    fields
-                        .insert(k, v)
-                        .map_err(|_| "log record has too many fields")?;
-                }
+                let fields = if map.is_empty() {
+                    None
+                } else {
+                    let mut bag = Box::new(ContextMap::new());
+                    for (k, v) in map.into_iter() {
+                        bag.insert(k, v)
+                            .map_err(|_| "log record has too many fields")?;
+                    }
+                    Some(bag)
+                };
                 Ok(LogRecord {
                     ts,
                     level,

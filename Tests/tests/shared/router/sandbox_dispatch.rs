@@ -129,9 +129,9 @@ fn build_schema() -> Schema {
 /// the handler finishes its loop all buffered response frames are returned.
 async fn run_and_collect(
     schema_registry: SchemaRegistry,
-    peer_capabilities: CapabilitySet,
+    peer_capabilities: saikuro_core::Arc<CapabilitySet>,
     sandbox: bool,
-    envelope: Envelope,
+    envelope: crate::Box<Envelope>,
 ) -> crate::Vec<Bytes> {
     let log = common::null_log();
     let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
@@ -142,34 +142,42 @@ async fn run_and_collect(
         "sandbox-peer",
         schema_registry,
         providers,
-        log,
+        log.clone(),
         handler_transport,
+        sandbox,
     );
-    if sandbox {
-        handler = handler.sandboxed();
-    }
-    handler.peer_capabilities = peer_capabilities;
+    handler.peer_capabilities = peer_capabilities.clone();
 
     let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
+
     test_sender.send(frame).await.expect("send frame");
     drop(test_sender);
 
-    handler.run().await;
-
+    // Drive the handler as a background task
+    let task = saikuro_exec::spawn(handler.run());
     let mut frames = crate::Vec::new();
     while let Ok(Some(f)) = test_receiver.recv().await {
         frames.push(f);
     }
+    // Join the handler task so its heap (run state, decode buffers) is released
+    // before the next test starts allocating.
+    let _ = task.await;
     frames
 }
 
 fn sandbox_announce_pushes_filtered_schema_frame() -> Result<(), &'static str> {
     crate::block_on(async {
         let registry = SchemaRegistry::new();
-        let schema = build_schema();
+        let schema = crate::Box::new(build_schema());
         let env = common::make_announce_envelope(&schema);
 
-        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        let frames = crate::Box::pin(run_and_collect(
+            registry,
+            saikuro_runtime::connection::empty_peer_capabilities(),
+            true,
+            crate::Box::new(env),
+        ))
+        .await;
 
         // Frame 0: ok response to the peer's Announce.
         // Frame 1: unsolicited Announce with the filtered schema.
@@ -233,12 +241,15 @@ fn sandbox_filtered_schema_excludes_functions_peer_lacks_caps_for() -> Result<()
 fn sandbox_filtered_schema_includes_functions_peer_has_caps_for() -> Result<(), &'static str> {
     crate::block_on(async {
         let registry = SchemaRegistry::new();
-        let schema = build_schema();
+        let schema = crate::Box::new(build_schema());
         let env = common::make_announce_envelope(&schema);
 
-        let caps = CapabilitySet::from_tokens([CapabilityToken::new("special.cap")])
-            .map_err(|_| "build caps")?;
-        let frames = run_and_collect(registry, caps, true, env).await;
+        let caps = saikuro_core::Arc::new(
+            CapabilitySet::from_tokens([CapabilityToken::new("special.cap")])
+                .map_err(|_| "build caps")?,
+        );
+        let frames =
+            crate::Box::pin(run_and_collect(registry, caps, true, crate::Box::new(env))).await;
         assert_eq!(frames.len(), 2);
 
         let push: Envelope =
@@ -266,10 +277,16 @@ fn sandbox_filtered_schema_asserts(
 ) -> Result<(), &'static str> {
     crate::block_on(async {
         let registry = SchemaRegistry::new();
-        let schema = build_schema();
+        let schema = crate::Box::new(build_schema());
         let env = common::make_announce_envelope(&schema);
 
-        let frames = run_and_collect(registry, CapabilitySet::empty(), true, env).await;
+        let frames = crate::Box::pin(run_and_collect(
+            registry,
+            saikuro_runtime::connection::empty_peer_capabilities(),
+            true,
+            crate::Box::new(env),
+        ))
+        .await;
         assert_eq!(frames.len(), 2);
 
         let push: Envelope =
@@ -290,10 +307,16 @@ fn sandbox_filtered_schema_asserts(
 fn non_sandbox_announce_produces_single_response_frame() -> Result<(), &'static str> {
     crate::block_on(async {
         let registry = SchemaRegistry::new();
-        let schema = build_schema();
+        let schema = crate::Box::new(build_schema());
         let env = common::make_announce_envelope(&schema);
 
-        let frames = run_and_collect(registry, CapabilitySet::empty(), false, env).await;
+        let frames = crate::Box::pin(run_and_collect(
+            registry,
+            saikuro_runtime::connection::empty_peer_capabilities(),
+            false,
+            crate::Box::new(env),
+        ))
+        .await;
 
         assert_eq!(
             frames.len(),
@@ -309,11 +332,11 @@ fn non_sandbox_announce_produces_single_response_frame() -> Result<(), &'static 
 fn sandbox_handler_denies_internal_function_invocation() -> Result<(), &'static str> {
     crate::block_on(async {
         let registry = SchemaRegistry::new();
-        let schema = build_schema();
+        let schema = crate::Box::new(build_schema());
 
         // Pre-register the schema so the validator can find it.
         registry
-            .merge_schema(schema.clone(), "test-provider")
+            .merge_schema((*schema).clone(), "test-provider")
             .await
             .map_err(|_| "merge schema")?;
 
@@ -331,7 +354,13 @@ fn sandbox_handler_denies_internal_function_invocation() -> Result<(), &'static 
             seq: None,
         };
 
-        let frames = run_and_collect(registry, CapabilitySet::empty(), true, invoke_env).await;
+        let frames = crate::Box::pin(run_and_collect(
+            registry,
+            saikuro_runtime::connection::empty_peer_capabilities(),
+            true,
+            crate::Box::new(invoke_env),
+        ))
+        .await;
 
         assert_eq!(frames.len(), 1);
         let resp = ResponseEnvelope::from_msgpack(&frames[0]).map_err(|_| "decode response")?;

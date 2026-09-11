@@ -114,12 +114,12 @@ fn channel_open_roundtrip() -> Result<(), &'static str> {
 fn envelope_with_meta_roundtrip() -> Result<(), &'static str> {
     let mut env = Envelope::call("a.b", vec![]).map_err(|_| "create")?;
     let _ = env
-        .meta
+        .meta_mut()
         .insert("trace-id".into(), Value::String("abc123".into()));
     let bytes = env.to_msgpack().map_err(|_| "to_msgpack")?;
     let decoded = Envelope::from_msgpack(&bytes).map_err(|_| "from_msgpack")?;
     assert_eq!(
-        decoded.meta.get("trace-id"),
+        decoded.meta().expect("meta present").get("trace-id"),
         Some(&Value::String("abc123".into()))
     );
     Ok(())
@@ -127,12 +127,23 @@ fn envelope_with_meta_roundtrip() -> Result<(), &'static str> {
 
 fn envelope_meta_canonical_order() -> Result<(), &'static str> {
     let mut env = Envelope::call("a.b", vec![]).map_err(|_| "create")?;
-    let _ = env.meta.insert("z".into(), Value::Int(1));
-    let _ = env.meta.insert("a".into(), Value::Int(2));
-    let _ = env.meta.insert("m".into(), Value::Int(3));
+    let _ = env
+        .meta_mut()
+        .insert("z".into(), Value::Int(1));
+    let _ = env
+        .meta_mut()
+        .insert("a".into(), Value::Int(2));
+    let _ = env
+        .meta_mut()
+        .insert("m".into(), Value::Int(3));
     let bytes = env.to_msgpack().map_err(|_| "msgpack")?;
     let decoded = Envelope::from_msgpack(&bytes).map_err(|_| "decode")?;
-    let keys: alloc::vec::Vec<&str> = decoded.meta.iter().map(|(k, _)| k.as_str()).collect();
+    let keys: alloc::vec::Vec<&str> = decoded
+        .meta()
+        .expect("meta present")
+        .iter()
+        .map(|(k, _)| k.as_str())
+        .collect();
     let mut sorted = keys.clone();
     sorted.sort();
     if keys != sorted {

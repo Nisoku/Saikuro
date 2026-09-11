@@ -18,8 +18,9 @@ fn main() -> ! {
         static _stack_start: u8;
     }
     let heap_start = unsafe { &__sheap as *const u8 as *mut u8 };
-    let heap_size =
-        unsafe { &_stack_start as *const u8 as usize }.wrapping_sub(0x2000) - heap_start as usize;
+    let heap_size = unsafe { &_stack_start as *const u8 as usize }
+        .wrapping_sub(embedded_runner::STACK_GUARD)
+        - heap_start as usize;
     embedded_runner::init_heap(heap_start, heap_size);
 
     let failed = embedded_runner::run_qemu_tests("saikuro QEMU tests (thumbv6m)");

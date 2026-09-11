@@ -20,20 +20,26 @@ pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// Serialize the metadata map with keys sorted, so equivalent metadata always
 /// produces identical bytes regardless of the caller's insertion order.
-// `Box<MetaMap>` is required because serde's `serialize_with` passes `&T` where
-// T is the field type (`meta: Box<MetaMap>`).
-#[allow(clippy::borrowed_box)]
-fn serialize_meta<S>(meta: &Box<MetaMap>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_meta<S>(meta: &Option<Box<MetaMap>>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    let mut pairs: Vec<(&str, &Value)> = meta.iter().map(|(k, v)| (k.as_str(), v)).collect();
+    let Some(map) = meta.as_deref() else {
+        return serializer.serialize_map(Some(0))?.end();
+    };
+    let mut pairs: Vec<(&str, &Value)> = map.iter().map(|(k, v)| (k.as_str(), v)).collect();
     pairs.sort_unstable_by(|a, b| a.0.cmp(b.0));
     let mut map = serializer.serialize_map(Some(pairs.len()))?;
     for (key, value) in pairs {
         map.serialize_entry(key, value)?;
     }
     map.end()
+}
+
+/// `true` when the metadata bag is absent or empty, so the field is omitted
+/// from the wire format.
+fn meta_is_empty(meta: &Option<Box<MetaMap>>) -> bool {
+    meta.as_deref().map_or(true, MetaMap::is_empty)
 }
 
 /// The type of an outgoing invocation.
@@ -76,8 +82,13 @@ pub enum StreamControl {
 
 /// The outbound envelope carrying a single invocation from an adapter to
 /// the runtime, or from the runtime to a provider adapter.
+///
+/// `A` is the positional-argument type. Callers construct and decode with the
+/// default `Value`; the runtime decodes announce frames as [`Envelope<Schema>`]
+/// so the schema in `args[0]` parses typed instead of through serde's untagged
+/// `Value` path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Envelope {
+pub struct Envelope<A = Value> {
     /// Protocol version: must equal [`PROTOCOL_VERSION`].
     pub version: u32,
 
@@ -92,16 +103,16 @@ pub struct Envelope {
     pub target: String,
 
     /// Positional arguments.
-    #[serde(default)]
-    pub args: Vec<Value>,
+    #[serde(default = "default_args")]
+    pub args: Vec<A>,
 
     /// Optional key/value metadata bag (trace IDs, deadlines, …).
     #[serde(
         default,
-        skip_serializing_if = "MetaMap::is_empty",
+        skip_serializing_if = "meta_is_empty",
         serialize_with = "serialize_meta"
     )]
-    pub meta: Box<MetaMap>,
+    pub meta: Option<Box<MetaMap>>,
 
     /// Capability token presented by the caller. Required when the target
     /// function declares one or more `capabilities`.
@@ -123,6 +134,25 @@ pub struct Envelope {
     pub seq: Option<u64>,
 }
 
+/// A default `args` value for a missing field, without requiring `A: Default`.
+fn default_args<A>() -> Vec<A> {
+    Vec::new()
+}
+
+impl<A> Envelope<A> {
+    /// Borrow the metadata bag, if present. Envelopes constructed without
+    /// metadata carry no bag and return `None`.
+    pub fn meta(&self) -> Option<&MetaMap> {
+        self.meta.as_deref()
+    }
+
+    /// Mutably borrow the metadata bag, allocating the backing map on first
+    /// access.
+    pub fn meta_mut(&mut self) -> &mut MetaMap {
+        self.meta.get_or_insert_with(|| Box::new(MetaMap::new()))
+    }
+}
+
 // Shared MessagePack serialization for wire types.
 macro_rules! impl_msgpack {
     ($ty:ty) => {
@@ -140,10 +170,28 @@ macro_rules! impl_msgpack {
     };
 }
 
-impl_msgpack!(Envelope);
+impl<A: Serialize> Envelope<A> {
+    /// Serialise this envelope to MessagePack bytes.
+    pub fn to_msgpack(&self) -> Result<Vec<u8>, saikuro_event::EncodeError> {
+        crate::msgpack::to_vec(self)
+    }
+}
+
+impl<'de, A: Deserialize<'de>> Envelope<A> {
+    /// Deserialise a frame whose positional arguments decode as `A`
+    /// (e.g. [`crate::schema::Schema`] for announce frames).
+    pub fn from_msgpack_typed(bytes: &'de [u8]) -> Result<Self, saikuro_event::DecodeError> {
+        crate::msgpack::from_slice(bytes)
+    }
+}
+
 impl_msgpack!(ResponseEnvelope);
 
-impl Envelope {
+impl Envelope<Value> {
+    /// Deserialise from MessagePack bytes into a `Value`-argued envelope.
+    pub fn from_msgpack(bytes: &[u8]) -> Result<Self, saikuro_event::DecodeError> {
+        crate::msgpack::from_slice(bytes)
+    }
     /// Construct the simplest possible call envelope.
     pub fn call(
         target: impl Into<String>,
@@ -155,7 +203,7 @@ impl Envelope {
             id: InvocationId::new()?,
             target: target.into(),
             args,
-            meta: Box::new(MetaMap::new()),
+            meta: None,
             capability: None,
             batch_items: None,
             stream_control: None,
@@ -237,7 +285,9 @@ pub fn split_target(target: &str) -> Option<(&str, &str)> {
 pub enum FrameKind {
     /// The frame is a [`ResponseEnvelope`].
     Response,
-    /// The frame is a non-response [`Envelope`].
+    /// The frame is an [`InvocationType::Announce`] [`Envelope`].
+    Announce,
+    /// The frame is any other non-response [`Envelope`].
     NonResponse,
 }
 
@@ -265,52 +315,125 @@ pub fn classify_frame(frame: &[u8]) -> FrameKind {
     };
 
     for _ in 0..entries {
-        let key_format = match <Format as DecodeBorrowed>::decode_borrowed(&mut reader) {
-            Ok(f) => f,
-            Err(_) => return FrameKind::NonResponse,
+        let key = match scan_top_key(&mut reader) {
+            Some(k) => k,
+            None => return FrameKind::NonResponse,
         };
-        let decided = match key_format {
-            Format::FixStr(n) => read_str_key(&mut reader, n as usize),
-            Format::Str8 => read_str_key_n(&mut reader, 1),
-            Format::Str16 => read_str_key_n(&mut reader, 2),
-            Format::Str32 => read_str_key_n(&mut reader, 4),
-            // A non-string top-level key is not required by the protocol; skip
-            // it as an arbitrary value and continue scanning.
-            _ => {
-                if !skip_value_with_format(&mut reader, key_format) {
-                    return FrameKind::NonResponse;
-                }
-                None
+        match key {
+            TopKey::Stop(kind) => return kind,
+            TopKey::Type => {
+                return if type_is_announce(&mut reader) {
+                    FrameKind::Announce
+                } else {
+                    FrameKind::NonResponse
+                };
             }
-        };
-        match decided {
-            Some(kind) => return kind,
-            None => {
+            TopKey::Continue => {
                 if !skip_value(&mut reader) {
                     return FrameKind::NonResponse;
                 }
             }
+            TopKey::Consumed => {}
         }
     }
 
     FrameKind::NonResponse
 }
 
-/// Read a string map key and decide the frame kind it identifies.
-fn read_str_key(reader: &mut SliceReader<'_>, len: usize) -> Option<FrameKind> {
-    let key = reader.read_slice(len).ok()?;
-    match key.as_bytes() {
-        b"ok" => Some(FrameKind::Response),
-        b"version" | b"type" => Some(FrameKind::NonResponse),
-        _ => None,
+/// Outcome of reading one top-level map key.
+enum TopKey {
+    /// The scan can stop: the key identifies the frame kind.
+    Stop(FrameKind),
+    /// The key is `type`; the caller reads its value next.
+    Type,
+    /// Unknown string key; the caller skips its value.
+    Continue,
+    /// A non-string key whose key and value were both skipped already.
+    Consumed,
+}
+
+/// Classify a top-level key's name.
+fn top_key(kind: &[u8]) -> TopKey {
+    match kind {
+        b"ok" => TopKey::Stop(FrameKind::Response),
+        b"type" => TopKey::Type,
+        _ => TopKey::Continue,
     }
 }
 
-/// Read a length-prefixed string map key and decide the frame kind.
-fn read_str_key_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> Option<FrameKind> {
-    read_len(reader, len_bytes)
-        .ok()
-        .and_then(|len| read_str_key(reader, len))
+/// Read and classify the next top-level map key. Returns `None` when the
+/// frame is malformed, so the caller reports a malformed-envelope error.
+fn scan_top_key(reader: &mut SliceReader<'_>) -> Option<TopKey> {
+    let key_format = match <Format as DecodeBorrowed>::decode_borrowed(reader) {
+        Ok(f) => f,
+        Err(_) => return None,
+    };
+    match key_format {
+        Format::FixStr(n) => read_fixed_str_key(reader, n as usize),
+        Format::Str8 => scan_top_key_n(reader, 1),
+        Format::Str16 => scan_top_key_n(reader, 2),
+        Format::Str32 => scan_top_key_n(reader, 4),
+        // A non-string top-level key is not required by the protocol; fully
+        // consume the key and value so subsequent entries stay aligned.
+        _ => {
+            if !skip_value_with_format(reader, key_format) {
+                return None;
+            }
+            if !skip_value(reader) {
+                return None;
+            }
+            Some(TopKey::Consumed)
+        }
+    }
+}
+
+/// Read a fixed-length string top-level key and classify it.
+fn read_fixed_str_key(reader: &mut SliceReader<'_>, len: usize) -> Option<TopKey> {
+    let key = reader.read_slice(len).ok()?;
+    Some(top_key(key.as_bytes()))
+}
+
+/// Read a length-prefixed string top-level key and classify it.
+fn scan_top_key_n(reader: &mut SliceReader<'_>, len_bytes: usize) -> Option<TopKey> {
+    let len = read_len(reader, len_bytes).ok()?;
+    read_fixed_str_key(reader, len)
+}
+
+/// Read the value of the `type` top-level key and report whether it reads
+/// `"announce"`.
+fn type_is_announce(reader: &mut SliceReader<'_>) -> bool {
+    let format = match <Format as DecodeBorrowed>::decode_borrowed(reader) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    match format {
+        Format::FixStr(n) => read_fixed_type(reader, n as usize),
+        Format::Str8 => type_str_is_announce(reader, 1),
+        Format::Str16 => type_str_is_announce(reader, 2),
+        Format::Str32 => type_str_is_announce(reader, 4),
+        _ => {
+            skip_value_with_format(reader, format);
+            false
+        }
+    }
+}
+
+/// Read a fixed-length `type` value and report whether it reads `"announce"`.
+fn read_fixed_type(reader: &mut SliceReader<'_>, len: usize) -> bool {
+    match reader.read_slice(len) {
+        Ok(v) => matches!(v.as_bytes(), b"announce"),
+        Err(_) => false,
+    }
+}
+
+/// Read a length-prefixed `type` value and report whether it reads
+/// `"announce"`.
+fn type_str_is_announce(reader: &mut SliceReader<'_>, len_bytes: usize) -> bool {
+    let len = match read_len(reader, len_bytes) {
+        Ok(len) => len,
+        Err(_) => return false,
+    };
+    read_fixed_type(reader, len)
 }
 
 /// Skip one MessagePack value, reading its format marker first.

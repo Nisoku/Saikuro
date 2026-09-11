@@ -554,7 +554,7 @@ fn client_acknowledges_announce_on_connect() {
             id: announce_id,
             target: "$announce".into(),
             args: vec![saikuro_event::Value::Null],
-            meta: Default::default(),
+            meta: None,
             capability: None,
             batch_items: None,
             stream_control: None,

@@ -338,7 +338,7 @@ fn c_rust_and_simulated_providers_coexist() -> Result<(), &'static str> {
         assert!(ack.ok, "ext announce must succeed");
 
         let ext_loop = saikuro_exec::spawn(async move {
-            while let Ok(Some(frame)) = ext_rx.recv().await {
+            if let Ok(Some(frame)) = ext_rx.recv().await {
                 let call: Envelope = decode_envelope(frame);
                 let result = call.args.first().cloned().unwrap_or(Value::Null);
                 let resp = ResponseEnvelope::ok(call.id, result);
@@ -523,7 +523,7 @@ fn f_announce_then_client_call_round_trip() -> Result<(), &'static str> {
         assert!(ack.ok, "announce must succeed");
 
         let prov_loop = saikuro_exec::spawn(async move {
-            while let Ok(Some(frame)) = prov_rx.recv().await {
+            if let Ok(Some(frame)) = prov_rx.recv().await {
                 let call: Envelope = decode_envelope(frame);
                 let n = match call.args.first() {
                     Some(Value::Int(n)) => *n,
@@ -579,7 +579,15 @@ fn g_concurrent_simulated_clients() -> Result<(), &'static str> {
             })
             .await;
 
-        const N: usize = 10;
+        // Chatty under a constrained embedded heap: each peer holds a small
+        // connection handler + transport while the call round-trips, so the
+        // host keeps 10 clients but embedded chips throttle to 7.
+        const N: usize = if crate::capacity::is_embedded_capacity() {
+            7
+        } else {
+            10
+        };
+
         let mut tasks = Vec::with_capacity(N);
 
         for i in 0..N {

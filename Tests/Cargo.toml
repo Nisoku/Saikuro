@@ -207,6 +207,11 @@ debug-assertions = false
 overflow-checks = false
 incremental = false
 
+[profile.qemu-debug]
+inherits = "qemu"
+strip = "none"
+debug = true
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"

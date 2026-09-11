@@ -205,6 +205,13 @@ impl RuntimeHandle {
     ) {
         let peer_id = peer_id.into();
         let (sender, receiver) = transport.split();
+
+        let peer_capabilities = if peer_caps.is_empty() {
+            crate::connection::empty_peer_capabilities()
+        } else {
+            saikuro_core::Arc::new(peer_caps)
+        };
+
         let handler = ConnectionHandler {
             peer_id: peer_id.clone(),
             registration_token: RegistrationToken::new(),
@@ -213,13 +220,14 @@ impl RuntimeHandle {
             validator: InvocationValidator::new(self.schema_registry.clone()),
             capability_engine: self.capability_engine.clone(),
             router: self.build_router(),
-            peer_capabilities: peer_caps,
+            peer_capabilities,
             max_message_size: self.config.max_message_size,
             schema_registry: self.schema_registry.clone(),
             provider_registry: self.provider_registry.clone(),
             log: self.log.clone(),
         };
 
+        let handler = alloc::boxed::Box::new(handler);
         let log = self.log.clone();
         let peer_id_clone = peer_id.clone();
         saikuro_exec::spawn(async move {

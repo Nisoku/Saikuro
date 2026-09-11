@@ -28,7 +28,7 @@ use saikuro_schema::{
     registry::SchemaRegistry,
     validator::InvocationValidator,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use spin::Mutex;
 
 use crate::transport_adapter::{RuntimeReceiver, RuntimeSender};
@@ -57,6 +57,19 @@ fn encode_bytes<T: Serialize>(value: &T) -> Result<Bytes, String> {
         .map_err(|e| e.to_string())
 }
 
+/// The shared, process-wide empty peer-capability set.
+pub fn empty_peer_capabilities() -> saikuro_core::Arc<CapabilitySet> {
+    static EMPTY: spin::Mutex<Option<saikuro_core::Arc<CapabilitySet>>> = spin::Mutex::new(None);
+    let mut guard = EMPTY.lock();
+    if guard.is_none() {
+        *guard = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
+    }
+    guard
+        .as_ref()
+        .expect("empty caps initialized above")
+        .clone()
+}
+
 /// A handler for a single connected peer.
 ///
 /// Generic over the transport halves so it works with every backend and
@@ -74,7 +87,8 @@ where
     pub validator: InvocationValidator,
     pub capability_engine: CapabilityEngine,
     pub router: InvocationRouter,
-    pub peer_capabilities: CapabilitySet,
+    /// Capabilities granted to this peer.
+    pub peer_capabilities: saikuro_core::Arc<CapabilitySet>,
     pub max_message_size: usize,
     /// Schema registry shared with the runtime; used to merge announced schemas.
     pub schema_registry: SchemaRegistry,
@@ -109,7 +123,7 @@ where
 {
     /// Run the receive loop until the connection is closed or an unrecoverable
     /// error occurs.
-    pub async fn run(mut self) {
+    pub async fn run(mut self: Box<Self>) {
         {
             let mut record = LogRecord::now(
                 LogLevel::Info,
@@ -225,7 +239,28 @@ where
         frame: Bytes,
         pending: &PendingCalls,
         forward_tx: &mpsc::Sender<Bytes>,
-    ) -> Option<(ResponseEnvelope, Option<Schema>)> {
+    ) -> Option<(ResponseEnvelope, Option<Box<Schema>>)> {
+        // Announce frames carry the schema in `args[0]`; decode it as a
+        // typed `Schema` instead of serde's untagged `Value`.
+        if classify_frame(&frame) == FrameKind::Announce {
+            let envelope = match self.decode_envelope::<Schema>(&frame).await {
+                Ok(e) => e,
+                Err(Some(resp)) => return Some((*resp, None)),
+                Err(None) => return None,
+            };
+            let id = envelope.id;
+            self.log_received(&envelope.target, id).await;
+            let response = self.handle_announce(envelope, pending, forward_tx).await;
+            // If sandbox mode is on and the announce succeeded, build the
+            // filtered schema to push back to the peer.
+            let sandbox_schema = if self.capability_engine.is_sandboxed() && response.ok {
+                self.build_filtered_schema().await
+            } else {
+                None
+            };
+            return Some((response, sandbox_schema));
+        }
+
         // 1. Decode the MessagePack envelope.
         let envelope = match self.decode_envelope(&frame).await {
             Ok(e) => e,
@@ -234,31 +269,13 @@ where
         };
 
         let id = envelope.id;
-        {
-            let mut record = LogRecord::now(
-                LogLevel::Debug,
-                "saikuro.runtime.connection",
-                "received envelope",
-            );
-            record.set_context("peer", self.peer_id.clone());
-            record.set_context("id", alloc::format!("{}", id));
-            record.set_context("target", envelope.target.clone());
-            self.log.emit(&record).await;
-        }
+        self.log_received(&envelope.target, id).await;
 
-        // 2. Handle system envelopes before schema validation.
+        // 2. Handle system envelopes before schema validation. Announce frames
+        // are handled in the typed branch above; one that escapes
+        // classification degrades to validation against an unknown
+        // `$saikuro.announce` target and is rejected there.
         match envelope.invocation_type {
-            InvocationType::Announce => {
-                let response = self.handle_announce(envelope, pending, forward_tx).await;
-                // If sandbox mode is on and the announce succeeded, build the
-                // filtered schema to push back to the peer.
-                let sandbox_schema = if self.capability_engine.is_sandboxed() && response.ok {
-                    self.build_filtered_schema().await
-                } else {
-                    None
-                };
-                return Some((response, sandbox_schema));
-            }
             InvocationType::Log => {
                 // Let the router's log sink handle it:  no validation needed.
                 return Some((self.router.dispatch_with(envelope, Some(frame)).await, None));
@@ -304,11 +321,14 @@ where
 
     /// Decode a MessagePack frame into an [`Envelope`], or return an error
     /// response on failure.
-    async fn decode_envelope(
+    async fn decode_envelope<A>(
         &self,
         frame: &[u8],
-    ) -> Result<Envelope, Option<Box<ResponseEnvelope>>> {
-        match saikuro_core::msgpack::from_slice(frame) {
+    ) -> Result<Envelope<A>, Option<Box<ResponseEnvelope>>>
+    where
+        A: for<'de> Deserialize<'de>,
+    {
+        match saikuro_core::msgpack::from_slice::<Envelope<A>>(frame) {
             Ok(env) => Ok(env),
             Err(e) => {
                 let mut record = LogRecord::now(
@@ -341,6 +361,19 @@ where
                 ))))
             }
         }
+    }
+
+    /// Emit a debug record for an incoming envelope.
+    async fn log_received(&self, target: &str, id: InvocationId) {
+        let mut record = LogRecord::now(
+            LogLevel::Debug,
+            "saikuro.runtime.connection",
+            "received envelope",
+        );
+        record.set_context("peer", self.peer_id.clone());
+        record.set_context("id", alloc::format!("{}", id));
+        record.set_context("target", target.to_owned());
+        self.log.emit(&record).await;
     }
 
     /// Process one incoming frame. Returns `false` when the loop should break.
@@ -422,16 +455,17 @@ where
     /// Handle a schema-announcement envelope.
     async fn handle_announce(
         &self,
-        envelope: Envelope,
+        envelope: Envelope<Schema>,
         pending: &PendingCalls,
         forward_tx: &mpsc::Sender<Bytes>,
     ) -> ResponseEnvelope {
         let id = envelope.id;
 
-        let schema: Option<Schema> = envelope.args.into_iter().next().and_then(|v| {
-            let bytes = encode_bytes(&v).ok()?;
-            saikuro_core::msgpack::from_slice(&bytes).ok()
-        });
+        // Announced immediately after connecting, `args[0]` must be a schema.
+        // Unlike other paths, announce frames are decoded typed: `handle_frame`
+        // routes them through [`Envelope<Schema>`], so the value arrives as a
+        // `Schema` directly instead of a Value->bytes->Schema round trip.
+        let schema: Option<Schema> = envelope.args.into_iter().next();
 
         match schema {
             Some(s) => {
@@ -585,7 +619,7 @@ where
     ///
     /// Only namespaces and functions visible to `peer_capabilities` (and not
     /// `Internal` or `Private`) are included.
-    async fn build_filtered_schema(&self) -> Option<Schema> {
+    async fn build_filtered_schema(&self) -> Option<Box<Schema>> {
         match self
             .schema_registry
             .snapshot_filtered(|_ns_name, _fn_name, schema| {
@@ -600,7 +634,7 @@ where
             })
             .await
         {
-            Ok(schema) => Some(schema),
+            Ok(schema) => Some(Box::new(schema)),
             Err(e) => {
                 let mut record = LogRecord::now(
                     LogLevel::Error,
@@ -618,7 +652,7 @@ where
     /// Encode `filtered_schema` as a `Value` and push it as an unsolicited
     /// `Announce` frame to the peer.  The peer uses this to discover what it
     /// is allowed to call.
-    async fn push_sandbox_schema(&mut self, filtered: Schema) -> Result<(), String> {
+    async fn push_sandbox_schema(&mut self, filtered: Box<Schema>) -> Result<(), String> {
         let schema_value: Value = {
             let bytes =
                 encode_bytes(&filtered).map_err(|e| format!("sandbox schema encode error: {e}"))?;

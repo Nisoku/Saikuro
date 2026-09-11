@@ -133,3 +133,6 @@ talc = { workspace = true }
 anyhow = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(saikuro_test_capacity, values("small", "rpx-class", "m33-class"))'] }

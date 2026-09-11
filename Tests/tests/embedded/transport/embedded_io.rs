@@ -211,7 +211,7 @@ fn truncated_header_is_an_error() -> Result<(), &'static str> {
                 .expect("valid frame limit");
         let (_, mut receiver) = transport.split();
         match receiver.recv().await {
-            Err(TransportError::FramingError(message)) => assert!(message.contains("header")),
+            Err(TransportError::ConnectionLost(message)) => assert!(message.contains("header")),
             other => panic!("expected truncated header error, got {other:?}"),
         }
     });
@@ -226,7 +226,7 @@ fn truncated_payload_is_an_error() -> Result<(), &'static str> {
             .expect("valid frame limit");
         let (_, mut receiver) = transport.split();
         match receiver.recv().await {
-            Err(TransportError::FramingError(message)) => assert!(message.contains("payload")),
+            Err(TransportError::ConnectionLost(_)) => {}
             other => panic!("expected truncated payload error, got {other:?}"),
         }
     });

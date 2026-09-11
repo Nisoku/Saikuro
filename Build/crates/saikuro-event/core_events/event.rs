@@ -131,6 +131,12 @@ impl fmt::Display for ErrorCode {
     }
 }
 
+/// `true` when the context bag is absent or empty, so the field is omitted
+/// from the wire format.
+fn context_is_empty(bag: &Option<Box<ContextMap>>) -> bool {
+    bag.as_deref().map_or(true, ContextMap::is_empty)
+}
+
 /// The wire-level error payload carried inside a failed [`ResponseEnvelope`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetail {
@@ -140,9 +146,10 @@ pub struct ErrorDetail {
     /// Human-readable description, intended for log output and debugging.
     pub message: String,
 
-    /// Optional structured context (stack traces, field paths, …).
-    #[serde(default, skip_serializing_if = "ContextMap::is_empty")]
-    pub details: Box<ContextMap>,
+    /// Optional structured context (stack traces, field paths, …). The backing
+    /// map is only allocated on first use.
+    #[serde(default, skip_serializing_if = "context_is_empty")]
+    pub details: Option<Box<ContextMap>>,
 }
 
 impl ErrorDetail {
@@ -151,8 +158,19 @@ impl ErrorDetail {
         Self {
             code,
             message: message.into(),
-            details: Box::new(ContextMap::new()),
+            details: None,
         }
+    }
+
+    /// Borrow the structured context bag, if present.
+    pub fn details(&self) -> Option<&ContextMap> {
+        self.details.as_deref()
+    }
+
+    /// Mutably borrow the structured context bag, allocating it on first write.
+    pub fn details_mut(&mut self) -> &mut ContextMap {
+        self.details
+            .get_or_insert_with(|| Box::new(ContextMap::new()))
     }
 
     /// Add a context entry and return `self` for chaining.
@@ -164,7 +182,7 @@ impl ErrorDetail {
         value: impl Into<Value>,
     ) -> core::result::Result<Self, SaikuroError> {
         let key = key.into();
-        self.details
+        self.details_mut()
             .insert(key.clone(), value.into())
             .map_err(|_| {
                 SaikuroError::CapacityExceeded(format!("error detail bag full at key '{key}'"))

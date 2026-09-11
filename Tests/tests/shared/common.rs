@@ -26,6 +26,8 @@ use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::ToString;
 use alloc::vec;
+use core::future::Future;
+use core::pin::Pin;
 
 pub fn null_log() -> Arc<dyn saikuro_event::LogSink> {
     Arc::from(Box::new(saikuro_event::NullSink) as Box<dyn saikuro_event::LogSink>)
@@ -106,60 +108,76 @@ pub async fn register_namespace(registry: &SchemaRegistry, namespace: &str, func
 
 /// Build a `ConnectionHandler` over the runtime side of a
 /// `MemoryTransport::pair` with the standard test configuration: default
-/// router config, non-sandbox capability engine, and empty peer capabilities.
+/// router config, optional sandbox capability engine, and empty peer
+/// capabilities.
 pub fn make_handler(
     peer_id: &str,
     schema_registry: SchemaRegistry,
     provider_registry: ProviderRegistry,
     log: Arc<dyn saikuro_event::LogSink>,
     handler_transport: MemoryTransport,
-) -> ConnectionHandler<MemorySender, MemoryReceiver> {
+    sandbox: bool,
+) -> crate::Box<ConnectionHandler<MemorySender, MemoryReceiver>> {
     let (handler_sender, handler_receiver) = handler_transport.split();
-    ConnectionHandler {
+    crate::Box::new(ConnectionHandler {
         peer_id: peer_id.to_string(),
         registration_token: RegistrationToken::new(),
         sender: handler_sender,
         receiver: handler_receiver,
         validator: InvocationValidator::new(schema_registry.clone()),
-        capability_engine: CapabilityEngine::default(),
+        capability_engine: if sandbox {
+            CapabilityEngine::sandboxed()
+        } else {
+            CapabilityEngine::default()
+        },
         router: InvocationRouter::new(provider_registry.clone(), RouterConfig::default()),
-        peer_capabilities: CapabilitySet::empty(),
+        peer_capabilities: saikuro_runtime::connection::empty_peer_capabilities(),
         max_message_size: core::cmp::min(4 * 1024 * 1024, crate::capacity::TEST_CAPACITY),
         schema_registry,
         provider_registry,
         log,
-    }
+    })
 }
 
-pub async fn round_trip_via_handler(
+/// Send `envelope` through a fresh handler and return the response.
+///
+/// Returns a boxed future so the handler's (large) state machine lives on the
+/// heap
+pub fn round_trip_via_handler(
     schema_registry: SchemaRegistry,
     provider_registry: ProviderRegistry,
     envelope: Envelope,
-) -> ResponseEnvelope {
-    let log = null_log();
-    let (test_transport, handler_transport) = MemoryTransport::pair("test", "handler", log.clone());
-    let (mut test_sender, mut test_receiver) = test_transport.split();
+) -> Pin<Box<dyn Future<Output = ResponseEnvelope> + 'static>> {
+    Box::pin(async move {
+        let log = null_log();
+        let (test_transport, handler_transport) =
+            MemoryTransport::pair("test", "handler", log.clone());
+        let (mut test_sender, mut test_receiver) = test_transport.split();
 
-    let handler = make_handler(
-        "test-peer",
-        schema_registry,
-        provider_registry,
-        log,
-        handler_transport,
-    );
+        let handler = make_handler(
+            "test-peer",
+            schema_registry,
+            provider_registry,
+            log,
+            handler_transport,
+            false,
+        );
 
-    let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
-    test_sender.send(frame).await.expect("send frame");
-    drop(test_sender);
+        let frame = Bytes::from(envelope.to_msgpack().expect("encode envelope"));
+        test_sender.send(frame).await.expect("send frame");
+        drop(test_sender);
 
-    handler.run().await;
+        // Box the handler run-loop future so its ~2.4K state machine lives on
+        // the heap (as a spawned task would)
+        Box::pin(handler.run()).await;
 
-    let resp_frame = test_receiver
-        .recv()
-        .await
-        .expect("recv response")
-        .expect("frame must be present");
-    ResponseEnvelope::from_msgpack(&resp_frame).expect("decode response")
+        let resp_frame = test_receiver
+            .recv()
+            .await
+            .expect("recv response")
+            .expect("frame must be present");
+        ResponseEnvelope::from_msgpack(&resp_frame).expect("decode response")
+    })
 }
 
 pub fn capacity(value: usize) -> saikuro_exec::ChannelCapacity {
