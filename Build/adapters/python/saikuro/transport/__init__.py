@@ -15,19 +15,18 @@ import threading
 
 from saikuro.transport.base import BaseTransport
 from saikuro.transport.memory import InMemoryTransport
-from saikuro.transport.unix import UnixSocketTransport
 from saikuro.transport.tcp import TcpTransport
-from saikuro.transport.websocket import WebSocketTransport
+from saikuro.transport.unix import UnixSocketTransport
 from saikuro.transport.wasm_host import WasmHostTransport
-
+from saikuro.transport.websocket import WebSocketTransport
 
 __all__ = [
     "BaseTransport",
     "InMemoryTransport",
-    "UnixSocketTransport",
     "TcpTransport",
-    "WebSocketTransport",
+    "UnixSocketTransport",
     "WasmHostTransport",
+    "WebSocketTransport",
     "make_transport",
     "reset_transport_factory",
 ]
@@ -89,7 +88,7 @@ class _TransportFactory:
             else:
                 host, _, port_str = rest.rpartition(":")
             return TcpTransport(host, int(port_str))
-        if address.startswith("ws://") or address.startswith("wss://"):
+        if address.startswith(("ws://", "wss://")):
             return WebSocketTransport(address)
         if address.startswith("wasm-host://"):
             channel = address[len("wasm-host://") :]

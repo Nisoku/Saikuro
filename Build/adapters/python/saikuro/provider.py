@@ -24,7 +24,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 from .envelope import Envelope, InvocationType, ResponseEnvelope, StreamControl
 from .error import SaikuroError
@@ -55,7 +56,7 @@ class SaikuroProvider:
 
     def __init__(self, namespace: str) -> None:
         self._namespace = namespace
-        self._handlers: Dict[str, Handler] = {}
+        self._handlers: dict[str, Handler] = {}
         self._schema_builder = SchemaBuilder(namespace)
 
     @property
@@ -68,8 +69,8 @@ class SaikuroProvider:
         self,
         name: str,
         *,
-        capabilities: Optional[List[str]] = None,
-        doc: Optional[str] = None,
+        capabilities: list[str] | None = None,
+        doc: str | None = None,
     ) -> Callable[[Handler], Handler]:
         """Decorator that registers a function under `name`.
 
@@ -96,8 +97,8 @@ class SaikuroProvider:
         name: str,
         fn: Handler,
         *,
-        capabilities: Optional[List[str]] = None,
-        doc: Optional[str] = None,
+        capabilities: list[str] | None = None,
+        doc: str | None = None,
     ) -> None:
         """Imperative variant of `register`."""
         self._handlers[name] = fn
@@ -175,10 +176,10 @@ class SaikuroProvider:
         If any item fails, the whole batch fails with the item's error code plus
         ``batch_index`` and ``target`` in ``details``.
         """
-        items: List[Envelope] = envelope.batch_items or []
+        items: list[Envelope] = envelope.batch_items or []
 
         try:
-            results: List[Any] = []
+            results: list[Any] = []
 
             for i, item in enumerate(items):
                 sink = _ResultSink()
@@ -289,14 +290,14 @@ class SaikuroProvider:
                     logger.debug(
                         "provider '%s': schema announce acknowledged", self._namespace
                     )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  announce is best-effort; a bad ack must not abort startup
                 logger.warning(
                     "provider '%s': could not decode schema announce ack: %s raw=%r",
                     self._namespace,
                     exc,
                     ack_raw,
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  announce is best-effort; runtime outage must not abort startup
             logger.warning(
                 "provider '%s': schema announce failed (continuing anyway): %s",
                 self._namespace,
@@ -311,13 +312,11 @@ class SaikuroProvider:
                 break
             try:
                 envelope = Envelope.from_msgpack_dict(raw)
-            except Exception as exc:
-                logger.error(
-                    "provider '%s': malformed envelope received, skipping: %s raw=%r",
+            except Exception:
+                logger.exception(
+                    "provider '%s': malformed envelope received, skipping: raw=%r",
                     self._namespace,
-                    exc,
                     raw,
-                    exc_info=True,
                 )
                 continue
             # Background dispatch; done-callback logs any unhandled exception.
@@ -330,9 +329,9 @@ class SaikuroProvider:
 
 def register_function(
     target: str,
-    fn: Optional[Handler] = None,
+    fn: Handler | None = None,
     *,
-    capabilities: Optional[List[str]] = None,
+    capabilities: list[str] | None = None,
 ) -> Any:
     """
     Register `fn` with the module-level default provider.
@@ -372,7 +371,7 @@ class _ResultSink:
 
     def __init__(self) -> None:
         self.result: Any = None
-        self.error: Optional[dict] = None
+        self.error: dict | None = None
 
     async def send(self, obj: dict) -> None:
         if obj.get("ok"):
@@ -389,9 +388,9 @@ def _make_error(
     inv_id: str,
     code: str,
     message: str,
-    details: Optional[dict] = None,
+    details: dict | None = None,
 ) -> dict:
-    error: Dict[str, Any] = {"code": code, "message": message}
+    error: dict[str, Any] = {"code": code, "message": message}
     if details:
         error["details"] = details
     return {"id": inv_id, "ok": False, "error": error}

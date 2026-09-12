@@ -82,7 +82,7 @@ impl PythonGenerator {
             schema,
             header,
             |type_name, fields| {
-                let mut lines = vec![format!("@dataclass"), format!("class {type_name}:")];
+                let mut lines = vec!["@dataclass".to_owned(), format!("class {type_name}:")];
                 if fields.is_empty() {
                     lines.push("    pass".to_owned());
                 } else {

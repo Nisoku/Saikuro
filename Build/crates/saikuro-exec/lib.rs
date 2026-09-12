@@ -36,6 +36,7 @@ compile_error!("the no_std engine cannot be combined with the std toolchain");
 
 mod shared;
 pub use shared::JoinError;
+pub use shared::TimeoutError;
 pub use shared::{ChannelCapacity, InvalidChannelCapacity};
 
 #[cfg(any(feature = "wasm", feature = "embedded", feature = "no_std"))]

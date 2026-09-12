@@ -24,6 +24,9 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_time::{Duration as EmbDuration, Timer};
 use futures::future::{Fuse, FutureExt};
 
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+use crate::shared::TimeoutError;
+
 pub use embassy_futures::yield_now;
 
 /// Heap-backed list of wakers with embassy `MultiWakerRegistration`
@@ -81,13 +84,13 @@ pub async fn sleep(dur: Duration) {
 }
 
 #[cfg(any(feature = "no_std", feature = "embedded"))]
-pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
+pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,
 {
     match embassy_futures::select::select(fut, Timer::after(emb_duration(dur))).await {
         embassy_futures::select::Either::First(res) => Ok(res),
-        embassy_futures::select::Either::Second(_) => Err(()),
+        embassy_futures::select::Either::Second(_) => Err(TimeoutError),
     }
 }
 

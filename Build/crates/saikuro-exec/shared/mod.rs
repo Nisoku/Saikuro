@@ -216,3 +216,15 @@ impl fmt::Display for JoinError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for JoinError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimeoutError;
+
+impl fmt::Display for TimeoutError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("operation timed out")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TimeoutError {}

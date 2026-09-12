@@ -6,13 +6,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 import msgpack
 
 from saikuro.transport.base import BaseTransport
 from saikuro.transport.framing import _recv_frame, _send_frame
-
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +24,8 @@ class _StreamTransport(BaseTransport):
     """
 
     def __init__(self) -> None:
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
 
     async def close(self) -> None:
         if self._writer is not None:
@@ -50,7 +48,7 @@ class _StreamTransport(BaseTransport):
         data = msgpack.packb(obj, use_bin_type=True)
         await _send_frame(self._writer, data)
 
-    async def recv(self) -> Optional[dict]:
+    async def recv(self) -> dict | None:
         if self._reader is None:
             raise RuntimeError(f"{type(self).__name__}: not connected")
         try:

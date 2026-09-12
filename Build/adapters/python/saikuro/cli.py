@@ -28,8 +28,8 @@ import inspect
 import json
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from types import ModuleType
 
 from .schema import SchemaBuilder
@@ -138,7 +138,7 @@ Examples:
 
     try:
         schema = extract_schema(source_path, args.namespace)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  importing user code can raise any exception
         print(f"Extraction error: {exc}", file=sys.stderr)
         return 2
 
@@ -155,7 +155,7 @@ Examples:
                 else out_path
             )
             print(f"Schema written to {rel}", file=sys.stderr)
-        except Exception as exc:
+        except OSError as exc:
             print(f"Error writing output file: {exc}", file=sys.stderr)
             return 2
     else:

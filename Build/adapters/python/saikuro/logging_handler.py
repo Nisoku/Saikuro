@@ -23,16 +23,17 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import logging
 import traceback
-from typing import Any, Dict
+from typing import Any
 
 from .client import SaikuroClient
 from .envelope import Envelope, InvocationType, LogLevel, LogRecord
 
 # Mapping from Python logging levels to Saikuro LogLevel values.
-_LEVEL_MAP: Dict[int, LogLevel] = {
+_LEVEL_MAP: dict[int, LogLevel] = {
     logging.DEBUG: LogLevel.DEBUG,
     logging.INFO: LogLevel.INFO,
     logging.WARNING: LogLevel.WARN,
@@ -74,7 +75,7 @@ class SaikuroLoggingHandler(logging.Handler):
         """Serialise ``record`` and schedule a fire-and-forget send."""
         try:
             envelope = self._make_envelope(record)
-        except Exception:
+        except Exception:  # noqa: BLE001  stdlib Handler.emit contract: route errors to handleError
             self.handleError(record)
             return
 
@@ -88,20 +89,18 @@ class SaikuroLoggingHandler(logging.Handler):
         loop.create_task(self._send(envelope))
 
     async def _send(self, envelope: Envelope) -> None:
-        try:
+        # Best-effort: swallowing the failure is required to preempt infinite
+        # recursion through the logging system when the transport is down.
+        with contextlib.suppress(Exception):
             await self._client._transport.send(envelope.to_msgpack_dict())
-        except Exception:
-            # Best-effort: if the transport is down, swallow the error rather
-            # than triggering infinite recursion through the logging system.
-            pass
 
     def _make_envelope(self, record: logging.LogRecord) -> Envelope:
         level = _python_level_to_saikuro(record.levelno)
         ts = datetime.datetime.fromtimestamp(
-            record.created, tz=datetime.timezone.utc
+            record.created, tz=datetime.UTC
         ).isoformat()
 
-        fields: Dict[str, Any] = {}
+        fields: dict[str, Any] = {}
         if record.exc_info:
             fields["exc"] = "".join(
                 traceback.format_exception(*record.exc_info)

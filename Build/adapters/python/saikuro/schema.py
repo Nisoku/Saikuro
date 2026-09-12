@@ -9,11 +9,12 @@ that reflection and builds the schema dict expected by the runtime.
 from __future__ import annotations
 
 import inspect
+import logging
 import types
 import typing
-import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, get_type_hints
+from typing import Any, get_type_hints
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class ArgDef:
     name: str
     type_str: str = "any"
     optional: bool = False
-    doc: Optional[str] = None
+    doc: str | None = None
 
 
 @dataclass
@@ -36,16 +37,16 @@ class FunctionDef:
     """A single function descriptor."""
 
     name: str
-    args: List[ArgDef] = field(default_factory=list)
+    args: list[ArgDef] = field(default_factory=list)
     returns: str = "any"
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     visibility: str = "public"
-    doc: Optional[str] = None
+    doc: str | None = None
 
 
 # Type annotation -> Saikuro type string mapping
 
-_PY_TYPE_MAP: Dict[Any, str] = {
+_PY_TYPE_MAP: dict[Any, str] = {
     int: "i64",
     float: "f64",
     bool: "bool",
@@ -145,13 +146,13 @@ class SchemaBuilder:
     def __init__(self, namespace: str) -> None:
         """Initialize builder for the given namespace."""
         self._namespace = namespace
-        self._functions: Dict[str, FunctionDef] = {}
+        self._functions: dict[str, FunctionDef] = {}
 
     def add_function(
         self,
         name: str,
         fn: Callable,
-        capabilities: List[str],
+        capabilities: list[str],
         doc: str = "",
     ) -> None:
         """Introspect `fn` and add it to the schema."""
@@ -169,7 +170,7 @@ class SchemaBuilder:
             hints = {}
 
         sig = inspect.signature(fn)
-        args: List[ArgDef] = []
+        args: list[ArgDef] = []
 
         for param_name, param in sig.parameters.items():
             if param_name in ("self", "cls"):

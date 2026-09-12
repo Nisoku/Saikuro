@@ -6,6 +6,7 @@ use tokio::runtime::{Builder, Runtime as TokioRuntime};
 use tokio::task::{JoinError as TokioJoinError, JoinHandle as TokioJoinHandle};
 
 use crate::shared::JoinError;
+use crate::shared::TimeoutError;
 
 pub use tokio::signal;
 
@@ -151,13 +152,13 @@ pub async fn sleep(dur: Duration) {
     tokio::time::sleep(dur).await;
 }
 
-pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
+pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,
 {
     match tokio::time::timeout(dur, fut).await {
         Ok(v) => Ok(v),
-        Err(_) => Err(()),
+        Err(_) => Err(TimeoutError),
     }
 }
 

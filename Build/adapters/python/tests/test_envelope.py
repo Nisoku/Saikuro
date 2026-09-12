@@ -3,6 +3,7 @@ Tests for envelope types and factory methods
 """
 
 import pytest
+
 from saikuro.envelope import (
     Envelope,
     InvocationType,
@@ -12,7 +13,6 @@ from saikuro.envelope import (
     ResponseEnvelope,
     StreamControl,
 )
-
 
 # InvocationType values
 
@@ -228,15 +228,15 @@ class TestResourceHandle:
         assert h.uri == "saikuro://res/res-2"
 
     def test_from_dict_requires_dict(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             ResourceHandle.from_dict("not-a-dict")
 
     def test_from_dict_requires_string_id(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             ResourceHandle.from_dict({"id": 42})
 
     def test_from_dict_requires_id_field(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             ResourceHandle.from_dict({"mime_type": "text/plain"})
 
     def test_to_dict_minimal(self):

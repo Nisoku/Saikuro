@@ -11,6 +11,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_time::Instant;
 
+use crate::shared::TimeoutError;
+
 struct SleepEntry {
     deadline: Instant,
     waker: Waker,
@@ -93,15 +95,15 @@ pub async fn sleep(dur: Duration) {
     .await
 }
 
-/// Race `fut` against [`sleep`], returning `Err(())` if the deadline passes
-/// first. The abandoned `fut` is dropped.
-pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, ()>
+/// Race `fut` against [`sleep`], returning `Err(TimeoutError)` if the deadline
+/// passes first. The abandoned `fut` is dropped.
+pub async fn timeout<F, T>(dur: Duration, fut: F) -> Result<T, TimeoutError>
 where
     F: Future<Output = T>,
 {
     match embassy_futures::select::select(fut, sleep(dur)).await {
         embassy_futures::select::Either::First(res) => Ok(res),
-        embassy_futures::select::Either::Second(_) => Err(()),
+        embassy_futures::select::Either::Second(_) => Err(TimeoutError),
     }
 }
 

@@ -49,7 +49,7 @@ def setup() -> int:
     if sys.platform == "darwin":
         return run(["brew", "install", "qemu"])
     elif sys.platform.startswith("linux"):
-        return run(["sudo", "apt-get", "install", "-y", "qemu-system-arm", "qemu-system-riscv"])
+        return run(["sh", "-c", "sudo apt-get update && sudo apt-get install -y qemu-system"])
     print("[ERROR] Could not determine how to install QEMU on this platform.", file=sys.stderr)
     return 1
 

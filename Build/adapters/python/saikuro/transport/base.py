@@ -5,7 +5,7 @@ Transport abstraction for the Python Saikuro adapter.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Self
 
 
 class BaseTransport(ABC):
@@ -24,13 +24,13 @@ class BaseTransport(ABC):
         """Serialise `obj` to MessagePack and send it as a framed message."""
 
     @abstractmethod
-    async def recv(self) -> Optional[dict]:
+    async def recv(self) -> dict | None:
         """Receive and deserialise the next framed MessagePack message.
 
         Returns `None` when the connection has been closed by the peer.
         """
 
-    async def __aenter__(self) -> "BaseTransport":
+    async def __aenter__(self) -> Self:
         await self.connect()
         return self
 

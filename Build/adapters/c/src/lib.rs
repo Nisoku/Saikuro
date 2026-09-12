@@ -2,11 +2,7 @@
 
 extern crate alloc;
 
-#[cfg(all(
-    not(feature = "std"),
-    not(feature = "native"),
-    any(target_os = "none", all(target_os = "wasi", target_env = "p1"))
-))]
+#[cfg(all(not(feature = "std"), not(feature = "native"), target_os = "none"))]
 mod embedded_rt {
     use core::alloc::{GlobalAlloc, Layout};
 

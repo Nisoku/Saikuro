@@ -32,6 +32,7 @@ wasi-tcp = ["saikuro/wasi-tcp"]
 wasi-host = ["saikuro/wasi-host"]
 wasi-preview1 = ["saikuro/wasi-preview1"]
 wasi-preview2 = ["saikuro/wasi-preview2"]
+default-panic-handler = ["saikuro/default-panic-handler"]
 
 [dependencies]
 saikuro = { workspace = true, default-features = false }
