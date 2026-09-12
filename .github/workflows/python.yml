@@ -31,6 +31,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: taiki-e/install-action@just
       - uses: astral-sh/setup-uv@v4
         with:
