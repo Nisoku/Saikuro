@@ -16,7 +16,7 @@ CMDS = {
 }
 
 
-def fmt_check() -> int:
+def format() -> int:
     return check("TypeScript",
                  ["npm", "run", "format:check"],
                  ["npm", "run", "format"],
@@ -38,7 +38,7 @@ def lint() -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="TypeScript adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check", "lint"] + list(CMDS))
+                        choices=["check", "format", "lint"] + list(CMDS))
     args = parser.parse_args()
     if args.command == "check":
         steps = [
@@ -53,8 +53,8 @@ def main() -> None:
                 print(f"[FAIL] {name} exited with code {code}", flush=True)
                 sys.exit(code)
         sys.exit(0)
-    if args.command == "fmt_check":
-        sys.exit(fmt_check())
+    if args.command == "format":
+        sys.exit(format())
     if args.command == "lint":
         sys.exit(lint())
     if args.command in CMDS:

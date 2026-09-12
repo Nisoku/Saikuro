@@ -8,101 +8,102 @@ scripts := "scripts"
 
 # Language-specific commands
 rust *args:
-    cd {{scripts}} && python3 rust.py {{args}}
+    cd {{ scripts }} && python3 rust.py {{ args }}
 
 python *args:
-    cd {{scripts}} && python3 python.py {{args}}
+    cd {{ scripts }} && python3 python.py {{ args }}
 
 typescript *args:
-    cd {{scripts}} && python3 typescript.py {{args}}
+    cd {{ scripts }} && python3 typescript.py {{ args }}
 
 csharp *args:
-    cd {{scripts}} && python3 csharp.py {{args}}
+    cd {{ scripts }} && python3 csharp.py {{ args }}
 
 c *args:
-    cd {{scripts}} && python3 c.py {{args}}
+    cd {{ scripts }} && python3 c.py {{ args }}
 
 cpp *args:
-    cd {{scripts}} && python3 cpp.py {{args}}
+    cd {{ scripts }} && python3 cpp.py {{ args }}
 
 web_demo *args:
-    cd {{scripts}} && python3 web_demo.py {{args}}
+    cd {{ scripts }} && python3 web_demo.py {{ args }}
 
 qemu *args:
-    cd {{scripts}} && python3 qemu.py {{args}}
+    cd {{ scripts }} && python3 qemu.py {{ args }}
 
 # Meta commands
 setup:
-    cd {{scripts}} && python3 rust.py setup
-    cd {{scripts}} && python3 python.py setup
-    cd {{scripts}} && python3 typescript.py setup
-    cd {{scripts}} && python3 csharp.py setup
-    cd {{scripts}} && python3 cpp.py setup
-    cd {{scripts}} && python3 qemu.py setup
+    cd {{ scripts }} && python3 rust.py setup
+    cd {{ scripts }} && python3 python.py setup
+    cd {{ scripts }} && python3 typescript.py setup
+    cd {{ scripts }} && python3 csharp.py setup
+    cd {{ scripts }} && python3 cpp.py setup
+    cd {{ scripts }} && python3 qemu.py setup
 
 lint:
-    cd {{scripts}} && python3 rust.py lint
-    cd {{scripts}} && python3 python.py lint
-    cd {{scripts}} && python3 typescript.py lint
-    # cd {{scripts}} && python3 csharp.py lint
-    # cd {{scripts}} && python3 c.py lint
-    # cd {{scripts}} && python3 cpp.py lint
+    cd {{ scripts }} && python3 rust.py lint
+    cd {{ scripts }} && python3 python.py lint
+    cd {{ scripts }} && python3 typescript.py lint
+    # cd {{ scripts }} && python3 csharp.py lint
+    # cd {{ scripts }} && python3 c.py lint
+    # cd {{ scripts }} && python3 cpp.py lint
 
+alias fmt := format
 format:
-    cd {{scripts}} && python3 rust.py fmt_check
-    cd {{scripts}} && python3 typescript.py fmt_check
-    cd {{scripts}} && python3 python.py fmt_check
-    cd {{scripts}} && python3 csharp.py fmt_check
-    cd {{scripts}} && python3 c.py fmt_check
-    cd {{scripts}} && python3 cpp.py fmt_check
+    cd {{ scripts }} && python3 rust.py format
+    cd {{ scripts }} && python3 typescript.py format
+    cd {{ scripts }} && python3 python.py format
+    cd {{ scripts }} && python3 csharp.py format
+    cd {{ scripts }} && python3 c.py format
+    cd {{ scripts }} && python3 cpp.py format
 
 test:
-    cd {{scripts}} && python3 rust.py test
-    cd {{scripts}} && python3 python.py test
-    cd {{scripts}} && python3 typescript.py test
-    cd {{scripts}} && python3 csharp.py test
-    cd {{scripts}} && python3 c.py test
-    cd {{scripts}} && python3 cpp.py test
+    cd {{ scripts }} && python3 rust.py test
+    cd {{ scripts }} && python3 python.py test
+    cd {{ scripts }} && python3 typescript.py test
+    cd {{ scripts }} && python3 csharp.py test
+    cd {{ scripts }} && python3 c.py test
+    cd {{ scripts }} && python3 cpp.py test
 
 check:
-    cd {{scripts}} && python3 rust.py check
-    cd {{scripts}} && python3 python.py check
-    cd {{scripts}} && python3 typescript.py check
-    cd {{scripts}} && python3 csharp.py check
-    cd {{scripts}} && python3 c.py check
-    cd {{scripts}} && python3 cpp.py check
+    cd {{ scripts }} && python3 rust.py check
+    cd {{ scripts }} && python3 python.py check
+    cd {{ scripts }} && python3 typescript.py check
+    cd {{ scripts }} && python3 csharp.py check
+    cd {{ scripts }} && python3 c.py check
+    cd {{ scripts }} && python3 cpp.py check
 
 clean:
-	cd {{scripts}} && python3 rust.py clean
-	cd {{scripts}} && python3 python.py clean
-	cd {{scripts}} && python3 typescript.py clean
-	cd {{scripts}} && python3 csharp.py clean
-	cd {{scripts}} && python3 c.py clean
-	cd {{scripts}} && python3 cpp.py clean
-	cd {{scripts}} && python3 qemu.py clean
-	rm -rf Demo/public/wasm Demo/node_modules Demo/dist
+    cd {{ scripts }} && python3 rust.py clean
+    cd {{ scripts }} && python3 python.py clean
+    cd {{ scripts }} && python3 typescript.py clean
+    cd {{ scripts }} && python3 csharp.py clean
+    cd {{ scripts }} && python3 c.py clean
+    cd {{ scripts }} && python3 cpp.py clean
+    cd {{ scripts }} && python3 qemu.py clean
+    rm -rf Demo/public/wasm Demo/node_modules Demo/dist
 
 # Demo recipes
 wasm-c:
-    @cd {{scripts}} && python3 web_demo.py build-c
+    @cd {{ scripts }} && python3 web_demo.py build-c
 
 wasm-cpp:
-    @cd {{scripts}} && python3 web_demo.py build-cpp
+    @cd {{ scripts }} && python3 web_demo.py build-cpp
 
 wasm-csharp:
-    @cd {{scripts}} && python3 web_demo.py build-csharp
+    @cd {{ scripts }} && python3 web_demo.py build-csharp
 
 wasm-rust-runtime:
-    @cd {{scripts}} && python3 web_demo.py build-rust-runtime
+    @cd {{ scripts }} && python3 web_demo.py build-rust-runtime
 
 wasm-rust-provider:
-    @cd {{scripts}} && python3 web_demo.py build-rust-provider
+    @cd {{ scripts }} && python3 web_demo.py build-rust-provider
 
 wasm-python:
-    @cd {{scripts}} && python3 web_demo.py build-python
+    @cd {{ scripts }} && python3 web_demo.py build-python
 
 wasm-rust:
-    @cd {{scripts}} && python3 web_demo.py build-rust
+    @cd {{ scripts }} && python3 web_demo.py build-rust
 
 wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python wasm-rust-runtime wasm-rust-provider
 

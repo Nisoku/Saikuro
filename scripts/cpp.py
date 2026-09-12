@@ -47,21 +47,21 @@ def setup() -> int:
     return run(["cmake", "-S", ".", "-B", "build"], cwd=CPP_DIR)
 
 
-def fmt_check() -> int:
+def format() -> int:
     return check_clang(_FMT_DIRS, ["*.[ch]pp", "*.h"], cwd=CPP_DIR)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="C++ adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check", "setup"] + list(CMDS))
+                        choices=["check", "format", "setup"] + list(CMDS))
     args = parser.parse_args()
-    if args.command == "fmt_check":
-        sys.exit(fmt_check())
+    if args.command == "format":
+        sys.exit(format())
     if args.command == "setup":
         sys.exit(setup())
     if args.command == "check":
-        failed = any([fmt_check() != 0, setup() != 0, run(CMDS["test"], cwd=CPP_DIR) != 0])
+        failed = any([format() != 0, setup() != 0, run(CMDS["test"], cwd=CPP_DIR) != 0])
         sys.exit(1 if failed else 0)
     if args.command in CMDS:
         sys.exit(run(CMDS[args.command], cwd=CPP_DIR))

@@ -15,23 +15,23 @@ CMDS = {
 }
 
 
-def fmt_check() -> int:
+def format() -> int:
     return check("Python",
-                 ["uvx", "ruff", "format", "--check", "."],
-                 ["uvx", "ruff", "format", "."],
+                 ["uv", "run", "ruff", "format", "--check", "."],
+                 ["uv", "run", "ruff", "format", "."],
                  cwd=PYTHON_DIR)
 
 
 def lint() -> int:
     result = subprocess.run(
-        ["uvx", "ruff", "check", "."], cwd=PYTHON_DIR, capture_output=True, text=True,
+        ["uv", "run", "ruff", "check", "."], cwd=PYTHON_DIR, capture_output=True, text=True,
     )
     if result.returncode == 0:
         return 0
     print(result.stdout, result.stderr, sep="", end="", flush=True)
     if os.environ.get("CI"):
         return result.returncode
-    subprocess.run(["uvx", "ruff", "check", ".", "--fix"], cwd=PYTHON_DIR)
+    subprocess.run(["uv", "run", "ruff", "check", ".", "--fix"], cwd=PYTHON_DIR)
     print("[WARN] Python lint issues auto-fixed. Stage changes before committing.", flush=True)
     return result.returncode
 
@@ -53,14 +53,14 @@ def clean() -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Python adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check", "lint", "clean"] + list(CMDS))
+                        choices=["check", "format", "lint", "clean"] + list(CMDS))
     args = parser.parse_args()
-    if args.command == "fmt_check":
-        sys.exit(fmt_check())
+    if args.command == "format":
+        sys.exit(format())
     if args.command == "lint":
         sys.exit(lint())
     if args.command == "check":
-        failed = any([fmt_check() != 0, lint() != 0, run(CMDS["test"], cwd=PYTHON_DIR) != 0])
+        failed = any([format() != 0, lint() != 0, run(CMDS["test"], cwd=PYTHON_DIR) != 0])
         sys.exit(1 if failed else 0)
     if args.command == "clean":
         sys.exit(clean())

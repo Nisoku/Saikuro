@@ -16,7 +16,7 @@ CMDS = {
 }
 
 
-def fmt_check() -> int:
+def format() -> int:
     ensure_dotnet()
     project = str(CSHARP_SRC / "Saikuro.csproj")
     return check("C#",
@@ -28,13 +28,13 @@ def fmt_check() -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="C# adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check"] + list(CMDS))
+                        choices=["check", "format"] + list(CMDS))
     args = parser.parse_args()
     if args.command == "check":
-        rc_sum = [fmt_check(), run(CMDS["build"], cwd=CSHARP_DIR), run(CMDS["test"], cwd=CSHARP_DIR)]
+        rc_sum = [format(), run(CMDS["build"], cwd=CSHARP_DIR), run(CMDS["test"], cwd=CSHARP_DIR)]
         sys.exit(0 if all(rc == 0 for rc in rc_sum) else 1)
-    if args.command == "fmt_check":
-        sys.exit(fmt_check())
+    if args.command == "format":
+        sys.exit(format())
     if args.command in CMDS:
         sys.exit(run(CMDS[args.command], cwd=CSHARP_DIR))
 

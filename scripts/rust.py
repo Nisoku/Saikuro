@@ -16,7 +16,7 @@ CMDS = {
 }
 
 
-def fmt_check() -> int:
+def format() -> int:
     rc = check("Rust workspace",
                ["cargo", "fmt", "--all", "--", "--check"],
                ["cargo", "fmt", "--all"],
@@ -36,14 +36,14 @@ def lint() -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rust workspace + adapter commands")
     parser.add_argument("command", nargs="?", default="check",
-                        choices=["check", "fmt_check", "lint"] + list(CMDS))
+                        choices=["check", "format", "lint"] + list(CMDS))
     args = parser.parse_args()
-    if args.command == "fmt_check":
-        sys.exit(fmt_check())
+    if args.command == "format":
+        sys.exit(format())
     if args.command == "lint":
         sys.exit(lint())
     if args.command == "check":
-        failed = any([fmt_check() != 0, lint() != 0,
+        failed = any([format() != 0, lint() != 0,
                       run(CMDS["test"], cwd=BUILD_ROOT) != 0,
                       run(CMDS["wasm_check"], cwd=QEMU_DIR) != 0,
                       run(CMDS["adapter_test"], cwd=BUILD_ROOT) != 0])

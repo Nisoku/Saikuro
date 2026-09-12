@@ -20,7 +20,7 @@ just web_demo         # build + run the polyglot WASM demo
 Each script supports subcommands:
 
 ```bash
-python3 rust.py fmt_check   # check + auto-fix formatting
+python3 rust.py format   # check + auto-fix formatting
 python3 python.py lint       # check + auto-fix lint
 python3 typescript.py test   # just run tests
 python3 web_demo.py dev      # build WASM and start Vite

@@ -54,7 +54,7 @@ jobs:
             Build/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - run: just rust fmt_check
+      - run: just rust format
       - run: just rust lint
 
   test:
