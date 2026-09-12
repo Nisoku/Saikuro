@@ -1,4 +1,4 @@
-#[cfg(any(feature = "no_std", feature = "embedded"))]
+#[cfg(any(feature = "no_std", feature = "embedded", feature = "wasm"))]
 pub(crate) mod block_on;
 
 pub mod heap_stats;
@@ -59,6 +59,12 @@ impl<const N: usize> WakerList<N> {
         for w in wakers {
             w.wake();
         }
+    }
+}
+
+impl<const N: usize> Default for WakerList<N> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -209,7 +209,7 @@ fn value_all_variants_roundtrip() -> Result<(), &'static str> {
         Value::Int(42),
         Value::Int(100),
         Value::UInt(u64::MAX),
-        Value::Float(3.14),
+        Value::Float(12.5),
         Value::String("hello".into()),
         Value::Array(vec![Value::Int(1), Value::Int(2)]),
     ];

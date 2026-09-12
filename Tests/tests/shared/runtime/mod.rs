@@ -172,8 +172,8 @@ fn transport_round_trip() -> Result<(), &'static str> {
         drop(client_tx);
         drop(client_rx);
         drop(router);
-        let _ = bridge_join;
-        let _ = provider_join;
+        drop(bridge_join);
+        drop(provider_join);
         Ok(())
     })
 }
@@ -239,7 +239,7 @@ fn runtime_full_stack() -> Result<(), &'static str> {
                 "test-provider".to_string(),
                 vec!["math".to_string()],
                 |env| async move {
-                    let a = env.args.get(0).cloned().unwrap_or(Value::Int(0));
+                    let a = env.args.first().cloned().unwrap_or(Value::Int(0));
                     let b = env.args.get(1).cloned().unwrap_or(Value::Int(0));
                     match (a, b) {
                         (Value::Int(x), Value::Int(y)) => {

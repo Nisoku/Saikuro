@@ -6,7 +6,7 @@ authors = ["NellowTCS"]
 license = "Apache-2.0"
 repository = "https://github.com/Nisoku/Saikuro"
 description = "Rust adapter for the Saikuro runtime"
-rust-version = "1.75"
+rust-version = "1.82"
 keywords = ["ipc", "cross-language", "rpc", "msgpack", "saikuro"]
 categories = ["network-programming", "asynchronous"]
 

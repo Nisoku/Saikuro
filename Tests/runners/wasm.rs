@@ -22,3 +22,7 @@ mod wasm_critical_section {
         unsafe fn release(_restore_state: critical_section::RawRestoreState) {}
     }
 }
+
+// Never entered: `wasm-bindgen-test-runner` drives the `#[wasm_bindgen_test]`
+// cases from the libc-free `_start` shim. (for clippy :P)
+fn main() {}

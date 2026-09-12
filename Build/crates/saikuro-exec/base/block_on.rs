@@ -1,6 +1,11 @@
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::future::Future;
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::pin::Pin;
-use core::ptr::{null, null_mut};
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+use core::ptr::null;
+use core::ptr::null_mut;
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::task::{Context, Poll};
 
 use embassy_executor::raw::Executor as ArchExecutor;
@@ -36,6 +41,7 @@ pub(crate) fn ensure_runner_started() {
 /// No-op: the executor is driven by its arch pender (the
 /// `#[embassy_executor::main]` loop on cortex-m). The wasm host entry no
 /// longer needs to pump manually.
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 pub fn pump() {}
 
 #[embassy_executor::task]
@@ -60,7 +66,9 @@ async fn task_runner() {
 }
 
 /// Run `fut` to completion on the spin executor. Loops until `fut` resolves so
-/// the result can be returned. Used by the no_std and embedded engines.
+/// the result can be returned. Used by the no_std and embedded engines; the
+/// wasm engine drives work through `wasm::pump` instead.
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 pub fn block_on<F>(fut: F) -> F::Output
 where
     F: Future + 'static,
@@ -69,6 +77,7 @@ where
     block_on_inner(fut)
 }
 
+#[cfg(any(feature = "no_std", feature = "embedded"))]
 fn block_on_inner<F>(mut fut: F) -> F::Output
 where
     F: Future + 'static,

@@ -31,7 +31,7 @@ pub struct LogRecord {
 /// `true` when the context bag is absent or empty, so the field is omitted
 /// from the wire format.
 fn context_is_empty(bag: &Option<Box<ContextMap>>) -> bool {
-    bag.as_deref().map_or(true, ContextMap::is_empty)
+    bag.as_deref().is_none_or(ContextMap::is_empty)
 }
 
 impl LogRecord {

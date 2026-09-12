@@ -94,7 +94,7 @@ fn m_rust_adapter_client_calls_runtime_provider() -> Result<(), &'static str> {
         assert_eq!(result, serde_json::json!(-7), "negate(7) == -7");
 
         client.close().await.map_err(|_| "close client")?;
-        let _ = bridge.abort();
+        bridge.abort();
         Ok(())
     })
 }
@@ -202,8 +202,8 @@ fn n_rust_adapter_provider_serves_simulated_client() -> Result<(), &'static str>
         );
 
         drop(client_tx);
-        let _ = serve_task.abort();
-        let _ = bridge.abort();
+        serve_task.abort();
+        bridge.abort();
         Ok(())
     })
 }

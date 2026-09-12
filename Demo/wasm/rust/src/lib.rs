@@ -44,7 +44,7 @@ pub async fn start_rust_provider(channel: String) -> Result<(), JsValue> {
 
 fn sentiment_score(args: Vec<JsonValue>) -> JsonValue {
     let text = args
-        .get(0)
+        .first()
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_lowercase();

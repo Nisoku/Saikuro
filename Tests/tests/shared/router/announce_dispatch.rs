@@ -247,7 +247,7 @@ fn announce_does_not_route_to_provider() -> Result<(), &'static str> {
             "announce should succeed even with a '$saikuro' provider"
         );
         check_test!(
-            matches!(work_rx.recv().await, None),
+            work_rx.recv().await.is_none(),
             "announce must NOT be forwarded to any provider channel"
         );
         Ok(())

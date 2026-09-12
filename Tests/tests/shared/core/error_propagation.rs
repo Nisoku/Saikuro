@@ -205,83 +205,92 @@ fn error_detail_with_context_accumulates() -> Result<(), &'static str> {
 }
 
 fn error_code_mapping_namespace_not_found() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::NamespaceNotFound, ErrorCode::NamespaceNotFound);
+    let err = SaikuroError::NamespaceNotFound("ns".into());
+    assert_eq!(err.error_code(), ErrorCode::NamespaceNotFound);
     Ok(())
 }
 
 fn error_code_mapping_function_not_found() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::FunctionNotFound, ErrorCode::FunctionNotFound);
+    let err = SaikuroError::FunctionNotFound("fn".into());
+    assert_eq!(err.error_code(), ErrorCode::FunctionNotFound);
     Ok(())
 }
 
 fn error_code_mapping_invalid_arguments() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::InvalidArguments, ErrorCode::InvalidArguments);
+    let err = SaikuroError::InvalidArguments { target: "ns.fn".into(), reason: "bad arg".into() };
+    assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
     Ok(())
 }
 
 fn error_code_mapping_no_provider() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::NoProvider, ErrorCode::NoProvider);
+    let err = SaikuroError::NoProvider("ns".into());
+    assert_eq!(err.error_code(), ErrorCode::NoProvider);
     Ok(())
 }
 
 fn error_code_mapping_provider_unavailable() -> Result<(), &'static str> {
-    assert_eq!(
-        ErrorCode::ProviderUnavailable,
-        ErrorCode::ProviderUnavailable
-    );
+let err = SaikuroError::ProviderUnavailable("ns".into());
+    assert_eq!(err.error_code(), ErrorCode::ProviderUnavailable);
     Ok(())
 }
 
 fn error_code_mapping_timeout() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::Timeout, ErrorCode::Timeout);
+    let err = SaikuroError::Timeout { millis: 1000 };
+    assert_eq!(err.error_code(), ErrorCode::Timeout);
     Ok(())
 }
 
 fn error_code_mapping_capability_denied() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::CapabilityDenied, ErrorCode::CapabilityDenied);
+    let err = SaikuroError::CapabilityDenied { target: "ns.fn".into(), required: "cap".into() };
+    assert_eq!(err.error_code(), ErrorCode::CapabilityDenied);
     Ok(())
 }
 
 fn error_code_mapping_message_too_large() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::MessageTooLarge, ErrorCode::MessageTooLarge);
+    let err = SaikuroError::MessageTooLarge { size: 1024, limit: 512 };
+    assert_eq!(err.error_code(), ErrorCode::MessageTooLarge);
     Ok(())
 }
 
 fn error_code_mapping_malformed_envelope() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::MalformedEnvelope, ErrorCode::MalformedEnvelope);
+    let err = SaikuroError::MalformedEnvelope("bad".into());
+    assert_eq!(err.error_code(), ErrorCode::MalformedEnvelope);
     Ok(())
 }
 
 fn error_code_mapping_internal_error() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::Internal, ErrorCode::Internal);
+    let err = SaikuroError::Internal("boom".into());
+    assert_eq!(err.error_code(), ErrorCode::Internal);
     Ok(())
 }
 
 fn error_code_mapping_buffer_overflow() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::BufferOverflow, ErrorCode::BufferOverflow);
+    let err = SaikuroError::BufferOverflow;
+    assert_eq!(err.error_code(), ErrorCode::BufferOverflow);
     Ok(())
 }
 
 fn error_code_mapping_stream_closed() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::StreamClosed, ErrorCode::StreamClosed);
+    let err = SaikuroError::StreamClosed;
+    assert_eq!(err.error_code(), ErrorCode::StreamClosed);
     Ok(())
 }
 
 fn error_code_mapping_channel_closed() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::ChannelClosed, ErrorCode::ChannelClosed);
+    let err = SaikuroError::ChannelClosed;
+    assert_eq!(err.error_code(), ErrorCode::ChannelClosed);
     Ok(())
 }
 
 fn error_code_mapping_connection_lost() -> Result<(), &'static str> {
-    assert_eq!(ErrorCode::ConnectionLost, ErrorCode::ConnectionLost);
+    let err = SaikuroError::ConnectionLost("reset".into());
+    assert_eq!(err.error_code(), ErrorCode::ConnectionLost);
     Ok(())
 }
 
 fn error_code_mapping_incompatible_version() -> Result<(), &'static str> {
-    assert_eq!(
-        ErrorCode::IncompatibleVersion,
-        ErrorCode::IncompatibleVersion
-    );
+let err = SaikuroError::IncompatibleVersion { expected: 1, received: 2 };
+    assert_eq!(err.error_code(), ErrorCode::IncompatibleVersion);
     Ok(())
 }
 

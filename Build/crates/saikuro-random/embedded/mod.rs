@@ -1,4 +1,5 @@
 use crate::shared::{init, EntropySource};
+use alloc::string::ToString;
 use saikuro_event::SaikuroError;
 
 /// Seed the process-wide DRBG from an application-provided [`EntropySource`].
@@ -14,7 +15,7 @@ pub fn init_from(source: &impl EntropySource) -> Result<(), SaikuroError> {
 /// [`init_from`].
 #[doc(hidden)]
 pub fn try_auto_seed() -> Result<(), SaikuroError> {
-    Err(SaikuroError::Entropy(format!(
-        "DRBG used before being seeded"
-    )))
+    Err(SaikuroError::Entropy(
+        "DRBG used before being seeded".to_string(),
+    ))
 }

@@ -64,6 +64,11 @@ impl<T> SyncUnsafeCell<T> {
     pub(crate) const fn new(val: T) -> Self {
         Self(UnsafeCell::new(val))
     }
+    // Unsafe `&mut` through `&self` is the point of this cell: it is a
+    // `Sync`-declared owner of a JSPI output slot whose aliasing safety is
+    // upheld entirely by the caller (single-threaded wasm, readonly after
+    // capture).
+    #[allow(clippy::mut_from_ref)]
     pub(crate) unsafe fn get(&self) -> &mut T {
         &mut *self.0.get()
     }

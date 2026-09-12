@@ -33,7 +33,6 @@ pub(crate) const CREATE_KV: &str = "
 /// Execution primitive shared by the actor and direct backends.
 pub(crate) trait RawSqlite {
     async fn query(&self, sql: &str, params: Params) -> Result<graphitesql::QueryResult>;
-    async fn batch(&self, sql: &str) -> Result<()>;
 }
 
 /// Map a `graphitesql` error into the crate's unified error type.
@@ -69,7 +68,7 @@ fn ns_key_params(namespace: &str, key: &str) -> Params {
     }
 }
 
-fn blob_of(row: &Vec<Value>) -> Option<Vec<u8>> {
+fn blob_of(row: &[Value]) -> Option<Vec<u8>> {
     row.first().and_then(|v| match v {
         Value::Blob(b) => Some(b.clone()),
         _ => None,
@@ -100,7 +99,11 @@ impl KeyValueBackend for SqliteStorage {
                 ns_key_params(&ns, key),
             )
             .await?;
-        Ok(res.rows.first().and_then(blob_of).map(Bytes::from))
+        Ok(res
+            .rows
+            .first()
+            .and_then(|row| blob_of(row))
+            .map(Bytes::from))
     }
 
     async fn put(&self, namespace: &str, key: &str, value: Bytes) -> Result<()> {

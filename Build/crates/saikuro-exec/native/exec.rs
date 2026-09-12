@@ -110,7 +110,7 @@ pub fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 impl<T> JoinHandle<T> {
-    pub async fn abort(&self) {
+    pub fn abort(&self) {
         self.inner.abort();
     }
 

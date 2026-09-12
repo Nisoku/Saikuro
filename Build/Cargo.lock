@@ -933,8 +933,6 @@ dependencies = [
 [[package]]
 name = "graphitesql"
 version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c253d40a145601b6f7cdb340e641bee43d57330b750e54ad42160ec6127cc458"
 
 [[package]]
 name = "hash32"
@@ -1469,6 +1467,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "regex-automata"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1679,6 +1689,24 @@ dependencies = [
  "saikuro-schema",
  "saikuro-storage",
  "saikuro-transport",
+]
+
+[[package]]
+name = "saikuro-c"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "regex",
+ "saikuro",
+ "saikuro-core",
+ "saikuro-event",
+ "saikuro-exec",
+ "saikuro-runtime",
+ "saikuro-transport",
+ "serde_json",
+ "spin 0.12.3",
+ "tokio",
 ]
 
 [[package]]
@@ -2127,6 +2155,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0134f9043ed38b087ac4f7d4af44c79e2c9e5094421fe3164f435ce585953b10"
 dependencies = [
+ "lock_api",
  "portable-atomic",
 ]
 

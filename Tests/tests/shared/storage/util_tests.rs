@@ -119,8 +119,10 @@ fn strip_prefix_none_is_identity() -> Result<(), &'static str> {
 }
 
 fn apply_then_strip_roundtrip() -> Result<(), &'static str> {
-    let mut config = StorageConfig::default();
-    config.namespace_prefix = Some("global".into());
+    let config = StorageConfig {
+        namespace_prefix: Some("global".into()),
+        ..Default::default()
+    };
     let applied = util::apply_prefix(&config, "ns");
     let stripped = util::strip_prefix(&config, &applied);
     assert_eq!(stripped, "ns");
@@ -128,16 +130,20 @@ fn apply_then_strip_roundtrip() -> Result<(), &'static str> {
 }
 
 fn apply_with_prefix_prepends() -> Result<(), &'static str> {
-    let mut config = StorageConfig::default();
-    config.namespace_prefix = Some("pfx".into());
+    let config = StorageConfig {
+        namespace_prefix: Some("pfx".into()),
+        ..Default::default()
+    };
     let applied = util::apply_prefix(&config, "ns");
     assert!(applied.starts_with("pfx"));
     Ok(())
 }
 
 fn strip_with_prefix_removes() -> Result<(), &'static str> {
-    let mut config = StorageConfig::default();
-    config.namespace_prefix = Some("pfx".into());
+    let config = StorageConfig {
+        namespace_prefix: Some("pfx".into()),
+        ..Default::default()
+    };
     let applied = util::apply_prefix(&config, "ns");
     let stripped = util::strip_prefix(&config, &applied);
     assert_eq!(stripped, "ns");

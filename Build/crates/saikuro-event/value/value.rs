@@ -79,7 +79,7 @@ impl ValueMap {
     }
 }
 
-fn pair_ref<'a>(pair: &'a (String, Value)) -> (&'a String, &'a Value) {
+fn pair_ref(pair: &(String, Value)) -> (&String, &Value) {
     (&pair.0, &pair.1)
 }
 

@@ -82,7 +82,7 @@ impl NamespaceSchema {
                 returns: fs.returns.clone().unwrap_or(TypeDescriptor::Primitive {
                     r#type: saikuro_core::schema::PrimitiveType::Any,
                 }),
-                visibility: fs.visibility.clone(),
+                visibility: fs.visibility,
                 capabilities: fs
                     .capabilities
                     .iter()

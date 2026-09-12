@@ -116,10 +116,16 @@ pub fn exit_code(success: bool) -> ! {
             cortex_m_semihosting::debug::EXIT_FAILURE
         };
         cortex_m_semihosting::debug::exit(code);
-        loop {}
+        // Fallback: `exit` may return on unconnected semihosting stubs. Pin
+        // the thread here rather than falling through into undefined code.
+        loop {
+            core::hint::spin_loop();
+        }
     }
     #[allow(unreachable_code)]
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 /// Bare-metal panic handler.

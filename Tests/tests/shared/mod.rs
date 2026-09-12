@@ -74,7 +74,7 @@ macro_rules! shared_test_async {
         mod $run {
             #[wasm_bindgen_test::wasm_bindgen_test]
             async fn $run() {
-                match crate::block_on(super::$run()) {
+                match $crate::block_on(super::$run()) {
                     Ok(()) => {}
                     Err(e) => panic!("{} failed: {}", $name, e),
                 }
@@ -101,6 +101,12 @@ pub struct TestSuite {
     pub passed: u32,
     pub failed: u32,
     pub failures: Vec<&'static str>,
+}
+
+impl Default for TestSuite {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestSuite {

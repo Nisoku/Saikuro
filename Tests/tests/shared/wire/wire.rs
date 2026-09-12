@@ -18,6 +18,7 @@ use saikuro_core::{
     InvocationId, ResponseEnvelope, PROTOCOL_VERSION,
 };
 use saikuro_event::{ErrorCode, Value};
+
 use saikuro_runtime::SaikuroRuntime;
 use saikuro_transport::{MemoryTransport, Transport, TransportReceiver, TransportSender};
 
@@ -379,7 +380,7 @@ fn c_rust_and_simulated_providers_coexist() -> Result<(), &'static str> {
         assert_eq!(echo_resp.result, Some(Value::String("hello".into())));
 
         drop(client_tx);
-        let _ = ext_loop.abort();
+        ext_loop.abort();
         Ok(())
     })
 }
@@ -557,7 +558,7 @@ fn f_announce_then_client_call_round_trip() -> Result<(), &'static str> {
         assert_eq!(resp.result, Some(Value::Int(81)), "9*9 = 81");
 
         drop(cli_tx);
-        let _ = prov_loop.abort();
+        prov_loop.abort();
         Ok(())
     })
 }
@@ -737,7 +738,7 @@ fn i_provider_reconnect_and_reannounce() -> Result<(), &'static str> {
         assert_eq!(resp2.result, Some(Value::Int(2)), "v2 provider must answer");
 
         drop(cli2_tx);
-        let _ = prov2_loop.abort();
+        prov2_loop.abort();
         Ok(())
     })
 }

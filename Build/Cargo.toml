@@ -13,8 +13,8 @@ members = [
     "crates/saikuro-random",
     "crates/saikuro-codegen",
     "crates/saikuro-client",
-    # "adapters/c",
     "adapters/rust",
+    "adapters/c",
 ]
 
 [workspace.package]
@@ -23,7 +23,7 @@ edition = "2021"
 authors = ["NellowTCS"]
 license = "Apache-2.0"
 repository = "https://github.com/Nisoku/Saikuro"
-rust-version = "1.75"
+rust-version = "1.82"
 
 [workspace.dependencies]
 # Serialization

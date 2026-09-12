@@ -127,7 +127,7 @@ impl SaikuroChannel {
 
     /// Close the channel by sending a StreamControl::End frame.
     pub async fn close(&self) -> Result<()> {
-        use saikuro_core::envelope::{Envelope, InvocationType, StreamControl};
+        use saikuro_core::envelope::{InvocationType, StreamControl};
 
         let mut envelope = super::helpers::make_envelope_with_id(
             self.id,
@@ -142,7 +142,7 @@ impl SaikuroChannel {
 
     /// Abort the channel by sending a StreamControl::Abort frame.
     pub async fn abort(&self) -> Result<()> {
-        use saikuro_core::envelope::{Envelope, InvocationType, StreamControl};
+        use saikuro_core::envelope::{InvocationType, StreamControl};
 
         let mut envelope = super::helpers::make_envelope_with_id(
             self.id,
@@ -157,7 +157,7 @@ impl SaikuroChannel {
 
     /// Send a value to the provider side of this channel.
     pub async fn send(&self, value: Value) -> Result<()> {
-        use saikuro_core::envelope::{Envelope, InvocationType};
+        use saikuro_core::envelope::InvocationType;
 
         let envelope = super::helpers::make_envelope_with_id(
             self.id,

@@ -54,18 +54,6 @@ impl PendingMap {
         }
     }
 
-    /// Remove all entries.
-    pub fn clear(&self) {
-        #[cfg(feature = "std")]
-        {
-            self.inner.clear();
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            self.inner.lock().clear();
-        }
-    }
-
     /// Collect all keys.
     pub fn keys(&self) -> alloc::vec::Vec<InvocationId> {
         #[cfg(feature = "std")]

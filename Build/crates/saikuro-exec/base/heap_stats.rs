@@ -20,7 +20,7 @@ pub fn add(bytes: usize) {
         cell.set(next);
         next
     });
-    let _ = PEAK.lock(|cell| {
+    PEAK.lock(|cell| {
         if new_live > cell.get() {
             cell.set(new_live);
         }
@@ -29,7 +29,7 @@ pub fn add(bytes: usize) {
 
 /// Account a freed allocation of `bytes` bytes.
 pub fn sub(bytes: usize) {
-    let _ = LIVE.lock(|cell| cell.set(cell.get().saturating_sub(bytes)));
+    LIVE.lock(|cell| cell.set(cell.get().saturating_sub(bytes)));
 }
 
 /// Live heap bytes at this instant.

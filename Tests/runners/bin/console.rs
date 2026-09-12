@@ -132,7 +132,10 @@ pub fn qemu_exit(success: bool) -> ! {
         1
     };
     let _ = semihost(SYS_EXIT, arg);
-    loop {}
+    // Balancing `qemu_exit`; pin the thread if the host ignores the request.
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 impl fmt::Write for Console {

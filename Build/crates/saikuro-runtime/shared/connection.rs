@@ -294,12 +294,9 @@ where
         // are handled in the typed branch above; one that escapes
         // classification degrades to validation against an unknown
         // `$saikuro.announce` target and is rejected there.
-        match envelope.invocation_type {
-            InvocationType::Log => {
-                // Let the router's log sink handle it:  no validation needed.
-                return Some((self.dispatch_spawned(id, envelope, frame).await, None));
-            }
-            _ => {}
+        if envelope.invocation_type == InvocationType::Log {
+            // Let the router's log sink handle it:  no validation needed.
+            return Some((self.dispatch_spawned(id, envelope, frame).await, None));
         }
 
         // 3. Validate the envelope against the schema.

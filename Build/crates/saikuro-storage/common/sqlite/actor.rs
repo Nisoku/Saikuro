@@ -22,10 +22,6 @@ enum Job {
         params: Params,
         resp: oneshot::Sender<Result<QueryResult>>,
     },
-    Batch {
-        sql: String,
-        resp: oneshot::Sender<Result<()>>,
-    },
 }
 
 /// Where the worker should open its database.
@@ -96,29 +92,18 @@ fn run_worker(target: OpenTarget, rx: mpsc::Receiver<Job>) {
         drain(rx);
         return;
     }
-    loop {
-        match rx.recv() {
-            Ok(Job::Query { sql, params, resp }) => {
-                let r = if sql.trim_start().to_ascii_uppercase().starts_with("SELECT") {
-                    conn.query_params(&sql, &params).map_err(map_err)
-                } else {
-                    conn.execute_params(&sql, &params)
-                        .map_err(map_err)
-                        .map(|_| QueryResult {
-                            columns: Vec::new(),
-                            rows: Vec::new(),
-                        })
-                };
-                let _ = resp.send(r);
-            }
-            Ok(Job::Batch { sql, resp }) => {
-                let r = conn.execute_batch(&sql).map_err(map_err);
-                let _ = resp.send(r);
-            }
-            Err(_) => {
-                break;
-            }
-        }
+    while let Ok(Job::Query { sql, params, resp }) = rx.recv() {
+        let r = if sql.trim_start().to_ascii_uppercase().starts_with("SELECT") {
+            conn.query_params(&sql, &params).map_err(map_err)
+        } else {
+            conn.execute_params(&sql, &params)
+                .map_err(map_err)
+                .map(|_| QueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                })
+        };
+        let _ = resp.send(r);
     }
 }
 
@@ -135,18 +120,6 @@ impl RawSqlite for SqliteStorage {
             .send(Job::Query {
                 sql: sql.to_owned(),
                 params,
-                resp: tx,
-            })
-            .map_err(|_| SaikuroError::internal("sqlite worker thread is not running"))?;
-        rx.await
-            .map_err(|_| SaikuroError::internal("sqlite worker dropped the response"))?
-    }
-
-    async fn batch(&self, sql: &str) -> Result<()> {
-        let (tx, rx) = oneshot::channel();
-        self.tx
-            .send(Job::Batch {
-                sql: sql.to_owned(),
                 resp: tx,
             })
             .map_err(|_| SaikuroError::internal("sqlite worker thread is not running"))?;

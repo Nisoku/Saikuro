@@ -39,7 +39,7 @@ where
 /// `true` when the metadata bag is absent or empty, so the field is omitted
 /// from the wire format.
 fn meta_is_empty(meta: &Option<Box<MetaMap>>) -> bool {
-    meta.as_deref().map_or(true, MetaMap::is_empty)
+    meta.as_deref().is_none_or(MetaMap::is_empty)
 }
 
 /// The type of an outgoing invocation.

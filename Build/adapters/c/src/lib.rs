@@ -1308,9 +1308,8 @@ async fn invoke_c_handler(
         .map_err(|_| saikuro::Error::internal("C handler returned non-UTF8".to_owned()))?
         .to_owned();
 
-    let value: Value = serde_json::from_str(&result_str).map_err(|e| {
-        saikuro::Error::internal(format!("C handler returned invalid JSON: {e}"))
-    })?;
+    let value: Value = serde_json::from_str(&result_str)
+        .map_err(|e| saikuro::Error::internal(format!("C handler returned invalid JSON: {e}")))?;
 
     Ok(value)
 }

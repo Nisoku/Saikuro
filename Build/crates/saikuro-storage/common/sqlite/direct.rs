@@ -59,9 +59,4 @@ impl RawSqlite for SqliteStorage {
             })
         }
     }
-
-    async fn batch(&self, sql: &str) -> Result<()> {
-        let mut conn = self.conn.lock();
-        conn.execute_batch(sql).map_err(map_err)
-    }
 }
