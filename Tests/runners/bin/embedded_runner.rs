@@ -22,16 +22,14 @@ use saikuro_tests::{register_all, run, TestSuite};
 pub(crate) static HEAP: CsMutex<RefCell<Heap>> = CsMutex::new(RefCell::new(Heap::empty()));
 static HEAP_SIZE: CsMutex<Cell<usize>> = CsMutex::new(Cell::new(0));
 
-/// Reserved bytes between the top of the heap and `_stack_start`.
-pub(crate) const STACK_GUARD: usize = 0x5400;
-
 /// Heap region size recorded at init.
 pub(crate) fn heap_size_allocated() -> usize {
     critical_section::with(|cs| HEAP_SIZE.borrow(cs).get())
 }
 
-/// Initialize the heap to the region `[start, start + size)`, which the
-/// runner binaries carve just below `_stack_start - STACK_GUARD`.
+/// Initialize the heap to the region `[start, start + size)`, which each
+/// runner binary carves just below `_stack_start` minus its own per-target
+/// stack reserve.
 pub(crate) fn init_heap(start: *mut u8, size: usize) {
     critical_section::with(|cs| {
         HEAP_SIZE.borrow(cs).set(size);

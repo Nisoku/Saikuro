@@ -13,6 +13,9 @@ static KEEP_RISCV_CRITICAL_SECTION_IMPL: fn() = riscv::interrupt::disable;
 
 mod embedded_runner;
 
+/// Stack reservation
+const STACK_GUARD: usize = 0x6c00;
+
 #[entry]
 fn main() -> ! {
     // The heap is the free span between the end of .bss and the top of the
@@ -23,7 +26,7 @@ fn main() -> ! {
     }
     let heap_start = unsafe { &__ebss as *const u8 as *mut u8 };
     let heap_size = unsafe { &_stack_start as *const u8 as usize }
-        .wrapping_sub(embedded_runner::STACK_GUARD)
+        .wrapping_sub(STACK_GUARD)
         - heap_start as usize;
     embedded_runner::init_heap(heap_start, heap_size);
 

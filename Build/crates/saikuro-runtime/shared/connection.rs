@@ -69,9 +69,7 @@ pub fn empty_peer_capabilities() -> saikuro_core::Arc<CapabilitySet> {
             if slot.is_none() {
                 *slot = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
             }
-            slot.as_ref()
-                .expect("empty caps initialized above")
-                .clone()
+            slot.as_ref().expect("empty caps initialized above").clone()
         })
     }
     #[cfg(not(any(feature = "no_std", feature = "embedded")))]
@@ -82,9 +80,7 @@ pub fn empty_peer_capabilities() -> saikuro_core::Arc<CapabilitySet> {
         if slot.is_none() {
             *slot = Some(saikuro_core::Arc::new(CapabilitySet::empty()));
         }
-        slot.as_ref()
-            .expect("empty caps initialized above")
-            .clone()
+        slot.as_ref().expect("empty caps initialized above").clone()
     }
 }
 

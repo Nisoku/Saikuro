@@ -728,8 +728,6 @@ dependencies = [
 [[package]]
 name = "graphitesql"
 version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c253d40a145601b6f7cdb340e641bee43d57330b750e54ad42160ec6127cc458"
 
 [[package]]
 name = "hash32"

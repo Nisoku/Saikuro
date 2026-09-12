@@ -5,13 +5,13 @@ use core::cell::RefCell;
 use core::task::{Context, Poll};
 
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
-use embassy_sync::waitqueue::WakerRegistration;
 
 use super::*;
 pub use crate::shared::mpsc::{SendError, TrySendError};
 use crate::ChannelCapacity;
 
 const MAX_WAITING_SENDERS: usize = 16;
+const MAX_WAITING_RECEIVERS: usize = 16;
 
 struct ChannelData<T> {
     queue: VecDeque<T>,
@@ -19,7 +19,7 @@ struct ChannelData<T> {
     senders: usize,
     receivers: usize,
     senders_waiting: super::WakerList<MAX_WAITING_SENDERS>,
-    receivers_waiting: WakerRegistration,
+    receivers_waiting: super::WakerList<MAX_WAITING_RECEIVERS>,
 }
 
 struct ChannelInner<T> {
@@ -135,6 +135,15 @@ pub struct Receiver<T> {
     inner: Arc<ChannelInner<T>>,
 }
 
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        self.inner.data.lock(|s| s.borrow_mut().receivers += 1);
+        Receiver {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         self.inner.data.lock(|s| {
@@ -197,7 +206,7 @@ pub fn channel<T>(capacity: ChannelCapacity) -> (Sender<T>, Receiver<T>) {
             senders: 1,
             receivers: 1,
             senders_waiting: super::WakerList::new(),
-            receivers_waiting: WakerRegistration::new(),
+            receivers_waiting: super::WakerList::new(),
         })),
     });
     (

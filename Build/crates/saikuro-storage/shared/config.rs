@@ -91,6 +91,9 @@ pub struct StorageConfig {
 
     /// Whether to sync to durable storage after each write (if supported).
     pub sync_on_write: bool,
+
+    /// SQLite page size in bytes for in-memory databases.
+    pub sqlite_page_size: Option<u32>,
 }
 
 impl Default for StorageConfig {
@@ -102,6 +105,7 @@ impl Default for StorageConfig {
             namespace_prefix: None,
             auto_create_namespaces: true,
             sync_on_write: false,
+            sqlite_page_size: Some(1024),
             #[cfg(feature = "std")]
             storage_path: None,
         }
@@ -148,6 +152,14 @@ impl StorageConfig {
     /// Set TTL-based cleanup.
     pub fn with_ttl(mut self, ttl: Duration) -> Self {
         self.cleanup = CleanupPolicy::Ttl(ttl);
+        self
+    }
+
+    /// Set the SQLite page size for in-memory databases.
+    ///
+    /// Pass `None` to fall back to `graphitesql`'s 4096-byte pages.
+    pub fn sqlite_page_size(mut self, page_size: Option<u32>) -> Self {
+        self.sqlite_page_size = page_size;
         self
     }
 }

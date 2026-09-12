@@ -61,7 +61,10 @@ struct CombinedAdapter<S, R> {
     receiver: R,
 }
 
-#[cfg(all(feature = "native", any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")))]
+#[cfg(all(
+    feature = "native",
+    any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")
+))]
 #[async_trait::async_trait]
 impl<S, R> AdapterTransport for CombinedAdapter<S, R>
 where
@@ -81,7 +84,10 @@ where
     }
 }
 
-#[cfg(all(not(feature = "native"), any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")))]
+#[cfg(all(
+    not(feature = "native"),
+    any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")
+))]
 #[async_trait::async_trait(?Send)]
 impl<S, R> AdapterTransport for CombinedAdapter<S, R>
 where

@@ -1,3 +1,6 @@
 [submodule "vendor/msgpack23"]
 	path = vendor/msgpack23
 	url = https://github.com/rwindegger/msgpack23
+[submodule "vendor/graphitesql"]
+	path = vendor/graphitesql
+	url = https://github.com/Nisoku/graphitesql

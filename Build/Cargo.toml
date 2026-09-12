@@ -172,6 +172,10 @@ wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", r
 js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 
+# Forked graphitesql with open_memory_with_page_size (adds a tunable page
+# size for in-memory databases on memory-constrained targets).
+graphitesql = { path = "../vendor/graphitesql" }
+
 [profile.qemu]
 inherits = "release"
 opt-level = "z"

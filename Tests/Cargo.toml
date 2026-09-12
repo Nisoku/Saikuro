@@ -298,3 +298,7 @@ wasm-bindgen-shared = { git = "https://github.com/wasm-bindgen/wasm-bindgen", re
 wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+
+# Forked graphitesql with open_memory_with_page_size (adds a tunable page
+# size for in-memory databases on memory-constrained targets).
+graphitesql = { path = "../vendor/graphitesql" }

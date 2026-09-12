@@ -11,6 +11,9 @@ use cortex_m_rt::entry;
 
 mod embedded_runner;
 
+/// Stack reservation
+const STACK_GUARD: usize = 0x6c00;
+
 #[entry]
 fn main() -> ! {
     extern "C" {
@@ -19,7 +22,7 @@ fn main() -> ! {
     }
     let heap_start = unsafe { &__sheap as *const u8 as *mut u8 };
     let heap_size = unsafe { &_stack_start as *const u8 as usize }
-        .wrapping_sub(embedded_runner::STACK_GUARD)
+        .wrapping_sub(STACK_GUARD)
         - heap_start as usize;
     embedded_runner::init_heap(heap_start, heap_size);
 

@@ -93,7 +93,8 @@ impl LogRecord {
 
     /// Mutably borrow the structured field bag, allocating it on first write.
     pub fn fields_mut(&mut self) -> &mut ContextMap {
-        self.fields.get_or_insert_with(|| Box::new(ContextMap::new()))
+        self.fields
+            .get_or_insert_with(|| Box::new(ContextMap::new()))
     }
 
     /// Add a structured field and return `self` for chaining.

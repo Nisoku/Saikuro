@@ -31,7 +31,7 @@ enum Job {
 /// Where the worker should open its database.
 enum OpenTarget {
     Path(PathBuf),
-    Memory,
+    Memory { page_size: Option<u32> },
 }
 
 /// `Send + Sync` handle to the SQLite worker thread.
@@ -53,7 +53,13 @@ impl SqliteStorage {
 
     /// Open an in-memory SQLite database (useful for testing).
     pub fn temporary() -> Result<Self> {
-        Self::spawn(OpenTarget::Memory, StorageConfig::default())
+        let config = StorageConfig::default();
+        Self::spawn(
+            OpenTarget::Memory {
+                page_size: config.sqlite_page_size,
+            },
+            config,
+        )
     }
 
     fn spawn(target: OpenTarget, config: StorageConfig) -> Result<Self> {
@@ -72,7 +78,10 @@ impl SqliteStorage {
 fn run_worker(target: OpenTarget, rx: mpsc::Receiver<Job>) {
     let opened = match &target {
         OpenTarget::Path(p) => Connection::open(p.to_str().unwrap_or_default()),
-        OpenTarget::Memory => Connection::open_memory(),
+        OpenTarget::Memory { page_size } => match page_size {
+            Some(ps) => Connection::open_memory_with_page_size(*ps),
+            None => Connection::open_memory(),
+        },
     };
     let mut conn = match opened {
         Ok(c) => c,

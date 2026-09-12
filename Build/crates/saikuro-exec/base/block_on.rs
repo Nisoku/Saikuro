@@ -20,17 +20,15 @@ pub fn start_runner(spawner: embassy_executor::Spawner) {
 /// Ensure the task-runner singleton has been spawned. Called lazily.
 pub(crate) fn ensure_runner_started() {
     use core::sync::atomic::Ordering;
-    static RUNNER_STARTED: portable_atomic::AtomicBool =
-        portable_atomic::AtomicBool::new(false);
+    static RUNNER_STARTED: portable_atomic::AtomicBool = portable_atomic::AtomicBool::new(false);
     if !RUNNER_STARTED.swap(true, Ordering::SeqCst) {
         let ex = static_executor();
         // SAFETY: `ex` is the sole static executor alive for the program's
         // duration; the shared reborrow is only live until `start_runner`
         // returns, so it never overlaps with the mutable borrow aliasing
         // the same single instance.
-        let exec_shared: &'static ArchExecutor = unsafe {
-            core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex)
-        };
+        let exec_shared: &'static ArchExecutor =
+            unsafe { core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex) };
         start_runner(exec_shared.spawner());
     }
 }

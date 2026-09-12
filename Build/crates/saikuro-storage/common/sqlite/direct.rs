@@ -24,8 +24,17 @@ pub struct SqliteStorage {
 impl SqliteStorage {
     /// Open an in-memory SQLite database (wasm / no_std / embedded / testing).
     pub fn temporary() -> Result<Self> {
-        let conn = Connection::open_memory().map_err(map_err)?;
-        Self::from_conn(conn, StorageConfig::default())
+        Self::with_config(StorageConfig::default())
+    }
+
+    /// Open an in-memory SQLite database with a custom configuration.
+    pub fn with_config(config: StorageConfig) -> Result<Self> {
+        let conn = match config.sqlite_page_size {
+            Some(ps) => Connection::open_memory_with_page_size(ps),
+            None => Connection::open_memory(),
+        }
+        .map_err(map_err)?;
+        Self::from_conn(conn, config)
     }
 
     fn from_conn(mut conn: Connection, config: StorageConfig) -> Result<Self> {
