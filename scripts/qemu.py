@@ -2,7 +2,6 @@
 
 import argparse
 import shutil
-import subprocess
 import sys
 
 from shared.constants import QEMU_DIR
