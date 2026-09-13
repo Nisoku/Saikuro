@@ -4,10 +4,10 @@ title: "C++ Adapter"
 description: "Saikuro adapter for C++"
 source: "https://nisoku.org/Saikuro/docs/adapters/cpp/"
 path: /adapters/cpp/
-updated: 2026-07-21
+updated: 2026-09-13
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-21T10:55:59.273Z"
+  generated_at: "2026-09-13T04:06:47.687Z"
 ---
 ---
 title: "C++ Adapter"

@@ -4,10 +4,10 @@ title: Installation
 description: "Install Saikuro adapters and the runtime"
 source: "https://nisoku.org/Saikuro/docs/getting-started/installation/"
 path: /getting-started/installation/
-updated: 2026-07-21
+updated: 2026-09-13
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-07-21T10:55:59.282Z"
+  generated_at: "2026-09-13T04:06:47.697Z"
 ---
 ---
 title: "Installation"
