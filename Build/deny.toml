@@ -1,7 +1,6 @@
 # cargo-deny configuration for the Saikuro workspace.
-# (modified from an online example)
 #
-# Run:  cargo deny --manifest-path Build/Cargo.toml check
+# Run:  cargo deny check
 # Docs: https://embarkstudios.github.io/cargo-deny/
 
 [graph]

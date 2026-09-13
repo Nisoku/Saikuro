@@ -200,7 +200,11 @@ fn error_detail_with_context_accumulates() -> Result<(), &'static str> {
         .map_err(|_| "with_context")?;
     let s = alloc::format!("{}", detail);
     assert!(s.contains("initial"));
-    assert!(detail.details().expect("context present").get("key").is_some());
+    assert!(detail
+        .details()
+        .expect("context present")
+        .get("key")
+        .is_some());
     Ok(())
 }
 
@@ -217,7 +221,10 @@ fn error_code_mapping_function_not_found() -> Result<(), &'static str> {
 }
 
 fn error_code_mapping_invalid_arguments() -> Result<(), &'static str> {
-    let err = SaikuroError::InvalidArguments { target: "ns.fn".into(), reason: "bad arg".into() };
+    let err = SaikuroError::InvalidArguments {
+        target: "ns.fn".into(),
+        reason: "bad arg".into(),
+    };
     assert_eq!(err.error_code(), ErrorCode::InvalidArguments);
     Ok(())
 }
@@ -229,7 +236,7 @@ fn error_code_mapping_no_provider() -> Result<(), &'static str> {
 }
 
 fn error_code_mapping_provider_unavailable() -> Result<(), &'static str> {
-let err = SaikuroError::ProviderUnavailable("ns".into());
+    let err = SaikuroError::ProviderUnavailable("ns".into());
     assert_eq!(err.error_code(), ErrorCode::ProviderUnavailable);
     Ok(())
 }
@@ -241,13 +248,19 @@ fn error_code_mapping_timeout() -> Result<(), &'static str> {
 }
 
 fn error_code_mapping_capability_denied() -> Result<(), &'static str> {
-    let err = SaikuroError::CapabilityDenied { target: "ns.fn".into(), required: "cap".into() };
+    let err = SaikuroError::CapabilityDenied {
+        target: "ns.fn".into(),
+        required: "cap".into(),
+    };
     assert_eq!(err.error_code(), ErrorCode::CapabilityDenied);
     Ok(())
 }
 
 fn error_code_mapping_message_too_large() -> Result<(), &'static str> {
-    let err = SaikuroError::MessageTooLarge { size: 1024, limit: 512 };
+    let err = SaikuroError::MessageTooLarge {
+        size: 1024,
+        limit: 512,
+    };
     assert_eq!(err.error_code(), ErrorCode::MessageTooLarge);
     Ok(())
 }
@@ -289,7 +302,10 @@ fn error_code_mapping_connection_lost() -> Result<(), &'static str> {
 }
 
 fn error_code_mapping_incompatible_version() -> Result<(), &'static str> {
-let err = SaikuroError::IncompatibleVersion { expected: 1, received: 2 };
+    let err = SaikuroError::IncompatibleVersion {
+        expected: 1,
+        received: 2,
+    };
     assert_eq!(err.error_code(), ErrorCode::IncompatibleVersion);
     Ok(())
 }
@@ -351,7 +367,10 @@ fn error_response_survives_msgpack_roundtrip() -> Result<(), &'static str> {
     let err = decoded.error.as_ref().expect("error should be present");
     assert_eq!(err.code, ErrorCode::InvalidArguments);
     assert_eq!(err.message, "bad types");
-    assert_eq!(err.details().expect("context present")["arg"], Value::String("x".into()));
+    assert_eq!(
+        err.details().expect("context present")["arg"],
+        Value::String("x".into())
+    );
     Ok(())
 }
 

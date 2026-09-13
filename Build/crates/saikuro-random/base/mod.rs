@@ -10,7 +10,7 @@ pub struct WasiEntropy;
 #[cfg(feature = "no_std")]
 impl EntropySource for WasiEntropy {
     fn try_fill(&self, dest: &mut [u8]) -> Result<(), SaikuroError> {
-        getrandom::fill(dest).map_err(|e| SaikuroError::from(e))
+        getrandom::fill(dest).map_err(SaikuroError::from)
     }
 }
 

@@ -58,7 +58,11 @@ impl Console {
     /// Write all `bytes` to the console.
     #[cfg(target_arch = "riscv32")]
     pub fn write_all(bytes: &[u8]) {
-        let block = [STDOUT_GUESTFD.load(Ordering::Relaxed), bytes.as_ptr() as usize, bytes.len()];
+        let block = [
+            STDOUT_GUESTFD.load(Ordering::Relaxed),
+            bytes.as_ptr() as usize,
+            bytes.len(),
+        ];
         semihost(SYS_WRITE, block.as_ptr() as usize);
     }
 }

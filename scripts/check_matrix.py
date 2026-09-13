@@ -32,7 +32,7 @@ CARGO = shutil.which("cargo") or "/Users/neel/.cargo/bin/cargo"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if os.path.basename(ROOT) == "scripts":
     ROOT = os.path.dirname(ROOT)
-MANIFEST = os.path.join(ROOT, "Build", "Cargo.toml")
+MANIFEST = os.path.join(ROOT, "Cargo.toml")
 
 DEFAULT_CRATE = "saikuro-runtime"
 TIMEOUT = 600  # seconds per check

@@ -127,15 +127,9 @@ fn envelope_with_meta_roundtrip() -> Result<(), &'static str> {
 
 fn envelope_meta_canonical_order() -> Result<(), &'static str> {
     let mut env = Envelope::call("a.b", vec![]).map_err(|_| "create")?;
-    let _ = env
-        .meta_mut()
-        .insert("z".into(), Value::Int(1));
-    let _ = env
-        .meta_mut()
-        .insert("a".into(), Value::Int(2));
-    let _ = env
-        .meta_mut()
-        .insert("m".into(), Value::Int(3));
+    let _ = env.meta_mut().insert("z".into(), Value::Int(1));
+    let _ = env.meta_mut().insert("a".into(), Value::Int(2));
+    let _ = env.meta_mut().insert("m".into(), Value::Int(3));
     let bytes = env.to_msgpack().map_err(|_| "msgpack")?;
     let decoded = Envelope::from_msgpack(&bytes).map_err(|_| "decode")?;
     let keys: alloc::vec::Vec<&str> = decoded
