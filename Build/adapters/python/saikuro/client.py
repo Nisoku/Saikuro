@@ -7,7 +7,8 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Self
 
 from .envelope import (
     Envelope,
@@ -40,18 +41,18 @@ class SaikuroClient:
     def __init__(self, transport: BaseTransport) -> None:
         self._transport = transport
         # pending calls: invocation_id -> Future[ResponseEnvelope]
-        self._pending_calls: Dict[str, asyncio.Future[ResponseEnvelope]] = {}
+        self._pending_calls: dict[str, asyncio.Future[ResponseEnvelope]] = {}
         # open streams: invocation_id -> SaikuroStream
-        self._open_streams: Dict[str, SaikuroStream] = {}
+        self._open_streams: dict[str, SaikuroStream] = {}
         # open channels: invocation_id -> SaikuroChannel
-        self._open_channels: Dict[str, SaikuroChannel] = {}
-        self._receive_task: Optional[asyncio.Task] = None
+        self._open_channels: dict[str, SaikuroChannel] = {}
+        self._receive_task: asyncio.Task | None = None
         self._connected = False
 
     #  Construction
 
     @classmethod
-    async def connect(cls, address: str) -> "SaikuroClient":
+    async def connect(cls, address: str) -> SaikuroClient:
         """Connect to a Saikuro runtime at `address` and return a ready client.
 
         Prefer using this as an async context manager.
@@ -62,12 +63,12 @@ class SaikuroClient:
         return client
 
     @classmethod
-    def from_transport(cls, transport: BaseTransport) -> "SaikuroClient":
+    def from_transport(cls, transport: BaseTransport) -> SaikuroClient:
         """Construct a client from an already-instantiated transport without connecting."""
         return cls(transport)
 
     @classmethod
-    async def open_on(cls, transport: BaseTransport) -> "SaikuroClient":
+    async def open_on(cls, transport: BaseTransport) -> SaikuroClient:
         """Connect an already-instantiated transport and return a ready client."""
         client = cls(transport)
         await client._connect()
@@ -93,7 +94,7 @@ class SaikuroClient:
         await self._transport.close()
 
         # Fail any pending calls with a transport error.
-        for inv_id, fut in self._pending_calls.items():
+        for fut in self._pending_calls.values():
             if not fut.done():
                 fut.set_exception(
                     TransportError(
@@ -106,7 +107,7 @@ class SaikuroClient:
 
         logger.debug("saikuro client closed")
 
-    async def __aenter__(self) -> "SaikuroClient":
+    async def __aenter__(self) -> Self:
         await self._connect()
         return self
 
@@ -118,7 +119,7 @@ class SaikuroClient:
     async def _send_and_wait(
         self,
         envelope: Envelope,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> ResponseEnvelope:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[ResponseEnvelope] = loop.create_future()
@@ -136,7 +137,7 @@ class SaikuroClient:
     async def _send_and_check(
         self,
         envelope: Envelope,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         error_message: str = "no error details",
     ) -> ResponseEnvelope:
         response = await self._send_and_wait(envelope, timeout)
@@ -149,9 +150,9 @@ class SaikuroClient:
     async def call(
         self,
         target: str,
-        args: List[Any],
-        capability: Optional[str] = None,
-        timeout: Optional[float] = None,
+        args: list[Any],
+        capability: str | None = None,
+        timeout: float | None = None,
     ) -> Any:
         """Perform a request/response call and return the result.
 
@@ -166,8 +167,8 @@ class SaikuroClient:
     async def cast(
         self,
         target: str,
-        args: List[Any],
-        capability: Optional[str] = None,
+        args: list[Any],
+        capability: str | None = None,
     ) -> None:
         """Fire-and-forget invocation. No response is expected."""
         envelope = Envelope.make_cast(target, args, capability)
@@ -175,11 +176,9 @@ class SaikuroClient:
 
     async def batch(
         self,
-        calls: Sequence[
-            Union[Tuple[str, List[Any]], Tuple[str, List[Any], Optional[str]]]
-        ],
-        timeout: Optional[float] = None,
-    ) -> List[Any]:
+        calls: Sequence[tuple[str, list[Any]] | tuple[str, list[Any], str | None]],
+        timeout: float | None = None,
+    ) -> list[Any]:
         """Send multiple calls in a single batch envelope.
 
         Each element of `calls` may be a ``(target, args)`` 2-tuple or a
@@ -200,11 +199,11 @@ class SaikuroClient:
             ])
             # results == [3, 12]
         """
-        items: List[Envelope] = []
+        items: list[Envelope] = []
         for entry in calls:
             target = entry[0]
-            args_list: List[Any] = entry[1]
-            cap: Optional[str] = entry[2] if len(entry) > 2 else None  # type: ignore[misc]
+            args_list: list[Any] = entry[1]
+            cap: str | None = entry[2] if len(entry) > 2 else None  # type: ignore[misc]
             items.append(Envelope.make_call(target, args_list, cap))
 
         batch_envelope = Envelope.make_batch(items)
@@ -220,9 +219,9 @@ class SaikuroClient:
     async def resource(
         self,
         target: str,
-        args: List[Any],
-        capability: Optional[str] = None,
-        timeout: Optional[float] = None,
+        args: list[Any],
+        capability: str | None = None,
+        timeout: float | None = None,
     ) -> ResourceHandle:
         """Invoke a provider function that manages an external resource and
         return the resulting class:`~saikuro.envelope.ResourceHandle` .
@@ -233,7 +232,7 @@ class SaikuroClient:
 
         Raises:
             SaikuroError (or a specific subclass) if the invocation fails.
-            ValueError if the provider returns a result that is not a valid
+            TypeError if the provider returns a result that is not a valid
             :class:`~saikuro.envelope.ResourceHandle` map.
             asyncio.TimeoutError if ``timeout`` seconds elapse without a response.
 
@@ -246,7 +245,7 @@ class SaikuroClient:
         response = await self._send_and_check(envelope, timeout, "resource call failed")
 
         if not isinstance(response.result, dict):
-            raise ValueError(
+            raise TypeError(
                 f"resource invocation for {target!r} returned a non-dict result: "
                 f"{response.result!r}"
             )
@@ -256,8 +255,8 @@ class SaikuroClient:
     async def stream(
         self,
         target: str,
-        args: List[Any],
-        capability: Optional[str] = None,
+        args: list[Any],
+        capability: str | None = None,
     ) -> SaikuroStream:
         """Open a server-to-client stream and return an async iterator.
 
@@ -275,8 +274,8 @@ class SaikuroClient:
     async def channel(
         self,
         target: str,
-        args: List[Any],
-        capability: Optional[str] = None,
+        args: list[Any],
+        capability: str | None = None,
     ) -> SaikuroChannel:
         """Open a bidirectional channel and return a SaikuroChannel."""
         envelope = Envelope.make_channel_open(target, args)
@@ -293,13 +292,13 @@ class SaikuroClient:
         level: LogLevel,
         name: str,
         msg: str,
-        fields: Optional[Dict[str, Any]] = None,
+        fields: dict[str, Any] | None = None,
     ) -> None:
         """Forward a structured log record to the runtime log sink.
 
         Fire-and-forget; no response is expected.
         """
-        ts = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
         record = LogRecord(ts=ts, level=level, name=name, msg=msg, fields=fields or {})
         envelope = Envelope(
             version=1,
@@ -328,12 +327,10 @@ class SaikuroClient:
         while self._connected:
             try:
                 raw = await self._transport.recv()
-            except Exception as exc:
+            except Exception:
                 if self._connected:
-                    logger.error(
-                        "saikuro client: transport receive error, connection will be torn down: %s",
-                        exc,
-                        exc_info=True,
+                    logger.exception(
+                        "saikuro client: transport receive error, connection will be torn down"
                     )
                 break
 
@@ -343,12 +340,10 @@ class SaikuroClient:
 
             try:
                 response = ResponseEnvelope.from_msgpack_dict(raw)
-            except Exception as exc:
-                logger.error(
-                    "saikuro client: malformed response envelope, discarding: %s raw=%r",
-                    exc,
+            except Exception:
+                logger.exception(
+                    "saikuro client: malformed response envelope, discarding: raw=%r",
                     raw,
-                    exc_info=True,
                 )
                 continue
 

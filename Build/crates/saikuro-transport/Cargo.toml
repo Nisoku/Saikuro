@@ -1,6 +1,6 @@
 [package]
 name = "saikuro-transport"
-description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, and WebSocket backends"
+description = "Transport layer for Saikuro: in-memory, Unix socket, TCP, QUIC, WASI, and WebSocket backends"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,49 +8,80 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "transport", "async"]
 
-# Feature flags control which transport backends are compiled in.
-#
-#   native-transport:   Unix socket + TCP (requires std networking; disabled on wasm32)
-#   ws-transport:       WebSocket module (works on both native and wasm32)
-#   native-ws:          WebSocket + tokio-tungstenite on native (non-wasm32 only)
-#   wasm-host-transport: BroadcastChannel transport (wasm32 only)
-#
-# The in-memory transport is always compiled; it has zero OS dependencies.
-[features]
-default = ["native-transport"]
-native-transport = ["saikuro-exec/tokio-runtime"]
-ws-transport = []
-wasm-runtime = ["saikuro-exec/wasm-runtime"]
+[lib]
+path = "lib.rs"
 
-# native-ws is only available on non-wasm32 (where tokio-tungstenite exists)
-native-ws = ["ws-transport", "saikuro-exec/tokio-runtime", "tokio-tungstenite", "tungstenite"]
+[features]
+default = ["std", "native", "tcp", "ws"]
+std = []
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-net/native",
+    "saikuro-exec/native",
+    "saikuro-event/native",
+    "dep:tokio-tungstenite",
+]
+no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std", "saikuro-event/no_std"]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-net/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-event/wasm",
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:web-sys",
+    "dep:send_wrapper",
+    "dep:wasm-bindgen-futures",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-event/embedded",
+    "dep:embedded-io-async",
+    "dep:embassy-sync",
+]
+tcp = []
+tcp-net = ["dep:saikuro-net", "saikuro-net/embedded"]
+unix = []
+ws = ["ws-native"]
+ws-native = ["tokio-tungstenite?/connect", "tokio-tungstenite?/handshake"]
+quic = ["dep:s2n-quic"]
+ws-wasm = []
+ws-wasi = ["dep:embedded-websocket", "dep:rand_core_06", "dep:getrandom", "wasi-tcp", "ws"]
+wasm-host = ["wasm"]
+wasi-tcp = ["saikuro-exec/no_std", "dep:embedded-io-async"]
+wasi-host = ["no_std", "saikuro-exec/no_std", "wasi-tcp"]
+wasi-preview2 = ["dep:wasi"]
+wasi-preview1 = ["dep:wasip1"]
 
 [dependencies]
-saikuro-core = { workspace = true }
-
-serde       = { workspace = true }
-bytes       = { workspace = true }
-rmp-serde   = { workspace = true }
+saikuro-core = { path = "../saikuro-core", default-features = false }
+saikuro-net = { path = "../saikuro-net", default-features = false, optional = true }
+saikuro-exec = { path = "../saikuro-exec", default-features = false }
+saikuro-random = { path = "../saikuro-random", default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
+serde = { workspace = true }
+bytes = { workspace = true }
 async-trait = { workspace = true }
-futures     = { workspace = true }
+futures = { workspace = true, default-features = false, features = ["async-await", "alloc"] }
 pin-project-lite = { workspace = true }
-thiserror   = { workspace = true }
-tracing     = { workspace = true }
-saikuro-exec = { workspace = true, default-features = false }
+portable-atomic-util = { workspace = true }
+portable-atomic = { workspace = true }
+thiserror = { workspace = true }
+embedded-io-async = { workspace = true, optional = true }
+embassy-sync = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+s2n-quic = { workspace = true, optional = true }
+embedded-websocket = { workspace = true, optional = true }
+rand_core_06 = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
 
-# WebSocket support on native (tokio-tungstenite uses mio which doesn't compile on wasm32)
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"], optional = true }
-tungstenite       = { version = "0.30", optional = true }
-
-# WASM host transport + WASM WebSocket
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.4.2", features = ["wasm_js"] }
-send_wrapper = "0.6"
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [
+send_wrapper = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "BroadcastChannel",
     "Crypto",
     "MessageEvent",
@@ -61,5 +92,8 @@ web-sys = { version = "0.3", features = [
     "BinaryType",
 ] }
 
+wasi = { workspace = true, optional = true }
+wasip1 = { workspace = true, optional = true }
+
 [dev-dependencies]
-tracing-subscriber = { workspace = true }
+futures = { workspace = true, default-features = false, features = ["async-await", "alloc", "executor"] }

@@ -3,7 +3,9 @@ Tests for InMemoryTransport
 """
 
 import asyncio
+
 import pytest
+
 from saikuro.transport import InMemoryTransport
 
 
@@ -49,7 +51,7 @@ async def test_messages_delivered_in_order():
 
 @pytest.mark.asyncio
 async def test_recv_returns_none_after_close():
-    a, b = InMemoryTransport.pair()
+    _, b = InMemoryTransport.pair()
     await b.close()
     result = await b.recv()
     assert result is None
@@ -57,7 +59,7 @@ async def test_recv_returns_none_after_close():
 
 @pytest.mark.asyncio
 async def test_close_unblocks_recv():
-    a, b = InMemoryTransport.pair()
+    _, b = InMemoryTransport.pair()
     recv_task = asyncio.create_task(b.recv())
     await asyncio.sleep(0)  # let task start waiting
     await b.close()
@@ -67,7 +69,7 @@ async def test_close_unblocks_recv():
 
 @pytest.mark.asyncio
 async def test_send_after_close_raises():
-    a, b = InMemoryTransport.pair()
+    a, _ = InMemoryTransport.pair()
     await a.close()
     with pytest.raises(RuntimeError, match="closed"):
         await a.send({"x": 1})
@@ -82,7 +84,7 @@ async def test_close_is_idempotent():
 
 @pytest.mark.asyncio
 async def test_recv_on_closed_returns_none_immediately():
-    a, b = InMemoryTransport.pair()
+    a, _ = InMemoryTransport.pair()
     await a.close()
     result = await a.recv()
     assert result is None
@@ -90,7 +92,7 @@ async def test_recv_on_closed_returns_none_immediately():
 
 @pytest.mark.asyncio
 async def test_context_manager_connects_and_closes():
-    a, b = InMemoryTransport.pair()
+    a, _ = InMemoryTransport.pair()
     async with a:
         await a.send({"ping": True})
     # After exiting the context, a should be closed.

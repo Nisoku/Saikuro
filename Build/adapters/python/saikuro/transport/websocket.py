@@ -5,14 +5,12 @@ WebSocket transport.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import msgpack
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from saikuro.transport.base import BaseTransport
 from saikuro.transport.framing import _MAX_FRAME_SIZE, _check_frame_size
-
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +35,10 @@ class WebSocketTransport(BaseTransport):
         uri: str,
         *,
         max_size: int = _MAX_FRAME_SIZE,
-        extra_headers: "dict[str, str] | None" = None,
+        extra_headers: dict[str, str] | None = None,
         open_timeout: float = 10.0,
-        ping_interval: "float | None" = 20.0,
-        ping_timeout: "float | None" = 20.0,
+        ping_interval: float | None = 20.0,
+        ping_timeout: float | None = 20.0,
     ) -> None:
         self._uri = uri
         self._max_size = max_size
@@ -99,7 +97,7 @@ class WebSocketTransport(BaseTransport):
         except Exception as exc:
             raise RuntimeError(f"WebSocketTransport: send failed: {exc}") from exc
 
-    async def recv(self) -> Optional[dict]:
+    async def recv(self) -> dict | None:
         if self._closed or self._ws is None:
             return None
         try:
@@ -108,7 +106,7 @@ class WebSocketTransport(BaseTransport):
             logger.debug("WebSocketTransport: connection closed by peer")
             self._closed = True
             return None
-        except Exception as exc:
+        except (OSError, WebSocketException) as exc:
             logger.warning("WebSocketTransport: recv error: %s", exc)
             self._closed = True
             return None
@@ -121,7 +119,7 @@ class WebSocketTransport(BaseTransport):
             return None
         try:
             return msgpack.unpackb(bytes(message), raw=False)
-        except Exception as exc:
+        except (ValueError, TypeError, msgpack.exceptions.UnpackException) as exc:
             logger.warning(
                 "WebSocketTransport: failed to decode MessagePack frame: %s", exc
             )

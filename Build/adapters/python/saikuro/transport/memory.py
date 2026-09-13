@@ -5,7 +5,6 @@ In-memory transport (for testing).
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 from saikuro.transport.base import BaseTransport
 
@@ -27,15 +26,15 @@ class InMemoryTransport(BaseTransport):
 
     def __init__(
         self,
-        send_queue: "asyncio.Queue[object]",
-        recv_queue: "asyncio.Queue[object]",
+        send_queue: asyncio.Queue[object],
+        recv_queue: asyncio.Queue[object],
     ) -> None:
         self._send_queue = send_queue
         self._recv_queue = recv_queue
         self._closed = False
 
     @classmethod
-    def pair(cls) -> "tuple[InMemoryTransport, InMemoryTransport]":
+    def pair(cls) -> tuple[InMemoryTransport, InMemoryTransport]:
         q_a: asyncio.Queue[object] = asyncio.Queue()
         q_b: asyncio.Queue[object] = asyncio.Queue()
         return cls(q_a, q_b), cls(q_b, q_a)
@@ -58,7 +57,7 @@ class InMemoryTransport(BaseTransport):
             raise RuntimeError("InMemoryTransport: transport is closed")
         await self._send_queue.put(obj)
 
-    async def recv(self) -> Optional[dict]:
+    async def recv(self) -> dict | None:
         if self._closed:
             return None
         item = await self._recv_queue.get()

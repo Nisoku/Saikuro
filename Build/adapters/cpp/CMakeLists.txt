@@ -46,7 +46,7 @@ target_link_libraries(saikuro_cpp_wrapper_behavior_test PRIVATE saikuro_cpp_adap
 add_executable(saikuro_cpp_schema_extractor_test tests/schema_extractor_cli.cpp)
 target_link_libraries(saikuro_cpp_schema_extractor_test PRIVATE saikuro_cpp_schema_extractor)
 target_compile_definitions(saikuro_cpp_schema_extractor_test PRIVATE
-    SAIKURO_SCHEMA_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/schema_service.h"
+    SAIKURO_SCHEMA_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/../../../Tests/adapters/c/fixtures/schema_service.h"
 )
 
 add_test(NAME saikuro_cpp_header_compile_test COMMAND saikuro_cpp_header_compile_test)
@@ -55,11 +55,11 @@ add_test(NAME saikuro_cpp_schema_extractor_test COMMAND saikuro_cpp_schema_extra
 
 add_test(
     NAME saikuro_cpp_schema_cli_success_test
-    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/schema_service.h
+    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../../../Tests/adapters/c/fixtures/schema_service.h
 )
 
 add_test(
     NAME saikuro_cpp_schema_cli_missing_file_test
-    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../c/tests/fixtures/does_not_exist.h
+    COMMAND $<TARGET_FILE:saikuro_cpp_schema_cli> --namespace parityns ${CMAKE_CURRENT_SOURCE_DIR}/../../../Tests/adapters/c/fixtures/does_not_exist.h
 )
 set_tests_properties(saikuro_cpp_schema_cli_missing_file_test PROPERTIES WILL_FAIL TRUE)

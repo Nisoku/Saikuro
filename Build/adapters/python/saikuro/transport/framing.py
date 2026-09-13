@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import struct
-from typing import Optional
-
 
 _LENGTH_HEADER = struct.Struct(">I")  # big-endian uint32
 _MAX_FRAME_SIZE = 16 * 1024 * 1024  # 16 MiB, which matches the Rust framing codec
@@ -27,7 +25,7 @@ async def _send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
     await writer.drain()
 
 
-async def _recv_frame(reader: asyncio.StreamReader) -> Optional[bytes]:
+async def _recv_frame(reader: asyncio.StreamReader) -> bytes | None:
     """Read one length-prefixed frame.
 
     Returns ``None`` on clean EOF (peer closed the connection).

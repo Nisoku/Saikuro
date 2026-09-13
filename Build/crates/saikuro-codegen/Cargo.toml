@@ -8,23 +8,41 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "codegen", "bindings"]
 
+[lib]
+path = "lib.rs"
+
 [[bin]]
 name = "saikuro-codegen"
-path = "src/cli/saikuro-codegen.rs"
+path = "cli/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "saikuro-rust-schema"
+path = "cli/rust_schema.rs"
 required-features = ["cli"]
 
 [features]
-cli = ["dep:clap"]
+default = ["cli"]
+cli = [
+    "dep:clap",
+    "dep:anyhow",
+    "dep:serde_json",
+    "dep:syn",
+    "saikuro-core/native",
+    "saikuro-schema/native",
+]
 
 [dependencies]
-saikuro-core   = { workspace = true }
+saikuro-core = { workspace = true, default-features = false }
 saikuro-schema = { workspace = true }
 
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
-anyhow      = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true, optional = true, default-features = false, features = [
+    "alloc",
+] }
+anyhow = { workspace = true, optional = true }
 
-clap = { version = "4.5", features = ["derive", "env"], optional = true }
+clap = { workspace = true, optional = true }
+syn = { version = "2.0", features = ["full"], optional = true }
 
 [dev-dependencies]

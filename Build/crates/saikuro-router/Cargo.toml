@@ -8,20 +8,54 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "router", "rpc"]
 
-[dependencies]
-saikuro-core   = { workspace = true }
-saikuro-schema = { workspace = true }
+[lib]
+path = "lib.rs"
 
-serde       = { workspace = true }
-bytes       = { workspace = true }
-rmp-serde   = { workspace = true }
+[features]
+default = ["std", "native"]
+std = []
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-exec/native",
+    "saikuro-schema/native",
+    "saikuro-event/native",
+    "saikuro-event/tracing",
+]
+no_std = [
+    "saikuro-core/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-event/no_std",
+    "saikuro-event/null",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-schema/wasm",
+    "saikuro-event/wasm",
+    "saikuro-event/console",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-schema/embedded",
+    "saikuro-event/embedded",
+    "saikuro-event/null",
+]
+
+[dependencies]
+saikuro-core   = { path = "../saikuro-core", default-features = false }
+saikuro-schema = { workspace = true, default-features = false }
+saikuro-exec   = { workspace = true, default-features = false }
+saikuro-event  = { workspace = true, default-features = false }
+
+bytes = { workspace = true }
 async-trait = { workspace = true }
-futures     = { workspace = true }
 thiserror   = { workspace = true }
-tracing     = { workspace = true }
-dashmap     = { workspace = true }
-saikuro-exec = { workspace = true, default-features = false }
-uuid        = { workspace = true }
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
 
 [dev-dependencies]
+saikuro-exec = { workspace = true }
 tracing-subscriber = { workspace = true }

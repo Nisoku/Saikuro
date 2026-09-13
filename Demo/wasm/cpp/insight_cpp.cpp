@@ -10,10 +10,14 @@ extern "C"
     extern void free(void *p);
     extern unsigned long strlen(const char *s);
     extern void *memcpy(void *dst, const void *src, unsigned long n);
-    static inline int strncmp(const char *a, const char *b, unsigned long n) {
-        for (unsigned long i = 0; i < n; i++) {
-            if (a[i] != b[i]) return (unsigned char)a[i] - (unsigned char)b[i];
-            if (a[i] == '\0') return 0;
+    static inline int strncmp(const char *a, const char *b, unsigned long n)
+    {
+        for (unsigned long i = 0; i < n; i++)
+        {
+            if (a[i] != b[i])
+                return (unsigned char)a[i] - (unsigned char)b[i];
+            if (a[i] == '\0')
+                return 0;
         }
         return 0;
     }
@@ -176,7 +180,8 @@ extern "C" int compute_ngrams(const char *text, int top_n,
         char key[64];
         join_words(tokens[i], tokens[i + 1], key, 64);
         KV *slot = find_slot(bigrams, 256, key);
-        if (slot) {
+        if (slot)
+        {
             if (slot->count == 0)
                 memcpy(slot->key, key, 64);
             slot->count++;
@@ -197,7 +202,8 @@ extern "C" int compute_ngrams(const char *text, int top_n,
         key[pos] = '\0';
 
         KV *slot = find_slot(trigrams, 256, key);
-        if (slot) {
+        if (slot)
+        {
             if (slot->count == 0)
                 memcpy(slot->key, key, 64);
             slot->count++;
@@ -311,6 +317,12 @@ static char *handle_ngrams(void *user_data, const char *args_json)
 
 extern "C"
 {
+    static void saikuro_cpp_serve_status(int status, void *user_data)
+    {
+        (void)status;
+        (void)user_data;
+    }
+
     __attribute__((used, visibility("default"))) void saikuro_cpp_start_provider(const char *channel)
     {
         char address[256];
@@ -327,6 +339,6 @@ extern "C"
 
         saikuro_provider_t provider = saikuro_provider_new("cpp");
         saikuro_provider_register_with_schema(provider, "ngrams", handle_ngrams, NULL, 2, "Any");
-        saikuro_provider_serve(provider, address);
+        saikuro_provider_serve_async(provider, address, saikuro_cpp_serve_status, NULL);
     }
 }

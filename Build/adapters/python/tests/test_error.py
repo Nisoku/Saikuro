@@ -3,21 +3,21 @@ Tests for the SaikuroError class hierarchy
 """
 
 from saikuro.error import (
-    SaikuroError,
+    BufferOverflowError,
+    CapabilityDeniedError,
+    ChannelClosedError,
     FunctionNotFoundError,
     InvalidArgumentsError,
-    CapabilityDeniedError,
-    TransportError,
-    TimeoutError,
-    NoProviderError,
-    ProviderUnavailableError,
-    ProviderError,
     MalformedEnvelopeError,
     MessageTooLargeError,
-    BufferOverflowError,
-    StreamClosedError,
-    ChannelClosedError,
+    NoProviderError,
     OutOfOrderError,
+    ProviderError,
+    ProviderUnavailableError,
+    SaikuroError,
+    StreamClosedError,
+    TimeoutError,
+    TransportError,
 )
 
 

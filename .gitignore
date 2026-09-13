@@ -37,20 +37,37 @@ cache/
 # Hook markers
 .dirty
 
+# Node
 node_modules/
 dist/
-bin/
-obj/
+site/
+Demo/public/wasm/*
+Demo/src/wasm/*
+
+# C# 
+Build/adapters/csharp/Saikuro/src/bin
+Build/adapters/csharp/Saikuro/src/obj/
+
+Build/adapters/csharp/tools/extractor/bin
+Build/adapters/csharp/tools/extractor/obj
+
+Build/adapters/csharp/Saikuro/tests/obj
+Build/adapters/csharp/Saikuro/tests/bin
+
+Demo/wasm/csharp/InsightLab/bin
+Demo/wasm/csharp/InsightLab/obj
+
+# Python
 .pytest_cache/
 __pycache__/
 .ruff_cache/
-site/
-Build/adapters/cpp/build/
 .venv/
+
+# C++
+Build/adapters/cpp/build/
+build_cpp/
+
+# Other
 # TODO: setup proper .vscode so we can keep this
 .vscode/ 
 .DS_Store
-build_cpp/
-
-Demo/public/wasm/*
-Demo/src/wasm/*

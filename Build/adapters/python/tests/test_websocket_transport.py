@@ -4,37 +4,33 @@ Tests for WebSocketTransport
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import msgpack
 import pytest
-from websockets.asyncio.server import serve as ws_serve
 from websockets.asyncio.server import ServerConnection
+from websockets.asyncio.server import serve as ws_serve
 
 from saikuro.transport import WebSocketTransport, make_transport
-
 
 #  Test server helpers
 
 
 async def _echo_handler(ws: ServerConnection) -> None:
     """Echo each binary message straight back."""
-    try:
+    with contextlib.suppress(Exception):
         async for message in ws:
             if isinstance(message, (bytes, bytearray)):
                 await ws.send(bytes(message))
-    except Exception:
-        pass
 
 
 async def _close_on_receive_handler(ws: ServerConnection) -> None:
     """Close the connection after receiving the first message."""
-    try:
+    with contextlib.suppress(Exception):
         async for _message in ws:
             await ws.close()
             return
-    except Exception:
-        pass
 
 
 async def _send_text_handler(ws: ServerConnection) -> None:

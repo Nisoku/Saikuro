@@ -8,44 +8,131 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "runtime", "async"]
 
+[lib]
+path = "lib.rs"
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "saikuro-runtime"
-path = "src/main.rs"
-required-features = ["native-transport"]
+path = "main.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "saikuro-runtime-embedded"
+path = "bin/embedded.rs"
+required-features = ["embedded", "tcp", "net"]
+
+[[bin]]
+name = "saikuro-runtime-wasi"
+path = "bin/wasi.rs"
+required-features = ["no_std"]
 
 [features]
-default = ["native-transport"]
-native-transport = ["saikuro-transport/native-transport", "saikuro-exec/tokio-runtime"]
-ws-transport = ["saikuro-transport/ws-transport", "dep:tokio-tungstenite", "dep:tungstenite"]
-wasm-runtime = ["saikuro-exec/wasm-runtime"]
+default = ["std", "native", "tcp", "unix", "default-panic-handler"]
+
+# Provide a default #[panic_handler] for bare-metal and WASI targets.
+# Disable this when your application supplies its own panic handler.
+default-panic-handler = []
+
+# Engine axes (exactly one of native / no_std / wasm / embedded; std is orthogonal).
+std = []
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-schema/native",
+    "saikuro-transport/native",
+    "saikuro-router/native",
+    "saikuro-exec/native",
+    "saikuro-random/native",
+    "saikuro-event/native",
+    "saikuro-event/stderr",
+    "saikuro-event/tracing",
+    "dep:anyhow",
+    "dep:clap",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+]
+no_std = [
+    "saikuro-core/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-transport/no_std",
+    "saikuro-router/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-random/no_std",
+    "saikuro-event/no_std",
+    "saikuro-event/null",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-schema/wasm",
+    "saikuro-transport/wasm",
+    "saikuro-router/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-random/wasm",
+    "saikuro-event/wasm",
+    "saikuro-event/console",
+    "wasm-host",
+    "dep:wasm-bindgen",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-schema/embedded",
+    "saikuro-transport/embedded",
+    "saikuro-router/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-random/embedded",
+    "saikuro-event/embedded",
+    "saikuro-event/null",
+]
+
+# Transport capability features (orthogonal to engine).
+tcp = ["saikuro-transport/tcp"]
+unix = ["saikuro-transport/unix"]
+ws = ["saikuro-transport/ws"]
+ws-wasi = ["saikuro-transport/ws-wasi"]
+wasm-host = ["saikuro-transport/wasm-host"]
+wasi-tcp = ["saikuro-transport/wasi-tcp"]
+wasi-host = ["saikuro-transport/wasi-host"]
+
+# Board-support networking (embassy-net TCP/UDP stack + executor).
+net = ["dep:saikuro-net", "dep:embassy-executor"]
+
+# WASI preview selection (no_std engine only).
+wasi-preview1 = ["saikuro-transport/wasi-preview1"]
+wasi-preview2 = ["saikuro-transport/wasi-preview2", "dep:wasi"]
 
 [dependencies]
-saikuro-core      = { workspace = true }
-saikuro-schema    = { workspace = true }
-saikuro-transport = { workspace = true }
-saikuro-router    = { workspace = true }
-saikuro-exec      = { workspace = true, default-features = false }
+saikuro-core = { path = "../saikuro-core", default-features = false }
+saikuro-schema = { path = "../saikuro-schema", default-features = false }
+saikuro-transport = { path = "../saikuro-transport", default-features = false }
+saikuro-router = { path = "../saikuro-router", default-features = false }
+saikuro-exec = { path = "../saikuro-exec", default-features = false }
+saikuro-random = { path = "../saikuro-random", default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
 
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-rmp-serde   = { workspace = true }
-bytes       = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["alloc"] }
+bytes = { workspace = true }
 async-trait = { workspace = true }
-futures     = { workspace = true }
-thiserror   = { workspace = true }
-tracing     = { workspace = true }
-tracing-subscriber = { workspace = true }
-dashmap     = { workspace = true }
-parking_lot = { workspace = true }
-uuid        = { workspace = true }
-serde_with  = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true, default-features = false, features = [
+    "log",
+    "attributes",
+], optional = true }
+spin = { workspace = true }
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }
+critical-section = { workspace = true }
 
-# CLI and error handling for binary
-anyhow      = { workspace = true }
-clap        = { version = "4.5", features = ["derive", "env"] }
+wasi = { workspace = true, optional = true }
+embassy-executor = { workspace = true, optional = true }
+saikuro-net = { path = "../saikuro-net", default-features = false, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+talc = { workspace = true }
 
-# WebSocket server-side (optional, depends on ws-transport feature)
-tokio-tungstenite = { version = "0.24", optional = true }
-tungstenite       = { version = "0.30", optional = true }
+anyhow = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
 
-[dev-dependencies]
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(saikuro_test_capacity, values("small", "rpx-class", "m33-class"))'] }

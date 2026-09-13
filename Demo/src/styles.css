@@ -1221,9 +1221,7 @@ input {
   }
 }
 
-/* ==========================================================================
-   Views (tab switching)
-   ========================================================================== */
+/* Views (tab switching) */
 .view {
   display: none;
 }
@@ -1251,9 +1249,7 @@ input {
   margin-top: 4px;
 }
 
-/* ==========================================================================
-   Provider Grid (Pipeline view)
-   ========================================================================== */
+/* Provider Grid (Pipeline view) */
 .provider-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1340,17 +1336,13 @@ input {
   margin-top: auto;
 }
 
-/* ==========================================================================
-   TS Language Badge
-   ========================================================================== */
+/* TS Language Badge */
 .lang-badge--ts {
   background: #e8f5fe;
   color: #1a73e8;
 }
 
-/* ==========================================================================
-   Tag Cloud (large variant for N-Grams view)
-   ========================================================================== */
+/* Tag Cloud (large variant for N-Grams view) */
 .tag-cloud--large {
   display: flex;
   flex-wrap: wrap;
@@ -1363,9 +1355,7 @@ input {
   line-height: 20px;
 }
 
-/* ==========================================================================
-   Log Viewer (Logs view)
-   ========================================================================== */
+/* Log Viewer (Logs view) */
 .log-viewer {
   background: var(--inverse-surface);
   color: #d4d4d4;
@@ -1444,9 +1434,7 @@ input {
   word-break: break-word;
 }
 
-/* ==========================================================================
-   Settings Row
-   ========================================================================== */
+/* Settings Row */
 .setting-row {
   display: flex;
   justify-content: space-between;
@@ -1473,9 +1461,7 @@ input {
   color: var(--on-surface);
 }
 
-/* ==========================================================================
-   Provider status pill variants
-   ========================================================================== */
+/* Provider status pill variants */
 .status-pill--running {
   background: var(--accent-soft-blue);
   border: 1px solid color-mix(in srgb, var(--secondary) 20%, transparent);

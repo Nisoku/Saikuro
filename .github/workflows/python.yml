@@ -5,13 +5,13 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/python/**"
-      - "Build/scripts/python.py"
+      - "scripts/python.py"
       - "Justfile"
       - ".github/workflows/python.yml"
   pull_request:
     paths:
       - "Build/adapters/python/**"
-      - "Build/scripts/python.py"
+      - "scripts/python.py"
       - "Justfile"
       - ".github/workflows/python.yml"
 
@@ -31,6 +31,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: taiki-e/install-action@just
       - uses: astral-sh/setup-uv@v4
         with:

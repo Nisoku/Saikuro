@@ -1,0 +1,34 @@
+[package]
+name = "saikuro-net"
+description = "Networking and IO facade for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["std", "native"]
+std = []
+native = ["std", "dep:tokio", "tokio/full"]
+no_std = []
+embedded = [
+    "dep:embassy-net",
+    "embassy-net/medium-ip",
+    "embassy-net/proto-ipv4",
+    "embassy-net/tcp",
+    "embassy-net/udp",
+    "dep:embedded-io-async",
+]
+wasm = []
+embassy-test = ["embedded", "embassy-time/std", "embassy-time/generic-queue-32"]
+
+[dependencies]
+tokio = { workspace = true, optional = true }
+embassy-net = { workspace = true, optional = true }
+embedded-io-async = { workspace = true, optional = true }
+embassy-time = { workspace = true, optional = true }
+futures = { workspace = true }

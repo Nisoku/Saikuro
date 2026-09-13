@@ -1,5 +1,5 @@
 import json
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 from saikuro import schema as s
 
@@ -15,7 +15,7 @@ async def gen_numbers(count: int) -> AsyncIterator[int]:
         yield i
 
 
-def maybe(msg: Optional[str] = None) -> Optional[str]:
+def maybe(msg: str | None = None) -> str | None:
     return msg
 
 
@@ -26,8 +26,8 @@ sb.add_function("maybe", maybe, [], "Optional return example")
 
 def sum_values(m: dict[str, int]) -> int:
     s = 0
-    for k in m:
-        s += m[k]
+    for v in m.values():
+        s += v
     return s
 
 

@@ -1,0 +1,54 @@
+#![cfg(feature = "no_std")]
+#![no_std]
+#![no_main]
+
+#[macro_use]
+extern crate alloc;
+
+use saikuro_core::Arc;
+
+use saikuro_exec::watch;
+use saikuro_runtime::transport_adapter::{HostPipeListener, LocalRuntimeListener};
+use saikuro_runtime::SaikuroRuntime;
+use saikuro_transport::wasi::host::WasiPipe;
+use saikuro_transport::wasi::tcp::WasiTcpListener;
+
+/// WASI command entry point. Returns a process exit code.
+#[no_mangle]
+pub extern "C" fn _start() -> i32 {
+    #[cfg(all(not(feature = "std"), not(feature = "embedded")))]
+    saikuro_runtime::init_heap();
+
+    let builder = SaikuroRuntime::builder();
+    let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+    let pipe = HostPipeListener::<WasiPipe>::new("saikuro");
+
+    saikuro_exec::block_on(async move {
+        let tcp = match WasiTcpListener::new("0.0.0.0:7700") {
+            Ok(listener) => LocalRuntimeListener::new(listener),
+            Err(_) => return,
+        };
+
+        let runtime = Arc::new(builder.build().await);
+        let mut rx1 = shutdown_rx.clone();
+        let mut rx2 = shutdown_rx.clone();
+
+        let tcp_task = {
+            let rt = runtime.clone();
+            saikuro_exec::spawn(async move {
+                rt.serve(vec![tcp], rx1).await;
+            })
+        };
+        let pipe_task = {
+            let rt = runtime.clone();
+            saikuro_exec::spawn(async move {
+                rt.serve(vec![pipe], rx2).await;
+            })
+        };
+
+        let _ = tcp_task.await;
+        let _ = pipe_task.await;
+    });
+
+    0
+}

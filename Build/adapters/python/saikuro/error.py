@@ -8,7 +8,7 @@ messages.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class SaikuroError(Exception):
@@ -18,15 +18,15 @@ class SaikuroError(Exception):
         self,
         code: str,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(f"[{code}] {message}")
         self.code = code
         self.message = message
-        self.details: Dict[str, Any] = details or {}
+        self.details: dict[str, Any] = details or {}
 
     @classmethod
-    def from_error_dict(cls, error_dict: Dict[str, Any]) -> "SaikuroError":
+    def from_error_dict(cls, error_dict: dict[str, Any]) -> SaikuroError:
         """Construct the most specific subclass for a wire error payload."""
         code = error_dict.get("code", "Internal")
         message = error_dict.get("message", "unknown error")

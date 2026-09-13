@@ -3,6 +3,7 @@ name: "Automatic Dependency Submission"
 on:
   push:
     branches: [ "main" ]
+  pull_request:
 
 permissions:
   contents: write

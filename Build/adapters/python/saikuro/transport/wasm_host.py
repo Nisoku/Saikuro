@@ -1,9 +1,9 @@
 """WASM host transport using BroadcastChannel via Pyodide's js module."""
 
 import asyncio
+import contextlib
 import secrets
 import time
-from typing import Optional
 
 import msgpack
 
@@ -46,12 +46,10 @@ class WasmHostTransport(BaseTransport):
         accept_event = asyncio.Event()
 
         def _on_accept(event):
-            try:
+            with contextlib.suppress(Exception):
                 d = event.data
                 if d.type == "accept" and d.id == conn_id:
                     accept_event.set()
-            except Exception:
-                pass
 
         from pyodide.ffi import create_proxy
 
@@ -69,7 +67,7 @@ class WasmHostTransport(BaseTransport):
 
         try:
             await asyncio.wait_for(accept_event.wait(), timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             private_channel.close()
             accept_proxy.destroy()
             raise RuntimeError("WasmHostTransport: connect timeout")
@@ -84,11 +82,9 @@ class WasmHostTransport(BaseTransport):
         data = _get_data(event)
         if data is None:
             return
-        try:
+        with contextlib.suppress(Exception):
             decoded = msgpack.unpackb(data)
             self._queue.put_nowait(decoded)
-        except Exception:
-            pass
 
     async def send(self, obj: dict) -> None:
         if self._bc is None:
@@ -98,7 +94,7 @@ class WasmHostTransport(BaseTransport):
         data = Uint8Array.new(msgpack.packb(obj))
         self._bc.postMessage(data)
 
-    async def recv(self) -> Optional[dict]:
+    async def recv(self) -> dict | None:
         if self._closed:
             return None
         item = await self._queue.get()
@@ -113,11 +109,9 @@ class WasmHostTransport(BaseTransport):
             await self._queue.put(None)
         if self._bc is not None:
             if self._handler is not None:
-                try:
+                with contextlib.suppress(Exception):
                     self._bc.removeEventListener("message", self._handler)
                     self._handler.destroy()
-                except Exception:
-                    pass
                 self._handler = None
             self._bc.close()
             self._bc = None

@@ -6,44 +6,89 @@ authors = ["NellowTCS"]
 license = "Apache-2.0"
 repository = "https://github.com/Nisoku/Saikuro"
 description = "Rust adapter for the Saikuro runtime"
-rust-version = "1.75"
+rust-version = "1.82"
 keywords = ["ipc", "cross-language", "rpc", "msgpack", "saikuro"]
 categories = ["network-programming", "asynchronous"]
 
-[[bin]]
-name = "saikuro-rust-schema"
-path = "src/cli/saikuro_rust_schema.rs"
-
 [features]
-default = ["tcp", "unix", "ws", "storage", "saikuro-exec/tokio-runtime"]
-tcp  = ["saikuro-transport/native-transport"]
-unix = ["saikuro-transport/native-transport"]
-ws   = ["saikuro-transport/native-ws"]
-wasm = ["saikuro-transport/wasm-runtime", "saikuro-transport/ws-transport"]
-
-# Storage backends: platform-agnostic factory in storage module
-storage         = ["saikuro-storage/native-storage"]
-storage-fs      = ["saikuro-storage/fs-storage"]
-storage-sled    = ["saikuro-storage/sled-storage"]
-storage-sqlite  = ["saikuro-storage/sqlite-storage"]
-wasm-storage    = ["saikuro-storage/wasm-storage"]
+default = ["std", "native", "tcp", "unix", "ws", "storage", "inmemory"]
+std = ["saikuro-runtime/std"]
+native = [
+    "std",
+    "saikuro-client/native",
+    "saikuro-core/native",
+    "saikuro-event/native",
+    "saikuro-exec/native",
+    "saikuro-net/native",
+    "saikuro-random/native",
+    "saikuro-router/native",
+    "saikuro-runtime/native",
+    "saikuro-schema/native",
+    "saikuro-transport/native",
+    "storage",
+]
+wasm = [
+    "saikuro-client/wasm",
+    "saikuro-core/wasm",
+    "saikuro-event/wasm",
+    "saikuro-exec/wasm",
+    "saikuro-net/wasm",
+    "saikuro-random/wasm",
+    "saikuro-router/wasm",
+    "saikuro-runtime/wasm",
+    "saikuro-schema/wasm",
+    "saikuro-transport/wasm",
+]
+embedded = [
+    "saikuro-client/embedded",
+    "saikuro-core/embedded",
+    "saikuro-event/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-net/embedded",
+    "saikuro-random/embedded",
+    "saikuro-router/embedded",
+    "saikuro-runtime/embedded",
+    "saikuro-schema/embedded",
+    "saikuro-transport/embedded",
+]
+no_std = [
+    "saikuro-client/no_std",
+    "saikuro-core/no_std",
+    "saikuro-event/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-net/no_std",
+    "saikuro-random/no_std",
+    "saikuro-router/no_std",
+    "saikuro-runtime/no_std",
+    "saikuro-schema/no_std",
+    "saikuro-transport/no_std",
+]
+tcp = ["saikuro-client/tcp"]
+unix = ["saikuro-client/unix"]
+ws = ["saikuro-client/ws"]
+ws-wasi = ["saikuro-client/ws-wasi"]
+wasi-tcp = ["saikuro-client/wasi-tcp"]
+wasi-host = ["saikuro-client/wasi-host"]
+wasi-preview1 = ["saikuro-client/wasi-preview1", "saikuro-runtime/wasi-preview1"]
+wasi-preview2 = ["saikuro-client/wasi-preview2"]
+default-panic-handler = ["saikuro-runtime/default-panic-handler"]
+storage = ["saikuro-storage"]
+inmemory = ["saikuro-storage/inmemory"]
+storage-fs = ["saikuro-storage/fs"]
+storage-sled = ["saikuro-storage/sled"]
+storage-sqlite = ["saikuro-storage/sqlite-native"]
+wasm-storage = ["saikuro-storage/wasm"]
+net = ["saikuro-net"]
 
 [dependencies]
-saikuro-core      = { path = "../../crates/saikuro-core" }
-saikuro-storage   = { path = "../../crates/saikuro-storage", default-features = false }
-saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
-
-anyhow      = { workspace = true }
-serde       = { version = "1.0", features = ["derive"] }
-serde_json  = "1.0.150"
-rmp-serde   = "1.3"
-bytes       = "1.7"
+saikuro-client = { path = "../../crates/saikuro-client", default-features = false }
+saikuro-core = { path = "../../crates/saikuro-core", default-features = false }
+saikuro-event = { path = "../../crates/saikuro-event", default-features = false }
 saikuro-exec = { workspace = true, default-features = false }
-futures     = "0.3"
-async-trait = "0.1"
-tracing     = "0.1"
-thiserror   = "2.0"
-dashmap     = "6.2.1"
-uuid        = { workspace = true }
-clap        = { version = "4.5", features = ["derive"] }
-syn         = { version = "2.0", features = ["full"] }
+saikuro-net = { path = "../../crates/saikuro-net", default-features = false, optional = true }
+saikuro-random = { path = "../../crates/saikuro-random", default-features = false }
+saikuro-router = { path = "../../crates/saikuro-router", default-features = false }
+saikuro-runtime = { path = "../../crates/saikuro-runtime", default-features = false }
+saikuro-schema = { path = "../../crates/saikuro-schema", default-features = false }
+saikuro-storage = { path = "../../crates/saikuro-storage", default-features = false, optional = true }
+saikuro-transport = { path = "../../crates/saikuro-transport", default-features = false }
