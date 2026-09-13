@@ -257,12 +257,12 @@ heapless = { version = "0.8", default-features = false, features = ["serde"] }
 embedded-storage-async = { version = "0.4", default-features = false }
 embedded-io-async = { version = "0.7", default-features = false }
 
-# WASM (pinned for JSPI support)
-wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-test = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
+# WASM
+wasm-bindgen = "0.2.128"
+wasm-bindgen-futures = "0.4.78"
+js-sys = "0.3.105"
+web-sys = "0.3.105"
+wasm-bindgen-test = "0.3.78"
 
 critical-section = { version = "1" }
 embassy-time-driver = { version = "0.2", default-features = false }
@@ -290,14 +290,6 @@ riscv = { version = "0.12", default-features = false, features = [
 [patch.crates-io]
 embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
 embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
-# wasm-bindgen (JSPI support)
-wasm-bindgen = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-macro = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-macro-support = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-shared = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-wasm-bindgen-futures = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-js-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
-web-sys = { git = "https://github.com/wasm-bindgen/wasm-bindgen", rev = "bd07ee8" }
 
 # Forked graphitesql with open_memory_with_page_size (adds a tunable page
 # size for in-memory databases on memory-constrained targets).
