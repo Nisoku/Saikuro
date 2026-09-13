@@ -69,12 +69,12 @@
 
 ## Current
 
-- [ ] lessen Saikuro memory usage for embedded
+- [X] lessen Saikuro memory usage for embedded
 
 - [ ] Asyncify fallback for JSPI (before the spinning one)
 - [ ] Update `saikuro-c`/`saikuro-cpp`/`saikuro-csharp` to just use a new `Build/codegen/cxx/` thing that automatically generates bindings for all three (1-1 api match, not the yucky serializing to JSON or whatever) (not safe tho (cffi) :( hmmm)
 - [ ] Possibly use something similar for JS/TS
-- [ ] python-ctypes too for Python via the same `cxx/` (not safe tho (cffi) :( hmmm)
+- [ ] python-ctypes too for Python via the same `cxx/` (not safe tho eitherrr)
 
 - [ ] Add more tests
 
