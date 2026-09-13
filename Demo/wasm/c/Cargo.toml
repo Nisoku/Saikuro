@@ -15,3 +15,8 @@ cc = "1"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
+[patch.crates-io]
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "73b44d7e867a371d0870a84624fea66a8b00f713" }

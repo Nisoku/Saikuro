@@ -1,0 +1,31 @@
+[package]
+name = "saikuro-random"
+description = "Randomness and entropy facade for Saikuro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["ipc", "cross-language", "saikuro", "random", "rng"]
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["std", "native"]
+std = ["rand_core/std"]
+native = ["std", "getrandom", "getrandom/std", "saikuro-event/getrandom", "saikuro-event/native"]
+no_std = ["getrandom", "saikuro-event/getrandom", "saikuro-event/no_std"]
+wasm = ["getrandom", "getrandom/wasm_js", "saikuro-event/getrandom", "saikuro-event/wasm"]
+embedded = ["saikuro-event/embedded"]
+
+[dependencies]
+getrandom = { workspace = true, optional = true }
+chacha20 = { workspace = true }
+portable-atomic = { workspace = true }
+rand_core = { workspace = true }
+uuid = { workspace = true }
+saikuro-event = { workspace = true, default-features = false }
+
+[dev-dependencies]
+chacha20 = { workspace = true }

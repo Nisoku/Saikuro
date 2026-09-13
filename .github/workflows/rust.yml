@@ -9,7 +9,7 @@ on:
       - "Build/crates/**"
       - "Build/tests/**"
       - "Build/adapters/rust/**"
-      - "Build/scripts/rust.py"
+      - "scripts/rust.py"
       - "Justfile"
       - ".github/workflows/rust.yml"
   pull_request:
@@ -19,7 +19,7 @@ on:
       - "Build/crates/**"
       - "Build/tests/**"
       - "Build/adapters/rust/**"
-      - "Build/scripts/rust.py"
+      - "scripts/rust.py"
       - "Justfile"
       - ".github/workflows/rust.yml"
 
@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -52,7 +54,7 @@ jobs:
             Build/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - run: just rust fmt_check
+      - run: just rust format
       - run: just rust lint
 
   test:
@@ -60,6 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v4
@@ -80,6 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@stable
         with:

@@ -62,20 +62,22 @@ int compute_stats(const char *text, char *out_buf, int out_capacity)
             else if (c < 0xE0)
             {
                 non_ascii++;
-                bytes += (text[bytes+1] && (text[bytes+1] & 0xC0) == 0x80) ? 2 : 1;
+                bytes += (text[bytes + 1] && (text[bytes + 1] & 0xC0) == 0x80) ? 2 : 1;
             }
             else if (c < 0xF0)
             {
                 non_ascii++;
                 int len = 1;
-                while (len < 3 && text[bytes+len] && (text[bytes+len] & 0xC0) == 0x80) len++;
+                while (len < 3 && text[bytes + len] && (text[bytes + len] & 0xC0) == 0x80)
+                    len++;
                 bytes += len;
             }
             else if (c < 0xF8)
             {
                 non_ascii++;
                 int len = 1;
-                while (len < 4 && text[bytes+len] && (text[bytes+len] & 0xC0) == 0x80) len++;
+                while (len < 4 && text[bytes + len] && (text[bytes + len] & 0xC0) == 0x80)
+                    len++;
                 bytes += len;
             }
             else
@@ -129,12 +131,24 @@ static const char *extract_first_string(const char *json, char *buf, int cap)
             p++;
             switch (*p)
             {
-                case 'n': buf[i++] = '\n'; break;
-                case 't': buf[i++] = '\t'; break;
-                case 'r': buf[i++] = '\r'; break;
-                case '"': buf[i++] = '"'; break;
-                case '\\': buf[i++] = '\\'; break;
-                default: buf[i++] = *p; break;
+            case 'n':
+                buf[i++] = '\n';
+                break;
+            case 't':
+                buf[i++] = '\t';
+                break;
+            case 'r':
+                buf[i++] = '\r';
+                break;
+            case '"':
+                buf[i++] = '"';
+                break;
+            case '\\':
+                buf[i++] = '\\';
+                break;
+            default:
+                buf[i++] = *p;
+                break;
             }
             p++;
         }
@@ -170,6 +184,12 @@ static char *handle_stats(void *user_data, const char *args_json)
 // Exported entry point called from TypeScript as start_c_provider(channel)
 //
 
+static void saikuro_c_serve_status(int status, void *user_data)
+{
+    (void)status;
+    (void)user_data;
+}
+
 __attribute__((used, visibility("default"))) void saikuro_c_start_provider(const char *channel)
 {
     char address[256];
@@ -186,5 +206,5 @@ __attribute__((used, visibility("default"))) void saikuro_c_start_provider(const
 
     saikuro_provider_t provider = saikuro_provider_new("c");
     saikuro_provider_register_with_schema(provider, "stats", handle_stats, NULL, 1, "Any");
-    saikuro_provider_serve(provider, address);
+    saikuro_provider_serve_async(provider, address, saikuro_c_serve_status, NULL);
 }

@@ -140,8 +140,20 @@ SAIKURO_API int SAIKURO_CALL saikuro_provider_register_with_schema(
     saikuro_provider_handler_fn callback, void *user_data, int nargs,
     const char *return_type_json);
 
+/* Provider status callback: receives 0 on clean shutdown, 1 on error. */
+typedef void(SAIKURO_CALL *saikuro_provider_status_cb_fn)(int status,
+                                                          void *user_data);
+
+/* Blocking serve.  Not available on WebAssembly builds;
+ * use saikuro_provider_serve_async there instead. */
 SAIKURO_API int SAIKURO_CALL saikuro_provider_serve(saikuro_provider_t handle,
                                                     const char *address);
+/** Schedule serving and return immediately; `callback` fires with 0 on clean
+ *  shutdown or 1 on error.  The provider handle must remain valid until the
+ *  callback fires.  `callback` must not be NULL. */
+SAIKURO_API void SAIKURO_CALL saikuro_provider_serve_async(
+    saikuro_provider_t handle, const char *address,
+    saikuro_provider_status_cb_fn callback, void *user_data);
 /** Close the given provider.  Returns 0 on success, non-zero on error. */
 SAIKURO_API int SAIKURO_CALL saikuro_provider_close(saikuro_provider_t handle);
 SAIKURO_API void SAIKURO_CALL saikuro_provider_free(saikuro_provider_t handle);

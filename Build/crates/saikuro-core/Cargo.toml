@@ -8,15 +8,29 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "rpc", "msgpack"]
 
+[features]
+default = ["std", "native"]
+std = []
+native = ["std", "saikuro-random/native", "saikuro-event/native"]
+no_std = ["saikuro-random/no_std", "saikuro-event/no_std"]
+wasm = ["saikuro-random/wasm", "saikuro-event/wasm"]
+embedded = ["saikuro-random/embedded", "saikuro-event/embedded"]
+
+[lib]
+path = "lib.rs"
+
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = false, features = [
+    "alloc",
+] }
 serde_bytes = { workspace = true }
-rmp-serde = { workspace = true }
-rmpv = { workspace = true }
-bytes = { workspace = true }
 uuid = { workspace = true }
-thiserror = { workspace = true }
-chrono = { workspace = true }
-serde_with = { workspace = true }
+saikuro-random = { workspace = true, default-features = false }
+saikuro-event = { workspace = true, default-features = false }
+thiserror = { workspace = true, default-features = false }
 strum = { workspace = true }
+heapless = { workspace = true }
+messagepack-serde = { workspace = true }
+portable-atomic = { workspace = true }
+portable-atomic-util = { workspace = true }

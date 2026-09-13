@@ -5,11 +5,11 @@ Tests for SaikuroProvider
 import asyncio
 
 import pytest
-from saikuro.provider import SaikuroProvider
+
 from saikuro.envelope import Envelope, InvocationType
 from saikuro.error import SaikuroError
+from saikuro.provider import SaikuroProvider
 from saikuro.transport import InMemoryTransport
-
 
 # Helpers
 

@@ -39,7 +39,7 @@ npm run dev
 WASM build (if you want to run by hand):
 
 ```bash
-python3 Build/scripts/web_demo.py build
+python3 scripts/web_demo.py build
 ```
 
 ## Tooling requirements

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from saikuro.cli import extract_schema
 
-
 FIXTURE_FILE = Path(__file__).parent / "fixtures" / "service.py"
 
 

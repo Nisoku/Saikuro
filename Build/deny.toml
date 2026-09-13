@@ -58,8 +58,10 @@ skip = [
     { name = "thiserror-impl" },
     { name = "windows-sys" },
     # tungstenite -> rand 0.8 -> rand_core -> getrandom 0.2
-    # uuid -> getrandom 0.4
-    # Both chains are external; nothing in the workspace controls either pin.
+    # tungstenite -> rand 0.10 -> getrandom 0.4
+    # saikuro-random -> getrandom 0.3
+    # All pins except 0.3 are external (from the tungstenite/rand WebSocket
+    # stack); nothing in the workspace controls them.
     { name = "getrandom" },
 ]
 

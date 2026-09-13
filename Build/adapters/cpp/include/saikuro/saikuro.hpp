@@ -84,11 +84,7 @@ class Client : public MoveOnlyHandle<Client, saikuro_client_t> {
 public:
   class Stream : public MoveOnlyHandle<Stream, saikuro_stream_t> {
   public:
-    explicit Stream(saikuro_stream_t handle) : MoveOnlyHandle(handle) {
-      if (handle_ == nullptr) {
-        throw Error(last_error());
-      }
-    }
+    explicit Stream(saikuro_stream_t handle) : MoveOnlyHandle(handle) {}
 
     Stream(Stream &&other) noexcept : MoveOnlyHandle(std::move(other)) {}
 
@@ -112,11 +108,7 @@ public:
 
   class Channel : public MoveOnlyHandle<Channel, saikuro_channel_t> {
   public:
-    explicit Channel(saikuro_channel_t handle) : MoveOnlyHandle(handle) {
-      if (handle_ == nullptr) {
-        throw Error(last_error());
-      }
-    }
+    explicit Channel(saikuro_channel_t handle) : MoveOnlyHandle(handle) {}
 
     void send_json(const std::string &item_json) {
       if (!open_) {

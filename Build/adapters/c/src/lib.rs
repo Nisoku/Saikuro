@@ -1,54 +1,250 @@
-use std::cell::RefCell;
-use std::ffi::{c_char, c_int, c_void, CStr, CString};
-use std::ptr;
-use std::thread_local;
-use std::time::Duration;
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), not(feature = "native"), target_os = "none"))]
+mod embedded_rt {
+    use core::alloc::{GlobalAlloc, Layout};
+
+    struct StubAllocator;
+
+    unsafe impl GlobalAlloc for StubAllocator {
+        unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
+            core::ptr::null_mut()
+        }
+        unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+    }
+
+    #[global_allocator]
+    static ALLOCATOR: StubAllocator = StubAllocator;
+
+    #[panic_handler]
+    fn panic(_info: &core::panic::PanicInfo) -> ! {
+        loop {}
+    }
+}
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::ToOwned;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+use alloc::ffi::CString;
+#[cfg(not(feature = "std"))]
+use alloc::format;
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+use core::ffi::{c_char, c_int, c_void, CStr};
+use core::future::Future;
+use core::ptr;
 
 use saikuro::{
-    ArgDescriptor, Client, FunctionSchema, PrimitiveType, Provider, RegisterOptions,
-    SaikuroChannel, TypeDescriptor, Value,
+    ArgDescriptor, FunctionSchema, PrimitiveType, Provider, RegisterOptions, TypeDescriptor, Value,
 };
-use saikuro_exec::Runtime;
-use std::sync::Arc;
+#[cfg(feature = "std")]
+use saikuro::{Client, SaikuroChannel, SaikuroStream};
 
-// C API helpers for client handle validation and result serialization
+// C API helpers for client handle validation and result serialization.
 
 const ERR_HANDLE_NULL: &str = "handle must not be null";
 
-thread_local! {
-    static LAST_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
-}
+// Last-error slot.
+#[cfg(feature = "std")]
+static LAST_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+#[cfg(not(feature = "std"))]
+static LAST_ERROR: spin::Mutex<Option<String>> = spin::Mutex::new(None);
 
 fn set_last_error(msg: impl Into<String>) {
-    LAST_ERROR.with(|cell| {
-        *cell.borrow_mut() = Some(msg.into());
-    });
+    #[cfg(feature = "std")]
+    {
+        *LAST_ERROR.lock().expect("last-error lock poisoned") = Some(msg.into());
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        *LAST_ERROR.lock() = Some(msg.into());
+    }
 }
 
 fn clear_last_error() {
-    LAST_ERROR.with(|cell| {
-        *cell.borrow_mut() = None;
-    });
+    #[cfg(feature = "std")]
+    {
+        *LAST_ERROR.lock().expect("last-error lock poisoned") = None;
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        *LAST_ERROR.lock() = None;
+    }
 }
+
+fn last_error_string() -> String {
+    #[cfg(feature = "std")]
+    {
+        LAST_ERROR
+            .lock()
+            .expect("last-error lock poisoned")
+            .clone()
+            .unwrap_or_default()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        LAST_ERROR.lock().clone().unwrap_or_default()
+    }
+}
+
+#[cfg(feature = "native")]
+mod exec {
+    use core::future::Future;
+    use std::sync::OnceLock;
+    use tokio::runtime::Runtime as TokioRuntime;
+
+    static RT: OnceLock<TokioRuntime> = OnceLock::new();
+
+    pub(super) fn spawn<F>(fut: F)
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let rt = RT
+            .get_or_init(|| TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime"));
+        rt.handle().spawn(fut);
+    }
+
+    pub(super) fn block_on<F: Future>(fut: F) -> F::Output {
+        let rt = RT
+            .get_or_init(|| TokioRuntime::new().expect("saikuro-c: failed to start tokio runtime"));
+        rt.block_on(fut)
+    }
+}
+
+#[cfg(feature = "native")]
+fn spawn_future<F>(fut: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    exec::spawn(fut);
+}
+
+#[cfg(feature = "native")]
+fn block_on_future<F: Future>(fut: F) -> F::Output {
+    exec::block_on(fut)
+}
+
+#[cfg(not(feature = "native"))]
+fn spawn_future<F>(fut: F)
+where
+    F: Future<Output = ()> + 'static,
+{
+    saikuro_exec::spawn(fut);
+}
+
+// C callback signatures.
+
+/// Called with the created handle (or null on error) once a connect / stream /
+/// channel open completes.
+pub type SaikuroConnectCb = extern "C" fn(*mut c_void, *mut c_void);
+
+/// Called with the serialised result (or null on error) once an RPC completes.
+pub type SaikuroResultCb = extern "C" fn(*mut c_char, *mut c_void);
+
+/// Called with a status code (0 = ok, 1 = error) once a fire-and-forget op
+/// (cast / log / close / abort / serve) completes.
+pub type SaikuroStatusCb = extern "C" fn(c_int, *mut c_void);
+
+/// Called with the next stream/channel item. `item` is null when the stream is
+/// exhausted or an error occurred (see `saikuro_last_error_message`). `done` is
+/// 0 when `item` holds a value, 1 otherwise.
+pub type SaikuroItemCb = extern "C" fn(*mut c_char, c_int, *mut c_void);
+
+// Handles.
+//
+// Every opaque C handle boxes exactly one Rust object; C callers release them
+// with the matching `saikuro_*_free` function.
+
+mod handles {
+    use super::*;
+
+    /// Owned client connection. `client` is `None` while a connect is in
+    /// flight and again once a close has been requested.
+    #[cfg(feature = "std")]
+    pub(crate) struct ClientHandle {
+        pub(crate) client: Option<Client>,
+    }
+
+    #[cfg(feature = "std")]
+    impl ClientHandle {
+        pub(crate) fn client(&self) -> &Client {
+            self.client.as_ref().expect("client already closed")
+        }
+    }
+
+    #[cfg(feature = "std")]
+    pub(crate) struct StreamHandle {
+        pub(crate) stream: SaikuroStream,
+    }
+
+    #[cfg(feature = "std")]
+    pub(crate) struct ChannelHandle {
+        pub(crate) channel: SaikuroChannel,
+    }
+
+    pub(crate) struct ProviderHandle {
+        pub(crate) provider: Option<Provider>,
+    }
+
+    // Lifetime-safe shared accessor for spawned futures: the C contract
+    // requires the handle to outlive every callback it spawned, so the
+    // unbounded borrow cannot dangle in practice.
+    #[cfg(feature = "std")]
+    pub(crate) fn client_ref(h: *mut c_void) -> &'static ClientHandle {
+        unsafe { &*(h as *const ClientHandle) }
+    }
+}
+
+use handles::ProviderHandle;
+#[cfg(feature = "std")]
+use handles::{client_ref, ChannelHandle, ClientHandle, StreamHandle};
+
+/// C callback for provider functions.
+///
+/// # Safety
+/// The returned pointer must be an owned C string allocated via
+/// `saikuro_string_dup` (or `CString::into_raw`-compatible allocation). Ownership
+/// is transferred to Rust, which reclaims it with `CString::from_raw`. Returning
+/// strings from `malloc`/`strdup` is undefined behavior because allocator
+/// ownership does not match `CString::from_raw` expectations.
+type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
+
+// Parsing / serialisation helpers.
 
 fn cstr_to_string(ptr: *const c_char, arg_name: &str) -> Result<String, String> {
     if ptr.is_null() {
         return Err(format!("{arg_name} must not be null"));
     }
-    let s = unsafe { CStr::from_ptr(ptr) }
+    let s = (unsafe { CStr::from_ptr(ptr) })
         .to_str()
         .map_err(|_| format!("{arg_name} must be valid UTF-8"))?;
     Ok(s.to_owned())
 }
 
+/// Copy `s` into a freshly allocated C string, transferring ownership to the
+/// caller.
+///
+/// Interior NUL bytes cannot round-trip through a C string, so instead of
+/// silently corrupting the value the allocation fails, the reason is recorded
+/// in the last-error slot, and null is returned.
 fn into_c_string_ptr(s: &str) -> *mut c_char {
-    let sanitized = s.replace('\0', " ");
-    match CString::new(sanitized) {
+    match CString::new(s) {
         Ok(cs) => cs.into_raw(),
-        Err(_) => ptr::null_mut(),
+        Err(_) => {
+            set_last_error("value contains null byte");
+            ptr::null_mut()
+        }
     }
 }
 
+#[cfg(feature = "std")]
 fn parse_json_array_arg(raw: &str, arg_name: &str) -> Result<Vec<Value>, String> {
     let parsed: serde_json::Value =
         serde_json::from_str(raw).map_err(|e| format!("{arg_name} must be valid JSON: {e}"))?;
@@ -58,12 +254,15 @@ fn parse_json_array_arg(raw: &str, arg_name: &str) -> Result<Vec<Value>, String>
     }
 }
 
+#[cfg(feature = "std")]
 fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
     let parsed: serde_json::Value =
         serde_json::from_str(raw).map_err(|e| format!("calls_json must be valid JSON: {e}"))?;
     let entries = match parsed {
         serde_json::Value::Array(items) => items,
-        _ => return Err("calls_json must be a JSON array".to_owned()),
+        _ => {
+            return Err("calls_json must be a JSON array".to_owned());
+        }
     };
 
     let mut calls = Vec::with_capacity(entries.len());
@@ -77,7 +276,9 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
                     .to_owned();
                 let args = match obj.get("args") {
                     Some(serde_json::Value::Array(items)) => items.clone(),
-                    _ => return Err("batch call object requires array 'args'".to_owned()),
+                    _ => {
+                        return Err("batch call object requires array 'args'".to_owned());
+                    }
                 };
                 calls.push((target, args));
             }
@@ -88,14 +289,16 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
                     .to_owned();
                 let args = match &tuple[1] {
                     serde_json::Value::Array(items) => items.clone(),
-                    _ => return Err("batch tuple[1] must be args array".to_owned()),
+                    _ => {
+                        return Err("batch tuple[1] must be args array".to_owned());
+                    }
                 };
                 calls.push((target, args));
             }
             _ => {
                 return Err(
                     "batch calls must be objects {target,args} or [target,args] tuples".to_owned(),
-                )
+                );
             }
         }
     }
@@ -103,6 +306,7 @@ fn parse_batch_calls(raw: &str) -> Result<Vec<(String, Vec<Value>)>, String> {
     Ok(calls)
 }
 
+#[cfg(feature = "std")]
 fn parse_json_object_arg(
     raw: &str,
     arg_name: &str,
@@ -115,52 +319,13 @@ fn parse_json_object_arg(
     }
 }
 
-//  C API helpers factor out the null-check / cast / error pattern
-
-macro_rules! ok_or_ptr {
-    ($expr:expr) => {
-        match $expr {
-            Ok(v) => v,
-            Err(e) => {
-                set_last_error(e);
-                return ptr::null_mut();
-            }
-        }
-    };
-}
-
-macro_rules! ok_or_int {
-    ($expr:expr) => {
-        match $expr {
-            Ok(v) => v,
-            Err(e) => {
-                set_last_error(e);
-                return 1;
-            }
-        }
-    };
-}
-
-/// Parse a JSON array from a C string pointer.
+#[cfg(feature = "std")]
 fn c_json_array(ptr: *const c_char) -> Result<Vec<Value>, String> {
     let s = cstr_to_string(ptr, "args_json")?;
     parse_json_array_arg(&s, "args_json")
 }
 
-/// Validate and dereference a client handle.
-fn client_handle(h: *mut c_void) -> Result<&'static mut ClientHandle, String> {
-    if h.is_null() {
-        return Err(ERR_HANDLE_NULL.to_owned());
-    }
-    let h = unsafe { &mut *(h as *mut ClientHandle) };
-    if h.client.is_none() {
-        return Err("client is already closed".to_owned());
-    }
-    Ok(h)
-}
-
-/// Serialise a `saikuro::Result<Value>` into a heap-allocated C string pointer,
-/// or set `last_error` and return null on failure.
+#[cfg(feature = "std")]
 fn ptr_saikuro(result: Result<Value, saikuro::Error>, op: &str) -> *mut c_char {
     match result {
         Ok(v) => match serde_json::to_string(&v) {
@@ -177,7 +342,7 @@ fn ptr_saikuro(result: Result<Value, saikuro::Error>, op: &str) -> *mut c_char {
     }
 }
 
-/// Map a `saikuro::Result<()>` to a C `c_int` return, setting `last_error` on failure.
+#[cfg(feature = "std")]
 fn int_saikuro(result: Result<(), saikuro::Error>, op: &str) -> c_int {
     match result {
         Ok(()) => 0,
@@ -188,226 +353,97 @@ fn int_saikuro(result: Result<(), saikuro::Error>, op: &str) -> c_int {
     }
 }
 
-struct ClientHandle {
-    rt: Arc<Runtime>,
-    client: Option<Client>,
+// Shared client operation bodies.
+//
+// The blocking (`saikuro_*`) and callback-based (`saikuro_*_async`) entry
+// points both delegate to these futures so each operation's invoke / serialize /
+// error-recording logic exists exactly once. Parameters are already-decoded
+// Rust values; the C-facing wrappers own pointer validation, string decoding,
+// and result plumbing (return value or callback invocation).
+
+/// Outcome of a single `next()` poll on a stream or channel.
+#[cfg(feature = "std")]
+enum NextOutcome {
+    /// A value arrived; carries its JSON encoding.
+    Item(String),
+    /// The source closed cleanly.
+    Done,
+    /// Receive or serialisation failed; `LAST_ERROR` records why.
+    Failed,
 }
 
-impl ClientHandle {
-    fn client(&self) -> &Client {
-        self.client.as_ref().expect("client already closed")
-    }
-
-    fn new(address: &str) -> Result<Self, String> {
-        let rt = Arc::new(
-            saikuro_exec::new_runtime()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("failed to create runtime: {e}"))?,
-        );
-
-        let client = rt
-            .block_on(Client::connect(address))
-            .map_err(|e| format!("failed to connect client: {e}"))?;
-
-        Ok(Self {
-            rt,
-            client: Some(client),
-        })
-    }
-
-    fn close(&mut self) -> Result<(), String> {
-        if let Some(client) = self.client.take() {
-            self.rt
-                .block_on(client.close())
-                .map_err(|e| format!("failed to close client: {e}"))?;
+/// Map a [`NextOutcome`] to the `(item, done)` pair the C API reports.
+#[cfg(feature = "std")]
+fn next_outcome_parts(outcome: NextOutcome) -> (*mut c_char, c_int) {
+    match outcome {
+        NextOutcome::Item(json) => {
+            let item = into_c_string_ptr(&json);
+            let done = c_int::from(item.is_null());
+            (item, done)
         }
-        Ok(())
+        NextOutcome::Done | NextOutcome::Failed => (ptr::null_mut(), 1),
     }
 }
 
-/// C callback for provider functions.
+/// Write a [`NextOutcome`] to the blocking API's out-parameters and produce its
+/// return code (0 = ok, including clean end-of-stream; 1 = failure).
 ///
 /// # Safety
-/// The returned pointer must be an owned C string allocated via `saikuro_string_dup`
-/// (or `CString::into_raw`-compatible allocation semantics).
-/// Ownership is transferred to Rust, which reclaims it with `CString::from_raw`.
-/// Returning strings from `malloc`/`strdup` is undefined behavior because allocator
-/// ownership does not match `CString::from_raw` expectations.
-type ProviderHandler = unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char;
-
-struct ProviderHandle {
-    rt: saikuro_exec::Runtime,
-    provider: Option<Provider>,
-}
-
-struct StreamHandle {
-    rt: Arc<Runtime>,
-    stream: saikuro::SaikuroStream,
-}
-
-struct ChannelHandle {
-    rt: Arc<Runtime>,
-    channel: SaikuroChannel,
-}
-
-impl ProviderHandle {
-    fn new(namespace: &str) -> Result<Self, String> {
-        let rt = saikuro_exec::new_runtime()
-            .enable_all()
-            .build()
-            .map_err(|e| format!("failed to create runtime: {e}"))?;
-
-        Ok(Self {
-            rt,
-            provider: Some(Provider::new(namespace)),
-        })
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_string_dup(input: *const c_char) -> *mut c_char {
-    match cstr_to_string(input, "input") {
-        Ok(s) => into_c_string_ptr(&s),
-        Err(e) => {
-            set_last_error(e);
-            ptr::null_mut()
-        }
-    }
-}
-
-/// Frees a heap-allocated string returned by the Saikuro C API.
-///
-/// # Safety
-///
-/// `ptr` must be either null or a pointer previously returned by
-/// [`saikuro_string_dup`], [`saikuro_last_error_message`], or another Saikuro C API function
-/// that transfers ownership of a heap string to the caller. Passing any other pointer,
-/// or a pointer not obtained from Saikuro, results in undefined behavior.
-#[no_mangle]
-pub unsafe extern "C" fn saikuro_string_free(ptr: *mut c_char) {
-    if ptr.is_null() {
-        return;
-    }
+/// `out_item_json` and `out_done` must be valid writable pointers.
+#[cfg(all(feature = "std", feature = "native"))]
+unsafe fn next_outcome_to_out_params(
+    outcome: NextOutcome,
+    out_item_json: *mut *mut c_char,
+    out_done: *mut c_int,
+) -> c_int {
+    let failed = matches!(outcome, NextOutcome::Failed);
+    let (item, done) = next_outcome_parts(outcome);
     unsafe {
-        let _ = CString::from_raw(ptr);
+        *out_item_json = item;
+        *out_done = done;
     }
+    c_int::from(failed)
 }
 
-#[no_mangle]
-pub extern "C" fn saikuro_last_error_message() -> *mut c_char {
-    let msg = LAST_ERROR
-        .with(|cell| cell.borrow().clone())
-        .unwrap_or_else(|| "".to_owned());
-    into_c_string_ptr(&msg)
+#[cfg(feature = "std")]
+async fn client_inner_call_json(client: &Client, target: String, args: Vec<Value>) -> *mut c_char {
+    ptr_saikuro(client.call(target, args).await, "call")
 }
 
-#[no_mangle]
-pub extern "C" fn saikuro_client_connect(address: *const c_char) -> *mut c_void {
-    clear_last_error();
+#[cfg(feature = "std")]
+async fn client_inner_call_json_timeout(
+    client: &Client,
+    target: String,
+    args: Vec<Value>,
+    timeout_ms: i64,
+) -> *mut c_char {
+    if timeout_ms < 0 {
+        set_last_error("timeout_ms must be non-negative");
+        return ptr::null_mut();
+    }
+    let timeout = core::time::Duration::from_millis(timeout_ms as u64);
+    ptr_saikuro(
+        client.call_with_timeout(target, args, Some(timeout)).await,
+        "call",
+    )
+}
 
-    let address = match cstr_to_string(address, "address") {
-        Ok(s) => s,
+#[cfg(feature = "std")]
+async fn client_inner_cast_json(client: &Client, target: String, args: Vec<Value>) -> c_int {
+    int_saikuro(client.cast(target, args).await, "cast")
+}
+
+#[cfg(feature = "std")]
+async fn client_inner_batch_json(client: &Client, calls_json: &str) -> *mut c_char {
+    let calls = match parse_batch_calls(calls_json) {
+        Ok(calls) => calls,
         Err(e) => {
             set_last_error(e);
             return ptr::null_mut();
         }
     };
-
-    match ClientHandle::new(&address) {
-        Ok(handle) => Box::into_raw(Box::new(handle)) as *mut c_void,
-        Err(e) => {
-            set_last_error(e);
-            ptr::null_mut()
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
-    clear_last_error();
-    if handle.is_null() {
-        set_last_error(ERR_HANDLE_NULL);
-        return 1;
-    }
-    match unsafe { &mut *(handle as *mut ClientHandle) }.close() {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(e);
-            1
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_free(handle: *mut c_void) {
-    if handle.is_null() {
-        return;
-    }
-
-    let mut boxed = unsafe { Box::from_raw(handle as *mut ClientHandle) };
-    let _ = boxed.close();
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_call_json(
-    handle: *mut c_void,
-    target: *const c_char,
-    args_json: *const c_char,
-) -> *mut c_char {
-    clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    let target = ok_or_ptr!(cstr_to_string(target, "target"));
-    let args = ok_or_ptr!(c_json_array(args_json));
-    ptr_saikuro(h.rt.block_on(h.client().call(target, args)), "call")
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_call_json_timeout(
-    handle: *mut c_void,
-    target: *const c_char,
-    args_json: *const c_char,
-    timeout_ms: c_int,
-) -> *mut c_char {
-    clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    if timeout_ms < 0 {
-        set_last_error("timeout_ms must be non-negative");
-        return ptr::null_mut();
-    }
-    let target = ok_or_ptr!(cstr_to_string(target, "target"));
-    let args = ok_or_ptr!(c_json_array(args_json));
-    let timeout = Duration::from_millis(timeout_ms as u64);
-    ptr_saikuro(
-        h.rt.block_on(h.client().call_with_timeout(target, args, Some(timeout))),
-        "call",
-    )
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_cast_json(
-    handle: *mut c_void,
-    target: *const c_char,
-    args_json: *const c_char,
-) -> c_int {
-    clear_last_error();
-    let h = ok_or_int!(client_handle(handle));
-    let target = ok_or_int!(cstr_to_string(target, "target"));
-    let args = ok_or_int!(c_json_array(args_json));
-    int_saikuro(h.rt.block_on(h.client().cast(target, args)), "cast")
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_batch_json(
-    handle: *mut c_void,
-    calls_json: *const c_char,
-) -> *mut c_char {
-    clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    let raw = ok_or_ptr!(cstr_to_string(calls_json, "calls_json"));
-    let calls = ok_or_ptr!(parse_batch_calls(&raw));
-    match h.rt.block_on(h.client().batch(calls)) {
-        Ok(v) => match serde_json::to_string(&v) {
+    match client.batch(calls).await {
+        Ok(values) => match serde_json::to_string(&values) {
             Ok(json) => into_c_string_ptr(&json),
             Err(e) => {
                 set_last_error(format!("failed to serialize result: {e}"));
@@ -421,97 +457,564 @@ pub extern "C" fn saikuro_client_batch_json(
     }
 }
 
-#[no_mangle]
-pub extern "C" fn saikuro_client_stream_json(
-    handle: *mut c_void,
-    target: *const c_char,
-    args_json: *const c_char,
+#[cfg(feature = "std")]
+async fn client_inner_stream_json(
+    client: &Client,
+    target: String,
+    args: Vec<Value>,
 ) -> *mut c_void {
-    clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    let target = ok_or_ptr!(cstr_to_string(target, "target"));
-    let args = ok_or_ptr!(c_json_array(args_json));
-    let rt = h.rt.clone();
-    let stream = match h.rt.block_on(h.client().stream(target, args)) {
-        Ok(s) => s,
+    match client.stream(target, args).await {
+        Ok(stream) => Box::into_raw(Box::new(StreamHandle { stream })) as *mut c_void,
         Err(e) => {
             set_last_error(format!("stream open failed: {e}"));
-            return ptr::null_mut();
+            ptr::null_mut()
         }
-    };
-    Box::into_raw(Box::new(StreamHandle { rt, stream })) as *mut c_void
+    }
 }
 
-#[no_mangle]
-/// # Safety
-///
-/// `stream` must be a valid handle returned by `saikuro_client_stream_json`.
-/// `out_item_json` and `out_done` must be non-null writable pointers valid for
-/// writes for the duration of this call.
-pub unsafe extern "C" fn saikuro_stream_next_json(
-    stream: *mut c_void,
-    out_item_json: *mut *mut c_char,
-    out_done: *mut c_int,
-) -> c_int {
-    clear_last_error();
-
-    unsafe {
-        if !out_done.is_null() {
-            *out_done = 1;
-        }
-        if !out_item_json.is_null() {
-            *out_item_json = ptr::null_mut();
+#[cfg(feature = "std")]
+async fn client_inner_channel_json(
+    client: &Client,
+    target: String,
+    args: Vec<Value>,
+) -> *mut c_void {
+    match client.channel(target, args).await {
+        Ok(channel) => Box::into_raw(Box::new(ChannelHandle { channel })) as *mut c_void,
+        Err(e) => {
+            set_last_error(format!("channel open failed: {e}"));
+            ptr::null_mut()
         }
     }
+}
 
-    if stream.is_null() {
-        set_last_error("stream must not be null");
-        return 1;
-    }
-    if out_item_json.is_null() || out_done.is_null() {
-        set_last_error("out_item_json and out_done must not be null");
-        return 1;
-    }
+#[cfg(feature = "std")]
+async fn client_inner_channel_send_json(channel: &SaikuroChannel, item: Value) -> c_int {
+    int_saikuro(channel.send(item).await, "channel send")
+}
 
-    let stream = unsafe { &mut *(stream as *mut StreamHandle) };
-    let next = stream.rt.block_on(stream.stream.next());
+#[cfg(feature = "std")]
+async fn client_inner_channel_close(channel: &SaikuroChannel) -> c_int {
+    int_saikuro(channel.close().await, "channel close")
+}
 
-    match next {
+#[cfg(feature = "std")]
+async fn client_inner_channel_abort(channel: &SaikuroChannel) -> c_int {
+    int_saikuro(channel.abort().await, "channel abort")
+}
+
+#[cfg(feature = "std")]
+async fn client_inner_channel_next_json(channel: &mut SaikuroChannel) -> NextOutcome {
+    match channel.next().await {
         Some(Ok(value)) => match serde_json::to_string(&value) {
-            Ok(json) => {
-                unsafe {
-                    *out_done = 0;
-                    *out_item_json = into_c_string_ptr(&json);
-                }
-                0
-            }
+            Ok(json) => NextOutcome::Item(json),
             Err(e) => {
-                unsafe {
-                    *out_done = 1;
-                    *out_item_json = ptr::null_mut();
-                }
-                set_last_error(format!("failed to serialize stream item: {e}"));
-                1
+                set_last_error(format!("failed to serialize channel item: {e}"));
+                NextOutcome::Failed
             }
         },
         Some(Err(e)) => {
-            unsafe {
-                *out_done = 1;
-                *out_item_json = ptr::null_mut();
-            }
-            set_last_error(format!("stream receive failed: {e}"));
-            1
+            set_last_error(format!("channel receive failed: {e}"));
+            NextOutcome::Failed
         }
-        None => {
-            unsafe {
-                *out_done = 1;
-                *out_item_json = ptr::null_mut();
+        None => NextOutcome::Done,
+    }
+}
+
+#[cfg(feature = "std")]
+async fn client_inner_stream_next_json(stream: &mut SaikuroStream) -> NextOutcome {
+    match stream.next().await {
+        Some(Ok(value)) => match serde_json::to_string(&value) {
+            Ok(json) => NextOutcome::Item(json),
+            Err(e) => {
+                set_last_error(format!("failed to serialize stream item: {e}"));
+                NextOutcome::Failed
             }
-            0
+        },
+        Some(Err(e)) => {
+            set_last_error(format!("stream receive failed: {e}"));
+            NextOutcome::Failed
+        }
+        None => NextOutcome::Done,
+    }
+}
+
+#[cfg(feature = "std")]
+async fn client_inner_resource_json(
+    client: &Client,
+    target: String,
+    args: Vec<Value>,
+) -> *mut c_char {
+    ptr_saikuro(client.resource(target, args).await, "resource")
+}
+
+#[cfg(feature = "std")]
+async fn client_inner_log(
+    client: &Client,
+    level: String,
+    name: String,
+    msg: String,
+    fields: Option<Value>,
+) -> c_int {
+    int_saikuro(client.log(level, name, msg, fields).await, "log")
+}
+
+// String lifecycle
+
+#[no_mangle]
+pub extern "C" fn saikuro_string_dup(input: *const c_char) -> *mut c_char {
+    match cstr_to_string(input, "input") {
+        Ok(s) => into_c_string_ptr(&s),
+        Err(e) => {
+            set_last_error(e);
+            ptr::null_mut()
         }
     }
 }
 
+/// # Safety
+/// `ptr` must be either null or a pointer previously returned by
+/// [`saikuro_string_dup`], [`saikuro_last_error_message`], or another Saikuro C
+/// API function that transfers ownership of a heap string to the caller.
+#[no_mangle]
+pub unsafe extern "C" fn saikuro_string_free(ptr: *mut c_char) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let _ = CString::from_raw(ptr);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn saikuro_last_error_message() -> *mut c_char {
+    let msg = last_error_string();
+    into_c_string_ptr(&msg)
+}
+
+// Client lifecycle (async).
+
+/// # Safety
+/// `cb` must not be null.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_connect_async(
+    address: *const c_char,
+    cb: Option<SaikuroConnectCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    let address = match cstr_to_string(address, "address") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle = Box::into_raw(Box::new(ClientHandle { client: None }));
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        match Client::connect(address).await {
+            Ok(client) => {
+                let handle = handle_addr as *mut ClientHandle;
+                unsafe {
+                    (*handle).client = Some(client);
+                }
+                cb(handle as *mut c_void, user_data_addr as *mut c_void);
+            }
+            Err(e) => {
+                set_last_error(format!("failed to connect client: {e}"));
+                unsafe {
+                    drop(Box::from_raw(handle_addr as *mut ClientHandle));
+                }
+                cb(ptr::null_mut(), user_data_addr as *mut c_void);
+            }
+        }
+    });
+}
+
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_free(handle: *mut c_void) {
+    if handle.is_null() {
+        return;
+    }
+    let _ = unsafe { Box::from_raw(handle as *mut ClientHandle) };
+}
+
+/// # Safety
+/// `cb` must not be null. The handle must not be freed while a close is in flight.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_close_async(
+    handle: *mut c_void,
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(1, user_data);
+        return;
+    }
+
+    let handle_ref = unsafe { &mut *(handle as *mut ClientHandle) };
+    let client = handle_ref.client.take();
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let status = match client {
+            Some(client) => int_saikuro(client.close().await, "close"),
+            None => 0,
+        };
+        cb(status, user_data_addr as *mut c_void);
+    });
+}
+
+// Client RPC (async).
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json_async(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    cb: Option<SaikuroResultCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let out = client_inner_call_json(h.client(), target, args).await;
+        cb(out, user_data_addr as *mut c_void);
+    });
+}
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json_timeout_async(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    timeout_ms: c_int,
+    cb: Option<SaikuroResultCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+    let timeout_ms = i64::from(timeout_ms);
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let out = client_inner_call_json_timeout(h.client(), target, args, timeout_ms).await;
+        cb(out, user_data_addr as *mut c_void);
+    });
+}
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_cast_json_async(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(1, user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(1, user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let status = client_inner_cast_json(h.client(), target, args).await;
+        cb(status, user_data_addr as *mut c_void);
+    });
+}
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_batch_json_async(
+    handle: *mut c_void,
+    calls_json: *const c_char,
+    cb: Option<SaikuroResultCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let raw = match cstr_to_string(calls_json, "calls_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let out = client_inner_batch_json(h.client(), &raw).await;
+        cb(out, user_data_addr as *mut c_void);
+    });
+}
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_resource_json_async(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    cb: Option<SaikuroResultCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let out = client_inner_resource_json(h.client(), target, args).await;
+        cb(out, user_data_addr as *mut c_void);
+    });
+}
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_log_async(
+    handle: *mut c_void,
+    level: *const c_char,
+    name: *const c_char,
+    msg: *const c_char,
+    fields_json: *const c_char,
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(1, user_data);
+        return;
+    }
+    let (level, name, msg) = match cstr_to_string(level, "level")
+        .and_then(|l| cstr_to_string(name, "name").map(|n| (l, n)))
+        .and_then(|(l, n)| cstr_to_string(msg, "msg").map(|m| (l, n, m)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(1, user_data);
+            return;
+        }
+    };
+    let fields = if fields_json.is_null() {
+        None
+    } else {
+        match cstr_to_string(fields_json, "fields_json")
+            .and_then(|raw| parse_json_object_arg(&raw, "fields_json").map(Value::Object))
+        {
+            Ok(v) => Some(v),
+            Err(e) => {
+                set_last_error(e);
+                cb(1, user_data);
+                return;
+            }
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let status = client_inner_log(h.client(), level, name, msg, fields).await;
+        cb(status, user_data_addr as *mut c_void);
+    });
+}
+
+// Streams (async open + async next).
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_stream_json_async(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    cb: Option<SaikuroConnectCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let stream = client_inner_stream_json(h.client(), target, args).await;
+        cb(stream, user_data_addr as *mut c_void);
+    });
+}
+
+#[cfg(feature = "std")]
 #[no_mangle]
 pub extern "C" fn saikuro_stream_free(stream: *mut c_void) {
     if stream.is_null() {
@@ -520,224 +1023,242 @@ pub extern "C" fn saikuro_stream_free(stream: *mut c_void) {
     let _ = unsafe { Box::from_raw(stream as *mut StreamHandle) };
 }
 
+/// # Safety
+/// `cb` must not be null. The stream handle must remain valid until `cb` fires,
+/// and `saikuro_stream_next_json_async` must not be called concurrently on the
+/// same stream.
+#[cfg(feature = "std")]
 #[no_mangle]
-pub extern "C" fn saikuro_client_channel_json(
+pub unsafe extern "C" fn saikuro_stream_next_json_async(
+    stream: *mut c_void,
+    cb: Option<SaikuroItemCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if stream.is_null() {
+        set_last_error("stream must not be null");
+        cb(ptr::null_mut(), 1, user_data);
+        return;
+    }
+
+    let stream_addr = stream as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let s = unsafe { &mut *(stream_addr as *mut StreamHandle) };
+        let outcome = client_inner_stream_next_json(&mut s.stream).await;
+        let (item, done) = next_outcome_parts(outcome);
+        cb(item, done, user_data_addr as *mut c_void);
+    });
+}
+
+// Channels (async open + async send/next).
+
+/// # Safety
+/// `cb` must not be null. The client handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_client_channel_json_async(
     handle: *mut c_void,
     target: *const c_char,
     args_json: *const c_char,
-) -> *mut c_void {
+    cb: Option<SaikuroConnectCb>,
+    user_data: *mut c_void,
+) {
     clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    let target = ok_or_ptr!(cstr_to_string(target, "target"));
-    let args = ok_or_ptr!(c_json_array(args_json));
-    let rt = h.rt.clone();
-    let channel = match h.rt.block_on(h.client().channel(target, args)) {
-        Ok(c) => c,
-        Err(e) => {
-            set_last_error(format!("channel open failed: {e}"));
-            return ptr::null_mut();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
         }
     };
-    Box::into_raw(Box::new(ChannelHandle { rt, channel })) as *mut c_void
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        cb(ptr::null_mut(), user_data);
+        return;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            cb(ptr::null_mut(), user_data);
+            return;
+        }
+    };
+
+    let handle_addr = handle as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let h = client_ref(handle_addr as *mut c_void);
+        let channel = client_inner_channel_json(h.client(), target, args).await;
+        cb(channel, user_data_addr as *mut c_void);
+    });
 }
 
+/// # Safety
+/// `cb` must not be null. The channel handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
 #[no_mangle]
-pub extern "C" fn saikuro_channel_send_json(
+pub extern "C" fn saikuro_channel_send_json_async(
     channel: *mut c_void,
     item_json: *const c_char,
-) -> c_int {
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
     clear_last_error();
-
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
     if channel.is_null() {
         set_last_error("channel must not be null");
-        return 1;
+        cb(1, user_data);
+        return;
     }
-
     let item_json = match cstr_to_string(item_json, "item_json") {
         Ok(s) => s,
         Err(e) => {
             set_last_error(e);
-            return 1;
+            cb(1, user_data);
+            return;
         }
     };
-
     let item: Value = match serde_json::from_str(&item_json) {
         Ok(v) => v,
         Err(e) => {
             set_last_error(format!("item_json must be valid JSON: {e}"));
-            return 1;
+            cb(1, user_data);
+            return;
         }
     };
 
-    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
-    match channel.rt.block_on(channel.channel.send(item)) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("channel send failed: {e}"));
-            1
-        }
-    }
+    let channel_addr = channel as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let c = unsafe { &mut *(channel_addr as *mut ChannelHandle) };
+        let status = client_inner_channel_send_json(&c.channel, item).await;
+        cb(status, user_data_addr as *mut c_void);
+    });
 }
 
-#[no_mangle]
-pub extern "C" fn saikuro_channel_close(channel: *mut c_void) -> c_int {
-    clear_last_error();
-
-    if channel.is_null() {
-        set_last_error("channel must not be null");
-        return 1;
-    }
-
-    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
-    match channel.rt.block_on(channel.channel.close()) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("channel close failed: {e}"));
-            1
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_channel_abort(channel: *mut c_void) -> c_int {
-    clear_last_error();
-
-    if channel.is_null() {
-        set_last_error("channel must not be null");
-        return 1;
-    }
-
-    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
-    match channel.rt.block_on(channel.channel.abort()) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("channel abort failed: {e}"));
-            1
-        }
-    }
-}
-
-#[no_mangle]
-/// # Safety
+/// Request graceful closure of the channel. The handle stays valid afterwards
+/// and must still be released with `saikuro_channel_free`.
 ///
-/// `channel` must be a valid handle returned by `saikuro_client_channel_json`.
-/// `out_item_json` and `out_done` must be non-null writable pointers valid for
-/// writes for the duration of this call.
-pub unsafe extern "C" fn saikuro_channel_next_json(
+/// # Safety
+/// `cb` must not be null. The channel handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_close_async(
     channel: *mut c_void,
-    out_item_json: *mut *mut c_char,
-    out_done: *mut c_int,
-) -> c_int {
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
     clear_last_error();
-
-    unsafe {
-        if !out_done.is_null() {
-            *out_done = 1;
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
         }
-        if !out_item_json.is_null() {
-            *out_item_json = ptr::null_mut();
-        }
-    }
-
+    };
     if channel.is_null() {
         set_last_error("channel must not be null");
-        return 1;
-    }
-    if out_item_json.is_null() || out_done.is_null() {
-        set_last_error("out_item_json and out_done must not be null");
-        return 1;
-    }
-
-    let channel = unsafe { &mut *(channel as *mut ChannelHandle) };
-    let next = channel.rt.block_on(channel.channel.next());
-
-    match next {
-        Some(Ok(value)) => match serde_json::to_string(&value) {
-            Ok(json) => {
-                unsafe {
-                    *out_done = 0;
-                    *out_item_json = into_c_string_ptr(&json);
-                }
-                0
-            }
-            Err(e) => {
-                unsafe {
-                    *out_done = 1;
-                    *out_item_json = ptr::null_mut();
-                }
-                set_last_error(format!("failed to serialize channel item: {e}"));
-                1
-            }
-        },
-        Some(Err(e)) => {
-            unsafe {
-                *out_done = 1;
-                *out_item_json = ptr::null_mut();
-            }
-            set_last_error(format!("channel receive failed: {e}"));
-            1
-        }
-        None => {
-            unsafe {
-                *out_done = 1;
-                *out_item_json = ptr::null_mut();
-            }
-            0
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_channel_free(channel: *mut c_void) {
-    if channel.is_null() {
+        cb(1, user_data);
         return;
     }
-    let _ = unsafe { Box::from_raw(channel as *mut ChannelHandle) };
+
+    let channel_addr = channel as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let c = unsafe { &mut *(channel_addr as *mut ChannelHandle) };
+        let status = client_inner_channel_close(&c.channel).await;
+        cb(status, user_data_addr as *mut c_void);
+    });
 }
 
+/// Abort the channel. The handle stays valid afterwards and must still be
+/// released with `saikuro_channel_free`.
+///
+/// # Safety
+/// `cb` must not be null. The channel handle must remain valid until `cb` fires.
+#[cfg(feature = "std")]
 #[no_mangle]
-pub extern "C" fn saikuro_client_resource_json(
-    handle: *mut c_void,
-    target: *const c_char,
-    args_json: *const c_char,
-) -> *mut c_char {
+pub extern "C" fn saikuro_channel_abort_async(
+    channel: *mut c_void,
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
     clear_last_error();
-    let h = ok_or_ptr!(client_handle(handle));
-    let target = ok_or_ptr!(cstr_to_string(target, "target"));
-    let args = ok_or_ptr!(c_json_array(args_json));
-    ptr_saikuro(h.rt.block_on(h.client().resource(target, args)), "resource")
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_client_log(
-    handle: *mut c_void,
-    level: *const c_char,
-    name: *const c_char,
-    msg: *const c_char,
-    fields_json: *const c_char,
-) -> c_int {
-    clear_last_error();
-    let h = ok_or_int!(client_handle(handle));
-    let level = ok_or_int!(cstr_to_string(level, "level"));
-    let name = ok_or_int!(cstr_to_string(name, "name"));
-    let msg = ok_or_int!(cstr_to_string(msg, "msg"));
-    let fields = if fields_json.is_null() {
-        None
-    } else {
-        let raw = ok_or_int!(cstr_to_string(fields_json, "fields_json"));
-        match parse_json_object_arg(&raw, "fields_json") {
-            Ok(map) => Some(Value::Object(map)),
-            Err(e) => {
-                set_last_error(e);
-                return 1;
-            }
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
         }
     };
-    int_saikuro(
-        h.rt.block_on(h.client().log(level, name, msg, fields)),
-        "log",
-    )
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        cb(1, user_data);
+        return;
+    }
+
+    let channel_addr = channel as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let c = unsafe { &mut *(channel_addr as *mut ChannelHandle) };
+        let status = client_inner_channel_abort(&c.channel).await;
+        cb(status, user_data_addr as *mut c_void);
+    });
 }
+
+/// # Safety
+/// `cb` must not be null. The channel handle must remain valid until `cb` fires,
+/// and `saikuro_channel_next_json_async` must not be called concurrently on the
+/// same channel.
+#[cfg(feature = "std")]
+#[no_mangle]
+pub unsafe extern "C" fn saikuro_channel_next_json_async(
+    channel: *mut c_void,
+    cb: Option<SaikuroItemCb>,
+    user_data: *mut c_void,
+) {
+    clear_last_error();
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        cb(ptr::null_mut(), 1, user_data);
+        return;
+    }
+
+    let channel_addr = channel as usize;
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        let c = unsafe { &mut *(channel_addr as *mut ChannelHandle) };
+        let outcome = client_inner_channel_next_json(&mut c.channel).await;
+        let (item, done) = next_outcome_parts(outcome);
+        cb(item, done, user_data_addr as *mut c_void);
+    });
+}
+
+// Provider lifecycle (sync register; async serve).
 
 #[no_mangle]
 pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void {
@@ -751,35 +1272,28 @@ pub extern "C" fn saikuro_provider_new(namespace: *const c_char) -> *mut c_void 
         }
     };
 
-    match ProviderHandle::new(&namespace) {
-        Ok(handle) => Box::into_raw(Box::new(handle)) as *mut c_void,
-        Err(e) => {
-            set_last_error(e);
-            ptr::null_mut()
-        }
-    }
+    Box::into_raw(Box::new(ProviderHandle {
+        provider: Some(Provider::new(&namespace)),
+    })) as *mut c_void
 }
 
-/// Safety: The `user_data` pointer is captured and later used inside
-/// asynchronous callbacks registered with the provider. Callers must ensure
-/// that the `user_data` pointer remains valid for the entire lifetime of the
-/// registered provider (i.e., until `saikuro_provider_free` is called). If
-/// `user_data` is freed or becomes dangling while the provider remains
-/// registered, subsequent callback invocations will dereference invalid
-/// memory and cause undefined behavior.
+/// Safety: The `user_data` pointer is captured and later used inside asynchronous
+/// callbacks registered with the provider. Callers must ensure that `user_data`
+/// remains valid for the entire lifetime of the registered provider (until
+/// `saikuro_provider_free` is called).
 async fn invoke_c_handler(
     callback: ProviderHandler,
     user_data_addr: usize,
     args: Vec<Value>,
 ) -> Result<Value, saikuro::Error> {
     let args_json = serde_json::to_string(&args)
-        .map_err(|e| saikuro::Error::InvalidState(format!("args encode failed: {e}")))?;
+        .map_err(|e| saikuro::Error::internal(format!("args encode failed: {e}")))?;
     let args_c = CString::new(args_json)
-        .map_err(|_| saikuro::Error::InvalidState("args contain NUL byte".to_owned()))?;
+        .map_err(|_| saikuro::Error::internal("args contain NUL byte".to_owned()))?;
 
-    let result_ptr = unsafe { (callback)(user_data_addr as *mut c_void, args_c.as_ptr()) };
+    let result_ptr = unsafe { callback(user_data_addr as *mut c_void, args_c.as_ptr()) };
     if result_ptr.is_null() {
-        return Err(saikuro::Error::InvalidState(
+        return Err(saikuro::Error::internal(
             "C handler returned null".to_owned(),
         ));
     }
@@ -787,12 +1301,11 @@ async fn invoke_c_handler(
     let result_owned = unsafe { CString::from_raw(result_ptr) };
     let result_str = result_owned
         .to_str()
-        .map_err(|_| saikuro::Error::InvalidState("C handler returned non-UTF8".to_owned()))?
+        .map_err(|_| saikuro::Error::internal("C handler returned non-UTF8".to_owned()))?
         .to_owned();
 
-    let value: Value = serde_json::from_str(&result_str).map_err(|e| {
-        saikuro::Error::InvalidState(format!("C handler returned invalid JSON: {e}"))
-    })?;
+    let value: Value = serde_json::from_str(&result_str)
+        .map_err(|e| saikuro::Error::internal(format!("C handler returned invalid JSON: {e}")))?;
 
     Ok(value)
 }
@@ -811,7 +1324,6 @@ pub extern "C" fn saikuro_provider_register(
         return 1;
     }
 
-    let handle = unsafe { &mut *(handle as *mut ProviderHandle) };
     let callback = match callback {
         Some(cb) => cb,
         None => {
@@ -943,20 +1455,35 @@ pub extern "C" fn saikuro_provider_register_with_schema(
     0
 }
 
+/// # Safety
+/// `cb` must not be null. The provider handle must remain valid until `cb` fires.
 #[no_mangle]
-pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_char) -> c_int {
+pub extern "C" fn saikuro_provider_serve_async(
+    handle: *mut c_void,
+    address: *const c_char,
+    cb: Option<SaikuroStatusCb>,
+    user_data: *mut c_void,
+) {
     clear_last_error();
-
+    let cb = match cb {
+        Some(c) => c,
+        None => {
+            set_last_error("callback must not be null");
+            return;
+        }
+    };
     if handle.is_null() {
         set_last_error(ERR_HANDLE_NULL);
-        return 1;
+        cb(1, user_data);
+        return;
     }
 
     let address = match cstr_to_string(address, "address") {
         Ok(s) => s,
         Err(e) => {
             set_last_error(e);
-            return 1;
+            cb(1, user_data);
+            return;
         }
     };
 
@@ -965,45 +1492,21 @@ pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_
         Some(p) => p,
         None => {
             set_last_error("provider has already started serving");
-            return 1;
+            cb(1, user_data);
+            return;
         }
     };
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        // On single-threaded wasm (no atomics), `block_on` cannot yield to the
-        // JS event loop, so futures that depend on JS I/O will never complete.
-        // Spawn the serve loop on the event loop and return immediately.
-        saikuro_exec::spawn(async move {
-            let _ = provider.serve(address).await;
-        });
-        0
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    match handle.rt.block_on(provider.serve(address)) {
-        Ok(()) => 0,
-        Err(e) => {
-            set_last_error(format!("provider serve failed: {e}"));
-            1
+    let user_data_addr = user_data as usize;
+    spawn_future(async move {
+        match provider.serve(address).await {
+            Ok(()) => cb(0, user_data_addr as *mut c_void),
+            Err(e) => {
+                set_last_error(format!("provider serve failed: {e}"));
+                cb(1, user_data_addr as *mut c_void);
+            }
         }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn saikuro_provider_close(handle: *mut c_void) -> c_int {
-    clear_last_error();
-
-    if handle.is_null() {
-        set_last_error(ERR_HANDLE_NULL);
-        return 1;
-    }
-
-    let handle = unsafe { &mut *(handle as *mut ProviderHandle) };
-    // If the provider was registered but never served, drop it now.
-    // If serve() already consumed it, there's nothing left to close.
-    let _ = handle.provider.take();
-    0
+    });
 }
 
 #[no_mangle]
@@ -1012,11 +1515,415 @@ pub extern "C" fn saikuro_provider_free(handle: *mut c_void) {
         return;
     }
 
-    // Close first so registered handlers are cleaned up before the runtime drops.
-    unsafe {
-        let h = &mut *(handle as *mut ProviderHandle);
-        let _ = h.provider.take();
-    }
+    // Drop the provider (and any pending handlers) before freeing the box.
+    let mut boxed = unsafe { Box::from_raw(handle as *mut ProviderHandle) };
+    let _ = boxed.provider.take();
+}
 
-    let _ = unsafe { Box::from_raw(handle as *mut ProviderHandle) };
+// Synchronous blocking API
+// These block the calling thread on the global tokio runtime. Each entry point
+// validates pointers, decodes the C strings, then delegates to the same inner
+// helpers the async entry points use.
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_connect(address: *const c_char) -> *mut c_void {
+    clear_last_error();
+    let address = match cstr_to_string(address, "address") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+
+    let client = match block_on_future(saikuro::Client::connect(address)) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(format!("failed to connect client: {e}"));
+            return ptr::null_mut();
+        }
+    };
+
+    Box::into_raw(Box::new(ClientHandle {
+        client: Some(client),
+    })) as *mut c_void
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_close(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let handle_ref = unsafe { &mut *(handle as *mut ClientHandle) };
+    let client = match handle_ref.client.take() {
+        Some(c) => c,
+        None => {
+            return 0;
+        }
+    };
+    int_saikuro(block_on_future(client.close()), "close")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_call_json(h.client(), target, args))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_call_json_timeout(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+    timeout_ms: c_int,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_call_json_timeout(
+        h.client(),
+        target,
+        args,
+        i64::from(timeout_ms),
+    ))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_cast_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_cast_json(h.client(), target, args))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_batch_json(
+    handle: *mut c_void,
+    calls_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let raw = match cstr_to_string(calls_json, "calls_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_batch_json(h.client(), &raw))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_stream_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_void {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_stream_json(h.client(), target, args))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_channel_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_void {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_channel_json(h.client(), target, args))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_send_json(
+    channel: *mut c_void,
+    item_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let item_json = match cstr_to_string(item_json, "item_json") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let item: Value = match serde_json::from_str(&item_json) {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(format!("item_json must be valid JSON: {e}"));
+            return 1;
+        }
+    };
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    block_on_future(client_inner_channel_send_json(&c.channel, item))
+}
+
+/// Close the channel. The handle stays valid afterwards and must still be
+/// released with `saikuro_channel_free`.
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_close(channel: *mut c_void) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    block_on_future(client_inner_channel_close(&c.channel))
+}
+
+/// Abort the channel. The handle stays valid afterwards and must still be
+/// released with `saikuro_channel_free`.
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_abort(channel: *mut c_void) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    block_on_future(client_inner_channel_abort(&c.channel))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn saikuro_channel_next_json(
+    channel: *mut c_void,
+    out_item_json: *mut *mut c_char,
+    out_done: *mut c_int,
+) -> c_int {
+    clear_last_error();
+    if channel.is_null() {
+        set_last_error("channel must not be null");
+        return 1;
+    }
+    let c = unsafe { &mut *(channel as *mut ChannelHandle) };
+    let outcome = block_on_future(client_inner_channel_next_json(&mut c.channel));
+    unsafe { next_outcome_to_out_params(outcome, out_item_json, out_done) }
+}
+
+#[cfg(feature = "std")]
+#[no_mangle]
+pub extern "C" fn saikuro_channel_free(channel: *mut c_void) {
+    if channel.is_null() {
+        return;
+    }
+    let _ = unsafe { Box::from_raw(channel as *mut ChannelHandle) };
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn saikuro_stream_next_json(
+    stream: *mut c_void,
+    out_item_json: *mut *mut c_char,
+    out_done: *mut c_int,
+) -> c_int {
+    clear_last_error();
+    if stream.is_null() {
+        set_last_error("stream must not be null");
+        return 1;
+    }
+    let s = unsafe { &mut *(stream as *mut StreamHandle) };
+    let outcome = block_on_future(client_inner_stream_next_json(&mut s.stream));
+    unsafe { next_outcome_to_out_params(outcome, out_item_json, out_done) }
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_resource_json(
+    handle: *mut c_void,
+    target: *const c_char,
+    args_json: *const c_char,
+) -> *mut c_char {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return ptr::null_mut();
+    }
+    let (target, args) = match cstr_to_string(target, "target")
+        .and_then(|t| c_json_array(args_json).map(|a| (t, a)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return ptr::null_mut();
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_resource_json(h.client(), target, args))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_client_log(
+    handle: *mut c_void,
+    level: *const c_char,
+    name: *const c_char,
+    msg: *const c_char,
+    fields_json: *const c_char,
+) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let (level, name, msg) = match cstr_to_string(level, "level")
+        .and_then(|l| cstr_to_string(name, "name").map(|n| (l, n)))
+        .and_then(|(l, n)| cstr_to_string(msg, "msg").map(|m| (l, n, m)))
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let fields = if fields_json.is_null() {
+        None
+    } else {
+        match cstr_to_string(fields_json, "fields_json")
+            .and_then(|raw| parse_json_object_arg(&raw, "fields_json").map(Value::Object))
+        {
+            Ok(v) => Some(v),
+            Err(e) => {
+                set_last_error(e);
+                return 1;
+            }
+        }
+    };
+    let h = unsafe { &*(handle as *const ClientHandle) };
+    block_on_future(client_inner_log(h.client(), level, name, msg, fields))
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_provider_serve(handle: *mut c_void, address: *const c_char) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let address = match cstr_to_string(address, "address") {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(e);
+            return 1;
+        }
+    };
+    let handle_ref = unsafe { &mut *(handle as *mut ProviderHandle) };
+    let provider = match handle_ref.provider.take() {
+        Some(p) => p,
+        None => {
+            set_last_error("provider has already started serving");
+            return 1;
+        }
+    };
+    int_saikuro(block_on_future(provider.serve(address)), "provider serve")
+}
+
+#[cfg(all(feature = "std", feature = "native"))]
+#[no_mangle]
+pub extern "C" fn saikuro_provider_close(handle: *mut c_void) -> c_int {
+    clear_last_error();
+    if handle.is_null() {
+        set_last_error(ERR_HANDLE_NULL);
+        return 1;
+    }
+    let handle_ref = unsafe { &mut *(handle as *mut ProviderHandle) };
+    let _ = handle_ref.provider.take();
+    0
 }

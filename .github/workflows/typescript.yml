@@ -5,13 +5,13 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/typescript/**"
-      - "Build/scripts/typescript.py"
+      - "scripts/typescript.py"
       - "Justfile"
       - ".github/workflows/typescript.yml"
   pull_request:
     paths:
       - "Build/adapters/typescript/**"
-      - "Build/scripts/typescript.py"
+      - "scripts/typescript.py"
       - "Justfile"
       - ".github/workflows/typescript.yml"
 

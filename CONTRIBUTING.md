@@ -150,7 +150,7 @@ just cpp check        # cmake configure + header compile test
 ### Individual subcommands
 
 ```bash
-just rust fmt_check
+just rust format
 just rust lint
 just rust test
 just rust wasm_check

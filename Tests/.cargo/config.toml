@@ -1,0 +1,39 @@
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"
+
+# The wasip1 runner is a `no_std` command: it exports `_start` itself, so the
+# CRT object (`crt1-command.o`) must not be linked.
+[target.wasm32-wasip1]
+rustflags = ["-C", "link-self-contained=no"]
+runner = "wasmtime --wasi common"
+
+# wasip2 uses wasmtime's preview2 component support.
+[target.wasm32-wasip2]
+runner = "wasmtime --wasi common"
+
+# QEMU embedded target configurations.
+
+# thumbv7m: Netduino 2 (STM32F205RF) - 1MB flash / 128K SRAM.
+[target.thumbv7m-none-eabi]
+runner = "qemu-system-arm -cpu cortex-m3 -machine netduino2 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Llink/netduino2", "--cfg", "saikuro_test_capacity=\"rpx-class\""]
+
+# thumbv6m: MPS2 AN385 - 92K SRAM.
+[target.thumbv6m-none-eabi]
+runner = "qemu-system-arm -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Llink/arm", "--cfg", "saikuro_test_capacity=\"small\""]
+
+# thumbv8m: MPS2 AN505 - declared 512K data SRAM.
+[target.thumbv8m.main-none-eabihf]
+runner = "qemu-system-arm -cpu cortex-m33 -machine mps2-an505 -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=-Llink/arm8", "--cfg", "saikuro_test_capacity=\"m33-class\""]
+
+# riscv32imac: QEMU virt - declared 256K heap budget.
+[target.riscv32imac-unknown-none-elf]
+runner = "qemu-system-riscv32 -M virt -bios none -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tmemory.x", "-C", "link-arg=-Tlink.x", "-C", "link-arg=-Llink/riscv", "--cfg", "saikuro_test_capacity=\"m33-class\""]
+
+# riscv32imc: QEMU virt - declared 256K heap budget.
+[target.riscv32imc-unknown-none-elf]
+runner = "qemu-system-riscv32 -M virt -bios none -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tmemory.x", "-C", "link-arg=-Tlink.x", "-C", "link-arg=-Llink/riscv", "--cfg", "saikuro_test_capacity=\"m33-class\""]

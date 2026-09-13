@@ -3,13 +3,15 @@ Tests for SaikuroClient
 """
 
 import asyncio
+import contextlib
+
 import pytest
+
 from saikuro.client import SaikuroClient
-from saikuro.provider import SaikuroProvider
 from saikuro.envelope import Envelope, InvocationType, ResourceHandle
 from saikuro.error import SaikuroError, TransportError
+from saikuro.provider import SaikuroProvider
 from saikuro.transport import InMemoryTransport
-
 
 #  Harness
 
@@ -30,10 +32,8 @@ class Harness:
     async def teardown(self):
         await self.client.close()
         self._serve_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await self._serve_task
-        except (asyncio.CancelledError, Exception):
-            pass
 
 
 async def make_harness(namespace: str = "test") -> Harness:
@@ -53,7 +53,11 @@ async def make_harness(namespace: str = "test") -> Harness:
                 break
             try:
                 envelope = Envelope.from_msgpack_dict(raw)
-            except Exception:
+            except (
+                ValueError,
+                TypeError,
+                KeyError,
+            ):  # harness skips malformed test frames
                 continue
             asyncio.ensure_future(provider._dispatch(envelope, provider_transport))
 
@@ -189,7 +193,7 @@ class TestClientResource:
     async def test_raises_on_non_dict_result(self):
         h = await make_harness()
         h.provider.register_function("open", lambda: "not-a-handle")
-        with pytest.raises((ValueError, SaikuroError)):
+        with pytest.raises(TypeError, match="non-dict"):
             await h.client.resource("test.open", [])
         await h.teardown()
 
@@ -383,10 +387,16 @@ def _make_batch_server(transport: InMemoryTransport, handlers: dict) -> asyncio.
                 break
             try:
                 envelope = Envelope.from_msgpack_dict(raw)
-            except Exception:
+            except (
+                ValueError,
+                TypeError,
+                KeyError,
+            ):  # harness skips malformed test frames
                 continue
             if envelope.invocation_type == InvocationType.BATCH:
                 results = []
+                # The fake server maps any handler failure to a null result, matching
+                # the runtime's per-invocation error isolation.
                 for item in envelope.batch_items or []:
                     fn_name = item.target.split(".")[-1]
                     handler = handlers.get(fn_name)
@@ -395,7 +405,7 @@ def _make_batch_server(transport: InMemoryTransport, handlers: dict) -> asyncio.
                     else:
                         try:
                             result = handler(*item.args)
-                        except Exception:
+                        except Exception:  # noqa: BLE001  see comment above
                             result = None
                         results.append(result)
                 await transport.send(

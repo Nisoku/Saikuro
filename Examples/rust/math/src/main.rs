@@ -6,7 +6,7 @@
 //! Run with:
 //!   cargo run -p math
 
-use saikuro::{Client, Error, InMemoryTransport, Provider, Result};
+use saikuro::{Client, Error, MemoryAdapterTransport, Provider, Result};
 use serde_json::Value as JsonValue;
 
 fn extract_two_floats(args: &[JsonValue]) -> (f64, f64) {
@@ -42,14 +42,14 @@ async fn async_main() -> Result<()> {
     provider.register("divide", |args: Vec<JsonValue>| async move {
         let (a, b) = extract_two_floats(&args);
         if b == 0.0 {
-            return Err(Error::InvalidState("division by zero".into()));
+            return Err(Error::ProviderError("division by zero".into()));
         }
         Ok(serde_json::json!(a / b))
     });
 
     // wire provider + client over in-memory transport
 
-    let (provider_transport, client_transport) = InMemoryTransport::pair();
+    let (provider_transport, client_transport) = MemoryAdapterTransport::pair();
 
     saikuro_exec::spawn(async move {
         let _ = provider.serve_on(Box::new(provider_transport)).await;
@@ -131,7 +131,7 @@ async fn async_main() -> Result<()> {
         .await
         .unwrap_err();
     println!("divide by zero caught: {err}");
-    assert!(matches!(err, Error::Remote { .. } | Error::InvalidState(_)));
+    assert!(matches!(err, Error::Remote { .. } | Error::ProviderError(_)));
 
     client.close().await?;
     println!("all examples passed");

@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class InvocationType(enum.Enum):
@@ -56,11 +56,11 @@ class LogRecord:
     level: LogLevel
     name: str  # logger name / origin
     msg: str
-    fields: Dict[str, Any] = field(default_factory=dict)
+    fields: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict for embedding in an Envelope ``args`` list."""
-        d: Dict[str, Any] = {
+        d: dict[str, Any] = {
             "ts": self.ts,
             "level": self.level.value,
             "name": self.name,
@@ -84,13 +84,13 @@ class ResourceHandle:
     """
 
     id: str
-    mime_type: Optional[str] = None
-    size: Optional[int] = None
-    uri: Optional[str] = None
+    mime_type: str | None = None
+    size: int | None = None
+    uri: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict for embedding in a response ``result``."""
-        d: Dict[str, Any] = {"id": self.id}
+        d: dict[str, Any] = {"id": self.id}
         if self.mime_type is not None:
             d["mime_type"] = self.mime_type
         if self.size is not None:
@@ -100,19 +100,19 @@ class ResourceHandle:
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "ResourceHandle":
+    def from_dict(cls, d: dict[str, Any]) -> ResourceHandle:
         """Deserialise from a plain dict (as decoded from MessagePack).
 
-        Raises :class:`ValueError` if ``d`` is not a mapping or is missing the
-        required ``id`` field.
+        Raises :class:`TypeError` if ``d`` is not a mapping or the ``id``
+        field is not a string.
         """
         if not isinstance(d, dict):
-            raise ValueError(
+            raise TypeError(
                 f"ResourceHandle.from_dict: expected dict, got {type(d).__name__!r}"
             )
         id_val = d.get("id")
         if not isinstance(id_val, str):
-            raise ValueError(
+            raise TypeError(
                 "ResourceHandle.from_dict: missing or non-string 'id' field"
             )
         return cls(
@@ -139,17 +139,17 @@ class Envelope:
     invocation_type: InvocationType
     id: str
     target: str
-    args: List[Any] = field(default_factory=list)
-    meta: Dict[str, Any] = field(default_factory=dict)
-    capability: Optional[str] = None
-    batch_items: Optional[List["Envelope"]] = None
-    stream_control: Optional[StreamControl] = None
-    seq: Optional[int] = None
+    args: list[Any] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
+    capability: str | None = None
+    batch_items: list[Envelope] | None = None
+    stream_control: StreamControl | None = None
+    seq: int | None = None
 
     @classmethod
     def make_call(
-        cls, target: str, args: List[Any], capability: Optional[str] = None
-    ) -> "Envelope":
+        cls, target: str, args: list[Any], capability: str | None = None
+    ) -> Envelope:
         return cls(
             version=1,
             invocation_type=InvocationType.CALL,
@@ -161,26 +161,26 @@ class Envelope:
 
     @classmethod
     def make_cast(
-        cls, target: str, args: List[Any], capability: Optional[str] = None
-    ) -> "Envelope":
+        cls, target: str, args: list[Any], capability: str | None = None
+    ) -> Envelope:
         env = cls.make_call(target, args, capability)
         env.invocation_type = InvocationType.CAST
         return env
 
     @classmethod
-    def make_stream_open(cls, target: str, args: List[Any]) -> "Envelope":
+    def make_stream_open(cls, target: str, args: list[Any]) -> Envelope:
         env = cls.make_call(target, args)
         env.invocation_type = InvocationType.STREAM
         return env
 
     @classmethod
-    def make_channel_open(cls, target: str, args: List[Any]) -> "Envelope":
+    def make_channel_open(cls, target: str, args: list[Any]) -> Envelope:
         env = cls.make_call(target, args)
         env.invocation_type = InvocationType.CHANNEL
         return env
 
     @classmethod
-    def make_announce(cls, schema_dict: Dict[str, Any]) -> "Envelope":
+    def make_announce(cls, schema_dict: dict[str, Any]) -> Envelope:
         """Construct a schema-announcement envelope.
 
         ``schema_dict`` is the plain-dict representation of a Schema produced by
@@ -197,7 +197,7 @@ class Envelope:
         )
 
     @classmethod
-    def make_batch(cls, items: List["Envelope"]) -> "Envelope":
+    def make_batch(cls, items: list[Envelope]) -> Envelope:
         """Construct a batch invocation envelope.
 
         ``items`` are the individual call envelopes to execute together. The
@@ -216,8 +216,8 @@ class Envelope:
 
     @classmethod
     def make_resource(
-        cls, target: str, args: List[Any], capability: Optional[str] = None
-    ) -> "Envelope":
+        cls, target: str, args: list[Any], capability: str | None = None
+    ) -> Envelope:
         """Construct a resource-access envelope.
 
         ``target`` identifies the provider function that manages the resource
@@ -229,9 +229,9 @@ class Envelope:
         env.invocation_type = InvocationType.RESOURCE
         return env
 
-    def to_msgpack_dict(self) -> Dict[str, Any]:
+    def to_msgpack_dict(self) -> dict[str, Any]:
         """Serialise to the dict that will be MessagePack-encoded."""
-        d: Dict[str, Any] = {
+        d: dict[str, Any] = {
             "version": self.version,
             "type": self.invocation_type.value,
             "id": self.id,
@@ -251,7 +251,7 @@ class Envelope:
         return d
 
     @classmethod
-    def from_msgpack_dict(cls, d: Dict[str, Any]) -> "Envelope":
+    def from_msgpack_dict(cls, d: dict[str, Any]) -> Envelope:
         batch_items = None
         if "batch_items" in d:
             batch_items = [cls.from_msgpack_dict(item) for item in d["batch_items"]]
@@ -277,12 +277,12 @@ class ResponseEnvelope:
     id: str
     ok: bool
     result: Any = None
-    error: Optional[Dict[str, Any]] = None
-    seq: Optional[int] = None
-    stream_control: Optional[StreamControl] = None
+    error: dict[str, Any] | None = None
+    seq: int | None = None
+    stream_control: StreamControl | None = None
 
     @classmethod
-    def from_msgpack_dict(cls, d: Dict[str, Any]) -> "ResponseEnvelope":
+    def from_msgpack_dict(cls, d: dict[str, Any]) -> ResponseEnvelope:
         sc = d.get("stream_control")
         return cls(
             id=d["id"],

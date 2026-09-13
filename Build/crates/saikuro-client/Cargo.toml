@@ -1,0 +1,75 @@
+[package]
+name = "saikuro-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Client/Provider building blocks for Rust services connecting to the Saikuro runtime"
+keywords = ["ipc", "cross-language", "rpc", "msgpack", "saikuro"]
+categories = ["network-programming", "asynchronous"]
+
+[lib]
+path = "lib.rs"
+
+[features]
+default = ["std", "native", "tcp", "unix", "ws"]
+std = ["dep:dashmap"]
+native = [
+    "std",
+    "saikuro-core/native",
+    "saikuro-transport/native",
+    "saikuro-exec/native",
+    "saikuro-event/native",
+    "saikuro-event/std",
+    "saikuro-schema/native",
+]
+wasm = [
+    "saikuro-core/wasm",
+    "saikuro-transport/wasm",
+    "saikuro-transport/wasm-host",
+    "saikuro-exec/wasm",
+    "saikuro-event/wasm",
+    "saikuro-schema/wasm",
+]
+embedded = [
+    "saikuro-core/embedded",
+    "saikuro-transport/embedded",
+    "saikuro-exec/embedded",
+    "saikuro-event/embedded",
+    "saikuro-schema/embedded",
+]
+no_std = [
+    "saikuro-core/no_std",
+    "saikuro-transport/no_std",
+    "saikuro-exec/no_std",
+    "saikuro-event/no_std",
+    "saikuro-schema/no_std",
+]
+tcp = ["saikuro-transport/tcp"]
+unix = ["saikuro-transport/unix"]
+ws = ["saikuro-transport/ws"]
+ws-wasi = ["saikuro-transport/ws-wasi"]
+wasi-tcp = ["saikuro-transport/wasi-tcp"]
+wasi-host = ["saikuro-transport/wasi-host"]
+wasi-preview1 = ["saikuro-transport/wasi-preview1"]
+wasi-preview2 = ["saikuro-transport/wasi-preview2"]
+
+[dependencies]
+saikuro-core = { path = "../saikuro-core", default-features = false }
+saikuro-transport = { path = "../saikuro-transport", default-features = false }
+saikuro-exec = { workspace = true, default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
+saikuro-schema = { path = "../saikuro-schema", default-features = false }
+
+serde_json = { workspace = true, features = ["alloc"] }
+bytes = { workspace = true }
+portable-atomic-util = { workspace = true, features = ["alloc"] }
+portable-atomic = { workspace = true }
+spin = { workspace = true }
+futures = { workspace = true, features = ["async-await"] }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+dashmap = { workspace = true, optional = true }
+
+[dev-dependencies]

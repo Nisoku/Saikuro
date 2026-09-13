@@ -8,56 +8,82 @@ license.workspace = true
 repository.workspace = true
 keywords = ["ipc", "cross-language", "saikuro", "storage", "key-value"]
 
+[lib]
+path = "lib.rs"
+
 [features]
-default = ["native-storage"]
-native-storage = [
-    "inmemory",
-    "local-storage",
-    "session-storage",
-    "saikuro-exec/tokio-runtime",
+default = ["std", "native", "inmemory"]
+std = ["saikuro-event/std"]
+
+# Engine features
+native   = [
+    "std",
+    "dep:tokio",
+    "saikuro-core/native",
+    "saikuro-event/native",
 ]
-inmemory = ["dashmap", "parking_lot"]
-local-storage = ["inmemory"]
-session-storage = ["inmemory"]
-fs-storage = ["dep:tokio", "saikuro-exec/tokio-runtime"]
-sled-storage = ["dep:tokio", "dep:sled", "saikuro-exec/tokio-runtime"]
-sqlite-storage = ["dep:tokio", "dep:rusqlite", "saikuro-exec/tokio-runtime"]
-wasm-storage = [
-    "inmemory",
-    "local-storage",
-    "session-storage",
-    "saikuro-exec/wasm-runtime",
+no_std   = [
+    "saikuro-core/no_std",
+    "saikuro-event/no_std",
+]
+wasm     = [
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:js-sys",
     "dep:web-sys",
+    "saikuro-core/wasm",
+    "saikuro-event/wasm",
 ]
-fs-access = ["wasm-storage"]
+embedded = [
+    "dep:embedded-storage-async",
+    "saikuro-core/embedded",
+    "saikuro-event/embedded",
+]
+
+wasi-component = ["no_std", "dep:wasi", "dep:wit-bindgen"]
+wasi-preview1  = ["no_std"]
+wasi-kv        = ["no_std"]
+
+inmemory = ["std", "dashmap"]
+fs    = ["native", "dep:tokio", "saikuro-core/std"]
+sled  = ["native", "dep:tokio", "dep:sled", "saikuro-core/std"]
+sqlite = ["dep:graphitesql"]
+sqlite-native = ["sqlite", "graphitesql/std"]
+flash = [
+    "embedded",
+    "dep:embedded-storage-async",
+    "dep:sequential-storage",
+    "saikuro-event/embedded",
+    "saikuro-core/embedded",
+]
 
 [dependencies]
-saikuro-core = { workspace = true }
-saikuro-exec = { workspace = true, default-features = false }
+saikuro-core = { path = "../saikuro-core", default-features = false }
+saikuro-event = { path = "../saikuro-event", default-features = false }
 
 serde = { workspace = true }
-serde_json = { workspace = true }
-rmp-serde = { workspace = true }
+serde_json = { workspace = true, features = ["alloc"] }
 bytes = { workspace = true }
-async-trait = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
+async-trait = { workspace = true }
 
 dashmap = { workspace = true, optional = true }
-parking_lot = { workspace = true, optional = true }
-tokio = { version = "1.52.3", features = ["rt"], optional = true }
-sled = { version = "0.34.7", optional = true }
-rusqlite = { version = "0.40.0", features = ["bundled"], optional = true }
+tokio = { workspace = true, optional = true, features = ["sync", "rt", "rt-multi-thread"] }
+sled = { workspace = true, optional = true }
+spin = { workspace = true }
+portable-atomic-util = { workspace = true }
+graphitesql = { workspace = true, optional = true }
+wit-bindgen = { workspace = true, optional = true }
+wasi = { workspace = true, optional = true }
+embedded-storage-async = { workspace = true, optional = true }
+sequential-storage = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { version = "0.2.122", optional = true }
-wasm-bindgen-futures = { version = "0.4.72", optional = true }
-js-sys = { version = "0.3.99", optional = true }
-web-sys = { version = "0.3.99", optional = true, features = [
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "Blob",
     "BroadcastChannel",
     "DomException",
@@ -89,4 +115,6 @@ web-sys = { version = "0.3.99", optional = true, features = [
 ] }
 
 [dev-dependencies]
-tracing-subscriber = { workspace = true }
+saikuro-exec = { workspace = true, features = ["native"] }
+futures-executor = { workspace = true }
+embedded-storage-async = { workspace = true }

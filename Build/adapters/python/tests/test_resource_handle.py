@@ -3,6 +3,7 @@ Tests for decodeResourceHandle
 """
 
 import pytest
+
 from saikuro.envelope import ResourceHandle
 
 
@@ -25,17 +26,17 @@ class TestResourceHandleFromDict:
         )
 
     def test_raises_for_null(self):
-        with pytest.raises(ValueError, match="expected dict"):
+        with pytest.raises(TypeError, match="expected dict"):
             ResourceHandle.from_dict(None)
 
     def test_raises_for_missing_id(self):
         raw = {"mime_type": "text/plain"}
-        with pytest.raises(ValueError, match="missing or non-string"):
+        with pytest.raises(TypeError, match="missing or non-string"):
             ResourceHandle.from_dict(raw)
 
     def test_raises_when_id_not_string(self):
         raw = {"id": 42}
-        with pytest.raises(ValueError, match="missing or non-string"):
+        with pytest.raises(TypeError, match="missing or non-string"):
             ResourceHandle.from_dict(raw)
 
     def test_omits_absent_optional_fields(self):

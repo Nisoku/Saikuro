@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Saikuro Development Environment Setup ==="
+echo "Saikuro Development Environment Setup"
 
 # System dependencies
 echo "Installing system packages..."
@@ -60,6 +60,6 @@ cargo check --target wasm32-unknown-unknown --no-default-features \
     --manifest-path Build/Cargo.toml
 
 echo ""
-echo "=== Setup complete ==="
+echo "Setup complete"
 echo "Run 'just check' to run all language checks."
 echo "Run 'just test' to run all language tests."
