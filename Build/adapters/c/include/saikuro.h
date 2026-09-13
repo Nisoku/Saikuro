@@ -141,10 +141,10 @@ SAIKURO_API int SAIKURO_CALL saikuro_provider_register_with_schema(
     const char *return_type_json);
 
 /* Provider status callback: receives 0 on clean shutdown, 1 on error. */
-typedef void (SAIKURO_CALL *saikuro_provider_status_cb_fn)(int status,
-                                                           void *user_data);
+typedef void(SAIKURO_CALL *saikuro_provider_status_cb_fn)(int status,
+                                                          void *user_data);
 
-/* Blocking serve.  Not available on WebAssembly builds; 
+/* Blocking serve.  Not available on WebAssembly builds;
  * use saikuro_provider_serve_async there instead. */
 SAIKURO_API int SAIKURO_CALL saikuro_provider_serve(saikuro_provider_t handle,
                                                     const char *address);
