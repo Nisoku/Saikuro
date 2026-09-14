@@ -7,7 +7,7 @@ path: /adapters/typescript/api-reference/
 updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-14T15:17:24.000Z"
+  generated_at: "2026-09-14T15:30:15.336Z"
 ---
 ---
 title: "TypeScript API Reference"

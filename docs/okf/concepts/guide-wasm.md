@@ -7,7 +7,7 @@ path: /guide/wasm/
 updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-14T15:17:24.010Z"
+  generated_at: "2026-09-14T15:30:15.343Z"
 ---
 ---
 title: "WASM"

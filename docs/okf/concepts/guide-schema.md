@@ -7,7 +7,7 @@ path: /guide/schema/
 updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-14T15:17:24.008Z"
+  generated_at: "2026-09-14T15:30:15.342Z"
 ---
 ---
 title: "Schema"
