@@ -43,6 +43,6 @@ serde_json = { workspace = true, optional = true, default-features = false, feat
 anyhow = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
-syn = { version = "2.0", features = ["full"], optional = true }
+syn = { version = "3.0", features = ["full"], optional = true }
 
 [dev-dependencies]
