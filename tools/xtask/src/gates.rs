@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::Context;
 
 use crate::paths;
@@ -44,13 +46,14 @@ pub fn miri() -> anyhow::Result<()> {
         .args([
             "+nightly",
             "miri",
-            "test",
+            "run",
             "-p",
-            "saikuro-core",
-            "-p",
-            "saikuro-exec",
-            "-p",
-            "saikuro-random",
+            "saikuro-tests",
+            "--no-default-features",
+            "--features",
+            "embedded",
+            "--bin",
+            "embedded-host",
         ])
         .current_dir(root())
         .env("MIRIFLAGS", "-Zmiri-strict-provenance")
@@ -178,6 +181,8 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
             );
             continue;
         }
+        print!("geiger: scanning {} ... ", member.name);
+        std::io::stdout().flush().ok();
         let manifest = member.manifest_path.display().to_string();
         let out = run::run_capture(
             &root(),
@@ -200,6 +205,7 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         }
         combined.push_str(&String::from_utf8_lossy(&out.stdout));
         combined.push('\n');
+        println!("done");
     }
     let digest = sha256_hex(&normalize_report(&combined));
     let baseline = baseline_path(GEIGER_BASELINE);
@@ -242,15 +248,33 @@ pub fn spellcheck() -> anyhow::Result<()> {
     run::run(
         &root(),
         "cargo",
-        [
-            "spellcheck",
-            "--manifest-path",
-            paths::engine_manifest().display().to_string().as_str(),
-        ],
+        ["spellcheck", "-r", "-m", "1", "check", "Build"],
     )
     .with_context(|| "cargo spellcheck")
 }
 
 pub fn deadlinks() -> anyhow::Result<()> {
-    run::run(&root(), "cargo", ["+nightly", "deadlinks"]).with_context(|| "cargo deadlinks")
+    let out = run::run_capture(&root(), "cargo", ["+nightly", "doc", "--workspace", "--no-deps"])
+        .with_context(|| "cargo doc")?;
+    let combined = String::from_utf8_lossy(&out.stdout);
+    let combined_stderr = String::from_utf8_lossy(&out.stderr);
+    let mut problems = Vec::new();
+    for (stream, text) in [("stderr", combined_stderr.as_ref()), ("stdout", combined.as_ref())] {
+        for line in text.lines() {
+            if ["unresolved link", "unresolved intra-doc link", "links to private item"]
+                .iter()
+                .any(|marker| line.contains(marker))
+            {
+                problems.push(format!("[{stream}] {line}"));
+            }
+        }
+    }
+    if !problems.is_empty() {
+        anyhow::bail!(
+            "broken intra-doc links:\n{}",
+            problems.join("\n")
+        );
+    }
+    println!("deadlinks: ok (rustdoc intra-doc links clean)");
+    Ok(())
 }

@@ -33,6 +33,11 @@ path = "runners/wasm.rs"
 required-features = ["wasm"]
 
 [[bin]]
+name = "embedded-host"
+path = "runners/embedded_host.rs"
+required-features = ["embedded"]
+
+[[bin]]
 name = "thumbv6m"
 path = "runners/bin/thumbv6m.rs"
 required-features = ["arm"]

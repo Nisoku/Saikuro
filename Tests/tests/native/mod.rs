@@ -5,7 +5,7 @@ pub mod core;
 pub mod exec;
 pub mod storage;
 
-/// Register host-only tests into the shared [`TestSuite`] instance the native
+/// Register host-only tests into the shared [`TestSuite`](saikuro_tests::TestSuite) instance the native
 /// runner owns.  Returns the same suite so callers can chain with
 /// `shared::register_all`.
 pub fn register(suite: &mut saikuro_tests::TestSuite) {

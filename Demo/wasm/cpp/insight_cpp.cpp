@@ -217,17 +217,17 @@ extern "C" int compute_ngrams(const char *text, int top_n,
     { while (*s && pos < out_capacity) out_buf[pos++] = *s++; };
 
     char tmp[4096];
-    int tpos = 0;
+    int text_pos = 0;
 
     wc('{');
     ws("\"bigrams\":");
-    tpos = write_json_ngrams(bigrams, 256, top_n, tmp, 4096);
-    tmp[tpos] = '\0';
+    text_pos = write_json_ngrams(bigrams, 256, top_n, tmp, 4096);
+    tmp[text_pos] = '\0';
     ws(tmp);
     wc(',');
     ws("\"trigrams\":");
-    tpos = write_json_ngrams(trigrams, 256, top_n, tmp, 4096);
-    tmp[tpos] = '\0';
+    text_pos = write_json_ngrams(trigrams, 256, top_n, tmp, 4096);
+    tmp[text_pos] = '\0';
     ws(tmp);
     wc('}');
     if (pos < out_capacity)

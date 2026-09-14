@@ -38,13 +38,6 @@ bin = "cargo-geiger"
 source = "binstall"
 
 [[tools]]
-name = "outdated"
-pkg = "cargo-outdated"
-version = "0.19.0"
-bin = "cargo-outdated"
-source = "binstall"
-
-[[tools]]
 name = "spellcheck"
 pkg = "cargo-spellcheck"
 version = "0.15.7"

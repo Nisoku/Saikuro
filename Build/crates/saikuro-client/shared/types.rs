@@ -50,7 +50,7 @@ pub(crate) const STREAM_CHANNEL_CAPACITY: saikuro_exec::ChannelCapacity =
 
 // Client types
 
-/// Options for [`Client`](super::client::Client).
+/// Options for [`Client`](crate::client::Client).
 #[derive(Debug, Clone, Default)]
 pub struct ClientOptions {
     /// Default timeout for `call` invocations. `None` means no timeout.
@@ -76,7 +76,7 @@ impl SaikuroStream {
 }
 
 /// A bidirectional channel opened with
-/// [`Client::channel`](super::client::Client::channel).
+/// [`Client::channel`](crate::client::Client::channel).
 pub struct SaikuroChannel {
     id: InvocationId,
     send_tx: ChannelSendTx,

@@ -68,7 +68,7 @@ enum Command {
     Deny,
     /// cargo-audit dependency advisories.
     Audit,
-    /// Miri on the pure crates that must be UB-free.
+    /// Miri over the embedded-engine suite.
     Miri,
     /// typos source spell check.
     Typos,
@@ -83,7 +83,7 @@ enum Command {
     // Outdated,
     /// cargo-spellcheck doc spell analysis.
     Spellcheck,
-    /// cargo-deadlinks intra-doc link gate (nightly).
+    /// rustdoc intra-doc link gate.
     Deadlinks,
 }
 
