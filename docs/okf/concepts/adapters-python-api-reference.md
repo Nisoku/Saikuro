@@ -4,10 +4,10 @@ title: "Python API Reference"
 description: "Full Python adapter API reference"
 source: "https://nisoku.org/Saikuro/docs/adapters/python/api-reference/"
 path: /adapters/python/api-reference/
-updated: 2026-09-13
+updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-13T04:06:47.690Z"
+  generated_at: "2026-09-14T15:17:23.997Z"
 ---
 ---
 title: "Python API Reference"

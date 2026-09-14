@@ -4,10 +4,10 @@ title: "C# API Reference"
 description: "Full C# adapter API reference"
 source: "https://nisoku.org/Saikuro/docs/adapters/csharp/api-reference/"
 path: /adapters/csharp/api-reference/
-updated: 2026-09-13
+updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-13T04:06:47.688Z"
+  generated_at: "2026-09-14T15:17:23.994Z"
 ---
 ---
 title: "C# API Reference"

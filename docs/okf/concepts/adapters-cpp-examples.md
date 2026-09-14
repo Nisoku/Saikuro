@@ -4,10 +4,10 @@ title: "C++ Examples"
 description: "C++ adapter usage patterns"
 source: "https://nisoku.org/Saikuro/docs/adapters/cpp/examples/"
 path: /adapters/cpp/examples/
-updated: 2026-09-13
+updated: 2026-09-14
 okf:
   generated_by: "@docmd/plugin-okf"
-  generated_at: "2026-09-13T04:06:47.687Z"
+  generated_at: "2026-09-14T15:17:23.993Z"
 ---
 ---
 title: "C++ Examples"
