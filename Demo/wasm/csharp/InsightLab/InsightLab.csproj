@@ -6,7 +6,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmEnableThreads>false</WasmEnableThreads>
-    <WasmBuildNative>true</WasmBuildNative>
+    <!-- Disables the native compiler flags only when GitHub's automated scanner runs a restore -->
+    <WasmBuildNative Condition="'$(GITHUB_ACTIONS)' != 'true'">true</WasmBuildNative>
     <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
     <SkipDotnetWorkloadIntegrityCheck>true</SkipDotnetWorkloadIntegrityCheck>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
