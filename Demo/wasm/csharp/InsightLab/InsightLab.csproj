@@ -8,6 +8,7 @@
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
     <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
+    <SkipDotnetWorkloadIntegrityCheck>true</SkipDotnetWorkloadIntegrityCheck>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
