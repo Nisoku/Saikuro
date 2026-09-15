@@ -8,7 +8,7 @@
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
     <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
-    <ExcludeFromDependencySubmission>true</ExcludeFromDependencySubmission>
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
