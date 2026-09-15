@@ -8,14 +8,11 @@
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
     <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
+    <ExcludeFromDependencySubmission>true</ExcludeFromDependencySubmission>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../../../Build/adapters/csharp/Saikuro/src/Saikuro.csproj" />
   </ItemGroup>
-  
-  <Target Name="AutoInstallWorkloads" BeforeTargets="_CheckForUnsupportedWorkloads;BeforeRestore">
-    <Exec Command="dotnet workload install wasm-tools" ContinueOnError="true" />
-  </Target>
 </Project>
