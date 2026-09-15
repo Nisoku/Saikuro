@@ -1,6 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
-    <SkipDotnetWorkloadIntegrityCheck>true</SkipDotnetWorkloadIntegrityCheck>
-  </PropertyGroup>
-</Project>

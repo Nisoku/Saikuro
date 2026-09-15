@@ -14,4 +14,8 @@
   <ItemGroup>
     <ProjectReference Include="../../../../Build/adapters/csharp/Saikuro/src/Saikuro.csproj" />
   </ItemGroup>
+  
+  <Target Name="AutoInstallWorkloads" BeforeTargets="_CheckForUnsupportedWorkloads;BeforeRestore">
+    <Exec Command="dotnet workload install wasm-tools" ContinueOnError="true" />
+  </Target>
 </Project>
