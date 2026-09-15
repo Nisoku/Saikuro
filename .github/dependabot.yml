@@ -2,12 +2,12 @@ version: 2
 updates:
   - package-ecosystem: "cargo"
     directories:
-      - "/Build"
-      - "/adapters/rust"
+      - "/"
       - "/Demo/wasm/rust"
       - "/Demo/wasm/c"
       - "/Demo/wasm/cpp"
       - "/Demo/wasm/runtime"
+      - "/Examples/rust"
     schedule:
       interval: "weekly"
 
@@ -15,13 +15,13 @@ updates:
     directories:
       - "/Demo"
       - "/Docs"
-      - "/adapters/typescript"
+      - "/Build/adapters/typescript"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
     directories: 
-      - "/adapters/python"
+      - "/Build/adapters/python"
       - "/Demo/wasm/python"
     schedule:
       interval: "weekly"

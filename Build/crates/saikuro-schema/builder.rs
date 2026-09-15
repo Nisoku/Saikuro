@@ -1,4 +1,4 @@
-//! Ergonomic builder types for constructing [`Schema`] values
+//! Ergonomic builder types for constructing [`NamespaceSchema`] values
 
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
@@ -42,7 +42,7 @@ pub struct ArgDescriptor {
     pub doc: Option<String>,
 }
 
-/// A namespace schema built up by a [`Provider`](saikuro_client::Provider).
+/// A namespace schema describing one provider namespace.
 #[derive(Debug, Default, Clone)]
 pub struct NamespaceSchema {
     /// Namespace-level doc string.

@@ -177,10 +177,10 @@ public class BroadcastChannelContractTests
             .GetMethod("SendRuntime",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
-        var parms = method!.GetParameters();
-        Assert.Equal(2, parms.Length);
-        Assert.Equal(typeof(string), parms[0].ParameterType);
-        Assert.Equal(typeof(byte[]), parms[1].ParameterType);
+        var parameters = method!.GetParameters();
+        Assert.Equal(2, parameters.Length);
+        Assert.Equal(typeof(string), parameters[0].ParameterType);
+        Assert.Equal(typeof(byte[]), parameters[1].ParameterType);
     }
 
     [Fact]
@@ -190,9 +190,9 @@ public class BroadcastChannelContractTests
             .GetMethod("ConnectToRuntime",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
-        var parms = method!.GetParameters();
-        Assert.Single(parms);
-        Assert.Equal(typeof(string), parms[0].ParameterType);
+        var parameters = method!.GetParameters();
+        Assert.Single(parameters);
+        Assert.Equal(typeof(string), parameters[0].ParameterType);
     }
 
     [Fact]

@@ -29,7 +29,7 @@ pub use value::*;
 mod core_events;
 pub use core_events::*;
 
-/// Structured logging primitives and [`LogSink`](log::sink::LogSink) implementations.
+/// Structured logging primitives and [`LogSink`] implementations.
 pub mod log;
 pub use log::*;
 

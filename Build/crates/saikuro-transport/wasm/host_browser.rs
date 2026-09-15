@@ -48,6 +48,9 @@ struct WasmChannel {
     closed: Cell<bool>,
 }
 
+// SAFETY: the Cells are single-threaded by design; this type is confined to
+// the browser main thread under the JSPI future bridge.
+#[allow(clippy::arc_with_non_send_sync)]
 impl WasmChannel {
     fn new(channel: BroadcastChannel) -> Arc<Self> {
         Arc::new(Self {
@@ -189,7 +192,7 @@ async fn open_connect(channel: &str) -> Result<(BroadcastChannelSend, BroadcastC
         }));
     shared
         .channel
-        .set_onmessage(Some((&*handler).as_ref().unchecked_ref()));
+        .set_onmessage(Some((*handler).as_ref().unchecked_ref()));
 
     // Announce `connect`, then keep re-announcing until accepted. Re-posting on
     // a fixed cadence converges once the listener is wired up, bounded by
@@ -255,7 +258,7 @@ async fn open_accept(channel: &str) -> Result<(BroadcastChannelSend, BroadcastCh
                 }
             }
         }));
-    base.set_onmessage(Some((&*base_handler).as_ref().unchecked_ref()));
+    base.set_onmessage(Some((*base_handler).as_ref().unchecked_ref()));
 
     let conn_id = match conn_rx.recv().await {
         Some(id) => id,
@@ -340,13 +343,10 @@ fn get_field(val: &JsValue, key: &str) -> Option<String> {
 
 /// Pull the bytes out of a `BroadcastChannel` message payload.
 fn extract_binary(data: &JsValue) -> Option<Vec<u8>> {
-    if let Some(buf) = data.dyn_ref::<ArrayBuffer>() {
-        Some(Uint8Array::new(buf).to_vec())
-    } else if let Some(arr) = data.dyn_ref::<Uint8Array>() {
-        Some(arr.to_vec())
-    } else {
-        None
-    }
+    data.dyn_ref::<ArrayBuffer>()
+        .map(|buf| Uint8Array::new(buf))
+        .or_else(|| data.dyn_ref::<Uint8Array>().cloned())
+        .map(|arr| arr.to_vec())
 }
 
 /// Post a binary frame as a freshly-allocated `ArrayBuffer`.

@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "ffi", crate_type = "cdylib")]
 
 #[macro_use]
 extern crate alloc;

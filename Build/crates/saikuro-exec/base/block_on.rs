@@ -27,13 +27,7 @@ pub(crate) fn ensure_runner_started() {
     use core::sync::atomic::Ordering;
     static RUNNER_STARTED: portable_atomic::AtomicBool = portable_atomic::AtomicBool::new(false);
     if !RUNNER_STARTED.swap(true, Ordering::SeqCst) {
-        let ex = static_executor();
-        // SAFETY: `ex` is the sole static executor alive for the program's
-        // duration; the shared reborrow is only live until `start_runner`
-        // returns, so it never overlaps with the mutable borrow aliasing
-        // the same single instance.
-        let exec_shared: &'static ArchExecutor =
-            unsafe { core::mem::transmute::<&mut ArchExecutor, &'static ArchExecutor>(&mut *ex) };
+        let exec_shared = static_executor();
         start_runner(exec_shared.spawner());
     }
 }
@@ -108,15 +102,26 @@ where
     }
 }
 
-fn static_executor() -> &'static mut ArchExecutor {
+fn static_executor() -> &'static ArchExecutor {
+    use core::sync::atomic::Ordering;
     static mut EXECUTOR: Option<ArchExecutor> = None;
-    let ex = unsafe {
-        (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut()))
-    };
-    // SAFETY: `EXECUTOR` is a `static mut` holding the sole executor instance; we
-    // upgrade its borrow to `'static` for the duration of the program. It is never
-    // moved or dropped, and `run`/`start`/`poll` are only called on this reference.
-    let ex: &'static mut ArchExecutor =
-        unsafe { core::mem::transmute::<&mut ArchExecutor, &'static mut ArchExecutor>(ex) };
-    ex
+    static EXECUTOR_INIT: portable_atomic::AtomicBool = portable_atomic::AtomicBool::new(false);
+
+    // SAFETY: `EXECUTOR` is initialized (through the unique borrow `addr_of_mut!`
+    // hands out) at most once before any reference to it exists, and the engine
+    // is single-threaded, so the check-and-write cannot observe a partially
+    // written executor.
+    if !EXECUTOR_INIT.load(Ordering::Acquire) {
+        let _ = unsafe {
+            (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut()))
+        };
+        EXECUTOR_INIT.store(true, Ordering::Release);
+    }
+
+    // SAFETY: after `EXECUTOR_INIT` is set the executor is `Some`, never moved,
+    // dropped, or written again, so the shared reference derived from the static
+    // stays valid for the rest of the program. Every call reads through the raw
+    // place, so no stale unique tag is reused and polling/spawning only ever see
+    // shared aliases (`poll` and `spawner` both take `&self`).
+    unsafe { (*core::ptr::addr_of_mut!(EXECUTOR)).as_ref().unwrap_unchecked() }
 }

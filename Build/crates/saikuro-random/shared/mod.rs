@@ -13,9 +13,9 @@ const BLOCK_LEN: usize = 64;
 /// ChaCha20 key length in bytes.
 const KEY_LEN: usize = 32;
 /// XChaCha20 extended nonce length in bytes.
-const NONCE_LEN: usize = 24;
+pub const NONCE_LEN: usize = 24;
 /// Total seed length in bytes.
-const SEED_LEN: usize = KEY_LEN + NONCE_LEN;
+pub const SEED_LEN: usize = KEY_LEN + NONCE_LEN;
 /// Global seed stored as `SEED_LEN / 8` independent `u64` words.
 const SEED_WORDS: usize = SEED_LEN / 8;
 /// ChaCha20 exposes a 32-bit block counter for each key and nonce.

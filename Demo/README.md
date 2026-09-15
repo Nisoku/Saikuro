@@ -39,7 +39,8 @@ npm run dev
 WASM build (if you want to run by hand):
 
 ```bash
-python3 scripts/web_demo.py build
+cd Demo
+cargo xtask demo build
 ```
 
 ## Tooling requirements
