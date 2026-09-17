@@ -13,7 +13,7 @@ fn require(tool: &str) -> anyhow::Result<()> {
     if run::which(tool) {
         Ok(())
     } else {
-        anyhow::bail!("{tool} is not installed. Run `cargo xtask setup` to sync Tools/tools.toml.")
+        anyhow::bail!("{tool} is not installed. Run `cargo xtask setup` to sync tools/tools.toml.")
     }
 }
 
@@ -187,7 +187,7 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         let out = run::run_capture(
             &root(),
             "cargo",
-            &[
+            [
                 "geiger",
                 "--output-format",
                 "Json",

@@ -105,11 +105,16 @@ pub fn sync(check_only: bool) -> anyhow::Result<()> {
     ensure_binstall(check_only)?;
 
     let mut failed = Vec::new();
+    let mut pending_system = Vec::new();
     for tool in &manifest.tools {
         match tool.source {
             Source::System => {
                 if !verify(tool)? {
-                    failed.push(format!("{} (system)", tool.name));
+                    if check_only {
+                        failed.push(format!("{} (system)", tool.name));
+                    } else {
+                        pending_system.push(tool.name.to_string());
+                    }
                 }
             }
             Source::Binstall => {
@@ -136,6 +141,13 @@ pub fn sync(check_only: bool) -> anyhow::Result<()> {
                 }
             }
         }
+    }
+
+    for name in &pending_system {
+        println!(
+            "WARN    {name} (system) is missing; install it via your environment \
+             (the commands that need it will fail at point of use otherwise)"
+        );
     }
 
     if !failed.is_empty() {

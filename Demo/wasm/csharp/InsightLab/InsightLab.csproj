@@ -8,6 +8,8 @@
     <WasmEnableThreads>false</WasmEnableThreads>
     <WasmBuildNative>true</WasmBuildNative>
     <EnableSdkWorkloadRestore>false</EnableSdkWorkloadRestore>
+    <!-- thank goodness the below flag exists, this fixes automatic dependency resolution 
+         because GitHub Advanced Security [bot] is a bit silly -->
     <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>

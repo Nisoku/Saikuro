@@ -65,3 +65,7 @@ pub(super) fn c_check() -> anyhow::Result<()> {
     run::cargo(&root(), &["build", "-p", "saikuro-c"])?;
     run::cargo(&root(), &["test", "-p", "saikuro-c"])
 }
+
+pub(super) fn c_clean() -> anyhow::Result<()> {
+    run::cargo(&root(), &["clean", "-p", "saikuro-c"])
+}

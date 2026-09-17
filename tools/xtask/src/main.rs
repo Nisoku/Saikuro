@@ -56,7 +56,7 @@ enum Command {
     Format,
     /// Purge build artifacts for every language.
     Clean,
-    /// Verify/install the pinned toolchain (Tools/tools.toml).
+    /// Verify/install the pinned toolchain (tools/tools.toml).
     Setup {
         /// Fail if any tool is missing instead of installing.
         #[arg(long)]
@@ -74,7 +74,7 @@ enum Command {
     Typos,
     /// geiger unsafe baseline snapshot gate.
     Geiger {
-        /// Rewrite Tools/baselines/geiger.baseline instead of checking.
+        /// Rewrite tools/baselines/geiger.baseline instead of checking.
         #[arg(long)]
         update: bool,
     },
@@ -100,7 +100,8 @@ enum QemuVerb {
     Setup,
     BuildArm,
     BuildRiscv,
-    BuildAll,
+    Build,
+    Run,
     Check,
     RunArm,
     RunRiscv,
@@ -179,9 +180,21 @@ impl Command {
         match self {
             Command::Check => languages::check_all(),
             Command::Test { target } => match target {
-                TestTarget::Native => {
-                    run::cargo(&root, &["test", "--workspace"]).context("native workspace tests")
-                }
+                TestTarget::Native => run::run(
+                    &root,
+                    "cargo",
+                    [
+                        "run",
+                        "-q",
+                        "-p",
+                        "saikuro-tests",
+                        "--bin",
+                        "native",
+                        "--features",
+                        "native",
+                    ],
+                )
+                .context("native runner tests"),
                 TestTarget::Wasm => wasm_tests(),
                 TestTarget::Embedded => qemu::test_embedded(),
                 TestTarget::Wasi => wasi_tests(),
@@ -196,11 +209,12 @@ impl Command {
                 QemuVerb::Setup => qemu::setup(),
                 QemuVerb::BuildArm => qemu::build_arm(),
                 QemuVerb::BuildRiscv => qemu::build_riscv(),
-                QemuVerb::BuildAll => qemu::build_all(),
+                QemuVerb::Build => qemu::build_all(),
+                QemuVerb::Run => qemu::test_embedded(),
+                QemuVerb::Test => qemu::test_embedded(),
                 QemuVerb::Check => qemu::check(),
                 QemuVerb::RunArm => qemu::run_arm(),
                 QemuVerb::RunRiscv => qemu::run_riscv(),
-                QemuVerb::Test => qemu::test_embedded(),
                 QemuVerb::Clean => qemu::clean(),
             },
             Command::Demo { verb } => match verb {
@@ -253,24 +267,37 @@ fn wasm_tests() -> anyhow::Result<()> {
     .context("wasm tests")
 }
 
-/// Run the wasi suites through the wasmtime runner.
+/// Run the wasi suites by executing each runner bin under wasmtime
 fn wasi_tests() -> anyhow::Result<()> {
-    for (features, label) in [
-        ("wasi-preview1", "wasi-preview1"),
-        ("wasi-preview2", "wasi-preview2"),
+    for (features, target, bin, label) in [
+        (
+            "wasi-preview1",
+            "wasm32-wasip1",
+            "wasi-preview1",
+            "wasi-preview1",
+        ),
+        (
+            "wasi-preview2",
+            "wasm32-wasip2",
+            "wasi-preview2",
+            "wasi-preview2",
+        ),
     ] {
         run::run(
             &paths::repo_root(),
             "cargo",
             [
-                "test",
+                "run",
+                "-q",
                 "-p",
                 "saikuro-tests",
                 "--target",
-                "wasm32-wasip1",
+                target,
                 "--no-default-features",
                 "--features",
                 features,
+                "--bin",
+                bin,
             ],
         )
         .with_context(|| format!("{label} tests"))?;

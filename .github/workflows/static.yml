@@ -1,13 +1,38 @@
-# Deploy documentation to GitHub Pages
-name: Deploy to GitHub Pages
+# Deploy the static web demo to GH Pages.
+name: GitHub Pages
 
 on:
   push:
     branches: ["main"]
+    paths:
+      - "Demo/**"
+      - "Docs/**"
+      - "Build/adapters/**"
+      - "Build/crates/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/static.yml"
+  pull_request:
+    paths:
+      - "Demo/**"
+      - "Docs/**"
+      - "Build/adapters/**"
+      - "Build/crates/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/static.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: "pages"
@@ -15,94 +40,30 @@ concurrency:
 
 jobs:
   deploy:
+    name: Build + Deploy demo to Pages
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install just
-        uses: taiki-e/install-action@just
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version-file: .nvmrc
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
         with:
-          python-version: "3.12"
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
         with:
-          version: "latest"
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Build web demo
+        run: cargo xtask demo build
+      - uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          dotnet-version: "8.0.x"
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-
-      - name: Restore C# WASM workload
-        run: dotnet workload restore
-        working-directory: Demo/wasm/csharp/InsightLab
-
-      - name: Install cmake
-        run: sudo apt-get update && sudo apt-get install -y cmake
-
-      - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
-
-      - name: Build documentation
-        working-directory: Docs
-        run: |
-          npm ci
-          npm run build
-
-      - name: Setup all adapters
-        run: just setup
-
-      - name: Install demo dependencies
-        run: npm ci
-        working-directory: Demo
-
-      - name: Build TypeScript adapter
-        run: npm run build
-        working-directory: Build/adapters/typescript
-
-      - name: Build demo
-        run: just web_demo build
-
-      - name: Prepare deployment
-        run: |
-          mkdir -p deploy
-
-          # Demo files are in Demo/dist, so we copy them to deploy/demo
-          cp -r Demo/dist deploy/demo
-
-          # Docs are built to Docs/site, so we copy them to deploy/docs
-          cp -r Docs/site deploy/docs
-
-          # Create an index.html that redirects to the docs (maybe will replace this with a proper homepage later)
-          cat > deploy/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head><meta http-equiv="refresh" content="0;url=docs/"></head>
-          <body><a href="docs/">Go to documentation</a></body>
-          </html>
-          EOF
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: deploy
+          path: Demo/dist
+      - uses: actions/deploy-pages@v4
+        id: deployment

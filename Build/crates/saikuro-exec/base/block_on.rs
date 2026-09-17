@@ -113,7 +113,8 @@ fn static_executor() -> &'static ArchExecutor {
     // written executor.
     if !EXECUTOR_INIT.load(Ordering::Acquire) {
         let _ = unsafe {
-            (*core::ptr::addr_of_mut!(EXECUTOR)).get_or_insert_with(|| ArchExecutor::new(null_mut()))
+            (*core::ptr::addr_of_mut!(EXECUTOR))
+                .get_or_insert_with(|| ArchExecutor::new(null_mut()))
         };
         EXECUTOR_INIT.store(true, Ordering::Release);
     }
@@ -123,5 +124,9 @@ fn static_executor() -> &'static ArchExecutor {
     // stays valid for the rest of the program. Every call reads through the raw
     // place, so no stale unique tag is reused and polling/spawning only ever see
     // shared aliases (`poll` and `spawner` both take `&self`).
-    unsafe { (*core::ptr::addr_of_mut!(EXECUTOR)).as_ref().unwrap_unchecked() }
+    unsafe {
+        (*core::ptr::addr_of_mut!(EXECUTOR))
+            .as_ref()
+            .unwrap_unchecked()
+    }
 }

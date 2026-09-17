@@ -4,7 +4,7 @@ use crate::paths;
 use crate::run;
 
 pub const ARM_TARGETS: &[(&str, &str)] = &[
-    ("thumbv7m-none-eabi", "arm,sqlite"),
+    ("thumbv7m-none-eabi", "arm"),
     ("thumbv6m-none-eabi", "arm,sqlite"),
     ("thumbv8m.main-none-eabihf", "arm,sqlite"),
 ];
@@ -17,7 +17,7 @@ pub const RISCV_TARGETS: &[(&str, &str)] = &[
 const EMBEDDED_RUNNERS: &[(&str, &str, &[&str])] = &[
     (
         "thumbv7m-none-eabi",
-        "arm,sqlite",
+        "arm",
         &[
             "qemu-system-arm",
             "-cpu",
@@ -94,6 +94,17 @@ fn root() -> std::path::PathBuf {
     paths::repo_root()
 }
 
+fn runner_bin(target: &str) -> &'static str {
+    match target {
+        "thumbv7m-none-eabi" => "thumbv7m",
+        "thumbv6m-none-eabi" => "thumbv6m",
+        "thumbv8m.main-none-eabihf" => "thumbv8m",
+        "riscv32imc-unknown-none-elf" => "riscv32imc",
+        "riscv32imac-unknown-none-elf" => "riscv32imac",
+        _ => unreachable!("no runner bin mapped for target {target}"),
+    }
+}
+
 fn build_args(target: &str, features: &str) -> Vec<String> {
     vec![
         "build".into(),
@@ -104,6 +115,8 @@ fn build_args(target: &str, features: &str) -> Vec<String> {
         features.into(),
         "--target".into(),
         target.into(),
+        "--bin".into(),
+        runner_bin(target).into(),
         "--manifest-path".into(),
         paths::tests_dir().join("Cargo.toml").display().to_string(),
     ]
@@ -117,6 +130,8 @@ fn check_args(target: &str, features: &str) -> Vec<String> {
         features.into(),
         "--target".into(),
         target.into(),
+        "--bin".into(),
+        runner_bin(target).into(),
         "--manifest-path".into(),
         paths::tests_dir().join("Cargo.toml").display().to_string(),
     ]
@@ -195,8 +210,7 @@ pub fn test_embedded() -> anyhow::Result<()> {
     setup()?;
     for (target, features, argv) in EMBEDDED_RUNNERS {
         selftest_cargo(&build_args(target, features))?;
-        let bin = target.split_once('-').map(|(b, _)| b).unwrap_or(target);
-        run_runner(target, bin, argv)?;
+        run_runner(target, runner_bin(target), argv)?;
     }
     Ok(())
 }

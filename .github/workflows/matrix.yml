@@ -1,0 +1,61 @@
+name: Matrix
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Build/crates/**"
+      - "Build/adapters/rust/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
+      - "Justfile"
+      - ".github/workflows/matrix.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Build/crates/**"
+      - "Build/adapters/rust/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
+      - "Justfile"
+      - ".github/workflows/matrix.yml"
+
+concurrency:
+  group: matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  matrix:
+    name: Cross-compile matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Check every crate for every toolchain target
+        run: cargo xtask matrix --all-crates
+      - name: Matrix with JSON output
+        run: cargo xtask matrix --all-crates --json matrix.json matrix.json

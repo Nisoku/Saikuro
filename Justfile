@@ -14,8 +14,9 @@ python *args:
 typescript *args:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang typescript {{ args }}
 
-csharp *args:
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang csharp {{ args }}
+alias csharp := c-sharp
+c-sharp *args:
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp {{ args }}
 
 c *args:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c {{ args }}

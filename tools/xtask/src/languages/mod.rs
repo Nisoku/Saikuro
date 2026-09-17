@@ -157,7 +157,7 @@ pub fn clean_all() -> anyhow::Result<()> {
     typescript_clean()?;
     csharp_clean()?;
     cpp_clean()?;
-    c_format()?;
+    c_clean()?;
     super::qemu::clean()?;
     for path in [
         paths::demo_dir().join("public").join("wasm"),

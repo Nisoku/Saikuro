@@ -35,7 +35,7 @@ pub fn public_wasm_dir() -> PathBuf {
 }
 
 pub fn tools_dir() -> PathBuf {
-    repo_root().join("Tools")
+    repo_root().join("tools")
 }
 
 pub fn baselines_dir() -> PathBuf {
