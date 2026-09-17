@@ -52,6 +52,6 @@ jobs:
       - name: Setup xtask deps
         run: cargo xtask setup
       - name: Adapter setup
-        run: cargo xtask lang typescript setup
+        run: cargo xtask lang type-script setup
       - name: Check
-        run: cargo xtask lang typescript check
+        run: cargo xtask lang type-script check

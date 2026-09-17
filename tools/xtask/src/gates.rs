@@ -183,7 +183,17 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         }
         print!("geiger: scanning {} ... ", member.name);
         std::io::stdout().flush().ok();
-        let manifest = member.manifest_path.display().to_string();
+        // cargo-geiger only accepts absolute manifest paths.
+        let manifest = if member.manifest_path.is_absolute() {
+            member.manifest_path.clone()
+        } else {
+            root().join(&member.manifest_path)
+        };
+        let manifest = manifest
+            .canonicalize()
+            .with_context(|| format!("canonicalize {}", manifest.display()))?
+            .display()
+            .to_string();
         let out = run::run_capture(
             &root(),
             "cargo",
@@ -197,6 +207,8 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         )
         .with_context(|| format!("geiger run for {}", member.name))?;
         if !out.status.success() {
+            std::io::stdout().write_all(&out.stdout)?;
+            std::io::stderr().write_all(&out.stderr)?;
             anyhow::bail!(
                 "geiger exited with {status} for {name}",
                 status = out.status,

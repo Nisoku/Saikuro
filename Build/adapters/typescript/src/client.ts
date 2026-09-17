@@ -568,8 +568,7 @@ export class SaikuroClient {
     const errorField = raw["error"] as ErrorPayload | undefined;
     const seqField = raw["seq"] as number | undefined;
     const scField = raw["stream_control"] as
-      | ResponseEnvelope["stream_control"]
-      | undefined;
+      ResponseEnvelope["stream_control"] | undefined;
 
     const scratch: Record<string, unknown> = {
       id,

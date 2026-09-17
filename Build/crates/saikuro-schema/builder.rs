@@ -1,12 +1,9 @@
 //! Ergonomic builder types for constructing [`NamespaceSchema`] values
 
 use alloc::boxed::Box;
-#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 use saikuro_event::Result;
 

@@ -13,7 +13,12 @@ path = "lib.rs"
 
 [features]
 default = ["std", "native", "tcp", "ws"]
-std = []
+std = [
+    "saikuro-core/std",
+    "saikuro-net/std",
+    "saikuro-exec/std",
+    "saikuro-event/std",
+]
 native = [
     "std",
     "saikuro-core/native",

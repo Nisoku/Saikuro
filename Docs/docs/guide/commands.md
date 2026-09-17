@@ -20,10 +20,10 @@ cargo install just
 | `just python test`          | `pytest`                            |
 | `just python check`         | ruff lint + format + pytest         |
 | `just typescript setup`     | `npm install`                       |
-| `just typescript build`     | Build with tsup                     |
+| `just typescript build`     | Build with tsdown                   |
 | `just typescript test`      | `vitest`                            |
 | `just typescript typecheck` | `tsc --noEmit`                      |
-| `just typescript check`     | eslint + tsc + vitest + tsup        |
+| `just typescript check`     | eslint + tsc + vitest + tsdown      |
 | `just csharp setup`         | `dotnet restore`                    |
 | `just csharp build`         | `dotnet build -c Release`           |
 | `just csharp test`          | `dotnet test -c Release`            |

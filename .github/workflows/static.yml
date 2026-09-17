@@ -39,12 +39,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build + Deploy demo to Pages
+  build:
+    name: Build demo
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,10 +57,22 @@ jobs:
         run: cargo xtask setup
       - name: Build web demo
         run: cargo xtask demo build
-      - uses: actions/configure-pages@v5
-      - name: Upload artifact
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: Demo/dist
+
+  deploy:
+    name: Deploy demo to Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v4
         id: deployment

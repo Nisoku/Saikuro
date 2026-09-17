@@ -1,4 +1,7 @@
-import { defineConfig } from "tsup";
+import { defineConfig } from "tsdown";
+
+const outExtensions = ({ format }: { format: string }) =>
+  format === "es" ? { js: ".mjs", dts: ".d.mts" } : { js: ".js", dts: ".d.ts" };
 
 export default defineConfig([
   // Library bundle (CJS + ESM + types)
@@ -8,14 +11,11 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    splitting: true,
     treeshake: true,
     platform: "node",
     target: "es2022",
-    external: ["net"],
-    esbuildOptions(options) {
-      options.pure = ["console.log"];
-    },
+    outExtensions,
+    deps: { neverBundle: ["net"] },
   },
   // Schema extractor (separate chunk, pulls in the full TypeScript compiler)
   // Import via: import { extractSchema } from "@nisoku/saikuro/schema-extractor"
@@ -25,10 +25,10 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: false,
-    splitting: false,
     treeshake: true,
     platform: "node",
     target: "es2022",
+    outExtensions,
   },
   // CLI binary (CommonJS, executable)
   {
@@ -36,11 +36,12 @@ export default defineConfig([
     format: ["cjs"],
     dts: false,
     sourcemap: false,
-    splitting: false,
+    clean: false,
     treeshake: true,
     platform: "node",
     target: "es2022",
-    external: ["net"],
+    outExtensions,
+    deps: { neverBundle: ["net"] },
     banner: {
       js: "#!/usr/bin/env node",
     },

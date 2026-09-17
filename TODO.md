@@ -4,7 +4,7 @@
 
 ### I can implement
 
-- [ ] JavaScript (maybe TS wrapper idk but useful, or we can have `tsup` compile it to JS)
+- [ ] JavaScript (maybe TS wrapper idk but useful, or we can have `tsdown` compile it to JS)
 - [ ] Bash (lol, I know some Bash but this is the scariest adapter haha we don't want to delete anything from the system, it needs to be EXTREMELY SANDBOXED/safe)
 - [ ] Zsh (ditto)
 - [ ] AssemblyScript (lol this technically isn't needed since TS adapter but we could have a wasm-specific adapter using it (I don't know AS but it's really similar to TS from what i've heard))
