@@ -65,7 +65,7 @@ than a network socket.
 
 ```bash
 npm ci
-npm run build      # compile with tsup
+npm run build      # compile with tsdown
 npm test           # run vitest
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint

@@ -31,7 +31,7 @@ cargo run -p math
 
 ### TypeScript
 
-Requires Node 22. Build the adapter once, then run the example:
+Requires Node 24. Build the adapter once, then run the example:
 
 ```bash
 cd Build/adapters/typescript && npm install && npm run build

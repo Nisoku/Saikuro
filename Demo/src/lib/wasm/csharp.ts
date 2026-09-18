@@ -12,15 +12,18 @@ export async function startCSharpProvider(channel: string): Promise<void> {
       // Load the Saikuro BroadcastChannel JS module.
       // This registers globalThis functions that the C# [JSImport] bindings
       // call for channel creation, handshake, send, and message dequeue.
-      await import("../../../public/wasm/csharp/Saikuro.BroadcastChannel.js");
+      // Loaded from the public path at runtime since it is emitted next to the
+      // dotnet artifacts and is absent at bundler time.
+      const broadcastUrl = new URL(
+        "wasm/csharp/Saikuro.BroadcastChannel.js",
+        document.baseURI,
+      ).href;
+      await import(/* @vite-ignore */ broadcastUrl);
 
       // Load dotnet.js from the public path (not through Vite's bundler) so
       // that import.meta.url inside it resolves to /wasm/csharp/ instead of
       // assets/
-      const dotnetUrl = new URL(
-        "wasm/csharp/dotnet.js",
-        document.baseURI,
-      ).href;
+      const dotnetUrl = new URL("wasm/csharp/dotnet.js", document.baseURI).href;
       const { dotnet } = await import(dotnetUrl);
       log.info("C# dotnet.js loaded, creating runtime");
 

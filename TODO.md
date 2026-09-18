@@ -4,7 +4,7 @@
 
 ### I can implement
 
-- [ ] JavaScript (maybe TS wrapper idk but useful, or we can have `tsup` compile it to JS)
+- [ ] JavaScript (maybe TS wrapper idk but useful, or we can have `tsdown` compile it to JS)
 - [ ] Bash (lol, I know some Bash but this is the scariest adapter haha we don't want to delete anything from the system, it needs to be EXTREMELY SANDBOXED/safe)
 - [ ] Zsh (ditto)
 - [ ] AssemblyScript (lol this technically isn't needed since TS adapter but we could have a wasm-specific adapter using it (I don't know AS but it's really similar to TS from what i've heard))
@@ -69,8 +69,6 @@
 
 ## Current
 
-- [X] lessen Saikuro memory usage for embedded
-
 - [ ] Asyncify fallback for JSPI (before the spinning one)
 - [ ] Update `saikuro-c`/`saikuro-cpp`/`saikuro-csharp` to just use a new `Build/codegen/cxx/` thing that automatically generates bindings for all three (1-1 api match, not the yucky serializing to JSON or whatever) (not safe tho (cffi) :( hmmm)
 - [ ] Possibly use something similar for JS/TS
@@ -78,12 +76,12 @@
 
 - [ ] Add more tests
 
-- [ ] add fancy stuff like `miri`, `cargo-geiger`, **`cargo-checkmate`**, `cargo-spellcheck`/`typos-cli` lol i need it, `cargo-outdated`, `cargo-geiger`, **`siderophile`**, etc
-- [ ] use nextest if we can, or a custom test runner cli that works across everything
-- [ ] revamp CI, deny.toml, devcontainer and Just setup for the new system and everything
+- [X] add fancy stuff like `miri`, `cargo-geiger`, **`cargo-checkmate`**, `cargo-spellcheck`/`typos-cli` lol i need it, `cargo-outdated`, `cargo-geiger`, **`siderophile`**, etc
+- [X] use nextest if we can, or a custom test runner cli that works across everything
+- [X] revamp CI, deny.toml, devcontainer and Just setup for the new system and everything
 - [ ] Update docs/demo/examples for the new everything
 - [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
 
-- [ ] maybe a root Cargo.toml (nested workspaces possible? idk)
+- [X] maybe a root Cargo.toml (nested workspaces possible? idk)
 
 - [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that

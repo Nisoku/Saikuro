@@ -1,9 +1,6 @@
 //! Dispatch inbound invocations to registered handlers.
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 use alloc::{
     borrow::ToOwned,

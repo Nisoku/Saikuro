@@ -66,7 +66,7 @@ impl FnProviderHandle {
     }
 }
 
-/// A cheap, `Clone`-able handle to a running [`SaikuroRuntime`].
+/// A cheap, `Clone`-able handle to a running [`SaikuroRuntime`](crate::SaikuroRuntime).
 ///
 /// All internal state is `Arc`-wrapped so cloning is O(1).
 #[derive(Clone)]

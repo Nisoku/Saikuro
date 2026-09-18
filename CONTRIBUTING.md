@@ -21,7 +21,7 @@ when opening a pull request.
 | Tool            | Minimum version   | Notes                                                 |
 |-----------------|-------------------|-------------------------------------------------------|
 | Rust toolchain  | 1.75              | Install via [rustup](https://rustup.rs/)              |
-| Node.js         | 22 (see `.nvmrc`) | Required for the TypeScript adapter                   |
+| Node.js         | 24 (see `.nvmrc`) | Required for the TypeScript adapter                   |
 | Python          | 3.11              | Required for the Python adapter                       |
 | uv              | latest            | Python package manager                                |
 | just            | latest            | Task runner                                           |
@@ -52,18 +52,20 @@ Build/
     python/           # PyPI package (uses uv)
     csharp/           # NuGet package
     c/                # C adapter
-  scripts/            # Per-language build/check scripts
-    rust.py
-    python.py
-    typescript.py
-    csharp.py
-    c.py
-    cpp.py
-    saikuro_build.py   # Orchestrator (runs all language checks)
+tools/
+  xtask/              # Rust repository task runner (binary entry point)
+    src/
+      main.rs         # CLI entry point; invoked as `cargo xtask <command>`
+      languages/      # Per-language setup/check/build tasks
 Examples/
   rust/math/         # Example Rust provider/client
 Docs/                 # Documentation site
 ```
+
+All repository tasks (setup, format, lint, test, build, gates) run through
+the Rust `xtask` binary at `tools/xtask/`. It is invoked as
+`cargo xtask <command>` (aliased in `.cargo/config.toml`) or via the `just`
+recipes in `Justfile`.
 
 ---
 
@@ -128,12 +130,6 @@ Runs formatters, linters, typecheckers, and tests for all languages:
 
 ```bash
 just check
-```
-
-Or via the Python orchestrator:
-
-```bash
-cd Build && python3 scripts/saikuro_build.py
 ```
 
 ### Per-language checks

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: full-${{ github.ref }}
+  group: full-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,40 +21,56 @@ jobs:
         with:
           submodules: recursive
       - uses: taiki-e/install-action@just
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
-          components: rustfmt, clippy
-      - uses: actions/setup-node@v4
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version-file: .nvmrc
+          workspaces: Cargo.toml
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
-      - uses: actions/setup-dotnet@v4
+          version: "0.6.0"
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Rust adapter gate (format, lint, native test)
+        run: cargo xtask lang rust check
+      - name: Native engine suite
+        run: cargo xtask test native
+      - name: Setup Python adapter
+        run: cargo xtask lang python setup
+      - name: Python adapter gate
+        run: cargo xtask lang python check
+      - name: Setup TypeScript adapter
+        run: cargo xtask lang type-script setup
+      - name: TypeScript adapter gate
+        run: cargo xtask lang type-script check
+      - name: C# adapter gate
+        run: cargo xtask lang c-sharp check
+      - name: C adapter gate
+        run: cargo xtask lang c check
+      - name: C++ adapter gate
+        run: cargo xtask lang cpp check
+      - name: Gates (deny, audit, geiger, typos, spellcheck, deadlinks)
+        run: |
+          cargo xtask deny
+          cargo xtask audit
+          cargo xtask geiger
+          cargo xtask typos
+          cargo xtask spellcheck
+          cargo xtask deadlinks
+      - name: Setup demo app
+        run: cargo xtask lang demo setup
+      - name: Setup Emscripten
+        uses: myMindstorm/setup-emsdk@v14
         with:
-          dotnet-version: "8.0.x"
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-      - name: Install cmake
-        run: sudo apt-get update && sudo apt-get install -y cmake
-      - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
-      - name: Install Python test deps
-        run: python3 -m pip install 'msgpack==1.1.0' 'websockets==13.1'
-      - name: Run setup
-        run: just setup
-      - name: Install npm deps for demo
-        run: npm ci
-        working-directory: Demo
-      - name: Restore C# WASM workload
-        run: dotnet workload restore
-        working-directory: Demo/wasm/csharp/InsightLab
-      - name: Run all checks
-        run: just check
-      - name: Build demo
-        run: just web_demo build
+          version: 3.1.64
+      - name: Install .NET WASM workload
+        run: sudo dotnet workload install wasm-tools
+      - name: Web demo build
+        run: cargo xtask lang demo build
+      - name: Web demo check
+        run: cargo xtask lang demo check

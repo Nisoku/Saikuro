@@ -10,11 +10,11 @@ use crate::core_events::io::{IoError, IoErrorKind};
 use crate::value::Value;
 
 /// Maximum number of structured context entries an [`ErrorDetail`] or
-/// [`LogRecord`] can carry.
+/// [`LogRecord`](crate::LogRecord) can carry.
 pub const CONTEXT_CAPACITY: usize = 16;
 
 /// Fixed-capacity map of structured context entries on [`ErrorDetail`] and
-/// [`LogRecord`].
+/// [`LogRecord`](crate::LogRecord).
 pub type ContextMap = heapless::FnvIndexMap<String, Value, CONTEXT_CAPACITY>;
 
 /// All error codes transmitted on the wire.
@@ -137,7 +137,7 @@ fn context_is_empty(bag: &Option<Box<ContextMap>>) -> bool {
     bag.as_deref().is_none_or(ContextMap::is_empty)
 }
 
-/// The wire-level error payload carried inside a failed [`ResponseEnvelope`].
+/// The wire-level error payload carried inside a failed `ResponseEnvelope`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetail {
     /// Machine-readable code for programmatic handling.

@@ -21,8 +21,7 @@ fn main() -> ! {
         static _stack_start: u8;
     }
     let heap_start = unsafe { &__sheap as *const u8 as *mut u8 };
-    let heap_size = unsafe { &_stack_start as *const u8 as usize }
-        .wrapping_sub(STACK_GUARD)
+    let heap_size = unsafe { &_stack_start as *const u8 as usize }.wrapping_sub(STACK_GUARD)
         - heap_start as usize;
     embedded_runner::init_heap(heap_start, heap_size);
 

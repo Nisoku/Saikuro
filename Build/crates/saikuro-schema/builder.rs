@@ -1,12 +1,9 @@
-//! Ergonomic builder types for constructing [`Schema`] values
+//! Ergonomic builder types for constructing [`NamespaceSchema`] values
 
 use alloc::boxed::Box;
-#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 use saikuro_event::Result;
 
@@ -42,7 +39,7 @@ pub struct ArgDescriptor {
     pub doc: Option<String>,
 }
 
-/// A namespace schema built up by a [`Provider`](saikuro_client::Provider).
+/// A namespace schema describing one provider namespace.
 #[derive(Debug, Default, Clone)]
 pub struct NamespaceSchema {
     /// Namespace-level doc string.

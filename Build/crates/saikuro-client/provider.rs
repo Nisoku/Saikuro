@@ -22,10 +22,7 @@ use saikuro_event::{json_to_core, LogLevel, LogRecord, LogSink, Result, SaikuroE
 use saikuro_schema::builder::{build_schema, NamespaceSchema};
 use saikuro_transport::{connect, AdapterTransport};
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 use crate::shared::types::Arc;
 
@@ -111,7 +108,7 @@ impl Provider {
             self.log.emit(&record).await;
         }
 
-        let handlers = Arc::new(self.handlers);
+        let handlers = self.handlers;
         let namespace = Arc::new(self.namespace);
         let log = self.log.clone();
 

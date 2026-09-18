@@ -1,108 +1,97 @@
-# Deploy documentation to GitHub Pages
-name: Deploy to GitHub Pages
+# Deploy the static web demo to GH Pages.
+name: GitHub Pages
 
 on:
   push:
     branches: ["main"]
+    paths:
+      - "Demo/**"
+      - "Docs/**"
+      - "Build/adapters/**"
+      - "Build/crates/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/static.yml"
+  pull_request:
+    paths:
+      - "Demo/**"
+      - "Docs/**"
+      - "Build/adapters/**"
+      - "Build/crates/**"
+      - "tools/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/static.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    name: Build demo
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install just
-        uses: taiki-e/install-action@just
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version-file: .nvmrc
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-
-      - name: Restore C# WASM workload
-        run: dotnet workload restore
-        working-directory: Demo/wasm/csharp/InsightLab
-
-      - name: Install cmake
-        run: sudo apt-get update && sudo apt-get install -y cmake
-
-      - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
-
-      - name: Build documentation
-        working-directory: Docs
-        run: |
-          npm ci
-          npm run build
-
-      - name: Setup all adapters
-        run: just setup
-
-      - name: Install demo dependencies
-        run: npm ci
-        working-directory: Demo
-
+          version: "0.6.0"
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Setup TypeScript adapter
+        run: cargo xtask lang type-script setup
+      - name: Setup demo app
+        run: cargo xtask lang demo setup
       - name: Build TypeScript adapter
-        run: npm run build
-        working-directory: Build/adapters/typescript
-
-      - name: Build demo
-        run: just web_demo build
-
-      - name: Prepare deployment
-        run: |
-          mkdir -p deploy
-
-          # Demo files are in Demo/dist, so we copy them to deploy/demo
-          cp -r Demo/dist deploy/demo
-
-          # Docs are built to Docs/site, so we copy them to deploy/docs
-          cp -r Docs/site deploy/docs
-
-          # Create an index.html that redirects to the docs (maybe will replace this with a proper homepage later)
-          cat > deploy/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head><meta http-equiv="refresh" content="0;url=docs/"></head>
-          <body><a href="docs/">Go to documentation</a></body>
-          </html>
-          EOF
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        run: cargo xtask lang type-script build
+      - name: Setup Emscripten
+        uses: myMindstorm/setup-emsdk@v14
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: deploy
+          version: 3.1.64
+      - name: Install .NET WASM workload
+        run: sudo dotnet workload install wasm-tools
+      - name: Build web demo
+        run: cargo xtask lang demo build
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Demo/dist
+
+  deploy:
+    name: Deploy demo to Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

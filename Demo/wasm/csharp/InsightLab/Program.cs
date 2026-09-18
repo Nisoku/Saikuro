@@ -14,7 +14,7 @@ public class Program
         await transport.ConnectAsync();
 
         var provider = new SaikuroProvider("csharp");
-        provider.Register("summary", (System.Collections.Generic.IReadOnlyList<object?> args) =>
+        provider.Register("summary", (System.Collections.Generic.IReadOnlyList<object> args) =>
         {
             var json = args.Count > 0 ? JsonSerializer.Serialize(args[0]) : "{}";
             return SummaryEngine.ComputeSummary(json);

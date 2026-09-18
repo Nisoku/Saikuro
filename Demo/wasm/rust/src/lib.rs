@@ -1,8 +1,8 @@
 use wasm_bindgen::prelude::*;
 
-use saikuro::{Provider, RegisterOptions};
-use saikuro::schema::{FunctionSchema, ArgDescriptor};
+use saikuro::schema::{ArgDescriptor, FunctionSchema};
 use saikuro::{PrimitiveType, TypeDescriptor};
+use saikuro::{Provider, RegisterOptions};
 use serde_json::Value as JsonValue;
 
 #[wasm_bindgen]
@@ -12,9 +12,7 @@ pub async fn start_rust_provider(channel: String) -> Result<(), JsValue> {
     let mut provider = Provider::new("rust");
     provider.register_with_options(
         "sentiment",
-        |args: Vec<JsonValue>| async move {
-            Ok(sentiment_score(args))
-        },
+        |args: Vec<JsonValue>| async move { Ok(sentiment_score(args)) },
         RegisterOptions {
             schema: Some(FunctionSchema {
                 doc: Some("Simple keyword-based sentiment analysis (Rust WASM)".into()),

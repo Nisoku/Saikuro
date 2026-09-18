@@ -4,98 +4,158 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "Build/Cargo.toml"
-      - "Build/Cargo.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "Build/crates/**"
-      - "Build/tests/**"
-      - "Build/adapters/rust/**"
-      - "scripts/rust.py"
+      - "Build/adapters/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
       - "Justfile"
+      - ".cargo/config.toml"
       - ".github/workflows/rust.yml"
   pull_request:
     paths:
-      - "Build/Cargo.toml"
-      - "Build/Cargo.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "Build/crates/**"
-      - "Build/tests/**"
-      - "Build/adapters/rust/**"
-      - "scripts/rust.py"
+      - "Build/adapters/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
       - "Justfile"
+      - ".cargo/config.toml"
       - ".github/workflows/rust.yml"
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
-
-concurrency:
-  group: rust-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  lint:
-    name: Format + Clippy
+  gate:
+    name: format / lint / test / adapter
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: taiki-e/install-action@just
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
-          components: rustfmt, clippy
-      - uses: actions/cache@v4
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            Build/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - run: just rust format
-      - run: just rust lint
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Rust adapter gate (format, lint, test)
+        run: cargo xtask lang rust check
+      - name: Native engine suite
+        run: cargo xtask test native
 
-  test:
-    name: Tests + WASM
+  wasm:
+    name: wasm (check + tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: taiki-e/install-action@just
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            Build/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Build/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - run: just rust test
-      - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
-      - run: just rust wasm_check
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Wasm adapter check
+        run: cargo xtask lang rust wasm-check
+      - name: Wasm tests
+        run: cargo xtask test wasm
 
-  adapter:
-    name: Rust adapter
+  wasi:
+    name: wasi (wasmtime / wasip1+wasip2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: taiki-e/install-action@just
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
-          components: rustfmt, clippy
-      - uses: actions/cache@v4
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - uses: taiki-e/install-action@wasmtime
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            Build/adapters/rust/target
-          key: ${{ runner.os }}-cargo-adapter-${{ hashFiles('Build/adapters/rust/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-adapter-
-      - run: just rust adapter_test
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Wasi tests
+        run: cargo xtask test wasi
+
+  embedded:
+    name: embedded (qemu arm + riscv)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - name: Install QEMU system emulators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-arm qemu-system-misc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: QEMU targets check
+        run: cargo xtask qemu check
+      - name: Embedded tests
+        run: cargo xtask test embedded
+
+  adapter-test:
+    name: Rust adapter test crate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown,wasm32-wasip1,wasm32-wasip2,thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv8m.main-none-eabihf,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf,aarch64-unknown-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Adapter test
+        run: cargo xtask lang rust adapter-test

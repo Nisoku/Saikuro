@@ -4,106 +4,85 @@
 #   just rust check   Run all Rust checks
 #   just check        Run all language checks
 
-scripts := "scripts"
-
 # Language-specific commands
 rust *args:
-    cd {{ scripts }} && python3 rust.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang rust {{ args }}
 
 python *args:
-    cd {{ scripts }} && python3 python.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python {{ args }}
 
 typescript *args:
-    cd {{ scripts }} && python3 typescript.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script {{ args }}
 
-csharp *args:
-    cd {{ scripts }} && python3 csharp.py {{ args }}
+alias csharp := c-sharp
+c-sharp *args:
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp {{ args }}
 
 c *args:
-    cd {{ scripts }} && python3 c.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c {{ args }}
 
 cpp *args:
-    cd {{ scripts }} && python3 cpp.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp {{ args }}
 
-web_demo *args:
-    cd {{ scripts }} && python3 web_demo.py {{ args }}
+demo *args:
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo {{ args }}
 
 qemu *args:
-    cd {{ scripts }} && python3 qemu.py {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- qemu {{ args }}
 
 # Meta commands
 setup:
-    cd {{ scripts }} && python3 rust.py setup
-    cd {{ scripts }} && python3 python.py setup
-    cd {{ scripts }} && python3 typescript.py setup
-    cd {{ scripts }} && python3 csharp.py setup
-    cd {{ scripts }} && python3 cpp.py setup
-    cd {{ scripts }} && python3 qemu.py setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang rust setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- qemu setup
 
 lint:
-    cd {{ scripts }} && python3 rust.py lint
-    cd {{ scripts }} && python3 python.py lint
-    cd {{ scripts }} && python3 typescript.py lint
-    # cd {{ scripts }} && python3 csharp.py lint
-    # cd {{ scripts }} && python3 c.py lint
-    # cd {{ scripts }} && python3 cpp.py lint
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lint
 
 alias fmt := format
 format:
-    cd {{ scripts }} && python3 rust.py format
-    cd {{ scripts }} && python3 typescript.py format
-    cd {{ scripts }} && python3 python.py format
-    cd {{ scripts }} && python3 csharp.py format
-    cd {{ scripts }} && python3 c.py format
-    cd {{ scripts }} && python3 cpp.py format
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- format
 
 test:
-    cd {{ scripts }} && python3 rust.py test
-    cd {{ scripts }} && python3 python.py test
-    cd {{ scripts }} && python3 typescript.py test
-    cd {{ scripts }} && python3 csharp.py test
-    cd {{ scripts }} && python3 c.py test
-    cd {{ scripts }} && python3 cpp.py test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp test
 
 check:
-    cd {{ scripts }} && python3 rust.py check
-    cd {{ scripts }} && python3 python.py check
-    cd {{ scripts }} && python3 typescript.py check
-    cd {{ scripts }} && python3 csharp.py check
-    cd {{ scripts }} && python3 c.py check
-    cd {{ scripts }} && python3 cpp.py check
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- check
 
 clean:
-    cd {{ scripts }} && python3 rust.py clean
-    cd {{ scripts }} && python3 python.py clean
-    cd {{ scripts }} && python3 typescript.py clean
-    cd {{ scripts }} && python3 csharp.py clean
-    cd {{ scripts }} && python3 c.py clean
-    cd {{ scripts }} && python3 cpp.py clean
-    cd {{ scripts }} && python3 qemu.py clean
-    rm -rf Demo/public/wasm Demo/node_modules Demo/dist
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- clean
 
 # Demo recipes
 wasm-c:
-    @cd {{ scripts }} && python3 web_demo.py build-c
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-c
 
 wasm-cpp:
-    @cd {{ scripts }} && python3 web_demo.py build-cpp
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-cpp
 
 wasm-csharp:
-    @cd {{ scripts }} && python3 web_demo.py build-csharp
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-csharp
 
 wasm-rust-runtime:
-    @cd {{ scripts }} && python3 web_demo.py build-rust-runtime
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust-runtime
 
 wasm-rust-provider:
-    @cd {{ scripts }} && python3 web_demo.py build-rust-provider
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust-provider
 
 wasm-python:
-    @cd {{ scripts }} && python3 web_demo.py build-python
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-python
 
 wasm-rust:
-    @cd {{ scripts }} && python3 web_demo.py build-rust
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust
 
 wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python wasm-rust-runtime wasm-rust-provider
 

@@ -1,0 +1,117 @@
+[rust]
+toolchain = "1.98.1"
+nightly_channel = "nightly-2026-09-17"
+
+[[tools]]
+name = "nextest"
+pkg = "cargo-nextest"
+version = "0.9.144"
+bin = "cargo-nextest"
+source = "binstall"
+
+[[tools]]
+name = "deny"
+pkg = "cargo-deny"
+version = "0.20.2"
+bin = "cargo-deny"
+source = "binstall"
+
+[[tools]]
+name = "audit"
+pkg = "cargo-audit"
+version = "0.22.2"
+bin = "cargo-audit"
+source = "binstall"
+
+[[tools]]
+name = "typos"
+pkg = "typos-cli"
+version = "1.50.1"
+bin = "typos"
+source = "binstall"
+
+[[tools]]
+name = "geiger"
+pkg = "cargo-geiger"
+version = "0.13.0"
+bin = "cargo-geiger"
+source = "binstall"
+
+[[tools]]
+name = "spellcheck"
+pkg = "cargo-spellcheck"
+version = "0.15.7"
+bin = "cargo-spellcheck"
+source = "binstall"
+
+[[tools]]
+name = "deadlinks"
+pkg = "cargo-deadlinks"
+version = "0.8.1"
+bin = "cargo-deadlinks"
+source = "binstall"
+
+# TODO: Disabled until kbknapp/cargo-outdated#122 merges
+# [[tools]]
+# name = "outdated"
+# pkg = "cargo-outdated"
+# version = "0.19.0"
+# bin = "cargo-outdated"
+# source = "binstall"
+
+[[tools]]
+name = "wasm-pack"
+pkg = "wasm-pack"
+version = "0.15.0"
+bin = "wasm-pack"
+source = "binstall"
+
+[[tools]]
+name = "wasm-bindgen"
+pkg = "wasm-bindgen-cli"
+version = "0.2.128"
+bin = "wasm-bindgen"
+source = "binstall"
+also = ["wasm-bindgen-test-runner"]
+
+[[tools]]
+name = "qemu-arm"
+bin = "qemu-system-arm"
+source = "system"
+
+[[tools]]
+name = "qemu-riscv"
+bin = "qemu-system-riscv32"
+source = "system"
+
+[[tools]]
+name = "wasmtime"
+bin = "wasmtime"
+source = "system"
+
+[[tools]]
+name = "dotnet"
+bin = "dotnet"
+source = "system"
+
+[[tools]]
+name = "node"
+bin = "node"
+source = "system"
+also = ["npm"]
+
+[[tools]]
+name = "python"
+bin = "python3"
+source = "system"
+also = ["uv"]
+
+[[tools]]
+name = "cmake"
+bin = "cmake"
+source = "system"
+
+[[tools]]
+name = "clang-format"
+bin = "clang-format"
+source = "system"

@@ -1,3 +1,6 @@
+[workspace]
+resolver = "2"
+
 [package]
 name = "saikuro_rust_insight"
 version = "0.1.0"

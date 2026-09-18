@@ -1,0 +1,161 @@
+name: Gates
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Build/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
+      - "Justfile"
+      - ".github/workflows/gates.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Build/**"
+      - "Tests/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "rust-toolchain.toml"
+      - "Justfile"
+      - ".github/workflows/gates.yml"
+
+concurrency:
+  group: gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deny:
+    name: cargo deny (bans / licenses / advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run deny
+        run: cargo xtask deny
+
+  audit:
+    name: cargo audit (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run audit
+        run: cargo xtask audit
+
+  geiger:
+    name: cargo geiger (unsafe-code statistics)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run geiger
+        run: cargo xtask geiger
+
+  typos:
+    name: typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run typos
+        run: cargo xtask typos
+
+  spellcheck:
+    name: cargo spellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run spellcheck
+        run: cargo xtask spellcheck
+
+  deadlinks:
+    name: cargo deadlinks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run deadlinks
+        run: cargo xtask deadlinks
+
+  miri:
+    name: miri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: miri, rust-src
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Run miri
+        run: cargo xtask miri

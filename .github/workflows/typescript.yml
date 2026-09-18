@@ -5,41 +5,65 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/typescript/**"
-      - "scripts/typescript.py"
+      - "Build/adapters/python/**"
+      - "Build/adapters/csharp/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
       - "Justfile"
+      - "Justfile.d"
       - ".github/workflows/typescript.yml"
   pull_request:
     paths:
       - "Build/adapters/typescript/**"
-      - "scripts/typescript.py"
+      - "Build/adapters/python/**"
+      - "Build/adapters/csharp/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
       - "Justfile"
+      - "Justfile.d"
       - ".github/workflows/typescript.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: typescript-${{ github.ref }}
+  group: typescript-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  ci:
-    name: Lint + Typecheck + Build + Test
+  check:
+    name: format + lint + typecheck + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: Build/adapters/typescript/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-      - name: Install Python test deps
-        run: python3 -m pip install 'msgpack==1.1.0' 'websockets==13.1'
-      - name: Install npm deps
-        run: npm ci
-        working-directory: Build/adapters/typescript
-      - run: just typescript check
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.6.0"
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Adapter setup
+        run: cargo xtask lang type-script setup
+      - name: Setup Python adapter
+        run: cargo xtask lang python setup
+      - name: Check
+        run: cargo xtask lang type-script check

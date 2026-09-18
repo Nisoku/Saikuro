@@ -15,15 +15,15 @@ cargo install just
 |-----------------------------|-------------------------------------|
 | `just rust setup`           | Add `wasm32-unknown-unknown` target |
 | `just rust test`            | `cargo test --workspace`            |
-| `just rust check`           | fmt + clippy + tests + wasm check   |
+| `just rust check`           | fmt + clippy + tests + wasm check (includes `tools/xtask`) |
 | `just python setup`         | `uv sync --dev`                     |
 | `just python test`          | `pytest`                            |
 | `just python check`         | ruff lint + format + pytest         |
 | `just typescript setup`     | `npm install`                       |
-| `just typescript build`     | Build with tsup                     |
+| `just typescript build`     | Build with tsdown                   |
 | `just typescript test`      | `vitest`                            |
 | `just typescript typecheck` | `tsc --noEmit`                      |
-| `just typescript check`     | eslint + tsc + vitest + tsup        |
+| `just typescript check`     | eslint + tsc + vitest + tsdown      |
 | `just csharp setup`         | `dotnet restore`                    |
 | `just csharp build`         | `dotnet build -c Release`           |
 | `just csharp test`          | `dotnet test -c Release`            |
@@ -34,6 +34,21 @@ cargo install just
 | `just cpp setup`            | cmake configure + ensure Emscripten |
 | `just cpp test`             | cmake build + ctest                 |
 | `just cpp check`            | clang-format + cmake + test         |
+
+## Demo Web App
+
+The `Demo` Vite app and its WASM provider samples are gated together as the `demo` language. This covers the frontend TypeScript plus the C, C++, C#, Python and Rust sources under `Demo/wasm/`.
+
+| Command             | What it does                                                        |
+|---------------------|---------------------------------------------------------------------|
+| `just demo setup`   | `npm install` in `Demo`                                             |
+| `just demo format`  | Prettier + clang-format + ruff + `cargo fmt` + `dotnet format`      |
+| `just demo check`   | Format checks + ruff lint + `tsc --noEmit` + `vite build`           |
+| `just demo build`   | Build every WASM provider + the Vite bundle                         |
+| `just demo dev`     | Build WASM + start the Vite dev server with live rebuilds           |
+| `just demo clean`   | Remove `node_modules`, `dist` and generated WASM output             |
+
+`just check` runs the demo gate alongside every other language.
 
 ## WASM / Demo
 
@@ -47,8 +62,8 @@ cargo install just
 | `just wasm-csharp`        | Build C# WASM provider                   |
 | `just wasm-python`        | Build Python WASM provider               |
 | `just wasm-all`           | Build every WASM module                  |
-| `just web_demo dev`       | Build WASM + start Vite dev server       |
-| `just web_demo build`     | Build WASM modules only                  |
+| `just demo build`         | Build all WASM modules + Vite bundle     |
+| `just demo dev`           | Build WASM + start Vite dev server       |
 
 ## Meta
 
@@ -86,5 +101,5 @@ Building the WASM demo:
 
 ```bash
 just wasm-all              # build all WASM modules
-just web_demo dev          # build WASM + start dev server
+just demo dev              # build WASM + start dev server
 ```

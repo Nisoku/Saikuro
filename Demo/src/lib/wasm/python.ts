@@ -8,9 +8,9 @@ export async function startPythonProvider(channel: string): Promise<void> {
   if (!bootPromise) {
     bootPromise = (async () => {
       log.info("loading Pyodide from CDN", { channel });
-      const module = await import(
-        /* @vite-ignore */ "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"
-      );
+      const pyodideUrl =
+        "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js";
+      const module = await import(/* @vite-ignore */ pyodideUrl);
       const loadPyodide = module.loadPyodide ?? (window as any).loadPyodide;
       if (!loadPyodide) throw new Error("loadPyodide not available");
 
@@ -39,10 +39,8 @@ export async function startPythonProvider(channel: string): Promise<void> {
       log.info("packages installed");
 
       log.info("loading Python insight.py script");
-      const insightUrl = new URL(
-        "wasm/python/insight.py",
-        document.baseURI,
-      ).href;
+      const insightUrl = new URL("wasm/python/insight.py", document.baseURI)
+        .href;
       const resp = await fetch(insightUrl);
       if (!resp.ok) {
         throw new Error(`Failed to fetch insight.py: ${resp.status}`);

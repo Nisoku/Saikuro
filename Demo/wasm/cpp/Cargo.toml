@@ -1,3 +1,6 @@
+[workspace]
+resolver = "2"
+
 [package]
 name = "saikuro-cpp-insight"
 version = "0.1.0"

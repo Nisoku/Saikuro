@@ -5,31 +5,48 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/csharp/**"
-      - "scripts/csharp.py"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
       - "Justfile"
+      - "Justfile.d"
       - ".github/workflows/csharp.yml"
   pull_request:
     paths:
       - "Build/adapters/csharp/**"
-      - "scripts/csharp.py"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
       - "Justfile"
+      - "Justfile.d"
       - ".github/workflows/csharp.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: csharp-${{ github.ref }}
+  group: csharp-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  test:
-    name: Build + Test
+  check:
+    name: format + lint + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
-      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
-      - run: just csharp check
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Adapter setup
+        run: cargo xtask lang c-sharp setup
+      - name: Check
+        run: cargo xtask lang c-sharp check

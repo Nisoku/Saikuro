@@ -1,4 +1,4 @@
-name: "Automatic Dependency Submission"
+name: "dependency-submission"
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  submit-nuget:
+  submit-dependencies:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
