@@ -76,12 +76,7 @@
 
 - [ ] Add more tests
 
-- [X] add fancy stuff like `miri`, `cargo-geiger`, **`cargo-checkmate`**, `cargo-spellcheck`/`typos-cli` lol i need it, `cargo-outdated`, `cargo-geiger`, **`siderophile`**, etc
-- [X] use nextest if we can, or a custom test runner cli that works across everything
-- [X] revamp CI, deny.toml, devcontainer and Just setup for the new system and everything
 - [ ] Update docs/demo/examples for the new everything
 - [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
-
-- [X] maybe a root Cargo.toml (nested workspaces possible? idk)
 
 - [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that
