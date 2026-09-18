@@ -107,7 +107,14 @@ fn py_sources() -> Vec<PathBuf> {
 }
 
 fn python_args(prefix: &[&str]) -> Vec<String> {
-    let mut args: Vec<String> = prefix.iter().map(|s| s.to_string()).collect();
+    let project = paths::adapters_dir().join("python");
+    let mut args: Vec<String> = ["run", "--project"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    args.push(project.display().to_string());
+    args.push("ruff".to_string());
+    args.extend(prefix.iter().map(|s| (*s).to_string()));
     args.extend(py_sources().iter().map(|p| p.display().to_string()));
     args
 }
@@ -121,7 +128,7 @@ fn python_format_check() -> anyhow::Result<()> {
     run_fix_step(
         "Demo Python",
         &demo_dir(),
-        "ruff",
+        "uv",
         &check.iter().map(String::as_str).collect::<Vec<_>>(),
         &fix.iter().map(String::as_str).collect::<Vec<_>>(),
     )
@@ -135,7 +142,7 @@ fn python_format() -> anyhow::Result<()> {
     run_formatter(
         "Demo Python",
         &demo_dir(),
-        "ruff",
+        "uv",
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
     )
 }
@@ -147,7 +154,7 @@ fn python_lint() -> anyhow::Result<()> {
     let args = python_args(&["check"]);
     run::run(
         &demo_dir(),
-        "ruff",
+        "uv",
         args.iter().map(String::as_str).collect::<Vec<_>>(),
     )
 }

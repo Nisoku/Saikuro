@@ -28,12 +28,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: Cargo.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.6.0"
       - name: Setup xtask deps
         run: cargo xtask setup
       - name: Rust adapter gate (format, lint, native test)
         run: cargo xtask lang rust check
       - name: Native engine suite
         run: cargo xtask test native
+      - name: Setup Python adapter
+        run: cargo xtask lang python setup
       - name: Python adapter gate
         run: cargo xtask lang python check
       - name: Setup TypeScript adapter

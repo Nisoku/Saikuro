@@ -5,6 +5,8 @@ on:
     branches: ["main"]
     paths:
       - "Build/adapters/typescript/**"
+      - "Build/adapters/python/**"
+      - "Build/adapters/csharp/**"
       - "tools/xtask/**"
       - "tools/tools.toml"
       - "Justfile"
@@ -13,6 +15,8 @@ on:
   pull_request:
     paths:
       - "Build/adapters/typescript/**"
+      - "Build/adapters/python/**"
+      - "Build/adapters/csharp/**"
       - "tools/xtask/**"
       - "tools/tools.toml"
       - "Justfile"
@@ -49,9 +53,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: Cargo.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.6.0"
       - name: Setup xtask deps
         run: cargo xtask setup
       - name: Adapter setup
         run: cargo xtask lang type-script setup
+      - name: Setup Python adapter
+        run: cargo xtask lang python setup
       - name: Check
         run: cargo xtask lang type-script check

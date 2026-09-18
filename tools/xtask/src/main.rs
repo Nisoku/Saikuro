@@ -266,7 +266,7 @@ fn wasm_tests() -> anyhow::Result<()> {
             &root,
             "cargo",
             BASE.into_iter()
-                .chain(["--bin", "wasm", "--", name.as_str()]),
+                .chain(["--bin", "wasm", "--", name.as_str(), "--exact"]),
         )
         .with_context(|| format!("wasm test {name}"))?;
     }

@@ -21,7 +21,7 @@ when opening a pull request.
 | Tool            | Minimum version   | Notes                                                 |
 |-----------------|-------------------|-------------------------------------------------------|
 | Rust toolchain  | 1.75              | Install via [rustup](https://rustup.rs/)              |
-| Node.js         | 22 (see `.nvmrc`) | Required for the TypeScript adapter                   |
+| Node.js         | 24 (see `.nvmrc`) | Required for the TypeScript adapter                   |
 | Python          | 3.11              | Required for the Python adapter                       |
 | uv              | latest            | Python package manager                                |
 | just            | latest            | Task runner                                           |

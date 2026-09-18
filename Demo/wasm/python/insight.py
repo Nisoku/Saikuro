@@ -68,4 +68,4 @@ if __name__ == "__main__":
     else:
         # Pyodide executes this module inside a live event loop, where
         # top-level await is valid.
-        await main()  # noqa: F704
+        await main()  # noqa: F704, PLE1142

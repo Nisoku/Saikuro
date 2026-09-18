@@ -73,19 +73,6 @@ pub fn typos() -> anyhow::Result<()> {
 
 const GEIGER_BASELINE: &str = "geiger.baseline";
 
-fn normalize_report(text: &str) -> String {
-    let prefix = root().display().to_string();
-    let mut out = String::new();
-    for line in text.lines() {
-        if line.contains("rustc version") || line.trim().starts_with("Scanning") {
-            continue;
-        }
-        out.push_str(&line.replace(&prefix, "."));
-        out.push('\n');
-    }
-    out
-}
-
 pub(crate) fn sha256_hex(input: impl AsRef<[u8]>) -> String {
     use sha2::Digest;
     use sha2::Sha256;
@@ -171,8 +158,9 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
     // cargo-geiger 0.13.0 embeds cargo-lib 0.86.0
     // See: https://github.com/rust-lang/cargo/pull/12708
     run::run(&root(), "cargo", ["fetch", "--locked"]).with_context(|| "cargo fetch")?;
-    let mut combined = String::new();
-    for member in workspace_members()? {
+    let members = workspace_members()?;
+    let mut report = std::collections::BTreeMap::new();
+    for member in &members {
         let engines: Vec<&str> = ENGINE_FEATURES
             .iter()
             .copied()
@@ -219,11 +207,31 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
                 name = member.name
             );
         }
-        combined.push_str(&String::from_utf8_lossy(&out.stdout));
-        combined.push('\n');
+        let parsed: serde_json::Value = serde_json::from_slice(&out.stdout)
+            .with_context(|| format!("parse geiger report for {}", member.name))?;
+        let unsafety = parsed
+            .get("packages")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|packages| {
+                packages.iter().find(|pkg| {
+                    pkg.get("package")
+                        .and_then(|pkg| pkg.get("id"))
+                        .and_then(|id| id.get("name"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(member.name.as_str())
+                })
+            })
+            .and_then(|pkg| pkg.get("unsafety"))
+            .with_context(|| {
+                format!(
+                    "geiger report for {} has no metrics for the crate itself",
+                    member.name
+                )
+            })?;
+        report.insert(member.name.clone(), unsafety.clone());
         println!("done");
     }
-    let digest = sha256_hex(normalize_report(&combined));
+    let digest = sha256_hex(serde_json::to_vec(&report).context("serialize geiger report")?);
     let baseline = baseline_path(GEIGER_BASELINE);
     if update {
         if let Some(dir) = baseline.parent() {
@@ -243,9 +251,8 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         .to_string();
     if digest != expected {
         anyhow::bail!(
-            "geiger digest drifted from {} (see {}). Re-run `cargo xtask geiger --update` \
-             only after reviewing the diff.",
-            baseline.display(),
+            "geiger baseline drifted ({}). Re-run `cargo xtask geiger --update` only after \
+             reviewing the unsafety diff.",
             baseline.display()
         );
     }

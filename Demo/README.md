@@ -56,4 +56,4 @@ just demo clean    # remove node_modules, dist, generated WASM
 - Rust toolchain + `wasm-pack`
 - Emscripten (`emcc` + `em++`) for C/C++
 - .NET 8 SDK for C# WASM
-- Node 22+
+- Node 24+
