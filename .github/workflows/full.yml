@@ -36,6 +36,8 @@ jobs:
         run: cargo xtask test native
       - name: Python adapter gate
         run: cargo xtask lang python check
+      - name: Setup TypeScript adapter
+        run: cargo xtask lang type-script setup
       - name: TypeScript adapter gate
         run: cargo xtask lang type-script check
       - name: C# adapter gate
@@ -52,7 +54,9 @@ jobs:
           cargo xtask typos
           cargo xtask spellcheck
           cargo xtask deadlinks
+      - name: Setup demo app
+        run: cargo xtask lang demo setup
       - name: Web demo build
-        run: cargo xtask demo build
+        run: cargo xtask lang demo build
       - name: Web demo check
-        run: cargo xtask demo check
+        run: cargo xtask lang demo check

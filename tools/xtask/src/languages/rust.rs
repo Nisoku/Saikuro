@@ -35,13 +35,32 @@ fn rust_format_check() -> anyhow::Result<()> {
         "cargo",
         &["fmt", "-p", "saikuro", "--", "--check"],
         &["fmt", "-p", "saikuro"],
+    )?;
+    run_fix_step(
+        "Rust xtask",
+        &w,
+        "cargo",
+        &[
+            "fmt",
+            "--manifest-path",
+            "tools/xtask/Cargo.toml",
+            "--",
+            "--check",
+        ],
+        &["fmt", "--manifest-path", "tools/xtask/Cargo.toml"],
     )
 }
 
 pub(super) fn rust_format() -> anyhow::Result<()> {
     let w = root();
     run_formatter("Rust workspace", &w, "cargo", &["fmt", "--all"])?;
-    run_formatter("Rust adapter", &w, "cargo", &["fmt", "-p", "saikuro"])
+    run_formatter("Rust adapter", &w, "cargo", &["fmt", "-p", "saikuro"])?;
+    run_formatter(
+        "Rust xtask",
+        &w,
+        "cargo",
+        &["fmt", "--manifest-path", "tools/xtask/Cargo.toml"],
+    )
 }
 
 pub(super) fn rust_lint() -> anyhow::Result<()> {
@@ -62,6 +81,18 @@ pub(super) fn rust_lint() -> anyhow::Result<()> {
         &w,
         "cargo",
         ["clippy", "-p", "saikuro", "--", "-D", "warnings"],
+    )?;
+    run::run(
+        &w,
+        "cargo",
+        [
+            "clippy",
+            "--manifest-path",
+            "tools/xtask/Cargo.toml",
+            "--",
+            "-D",
+            "warnings",
+        ],
     )
 }
 

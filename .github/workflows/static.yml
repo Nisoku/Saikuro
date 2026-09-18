@@ -31,8 +31,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
@@ -55,8 +53,14 @@ jobs:
           workspaces: Cargo.toml
       - name: Setup xtask deps
         run: cargo xtask setup
+      - name: Setup TypeScript adapter
+        run: cargo xtask lang type-script setup
+      - name: Setup demo app
+        run: cargo xtask lang demo setup
+      - name: Build TypeScript adapter
+        run: cargo xtask lang type-script build
       - name: Build web demo
-        run: cargo xtask demo build
+        run: cargo xtask lang demo build
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -70,6 +74,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

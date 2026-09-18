@@ -9,7 +9,7 @@ export async function startCppProvider(channel: string): Promise<void> {
     bootPromise = (async () => {
       log.info("loading C++ WASM", { channel });
       const mod = await import(
-        new URL("wasm/cpp/saikuro_cpp_insight.js", document.baseURI).href,
+        new URL("wasm/cpp/saikuro_cpp_insight.js", document.baseURI).href
       );
       log.info("C++ WASM module loaded, initializing");
       await mod.default();

@@ -2,6 +2,7 @@ use std::io::Write;
 
 use anyhow::Context;
 
+use crate::config::Config;
 use crate::paths;
 use crate::run;
 
@@ -85,11 +86,11 @@ fn normalize_report(text: &str) -> String {
     out
 }
 
-fn sha256_hex(input: &str) -> String {
+pub(crate) fn sha256_hex(input: impl AsRef<[u8]>) -> String {
     use sha2::Digest;
     use sha2::Sha256;
     let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
+    hasher.update(input.as_ref());
     let out = hasher.finalize();
     out.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -219,7 +220,7 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
         combined.push('\n');
         println!("done");
     }
-    let digest = sha256_hex(&normalize_report(&combined));
+    let digest = sha256_hex(normalize_report(&combined));
     let baseline = baseline_path(GEIGER_BASELINE);
     if update {
         if let Some(dir) = baseline.parent() {
@@ -266,26 +267,41 @@ pub fn spellcheck() -> anyhow::Result<()> {
 }
 
 pub fn deadlinks() -> anyhow::Result<()> {
-    let out = run::run_capture(&root(), "cargo", ["+nightly", "doc", "--workspace", "--no-deps"])
-        .with_context(|| "cargo doc")?;
+    let config = Config::load(&paths::tools_manifest())?;
+    let nightly = format!("+{}", config.rust.nightly_channel);
+    let out = run::run_capture(
+        &root(),
+        "cargo",
+        [nightly.as_str(), "doc", "--workspace", "--no-deps"],
+    )
+    .with_context(|| "cargo doc")?;
+    if !out.status.success() {
+        std::io::stdout().write_all(&out.stdout)?;
+        std::io::stderr().write_all(&out.stderr)?;
+        anyhow::bail!("cargo doc exited with {}", out.status);
+    }
     let combined = String::from_utf8_lossy(&out.stdout);
     let combined_stderr = String::from_utf8_lossy(&out.stderr);
     let mut problems = Vec::new();
-    for (stream, text) in [("stderr", combined_stderr.as_ref()), ("stdout", combined.as_ref())] {
+    for (stream, text) in [
+        ("stderr", combined_stderr.as_ref()),
+        ("stdout", combined.as_ref()),
+    ] {
         for line in text.lines() {
-            if ["unresolved link", "unresolved intra-doc link", "links to private item"]
-                .iter()
-                .any(|marker| line.contains(marker))
+            if [
+                "unresolved link",
+                "unresolved intra-doc link",
+                "links to private item",
+            ]
+            .iter()
+            .any(|marker| line.contains(marker))
             {
                 problems.push(format!("[{stream}] {line}"));
             }
         }
     }
     if !problems.is_empty() {
-        anyhow::bail!(
-            "broken intra-doc links:\n{}",
-            problems.join("\n")
-        );
+        anyhow::bail!("broken intra-doc links:\n{}", problems.join("\n"));
     }
     println!("deadlinks: ok (rustdoc intra-doc links clean)");
     Ok(())

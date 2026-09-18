@@ -58,4 +58,4 @@ jobs:
       - name: Check every crate for every toolchain target
         run: cargo xtask matrix --all-crates
       - name: Matrix with JSON output
-        run: cargo xtask matrix --all-crates --json matrix.json matrix.json
+        run: cargo xtask matrix --all-crates --json matrix.json

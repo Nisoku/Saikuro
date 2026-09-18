@@ -95,7 +95,7 @@ The TypeScript adapter works in the browser without any WASM compilation. For th
 ```bash
 just wasm-all           # build all provider WASM modules
 just wasm-rust-runtime  # build the WASM runtime (not included in wasm-all)
-just web_demo dev       # build + start the dev server
+just demo dev           # build + start the dev server
 ```
 
 See [WASM Guide](../guide/wasm) for browser integration details.

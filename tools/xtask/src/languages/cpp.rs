@@ -15,7 +15,7 @@ fn cpp_sources() -> Vec<PathBuf> {
     for sub in ["src", "include", "tests"] {
         out.extend(collect_recursive(
             &cpp_dir().join(sub),
-            &["*.[ch]pp", "*.h"],
+            &["*.cpp", "*.hpp", "*.h"],
         ));
     }
     out

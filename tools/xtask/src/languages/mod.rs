@@ -9,6 +9,7 @@ use crate::run;
 mod c;
 mod cpp;
 mod csharp;
+mod demo;
 mod python;
 mod rust;
 mod typescript;
@@ -16,6 +17,7 @@ mod typescript;
 use c::*;
 use cpp::*;
 use csharp::*;
+use demo::*;
 use python::*;
 use rust::*;
 use typescript::*;
@@ -105,6 +107,7 @@ pub enum Lang {
     CSharp,
     C,
     Cpp,
+    Demo,
 }
 
 impl Lang {
@@ -116,17 +119,19 @@ impl Lang {
             Lang::CSharp => "csharp",
             Lang::C => "c",
             Lang::Cpp => "cpp",
+            Lang::Demo => "demo",
         }
     }
 }
 
-pub const ALL_LANGS: [Lang; 6] = [
+pub const ALL_LANGS: [Lang; 7] = [
     Lang::Rust,
     Lang::Python,
     Lang::TypeScript,
     Lang::CSharp,
     Lang::C,
     Lang::Cpp,
+    Lang::Demo,
 ];
 
 /// Aggregate `just check` equivalent.
@@ -148,6 +153,7 @@ pub fn lint_all() -> anyhow::Result<()> {
     rust_lint()?;
     python_lint()?;
     typescript_lint()?;
+    demo_lint()?;
     Ok(())
 }
 
@@ -158,17 +164,8 @@ pub fn clean_all() -> anyhow::Result<()> {
     csharp_clean()?;
     cpp_clean()?;
     c_clean()?;
-    super::qemu::clean()?;
-    for path in [
-        paths::demo_dir().join("public").join("wasm"),
-        paths::demo_dir().join("node_modules"),
-        paths::demo_dir().join("dist"),
-    ] {
-        if path.is_dir() {
-            std::fs::remove_dir_all(&path).with_context(|| format!("rm {}", path.display()))?;
-        }
-    }
-    Ok(())
+    demo_clean()?;
+    super::qemu::clean()
 }
 
 pub fn run_lang(lang: Lang, verb: &str) -> anyhow::Result<()> {
@@ -204,6 +201,7 @@ pub fn run_lang(lang: Lang, verb: &str) -> anyhow::Result<()> {
         (Lang::TypeScript, "lint") => typescript_lint(),
         (Lang::TypeScript, "setup") => run::run(&ts_dir(), "npm", ["install"]),
         (Lang::TypeScript, "test") => run::run(&ts_dir(), "npm", ["test"]),
+        (Lang::TypeScript, "build") => run::run(&ts_dir(), "npm", ["run", "build"]),
         (Lang::TypeScript, "clean") => typescript_clean(),
 
         (Lang::CSharp, "check") => csharp_check(),
@@ -233,6 +231,21 @@ pub fn run_lang(lang: Lang, verb: &str) -> anyhow::Result<()> {
         (Lang::Cpp, "setup") => cpp_setup(),
         (Lang::Cpp, "test") => cpp_test(),
         (Lang::Cpp, "clean") => cpp_clean(),
+
+        (Lang::Demo, "check") => demo_check(),
+        (Lang::Demo, "format") => demo_format(),
+        (Lang::Demo, "lint") => demo_lint(),
+        (Lang::Demo, "setup") => demo_setup(),
+        (Lang::Demo, "clean") => demo_clean(),
+        (Lang::Demo, "build") => demo_build(),
+        (Lang::Demo, "dev") => demo_dev(),
+        (Lang::Demo, "build-c") => demo_wasm_c(),
+        (Lang::Demo, "build-cpp") => demo_wasm_cpp(),
+        (Lang::Demo, "build-csharp") => demo_wasm_csharp(),
+        (Lang::Demo, "build-rust-runtime") => demo_wasm_runtime(),
+        (Lang::Demo, "build-rust-provider") => demo_wasm_rust(),
+        (Lang::Demo, "build-rust") => demo_wasm_rust_all(),
+        (Lang::Demo, "build-python") => demo_wasm_python(),
 
         (lang, verb) => {
             anyhow::bail!("no such verb '{}' for language '{}'", verb, lang.name())

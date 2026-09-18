@@ -108,7 +108,7 @@ To run the demo:
 
 ```bash
 just wasm-all       # build all WASM modules
-just web_demo dev   # build + start dev server
+just demo dev       # build + start dev server
 ```
 
 ## Next Steps

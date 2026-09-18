@@ -1,10 +1,20 @@
 use std::path::Path;
+use std::process::Command;
 
 use anyhow::Context;
 
 use crate::config::{Config, Source};
+use crate::gates::sha256_hex;
 use crate::paths;
 use crate::run;
+
+const BINSTALL_INSTALL_URL: &str = concat!(
+    "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/",
+    "9d36bebae244fb1a7fd7831d3c5a4bc8f1cab230/install-from-binstall-release.sh"
+);
+const BINSTALL_INSTALL_SHA256: &str =
+    "d3a93702160e0ec03e2a4e996855db1f01adee801fb84a43add24e0877ef8eae";
+const BINSTALL_VERSION: &str = "v1.23.0";
 
 fn verify(tool: &crate::config::Tool) -> anyhow::Result<bool> {
     if !run::which(&tool.bin) {
@@ -15,6 +25,18 @@ fn verify(tool: &crate::config::Tool) -> anyhow::Result<bool> {
             tool.version.as_deref().unwrap_or("-")
         );
         return Ok(false);
+    }
+    if let Some(expected) = &tool.version {
+        let out = run::run_capture(Path::new("/"), &tool.bin, ["--version"])?;
+        let installed = format!(
+            "{} {}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        if !out.status.success() || !installed.split_whitespace().any(|part| part == expected) {
+            println!("MISMATCH {:23} (expected {})", tool.name, expected);
+            return Ok(false);
+        }
     }
     let mut extra_ok = true;
     for extra in &tool.also {
@@ -81,7 +103,14 @@ fn ensure_rust(manifest: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-const BINSTALL_INSTALL_URL: &str = "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh";
+// Removes the verified bootstrap script from the temp dir on scope exit.
+struct TempScript(std::path::PathBuf);
+
+impl Drop for TempScript {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
 
 fn ensure_binstall(check_only: bool) -> anyhow::Result<()> {
     if run::which("cargo-binstall") {
@@ -91,8 +120,36 @@ fn ensure_binstall(check_only: bool) -> anyhow::Result<()> {
         anyhow::bail!("cargo-binstall is missing; run `cargo xtask setup`");
     }
     println!("installing cargo-binstall...");
-    let script = format!("curl -LsSf {BINSTALL_INSTALL_URL} | bash");
-    run::run(Path::new("/"), "sh", ["-c", script.as_str()]).context("bootstrap cargo-binstall")?;
+    let out = run::run_capture(Path::new("/"), "curl", ["-fLsS", BINSTALL_INSTALL_URL])
+        .context("download cargo-binstall bootstrap")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "download cargo-binstall bootstrap failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let digest = sha256_hex(&out.stdout);
+    if digest != BINSTALL_INSTALL_SHA256 {
+        anyhow::bail!(
+            "cargo-binstall bootstrap digest mismatch (got {digest}, want {BINSTALL_INSTALL_SHA256}); \
+             refusing to execute"
+        );
+    }
+    let script = TempScript(std::env::temp_dir().join(format!(
+        "cargo-binstall-bootstrap-{}.sh",
+        std::process::id()
+    )));
+    std::fs::write(&script.0, &out.stdout)
+        .with_context(|| format!("write {}", script.0.display()))?;
+    let status = Command::new("sh")
+        .arg(&script.0)
+        .env("BINSTALL_VERSION", BINSTALL_VERSION)
+        .current_dir(Path::new("/"))
+        .status()
+        .with_context(|| "run cargo-binstall bootstrap")?;
+    if !status.success() {
+        anyhow::bail!("cargo-binstall bootstrap exited with {status}");
+    }
     if !run::which("cargo-binstall") {
         anyhow::bail!("cargo-binstall installed but not found on PATH");
     }

@@ -15,7 +15,9 @@ def prepare_viz(stats, ngrams, sentiment):
     tokens = ngrams.get("bigrams", [])
     token_lengths = []
     for item in tokens:
-        words = item[0].split() if isinstance(item, (list, tuple)) and len(item) > 0 else []
+        words = (
+            item[0].split() if isinstance(item, (list, tuple)) and len(item) > 0 else []
+        )
         token_lengths.append(max(len(w) for w in words) if words else 0)
 
     buckets = {"short": 0, "medium": 0, "long": 0}
@@ -36,7 +38,9 @@ def prepare_viz(stats, ngrams, sentiment):
     return {
         "bins": bins,
         "sentiment": sentiment.get("label", "neutral"),
-        "ascii_ratio": 0 if stats.get("bytes", 0) == 0 else stats.get("ascii", 0) / stats.get("bytes", 1),
+        "ascii_ratio": 0
+        if stats.get("bytes", 0) == 0
+        else stats.get("ascii", 0) / stats.get("bytes", 1),
     }
 
 
@@ -62,4 +66,6 @@ if __name__ == "__main__":
     except RuntimeError:
         asyncio.run(main())
     else:
-        await main()
+        # Pyodide executes this module inside a live event loop, where
+        # top-level await is valid.
+        await main()  # noqa: F704

@@ -105,6 +105,14 @@ fn runner_bin(target: &str) -> &'static str {
     }
 }
 
+fn runner_args(target: &str) -> &'static [&'static str] {
+    EMBEDDED_RUNNERS
+        .iter()
+        .find(|(runner_target, _, _)| *runner_target == target)
+        .map(|(_, _, argv)| *argv)
+        .unwrap_or_else(|| unreachable!("no runner arguments mapped for target {target}"))
+}
+
 fn build_args(target: &str, features: &str) -> Vec<String> {
     vec![
         "build".into(),
@@ -218,33 +226,15 @@ pub fn test_embedded() -> anyhow::Result<()> {
 pub fn run_arm() -> anyhow::Result<()> {
     setup()?;
     build_arm()?;
-    let argv = &[
-        "qemu-system-arm",
-        "-cpu",
-        "cortex-m3",
-        "-machine",
-        "mps2-an385",
-        "-nographic",
-        "-semihosting-config",
-        "enable=on,target=native",
-        "-kernel",
-    ];
-    run_runner("thumbv7m-none-eabi", "thumbv7m", argv)
+    let target = ARM_TARGETS[0].0;
+    run_runner(target, runner_bin(target), runner_args(target))
 }
 
 pub fn run_riscv() -> anyhow::Result<()> {
     setup()?;
     build_riscv()?;
-    let argv = &[
-        "qemu-system-riscv32",
-        "-M",
-        "virt",
-        "-nographic",
-        "-semihosting-config",
-        "enable=on,target=native",
-        "-kernel",
-    ];
-    run_runner("riscv32imac-unknown-none-elf", "riscv32imac", argv)
+    let target = RISCV_TARGETS[1].0;
+    run_runner(target, runner_bin(target), runner_args(target))
 }
 
 pub fn clean() -> anyhow::Result<()> {

@@ -260,7 +260,11 @@ fn check_combo(
         .with_context(|| format!("spawn cargo check for {crate_name} :: {}", combo.name))?;
     let seconds = start.elapsed().as_secs_f64();
 
-    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    let text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     let errors = text.lines().filter(|l| l.starts_with("error")).count();
     let warnings = text
         .lines()

@@ -8,7 +8,6 @@ mod paths;
 mod qemu;
 mod run;
 mod setup;
-mod webdemo;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
@@ -38,12 +37,7 @@ enum Command {
         #[arg(value_enum, default_value_t = QemuVerb::Check)]
         verb: QemuVerb,
     },
-    /// Web demo.
-    Demo {
-        #[arg(value_enum, default_value_t = DemoVerb::Dev)]
-        verb: DemoVerb,
-    },
-    /// Run a verb for one language adapter.
+    /// Run a verb for one language adapter (including the web demo).
     Lang {
         #[arg(value_enum)]
         lang: languages::Lang,
@@ -110,21 +104,6 @@ enum QemuVerb {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-enum DemoVerb {
-    Setup,
-    Build,
-    Dev,
-    Check,
-    BuildC,
-    BuildCpp,
-    BuildCsharp,
-    BuildRustRuntime,
-    BuildRustProvider,
-    BuildRust,
-    BuildPython,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum LangVerb {
     Check,
     Format,
@@ -135,6 +114,14 @@ enum LangVerb {
     Build,
     WasmCheck,
     AdapterTest,
+    Dev,
+    BuildC,
+    BuildCpp,
+    BuildCsharp,
+    BuildRustRuntime,
+    BuildRustProvider,
+    BuildRust,
+    BuildPython,
 }
 
 impl LangVerb {
@@ -149,6 +136,14 @@ impl LangVerb {
             LangVerb::Build => "build",
             LangVerb::WasmCheck => "wasm_check",
             LangVerb::AdapterTest => "adapter_test",
+            LangVerb::Dev => "dev",
+            LangVerb::BuildC => "build-c",
+            LangVerb::BuildCpp => "build-cpp",
+            LangVerb::BuildCsharp => "build-csharp",
+            LangVerb::BuildRustRuntime => "build-rust-runtime",
+            LangVerb::BuildRustProvider => "build-rust-provider",
+            LangVerb::BuildRust => "build-rust",
+            LangVerb::BuildPython => "build-python",
         }
     }
 }
@@ -216,19 +211,6 @@ impl Command {
                 QemuVerb::RunArm => qemu::run_arm(),
                 QemuVerb::RunRiscv => qemu::run_riscv(),
                 QemuVerb::Clean => qemu::clean(),
-            },
-            Command::Demo { verb } => match verb {
-                DemoVerb::Setup => webdemo::setup_dependencies(),
-                DemoVerb::Build => webdemo::build_all(),
-                DemoVerb::Dev => webdemo::dev_server(),
-                DemoVerb::Check => webdemo::typecheck(),
-                DemoVerb::BuildC => webdemo::wasm_c(),
-                DemoVerb::BuildCpp => webdemo::wasm_cpp(),
-                DemoVerb::BuildCsharp => webdemo::wasm_csharp(),
-                DemoVerb::BuildRustRuntime => webdemo::wasm_runtime(),
-                DemoVerb::BuildRustProvider => webdemo::wasm_rust(),
-                DemoVerb::BuildRust => webdemo::wasm_rust_all(),
-                DemoVerb::BuildPython => webdemo::wasm_python(),
             },
             Command::Lang { lang, verb } => languages::run_lang(lang, verb.as_str()),
             Command::Lint => languages::lint_all(),

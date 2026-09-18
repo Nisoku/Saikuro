@@ -172,26 +172,10 @@ function startWatcher() {
     "Runtime",
     "wasm-rust-runtime",
   );
-  watchFile(
-    path.join(WASM, "c", "Cargo.toml"),
-    "C",
-    "wasm-c",
-  );
-  watchFile(
-    path.join(WASM, "cpp", "Cargo.toml"),
-    "C++",
-    "wasm-cpp",
-  );
-  watchFile(
-    path.join(WASM, "c", "insight_c.c"),
-    "C",
-    "wasm-c",
-  );
-  watchFile(
-    path.join(WASM, "cpp", "insight_cpp.cpp"),
-    "C++",
-    "wasm-cpp",
-  );
+  watchFile(path.join(WASM, "c", "Cargo.toml"), "C", "wasm-c");
+  watchFile(path.join(WASM, "cpp", "Cargo.toml"), "C++", "wasm-cpp");
+  watchFile(path.join(WASM, "c", "insight_c.c"), "C", "wasm-c");
+  watchFile(path.join(WASM, "cpp", "insight_cpp.cpp"), "C++", "wasm-cpp");
 
   console.log(
     `\n${BOLD} Ready. Edit a source file to trigger a partial rebuild${RESET}\n`,

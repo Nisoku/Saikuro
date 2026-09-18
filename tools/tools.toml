@@ -1,6 +1,6 @@
 [rust]
 toolchain = "1.98.1"
-nightly_channel = "nightly"
+nightly_channel = "nightly-2026-09-17"
 
 [[tools]]
 name = "nextest"

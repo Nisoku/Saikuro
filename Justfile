@@ -12,7 +12,7 @@ python *args:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python {{ args }}
 
 typescript *args:
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang typescript {{ args }}
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script {{ args }}
 
 alias csharp := c-sharp
 c-sharp *args:
@@ -24,8 +24,8 @@ c *args:
 cpp *args:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp {{ args }}
 
-web_demo *args:
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo {{ args }}
+demo *args:
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo {{ args }}
 
 qemu *args:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- qemu {{ args }}
@@ -35,9 +35,10 @@ setup:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- setup
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang rust setup
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python setup
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang typescript setup
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang csharp setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp setup
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp setup
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo setup
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- qemu setup
 
 lint:
@@ -50,8 +51,8 @@ format:
 test:
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- test
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang python test
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang typescript test
-    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang csharp test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang type-script test
+    cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c-sharp test
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang c test
     cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang cpp test
 
@@ -63,25 +64,25 @@ clean:
 
 # Demo recipes
 wasm-c:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-c
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-c
 
 wasm-cpp:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-cpp
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-cpp
 
 wasm-csharp:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-csharp
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-csharp
 
 wasm-rust-runtime:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-rust-runtime
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust-runtime
 
 wasm-rust-provider:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-rust-provider
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust-provider
 
 wasm-python:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-python
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-python
 
 wasm-rust:
-    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- demo build-rust
+    @cargo run --quiet --manifest-path tools/xtask/Cargo.toml -- lang demo build-rust
 
 wasm-all: wasm-rust wasm-c wasm-cpp wasm-csharp wasm-python wasm-rust-runtime wasm-rust-provider
 
