@@ -69,6 +69,8 @@ jobs:
         uses: myMindstorm/setup-emsdk@v14
         with:
           version: 3.1.64
+      - name: Install .NET WASM workload
+        run: sudo dotnet workload install wasm-tools
       - name: Build web demo
         run: cargo xtask lang demo build
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'

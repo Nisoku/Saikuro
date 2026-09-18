@@ -6,11 +6,11 @@ namespace InsightLab;
 
 public static class SummaryEngine
 {
-    public static Dictionary<string, object?> ComputeSummary(string json)
+    public static Dictionary<string, object> ComputeSummary(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return new Dictionary<string, object?> { ["text"] = "No input provided." };
+            return new Dictionary<string, object> { ["text"] = "No input provided." };
         }
 
         JsonDocument doc;
@@ -20,7 +20,7 @@ public static class SummaryEngine
         }
         catch (JsonException)
         {
-            return new Dictionary<string, object?> { ["text"] = "Invalid JSON input." };
+            return new Dictionary<string, object> { ["text"] = "Invalid JSON input." };
         }
 
         using (doc)
@@ -70,7 +70,7 @@ public static class SummaryEngine
                     $"Balanced mode: {label} tone. ASCII ratio {ratio:F2}. Top phrase '{topBigram}'."
             };
 
-            return new Dictionary<string, object?> { ["text"] = message };
+            return new Dictionary<string, object> { ["text"] = message };
         }
     }
 }

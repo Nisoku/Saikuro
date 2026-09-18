@@ -119,8 +119,6 @@ static int write_json_ngrams(KV *table, int table_len, int top_n, char *out,
     ws(table[order[i]].key);
     wc('"');
     wc(',');
-    char tmp[16];
-    int ti = 0;
     int v = table[order[i]].count;
     if (v < 0) {
       wc('-');
