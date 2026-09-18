@@ -199,6 +199,7 @@ impl Command {
                 args.all_crates,
                 args.crate_name.as_deref(),
                 args.json.as_deref(),
+                args.verbose,
             ),
             Command::Qemu { verb } => match verb {
                 QemuVerb::Setup => qemu::setup(),
@@ -232,21 +233,44 @@ impl Command {
 
 /// Run the saikuro-tests wasm suite through wasm-bindgen-test-runner.
 fn wasm_tests() -> anyhow::Result<()> {
-    run::run(
-        &paths::repo_root(),
+    let root = paths::repo_root();
+    const BASE: [&str; 8] = [
+        "test",
+        "-p",
+        "saikuro-tests",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--no-default-features",
+        "--features",
+        "wasm",
+    ];
+
+    run::run(&root, "cargo", BASE.into_iter().chain(["--lib"])).context("wasm lib tests")?;
+
+    let list = run::run_capture_ok(
+        &root,
         "cargo",
-        [
-            "test",
-            "-p",
-            "saikuro-tests",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--no-default-features",
-            "--features",
-            "wasm",
-        ],
+        BASE.into_iter().chain(["--bin", "wasm", "--", "--list"]),
     )
-    .context("wasm tests")
+    .with_context(|| "enumerate wasm harness tests")?;
+    let names: Vec<String> = String::from_utf8_lossy(&list.stdout)
+        .lines()
+        .filter_map(|l| l.strip_suffix(": test"))
+        .map(str::to_string)
+        .collect();
+    if names.is_empty() {
+        anyhow::bail!("no tests discovered in the `wasm` harness");
+    }
+    for name in &names {
+        run::run(
+            &root,
+            "cargo",
+            BASE.into_iter()
+                .chain(["--bin", "wasm", "--", name.as_str()]),
+        )
+        .with_context(|| format!("wasm test {name}"))?;
+    }
+    Ok(())
 }
 
 /// Run the wasi suites by executing each runner bin under wasmtime

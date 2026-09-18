@@ -168,6 +168,9 @@ fn workspace_members() -> anyhow::Result<Vec<GeigerMember>> {
 
 pub fn geiger(update: bool) -> anyhow::Result<()> {
     require("cargo-geiger")?;
+    // cargo-geiger 0.13.0 embeds cargo-lib 0.86.0
+    // See: https://github.com/rust-lang/cargo/pull/12708
+    run::run(&root(), "cargo", ["fetch", "--locked"]).with_context(|| "cargo fetch")?;
     let mut combined = String::new();
     for member in workspace_members()? {
         let engines: Vec<&str> = ENGINE_FEATURES

@@ -56,6 +56,10 @@ jobs:
           cargo xtask deadlinks
       - name: Setup demo app
         run: cargo xtask lang demo setup
+      - name: Setup Emscripten
+        uses: myMindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
       - name: Web demo build
         run: cargo xtask lang demo build
       - name: Web demo check

@@ -171,12 +171,13 @@ pub struct ReportEntry {
     pub warnings: usize,
     pub diagnostics: Vec<String>,
     pub seconds: f64,
+    pub full_output: String,
 }
 
 fn workspace_feature_sets(
     root: &Path,
 ) -> anyhow::Result<std::collections::HashMap<String, BTreeSet<String>>> {
-    let output = run::run_capture(
+    let output = run::run_capture_ok(
         root,
         "cargo",
         [
@@ -188,7 +189,7 @@ fn workspace_feature_sets(
             paths::engine_manifest().display().to_string().as_str(),
         ],
     )
-    .context("cargo metadata")?;
+    .with_context(|| "cargo metadata")?;
     let meta: serde_json::Value =
         serde_json::from_slice(&output.stdout).context("parse metadata")?;
     let mut map = std::collections::HashMap::new();
@@ -249,6 +250,7 @@ fn check_combo(
                 warnings: 0,
                 diagnostics: vec![],
                 seconds: 0.0,
+                full_output: String::new(),
             });
         }
         cargo_args[fi + 1] = kept.join(",");
@@ -285,6 +287,7 @@ fn check_combo(
         warnings,
         diagnostics,
         seconds: (seconds * 10.0).round() / 10.0,
+        full_output: text,
     })
 }
 
@@ -330,7 +333,7 @@ pub fn select_crates(
         return Ok(vec![name.to_string()]);
     }
     if all {
-        let output = run::run_capture(
+        let output = run::run_capture_ok(
             root,
             "cargo",
             [
@@ -342,7 +345,7 @@ pub fn select_crates(
                 paths::engine_manifest().display().to_string().as_str(),
             ],
         )
-        .context("cargo metadata")?;
+        .with_context(|| "cargo metadata")?;
         let meta: serde_json::Value =
             serde_json::from_slice(&output.stdout).context("parse metadata")?;
         let mut names: Vec<String> = meta["packages"]
@@ -362,6 +365,7 @@ pub fn run_matrix(
     all: bool,
     crate_name: Option<&str>,
     json: Option<&Path>,
+    verbose: bool,
 ) -> anyhow::Result<()> {
     let crates = select_crates(root, all, crate_name)?;
     let features = workspace_feature_sets(root)?;
@@ -413,6 +417,12 @@ pub fn run_matrix(
                 println!("  (no diagnostic lines captured)");
             } else {
                 for line in &r.diagnostics {
+                    println!("  {line}");
+                }
+            }
+            if verbose && !r.passed {
+                println!("full output");
+                for line in r.full_output.lines() {
                     println!("  {line}");
                 }
             }

@@ -59,6 +59,10 @@ jobs:
         run: cargo xtask lang demo setup
       - name: Build TypeScript adapter
         run: cargo xtask lang type-script build
+      - name: Setup Emscripten
+        uses: myMindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
       - name: Build web demo
         run: cargo xtask lang demo build
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'

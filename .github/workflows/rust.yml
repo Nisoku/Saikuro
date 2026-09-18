@@ -84,6 +84,10 @@ jobs:
           workspaces: Cargo.toml
       - name: Setup xtask deps
         run: cargo xtask setup
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
       - name: Wasm adapter check
         run: cargo xtask lang rust wasm-check
       - name: Wasm tests

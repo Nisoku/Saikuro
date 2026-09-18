@@ -20,6 +20,8 @@ static inline int strncmp(const char *a, const char *b, unsigned long n) {
 }
 }
 
+static const int kMaxNgramEntries = 56;
+
 static bool is_alnum(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
          (c >= '0' && c <= '9');
@@ -274,6 +276,12 @@ static char *handle_ngrams(void *user_data, const char *args_json) {
     return saikuro_string_dup("{\"error\":\"missing text argument\"}");
   }
   int top_n = extract_int_after_comma(args_json, 6);
+  if (top_n <= 0) {
+    return saikuro_string_dup(
+        "{\"error\":\"top_n must be a positive integer\"}");
+  }
+  if (top_n > kMaxNgramEntries)
+    top_n = kMaxNgramEntries;
 
   char result[16384];
   compute_ngrams(text, top_n, result, sizeof(result));

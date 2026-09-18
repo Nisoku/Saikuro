@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -28,13 +29,26 @@ fn verify(tool: &crate::config::Tool) -> anyhow::Result<bool> {
     }
     if let Some(expected) = &tool.version {
         let out = run::run_capture(Path::new("/"), &tool.bin, ["--version"])?;
-        let installed = format!(
+        let reported = format!(
             "{} {}",
-            String::from_utf8_lossy(&out.stdout),
-            String::from_utf8_lossy(&out.stderr)
+            String::from_utf8_lossy(&out.stdout).trim(),
+            String::from_utf8_lossy(&out.stderr).trim()
         );
-        if !out.status.success() || !installed.split_whitespace().any(|part| part == expected) {
-            println!("MISMATCH {:23} (expected {})", tool.name, expected);
+        if !out.status.success() {
+            println!(
+                "DEAD    {:<21} (--version exited with {})",
+                tool.name, out.status
+            );
+            if !reported.is_empty() {
+                println!("    said: {reported}");
+            }
+            return Ok(false);
+        }
+        if !reported.split_whitespace().any(|part| part == expected) {
+            println!(
+                "MISMATCH {:<20} (expected {expected}, said: {reported})",
+                tool.name
+            );
             return Ok(false);
         }
     }
@@ -53,7 +67,8 @@ fn verify(tool: &crate::config::Tool) -> anyhow::Result<bool> {
 
 fn ensure_rust(manifest: &Config) -> anyhow::Result<()> {
     let toolchain = &manifest.rust.toolchain;
-    let out = run::run_capture(Path::new("/"), "rustup", ["toolchain", "list"])?;
+    let out = run::run_capture_ok(Path::new("/"), "rustup", ["toolchain", "list"])
+        .with_context(|| "rustup toolchain list")?;
     let installed: Vec<String> = std::str::from_utf8(&out.stdout)?
         .lines()
         .map(|l| l.trim().to_string())
@@ -103,15 +118,6 @@ fn ensure_rust(manifest: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Removes the verified bootstrap script from the temp dir on scope exit.
-struct TempScript(std::path::PathBuf);
-
-impl Drop for TempScript {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
-
 fn ensure_binstall(check_only: bool) -> anyhow::Result<()> {
     if run::which("cargo-binstall") {
         return Ok(());
@@ -135,14 +141,16 @@ fn ensure_binstall(check_only: bool) -> anyhow::Result<()> {
              refusing to execute"
         );
     }
-    let script = TempScript(std::env::temp_dir().join(format!(
-        "cargo-binstall-bootstrap-{}.sh",
-        std::process::id()
-    )));
-    std::fs::write(&script.0, &out.stdout)
-        .with_context(|| format!("write {}", script.0.display()))?;
+    let mut bootstrap =
+        tempfile::NamedTempFile::new().context("create cargo-binstall bootstrap temp file")?;
+    bootstrap
+        .write_all(&out.stdout)
+        .with_context(|| format!("write {}", bootstrap.path().display()))?;
+    bootstrap
+        .flush()
+        .with_context(|| format!("flush {}", bootstrap.path().display()))?;
     let status = Command::new("sh")
-        .arg(&script.0)
+        .arg(bootstrap.path())
         .env("BINSTALL_VERSION", BINSTALL_VERSION)
         .current_dir(Path::new("/"))
         .status()
