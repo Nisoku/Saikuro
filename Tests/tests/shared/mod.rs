@@ -15,7 +15,9 @@ pub mod capacity;
 pub mod codegen;
 pub mod common;
 pub mod core;
+pub mod event;
 pub mod exec;
+pub mod random;
 pub mod router;
 pub mod runner;
 pub mod runtime;
@@ -176,5 +178,7 @@ pub fn register_all(suite: &mut TestSuite) {
     storage::register(suite);
     transport::register(suite);
     codegen::register(suite);
+    event::register(suite);
+    random::register(suite);
     wire::register(suite);
 }

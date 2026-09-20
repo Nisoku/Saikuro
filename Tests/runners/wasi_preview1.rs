@@ -92,6 +92,11 @@ pub extern "C" fn _start() {
 // `.cargo/config.toml`), so no libc provides the memcmp required by
 // alloc/serde code. Implement it against the same ABI as wasi-libc.
 #[no_mangle]
+/// Compare the first `n` bytes of `a` and `b`, returning 0 on equality or the
+/// difference of the first differing byte pair.
+///
+/// # Safety
+/// `a` and `b` must be valid for reads of `n` bytes each
 pub unsafe extern "C" fn memcmp(
     a: *const core::ffi::c_void,
     b: *const core::ffi::c_void,

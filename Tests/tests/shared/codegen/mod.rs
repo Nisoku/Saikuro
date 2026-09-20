@@ -1167,8 +1167,10 @@ mod binding_output {
 }
 
 pub mod c_cpp;
+pub mod names;
 
 pub fn register(suite: &mut TestSuite) {
     binding_output::register(suite);
     c_cpp::register(suite);
+    names::register(suite);
 }

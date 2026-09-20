@@ -8,8 +8,10 @@ pub fn register(suite: &mut TestSuite) {
     error_propagation::register(suite);
     frame_classify::register(suite);
     relay_fidelity::register(suite);
+    edge::register(suite);
 }
 
+pub mod edge;
 pub mod envelope_roundtrip;
 pub mod error_propagation;
 pub mod frame_classify;
