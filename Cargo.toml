@@ -168,6 +168,7 @@ saikuro-router = { path = "Build/crates/saikuro-router", default-features = fals
 saikuro-runtime = { path = "Build/crates/saikuro-runtime", default-features = false }
 saikuro-codegen = { path = "Build/crates/saikuro-codegen", default-features = false }
 saikuro-exec = { path = "Build/crates/saikuro-exec", default-features = false }
+saikuro-net = { path = "Build/crates/saikuro-net", default-features = false }
 saikuro-random = { path = "Build/crates/saikuro-random", default-features = false }
 saikuro-event = { path = "Build/crates/saikuro-event", default-features = false }
 saikuro = { path = "Build/adapters/rust", default-features = false }

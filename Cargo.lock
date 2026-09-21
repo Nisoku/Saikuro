@@ -2140,6 +2140,7 @@ dependencies = [
  "saikuro-core",
  "saikuro-event",
  "saikuro-exec",
+ "saikuro-net",
  "saikuro-random",
  "saikuro-router",
  "saikuro-runtime",

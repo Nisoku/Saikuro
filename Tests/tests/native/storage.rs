@@ -1,9 +1,12 @@
 //! In-memory storage backend tests.
 
 use bytes::Bytes;
-use saikuro_storage::{InMemoryStorage, KeyValueBackend, StorageBackend, StorageConfig};
+use saikuro_storage::{
+    InMemoryStorage, KeyValueBackend, KeyValueBackendExt, StorageBackend, StorageConfig,
+};
 use saikuro_tests::common;
 use saikuro_tests::TestSuite;
+use serde::{Deserialize, Serialize};
 
 pub fn register(suite: &mut TestSuite) {
     suite.register(
@@ -118,6 +121,26 @@ pub fn register(suite: &mut TestSuite) {
     suite.register(
         "storage::inmemory_as_file_backend_none",
         as_file_backend_is_none,
+    );
+    suite.register(
+        "storage::inmemory_json_roundtrip",
+        json_roundtrip_through_ext,
+    );
+    suite.register(
+        "storage::inmemory_json_missing_key_returns_none",
+        json_ext_missing_key_returns_none,
+    );
+    suite.register(
+        "storage::inmemory_json_rejects_mismatched_schema",
+        json_ext_rejects_mismatched_schema,
+    );
+    suite.register(
+        "storage::inmemory_msgpack_roundtrip",
+        msgpack_roundtrip_through_ext,
+    );
+    suite.register(
+        "storage::inmemory_msgpack_missing_key_returns_none",
+        msgpack_ext_missing_key_returns_none,
     );
 }
 
@@ -476,4 +499,88 @@ fn supports_files_is_false() -> Result<(), &'static str> {
 fn as_file_backend_is_none() -> Result<(), &'static str> {
     assert!(InMemoryStorage::new().as_file_backend().is_none());
     Ok(())
+}
+
+/// A small typed value exercising JSON and MessagePack codecs.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Profile {
+    name: saikuro_tests::String,
+    score: u32,
+    active: bool,
+}
+
+fn profile() -> Profile {
+    Profile {
+        name: "ada".into(),
+        score: 9001,
+        active: true,
+    }
+}
+
+fn json_roundtrip_through_ext() -> Result<(), &'static str> {
+    saikuro_tests::block_on(async {
+        let s = InMemoryStorage::new();
+        let p = profile();
+        s.put_json("ns", "profile", &p)
+            .await
+            .map_err(|_| "put_json")?;
+        let got = s
+            .get_json::<Profile>("ns", "profile")
+            .await
+            .map_err(|_| "get_json")?;
+        assert_eq!(got, Some(p));
+        Ok(())
+    })
+}
+
+fn json_ext_missing_key_returns_none() -> Result<(), &'static str> {
+    saikuro_tests::block_on(async {
+        let s = InMemoryStorage::new();
+        let got = s
+            .get_json::<Profile>("ns", "ghost")
+            .await
+            .map_err(|_| "get_json")?;
+        assert_eq!(got, None);
+        Ok(())
+    })
+}
+
+fn json_ext_rejects_mismatched_schema() -> Result<(), &'static str> {
+    saikuro_tests::block_on(async {
+        let s = InMemoryStorage::new();
+        s.put("ns", "raw", Bytes::from("not-json"))
+            .await
+            .map_err(|_| "put")?;
+        let out = s.get_json::<Profile>("ns", "raw").await;
+        assert!(out.is_err(), "invalid JSON must surface a decode error");
+        Ok(())
+    })
+}
+
+fn msgpack_roundtrip_through_ext() -> Result<(), &'static str> {
+    saikuro_tests::block_on(async {
+        let s = InMemoryStorage::new();
+        let p = profile();
+        s.put_msgpack("ns", "profile", &p)
+            .await
+            .map_err(|_| "put_msgpack")?;
+        let got = s
+            .get_msgpack::<Profile>("ns", "profile")
+            .await
+            .map_err(|_| "get_msgpack")?;
+        assert_eq!(got, Some(p));
+        Ok(())
+    })
+}
+
+fn msgpack_ext_missing_key_returns_none() -> Result<(), &'static str> {
+    saikuro_tests::block_on(async {
+        let s = InMemoryStorage::new();
+        let got = s
+            .get_msgpack::<Profile>("ns", "ghost")
+            .await
+            .map_err(|_| "get_msgpack")?;
+        assert_eq!(got, None);
+        Ok(())
+    })
 }

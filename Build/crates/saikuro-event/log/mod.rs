@@ -5,6 +5,7 @@ pub mod record;
 /// The [`LogSink`] trait and built-in sink implementations.
 pub mod sink;
 
+/// A bounded in-memory sink that retains the most recent records.
 #[cfg(feature = "collector")]
 pub mod ring;
 
