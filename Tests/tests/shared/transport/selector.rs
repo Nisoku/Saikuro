@@ -124,6 +124,15 @@ fn selector_unix_path_prefers_unix() -> Result<(), &'static str> {
             kind == TransportKind::Unix,
             "a relative dot path must prefer Unix"
         );
+        let (kind, address) = TransportSelector::select(Some("unix:///tmp/foo.sock"), None);
+        check_test!(
+            kind == TransportKind::Unix,
+            "unix:// scheme must prefer Unix"
+        );
+        check_test!(
+            address.as_deref() == Some("/tmp/foo.sock"),
+            "unix:// address must be stripped of its scheme"
+        );
     }
     Ok(())
 }

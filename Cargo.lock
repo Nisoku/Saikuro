@@ -2136,6 +2136,7 @@ dependencies = [
  "riscv-rt",
  "saikuro",
  "saikuro-c",
+ "saikuro-client",
  "saikuro-codegen",
  "saikuro-core",
  "saikuro-event",

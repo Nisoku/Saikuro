@@ -12,6 +12,7 @@ use ::core::future::Future;
 use ::core::pin::Pin;
 
 pub mod capacity;
+pub mod client;
 pub mod codegen;
 pub mod common;
 pub mod core;
@@ -170,6 +171,7 @@ impl TestSuite {
 }
 
 pub fn register_all(suite: &mut TestSuite) {
+    client::register(suite);
     core::register(suite);
     exec::register(suite);
     router::register(suite);
