@@ -51,6 +51,13 @@ version = "0.8.1"
 bin = "cargo-deadlinks"
 source = "binstall"
 
+[[tools]]
+name = "llvm-cov"
+pkg = "cargo-llvm-cov"
+version = "0.9.1"
+bin = "cargo-llvm-cov"
+source = "binstall"
+
 # TODO: Disabled until kbknapp/cargo-outdated#122 merges
 # [[tools]]
 # name = "outdated"

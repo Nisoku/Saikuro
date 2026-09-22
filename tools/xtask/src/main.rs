@@ -32,6 +32,12 @@ enum Command {
     },
     /// Cross-compile check across the full engine x target matrix.
     Matrix(MatrixArgs),
+    /// Run the native suite under LLVM coverage and emit an HTML report.
+    Cov {
+        /// Fail if line coverage is below this percentage.
+        #[arg(long)]
+        fail_under_lines: Option<f64>,
+    },
     /// QEMU embedded build/run.
     Qemu {
         #[arg(value_enum, default_value_t = QemuVerb::Check)]
@@ -201,6 +207,7 @@ impl Command {
                 args.json.as_deref(),
                 args.verbose,
             ),
+            Command::Cov { fail_under_lines } => cov(fail_under_lines),
             Command::Qemu { verb } => match verb {
                 QemuVerb::Setup => qemu::setup(),
                 QemuVerb::BuildArm => qemu::build_arm(),
@@ -273,7 +280,52 @@ fn wasm_tests() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run the wasi suites by executing each runner bin under wasmtime
+fn cov(fail_under_lines: Option<f64>) -> anyhow::Result<()> {
+    let root = paths::repo_root();
+    run::run(
+        &root,
+        "cargo",
+        [
+            "llvm-cov",
+            "run",
+            "--bin",
+            "native",
+            "--features",
+            "saikuro-tests/native",
+        ],
+    )
+    .context("native coverage run")?;
+
+    run::run(
+        &root,
+        "cargo",
+        [
+            "llvm-cov",
+            "report",
+            "--html",
+            "--output-dir",
+            "target/cov/html",
+        ],
+    )
+    .context("coverage html report")?;
+
+    if let Some(threshold) = fail_under_lines {
+        run::run(
+            &root,
+            "cargo",
+            [
+                "llvm-cov",
+                "report",
+                "--fail-under-lines",
+                &threshold.to_string(),
+            ],
+        )
+        .context("coverage threshold gate")?;
+    }
+    Ok(())
+}
+
+/// Run the saikuro-tests wasi suites by executing each runner bin under wasmtime
 fn wasi_tests() -> anyhow::Result<()> {
     for (features, target, bin, label) in [
         (
