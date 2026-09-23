@@ -29,8 +29,10 @@ pub fn register(suite: &mut TestSuite) {
     shared_test!(suite, "runtime::runtime_full_stack", runtime_full_stack);
     config_capacity::register(suite);
     schema_registration::register(suite);
+    config::register(suite);
 }
 
+pub mod config;
 pub mod config_capacity;
 pub mod schema_registration;
 

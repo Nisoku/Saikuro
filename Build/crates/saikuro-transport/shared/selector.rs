@@ -99,6 +99,12 @@ impl TransportSelector {
         // Non-WASM: unix socket, websocket, or TCP.
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // Unix socket: explicit scheme, then path-like addresses.
+            #[cfg(target_family = "unix")]
+            if let Some(rest) = addr.strip_prefix("unix://") {
+                return (TransportKind::Unix, Some(rest.to_owned()));
+            }
+
             // Unix socket: path-like address on a Unix host.
             #[cfg(target_family = "unix")]
             if addr.starts_with('/') || addr.starts_with('.') {

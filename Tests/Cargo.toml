@@ -74,14 +74,20 @@ native = [
     "saikuro-exec/native",
     "saikuro-storage/inmemory",
     "saikuro-random/native",
+    "saikuro-event/collector",
     "dep:saikuro",
     "dep:saikuro-c",
+    "dep:saikuro-net",
+    "dep:saikuro-client",
     "saikuro/native",
     "saikuro-c/native",
+    "saikuro-net/native",
+    "saikuro-client/native",
 ]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-event/embedded",
+    "saikuro-event/collector",
     "saikuro-schema/embedded",
     "saikuro-router/embedded",
     "saikuro-transport/embedded",
@@ -89,10 +95,13 @@ embedded = [
     "saikuro-exec/embedded",
     "saikuro-storage/embedded",
     "saikuro-random/embedded",
+    "dep:saikuro-client",
+    "saikuro-client/embedded",
 ]
 wasm = [
     "saikuro-core/wasm",
     "saikuro-event/wasm",
+    "saikuro-event/collector",
     "saikuro-schema/wasm",
     "saikuro-router/wasm",
     "saikuro-transport/wasm",
@@ -105,10 +114,13 @@ wasm = [
     "dep:js-sys",
     "dep:web-sys",
     "dep:wasm-bindgen-test",
+    "dep:saikuro-client",
+    "saikuro-client/wasm",
 ]
 wasi-preview1 = [
     "saikuro-core/no_std",
     "saikuro-event/no_std",
+    "saikuro-event/collector",
     "saikuro-schema/no_std",
     "saikuro-router/no_std",
     "saikuro-transport/no_std",
@@ -118,10 +130,13 @@ wasi-preview1 = [
     "saikuro-runtime/wasi-preview1",
     "saikuro-exec/no_std",
     "saikuro-random/no_std",
+    "dep:saikuro-client",
+    "saikuro-client/no_std",
 ]
 wasi-preview2 = [
     "saikuro-core/no_std",
     "saikuro-event/no_std",
+    "saikuro-event/collector",
     "saikuro-schema/no_std",
     "saikuro-router/no_std",
     "saikuro-transport/no_std",
@@ -130,6 +145,8 @@ wasi-preview2 = [
     "saikuro-runtime/wasi-preview2",
     "saikuro-exec/no_std",
     "saikuro-random/no_std",
+    "dep:saikuro-client",
+    "saikuro-client/no_std",
 ]
 arm = [
     "embedded",
@@ -163,6 +180,8 @@ saikuro-exec = { workspace = true }
 saikuro-storage = { workspace = true, default-features = false }
 saikuro-random = { workspace = true }
 saikuro-codegen = { workspace = true }
+saikuro-net = { workspace = true, optional = true }
+saikuro-client = { workspace = true, optional = true }
 saikuro = { workspace = true, optional = true }
 saikuro-c = { path = "../Build/adapters/c", default-features = false, optional = true }
 

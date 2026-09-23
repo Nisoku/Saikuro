@@ -1,5 +1,4 @@
 use core::any::Any;
-use core::cell::UnsafeCell;
 use core::future::Future;
 
 use alloc::boxed::Box;
@@ -56,28 +55,20 @@ pub(crate) fn static_executor() -> &'static mut embassy_executor::raw::Executor 
     unsafe { core::mem::transmute::<&mut _, &'static mut _>(ex) }
 }
 
-// Output slot
+// Output cell
 
-pub(crate) struct SyncUnsafeCell<T>(UnsafeCell<T>);
-unsafe impl<T> Sync for SyncUnsafeCell<T> {}
-impl<T> SyncUnsafeCell<T> {
-    pub(crate) const fn new(val: T) -> Self {
-        Self(UnsafeCell::new(val))
-    }
-    // Unsafe `&mut` through `&self` is the point of this cell: it is a
-    // `Sync`-declared owner of a JSPI output slot whose aliasing safety is
-    // upheld entirely by the caller (single-threaded wasm, readonly after
-    // capture).
-    #[allow(clippy::mut_from_ref)]
-    pub(crate) unsafe fn get(&self) -> &mut T {
-        &mut *self.0.get()
-    }
-}
+type OutputCell = Option<Box<dyn Any>>;
 
-pub(crate) static OUTPUT_SLOT: SyncUnsafeCell<Option<*mut dyn Any>> = SyncUnsafeCell::new(None);
-
+/// Wrapper future that boxes the inner future's output into a per-call cell.
 pub(crate) struct OutputCapture<T> {
     pub(crate) inner: T,
+    out: *mut OutputCell,
+}
+
+impl<T> OutputCapture<T> {
+    pub(crate) fn new(inner: T, out: *mut OutputCell) -> Self {
+        Self { inner, out }
+    }
 }
 
 impl<T> Future for OutputCapture<T>
@@ -93,10 +84,12 @@ where
     ) -> core::task::Poll<()> {
         match unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.inner) }.poll(cx) {
             core::task::Poll::Ready(val) => {
-                let boxed: Box<dyn Any> = Box::new(val);
-                let ptr: *mut dyn Any = Box::into_raw(boxed);
+                // SAFETY: `self.out` points into the owning `block_on` frame,
+                // which stays live until the done-channel signalled from here
+                // has been received, a strictly later event. wasm is
+                // single-threaded, so no other writer touches the cell.
                 unsafe {
-                    *OUTPUT_SLOT.get() = Some(ptr);
+                    (*self.out) = Some(Box::new(val));
                 }
                 core::task::Poll::Ready(())
             }
@@ -105,15 +98,18 @@ where
     }
 }
 
-pub(crate) unsafe fn take_output<F: 'static>() -> F {
-    let ptr = unsafe { OUTPUT_SLOT.get() }
+/// Collect the inner output from a `block_on` cell and downcast it.
+pub(crate) fn claim<F: 'static>(out: *mut OutputCell) -> F {
+    let boxed = unsafe { &mut *out }
         .take()
-        .expect("block_on: output slot was not set");
-
-    let boxed: Box<dyn Any> = unsafe { Box::from_raw(ptr) };
-
+        .expect("block_on: done-channel resolved without output; executor lost the future");
     match boxed.downcast::<F>() {
         Ok(val) => *val,
-        Err(_) => unreachable!("block_on: type mismatch in output slot"),
+        Err(other) => panic!(
+            "block_on: output type mismatch in result cell (expected {} [{:?}], stored [{:?}])",
+            core::any::type_name::<F>(),
+            core::any::TypeId::of::<F>(),
+            other.type_id(),
+        ),
     }
 }

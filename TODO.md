@@ -62,21 +62,23 @@
 - [ ] Named Pipes (Windows)
 - [ ] WebRTC Transport
 
-## Other
+## The Sashiki Problem
 
 - [ ] Every language adapter independently re-implements the same wire protocol logic, so every protocol change requires updating all of them
-- [ ] Language Adapter Template Generator (using above)
+- [ ] Language Adapter Code Generator (aka Sashiki)
+- [ ] Uses existing things like oxc, syn, roslyn, etc. to get direct access to language internals after code is parsed, so we can generate a IR that works across them all
+- [ ] works with both compiled and interpreted things
+- [ ] like previously mentioned, it's called sashiki
 
 ## Current
 
-- [ ] Asyncify fallback for JSPI (before the spinning one)
-- [ ] Update `saikuro-c`/`saikuro-cpp`/`saikuro-csharp` to just use a new `Build/codegen/cxx/` thing that automatically generates bindings for all three (1-1 api match, not the yucky serializing to JSON or whatever) (not safe tho (cffi) :( hmmm)
-- [ ] Possibly use something similar for JS/TS
-- [ ] python-ctypes too for Python via the same `cxx/` (not safe tho eitherrr)
+- [ ] Asyncify fallback for JSPI (before the spin one)
 
-- [ ] Add more tests
+- [ ] Add more shared and also runner-specific tests?
+
+- [ ] Run no_std Saikuro on `wasm32-unknown-unknown` through WAMR (`iwasm`/`wamrc`), the embedded-class runtime (Zephyr/FreeRTOS/ESP-IDF/etc.) (current `wasm` suite is JS-hosted (wasm-bindgen/JSPI) and can't even load there, so no_std wasm needs to become basically the non-browser WASM, vs std WASM, which is for browsers)
 
 - [ ] Update docs/demo/examples for the new everything
-- [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
-
 - [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that
+
+- [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
