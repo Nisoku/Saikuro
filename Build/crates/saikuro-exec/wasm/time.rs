@@ -27,6 +27,11 @@ pub(crate) fn now() -> Instant {
     Instant::now()
 }
 
+/// Number of sleeps currently waiting on a clock advance.
+pub(crate) fn pending_sleeps() -> usize {
+    SLEEPS.lock(|r| r.borrow().len())
+}
+
 /// Wake every sleep whose deadline has passed, then re-arm a JS timer for the
 /// next pending deadline. Called from every executor pump site: `pump()`, the
 /// `block_on` spin loop, and the JS timer itself.

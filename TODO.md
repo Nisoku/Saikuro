@@ -72,7 +72,7 @@
 
 ## Current
 
-- [ ] Asyncify fallback for JSPI (before the spinning one)
+- [ ] Asyncify fallback for JSPI (before the spin one)
 
 - [ ] Add more shared and also runner-specific tests?
 

@@ -27,7 +27,6 @@ no_std = [
 wasm = [
     "dep:embassy-executor",
     "embassy-executor/executor-thread",
-    "embassy-executor/platform-spin",
     "dep:embassy-sync",
     "dep:embassy-futures",
     "futures/async-await",
