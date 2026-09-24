@@ -58,7 +58,7 @@ portable-atomic-util = { version = "0.2", default-features = false, features = [
     "alloc",
 ] }
 
-rand_core = { version = "0.9", default-features = false }
+rand_core = { version = "0.10", default-features = false }
 
 heapless = { version = "0.8", default-features = false, features = ["serde"] }
 
