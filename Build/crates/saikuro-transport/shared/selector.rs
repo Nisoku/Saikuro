@@ -11,8 +11,8 @@ pub enum TransportKind {
     /// Unix domain sockets:  intra-machine on Unix.
     #[cfg(all(not(target_arch = "wasm32"), target_family = "unix"))]
     Unix,
-    /// Raw TCP stream:  cross-machine native.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Raw TCP stream:  cross-machine, on native hosts and on WASI.
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
     Tcp,
     /// WebSocket:  cross-machine and WASM-compatible.
     WebSocket,
@@ -82,12 +82,13 @@ impl TransportSelector {
             return (TransportKind::Memory, None);
         }
 
-        // WASM: prefer BroadcastChannel host transport for in-realm communication.
         #[cfg(target_arch = "wasm32")]
+        if addr == "wasm-host" || addr.starts_with("wasm-host://") {
+            return (TransportKind::WasmHost, Some(addr.to_owned()));
+        }
+
+        #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
         {
-            if addr == "wasm-host" || addr.starts_with("wasm-host://") {
-                return (TransportKind::WasmHost, Some(addr.to_owned()));
-            }
             let ws_url = if addr.starts_with("ws://") || addr.starts_with("wss://") {
                 addr.to_owned()
             } else {
@@ -96,7 +97,21 @@ impl TransportSelector {
             (TransportKind::WebSocket, Some(ws_url))
         }
 
-        // Non-WASM: unix socket, websocket, or TCP.
+        // WASI:  WebSocket or TCP.
+        #[cfg(target_os = "wasi")]
+        {
+            if addr.starts_with("ws://") || addr.starts_with("wss://") {
+                return (TransportKind::WebSocket, Some(addr.to_owned()));
+            }
+
+            if let Some(rest) = addr.strip_prefix("tcp://") {
+                return (TransportKind::Tcp, Some(rest.to_owned()));
+            }
+
+            (TransportKind::Tcp, Some(addr.to_owned()))
+        }
+
+        // Native: unix socket, websocket, or TCP.
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Unix socket: explicit scheme, then path-like addresses.
@@ -114,6 +129,11 @@ impl TransportSelector {
             // WebSocket URL.
             if addr.starts_with("ws://") || addr.starts_with("wss://") {
                 return (TransportKind::WebSocket, Some(addr.to_owned()));
+            }
+
+            // TCP
+            if let Some(rest) = addr.strip_prefix("tcp://") {
+                return (TransportKind::Tcp, Some(rest.to_owned()));
             }
 
             // TCP fallback.

@@ -49,6 +49,17 @@ pub use provider::{HandlerArgs, Provider, RegisterOptions};
 pub use saikuro_core::schema::{PrimitiveType, TypeDescriptor, Visibility};
 pub use saikuro_schema::builder::{build_schema, ArgDescriptor, FunctionSchema, NamespaceSchema};
 pub use saikuro_transport::{connect, AdapterTransport, MemoryAdapterTransport};
+
+#[cfg(any(
+    feature = "tcp",
+    feature = "unix",
+    feature = "ws",
+    feature = "ws-wasi",
+    feature = "wasm",
+    feature = "wasi-tcp",
+    feature = "wasi-host"
+))]
+pub use saikuro_transport::from_halves;
 pub use shared::{ClientOptions, SaikuroChannel, SaikuroStream};
 
 /// The value type used throughout the Saikuro Rust adapter.

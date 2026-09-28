@@ -10,6 +10,8 @@ use crate::shared::traits::{
     LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
     LocalTransportSender,
 };
+#[cfg(feature = "wasm-host")]
+use crate::shared::traits::{TransportReceiver, TransportSender};
 
 /// Which side of a rendezvous a pipe endpoint plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,6 +225,27 @@ mod nosend_traits {
                 Some(bytes) => Ok(Some(Bytes::from(bytes))),
                 None => Ok(None),
             }
+        }
+    }
+
+    // The host halves are consumed by `connect()`
+    #[cfg(feature = "wasm-host")]
+    #[async_trait(?Send)]
+    impl<S: HostPipeSend> TransportSender for WasmHostSender<S> {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            LocalTransportSender::send(self, frame).await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            LocalTransportSender::close(self).await
+        }
+    }
+
+    #[cfg(feature = "wasm-host")]
+    #[async_trait(?Send)]
+    impl<R: HostPipeRecv> TransportReceiver for WasmHostReceiver<R> {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            LocalTransportReceiver::recv(self).await
         }
     }
 

@@ -21,7 +21,8 @@ export class NodeStreamTransport extends BaseTransport {
   private _buffer: Buffer = Buffer.alloc(0);
   private readonly _connectionOptions:
     | { type: "tcp"; host: string; port: number }
-    | { type: "unix"; path: string };
+    | { type: "unix"; path: string }
+    | { type: "socket" };
 
   static tcp(host: string, port: number): NodeStreamTransport {
     return new NodeStreamTransport({ type: "tcp", host, port });
@@ -34,16 +35,46 @@ export class NodeStreamTransport extends BaseTransport {
   private constructor(
     opts:
       | { type: "tcp"; host: string; port: number }
-      | { type: "unix"; path: string },
+      | { type: "unix"; path: string }
+      | { type: "socket" },
   ) {
     super();
     this._connectionOptions = opts;
   }
 
+  /**
+   * Wrap an already-connected socket, e.g. one accepted from a
+   * `net.createServer` listener.
+   */
+  static fromSocket(socket: import("net").Socket): NodeStreamTransport {
+    const transport = new NodeStreamTransport({ type: "socket" });
+    transport._attach(socket);
+    return transport;
+  }
+
+  /** Wire up event handlers for an already-connected socket. */
+  private _attach(socket: import("net").Socket): void {
+    this._socket = socket;
+    socket.on("error", (err: Error) => this._closeHandler?.(err));
+    socket.on("data", (chunk: Buffer) => this._onData(chunk));
+    socket.on("close", (hadError: boolean) => {
+      const err = hadError ? new Error("socket closed with error") : undefined;
+      this._closeHandler?.(err);
+    });
+  }
+
+  /**
+   * Dial the transport.
+   *
+   * Idempotent: a transport built by {@link fromSocket} is already connected,
+   * and `SaikuroClient.open()` connects unconditionally
+   */
   async connect(): Promise<void> {
+    const opts = this._connectionOptions;
+    if (opts.type === "socket" || this._socket !== undefined) return;
+
     const net = await import("net");
     return new Promise((resolve, reject) => {
-      const opts = this._connectionOptions;
       const connectArgs =
         opts.type === "tcp"
           ? { host: opts.host, port: opts.port }
@@ -52,22 +83,14 @@ export class NodeStreamTransport extends BaseTransport {
       const socket = net.createConnection(
         connectArgs as unknown as Parameters<typeof net.createConnection>[0],
         () => {
-          this._socket = socket;
           socket.removeListener("error", onConnectError);
-          socket.on("error", (err) => this._closeHandler?.(err));
+          this._attach(socket);
           resolve();
         },
       );
 
       const onConnectError = (err: Error) => reject(err);
       socket.on("error", onConnectError);
-      socket.on("data", (chunk: Buffer) => this._onData(chunk));
-      socket.on("close", (hadError: boolean) => {
-        const err = hadError
-          ? new Error("socket closed with error")
-          : undefined;
-        this._closeHandler?.(err);
-      });
     });
   }
 

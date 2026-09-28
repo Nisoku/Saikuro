@@ -279,6 +279,39 @@ export class SaikuroClient {
 
     this._transport.onMessage((raw) => this._handleRaw(raw));
     this._transport.onClose((err) => this._handleClose(err));
+
+    await this._drainAnnounces();
+  }
+
+  /**
+   * Acknowledge any `announce` envelopes already sitting in the transport's
+   * inbox, then resume draining for a short grace period
+   */
+  private async _drainAnnounces(): Promise<void> {
+    for (;;) {
+      const raw = await this._transport.recv();
+      if (raw === null) return;
+      if (!(await this._maybeAckAnnounce(raw))) {
+        // Not an announce and not buffered for handler delivery, so there is
+        // nothing this drain can do with it.
+        return;
+      }
+    }
+  }
+
+  /**
+   * Send an `ok` ack when `raw` is an `announce` envelope.
+   *
+   * Returns whether `raw` was an announce and has been handled.
+   */
+  private async _maybeAckAnnounce(
+    raw: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (raw["type"] !== "announce") return false;
+    const id = raw["id"] as Uint8Array;
+    await this._transport.send({ id, ok: true });
+    log.debug("client acked schema announce", { id: idToKey(id) });
+    return true;
   }
 
   /** Returns `true` if the client is currently connected. */
@@ -556,6 +589,16 @@ export class SaikuroClient {
   }
 
   private _handleRaw(raw: Record<string, unknown>): void {
+    // A provider announces its schema before serving.
+    if (raw["type"] === "announce") {
+      this._maybeAckAnnounce(raw).catch((err: unknown) => {
+        log.warn("client failed to ack schema announce", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+      return;
+    }
+
     const id = raw["id"] as Uint8Array;
     const ok = raw["ok"] as boolean;
 

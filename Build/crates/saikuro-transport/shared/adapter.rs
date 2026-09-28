@@ -15,9 +15,16 @@ use super::memory::{MemoryReceiver, MemorySender, MemoryTransport};
 use super::selector::{TransportKind, TransportSelector};
 #[cfg(feature = "tcp")]
 use super::traits::TransportConnector;
+#[cfg(any(
+    all(feature = "wasm-host", target_arch = "wasm32"),
+    all(feature = "wasi-tcp", feature = "no_std", not(feature = "native"))
+))]
+use super::traits::{LocalTransport, LocalTransportConnector};
 use super::traits::{Transport, TransportReceiver, TransportSender};
 
 use alloc::boxed::Box;
+#[cfg(all(feature = "wasm-host", target_arch = "wasm32"))]
+use alloc::string::String;
 #[cfg(not(target_has_atomic = "ptr"))]
 use portable_atomic_util::Arc;
 #[cfg(target_has_atomic = "ptr")]
@@ -55,55 +62,62 @@ pub trait AdapterTransport: 'static {
     async fn close(&mut self) -> Result<()>;
 }
 
-#[cfg(any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi"))]
-struct CombinedAdapter<S, R> {
-    sender: S,
-    receiver: R,
-}
-
-#[cfg(all(
-    feature = "native",
-    any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")
-))]
-#[async_trait::async_trait]
-impl<S, R> AdapterTransport for CombinedAdapter<S, R>
-where
-    S: TransportSender,
-    R: TransportReceiver,
-{
-    async fn send(&mut self, frame: Bytes) -> Result<()> {
-        self.sender.send(frame).await
-    }
-
-    async fn recv(&mut self) -> Result<Option<Bytes>> {
-        self.receiver.recv().await
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        self.sender.close().await
+passive_engine_items! {
+    struct CombinedAdapter<S, R> {
+        sender: S,
+        receiver: R,
     }
 }
 
-#[cfg(all(
-    not(feature = "native"),
-    any(feature = "tcp", feature = "unix", feature = "ws", feature = "ws-wasi")
-))]
-#[async_trait::async_trait(?Send)]
-impl<S, R> AdapterTransport for CombinedAdapter<S, R>
-where
-    S: TransportSender,
-    R: TransportReceiver,
-{
-    async fn send(&mut self, frame: Bytes) -> Result<()> {
-        self.sender.send(frame).await
-    }
+passive_engine_items! { for native;
+    #[async_trait::async_trait]
+    impl<S, R> AdapterTransport for CombinedAdapter<S, R>
+    where
+        S: TransportSender,
+        R: TransportReceiver,
+    {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            self.sender.send(frame).await
+        }
 
-    async fn recv(&mut self) -> Result<Option<Bytes>> {
-        self.receiver.recv().await
-    }
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            self.receiver.recv().await
+        }
 
-    async fn close(&mut self) -> Result<()> {
-        self.sender.close().await
+        async fn close(&mut self) -> Result<()> {
+            self.sender.close().await
+        }
+    }
+}
+
+passive_engine_items! { for non_native;
+    #[async_trait::async_trait(?Send)]
+    impl<S, R> AdapterTransport for CombinedAdapter<S, R>
+    where
+        S: TransportSender,
+        R: TransportReceiver,
+    {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            self.sender.send(frame).await
+        }
+
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            self.receiver.recv().await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            self.sender.close().await
+        }
+    }
+}
+
+passive_engine_items! {
+    /// Combine a sender half and a receiver half into a boxed [`AdapterTransport`].
+    pub fn from_halves(
+        sender: impl TransportSender + 'static,
+        receiver: impl TransportReceiver + 'static,
+    ) -> Box<dyn AdapterTransport> {
+        Box::new(CombinedAdapter { sender, receiver })
     }
 }
 
@@ -239,6 +253,17 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
             Ok(Box::new(CombinedAdapter { sender, receiver }))
         }
 
+        #[cfg(all(feature = "wasi-tcp", feature = "no_std", not(feature = "native")))]
+        TransportKind::Tcp => {
+            let addr_str = addr.as_deref().ok_or(TransportError::ConnectionRefused(
+                "tcp requires a host:port address".into(),
+            ))?;
+            let connector = crate::wasi::tcp::WasiTcpConnector::new(addr_str);
+            let transport = LocalTransportConnector::connect(&connector).await?;
+            let (sender, receiver) = transport.split();
+            Ok(Box::new(CombinedAdapter { sender, receiver }))
+        }
+
         #[cfg(all(feature = "unix", not(target_arch = "wasm32"), target_family = "unix"))]
         TransportKind::Unix => {
             let path = addr.as_deref().ok_or(TransportError::ConnectionRefused(
@@ -260,12 +285,40 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
             Ok(Box::new(CombinedAdapter { sender, receiver }))
         }
 
+        #[cfg(all(
+            feature = "ws",
+            feature = "wasm",
+            not(feature = "native"),
+            not(feature = "no_std")
+        ))]
+        TransportKind::WebSocket => {
+            let url = addr.as_deref().ok_or(TransportError::ConnectionRefused(
+                "websocket requires a ws:// or wss:// URL".into(),
+            ))?;
+            let transport = crate::wasm::WebSocketTransport::connect(url).await?;
+            let (sender, receiver) = transport.split();
+            Ok(Box::new(CombinedAdapter { sender, receiver }))
+        }
+
         #[cfg(all(feature = "ws", feature = "no_std", not(feature = "native")))]
         TransportKind::WebSocket => {
             let url = addr.as_deref().ok_or(TransportError::ConnectionRefused(
                 "websocket requires a ws:// or wss:// URL".into(),
             ))?;
             let transport = crate::wasi::websocket::WebSocketTransport::connect(url).await?;
+            let (sender, receiver) = transport.split();
+            Ok(Box::new(CombinedAdapter { sender, receiver }))
+        }
+
+        #[cfg(all(feature = "wasm-host", target_arch = "wasm32"))]
+        TransportKind::WasmHost => {
+            let address = addr.as_deref().ok_or(TransportError::ConnectionRefused(
+                "wasm-host requires a channel name".into(),
+            ))?;
+            let channel = String::from(address.strip_prefix("wasm-host://").unwrap_or(address));
+            let connector =
+                crate::WasmHostConnector::<crate::wasm::BroadcastChannelPipe>::new(channel);
+            let transport = LocalTransportConnector::connect(&connector).await?;
             let (sender, receiver) = transport.split();
             Ok(Box::new(CombinedAdapter { sender, receiver }))
         }

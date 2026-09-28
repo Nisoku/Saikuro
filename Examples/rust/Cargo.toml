@@ -1,5 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "math"
+    "math",
+    "math-core",
+    "math-wasi-preview1",
+    "math-wasi-preview2",
+    "math-wasm",
 ]

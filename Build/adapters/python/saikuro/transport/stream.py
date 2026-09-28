@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Self
 
 import msgpack
 
@@ -26,6 +27,24 @@ class _StreamTransport(BaseTransport):
     def __init__(self) -> None:
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
+
+    @classmethod
+    def from_stream(
+        cls,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> Self:
+        """Adopt an already-connected stream pair, for example from a listener."""
+        transport = cls.__new__(cls)
+        _StreamTransport.__init__(transport)
+        transport._reader = reader
+        transport._writer = writer
+        return transport
+
+    @property
+    def is_connected(self) -> bool:
+        """Whether the transport holds a live stream pair."""
+        return self._writer is not None
 
     async def close(self) -> None:
         if self._writer is not None:

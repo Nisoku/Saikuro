@@ -25,8 +25,11 @@ struct Iovec {
 extern "C" {
     fn clock_time_get(clock_id: i32, precision: u64, out: *mut u64) -> i32;
     fn fd_write(fd: i32, iovs: *const Iovec, iovs_len: usize, nwritten: *mut usize) -> i32;
-    fn proc_exit(code: i32) -> !;
 }
+
+// Link wasi-libc for the `memcmp` that `alloc`/serde code needs.
+#[link(name = "c")]
+extern "C" {}
 
 /// Clock id for the monotonic clock, per WASI preview1 snapshot 01.
 const MONOTONIC_CLOCK_ID: i32 = 1;
@@ -80,37 +83,13 @@ fn run_suite() -> u32 {
     })
 }
 
+/// WASI command entry point. Returns a process exit code.
 #[no_mangle]
-pub extern "C" fn _start() {
+pub extern "C" fn __main_void() -> i32 {
     let failed = run_suite();
-    let code = if failed == 0 { 0 } else { 1 };
-    // SAFETY: terminating the WASI process is the intended final action.
-    unsafe { proc_exit(code) }
-}
-
-// `crt1-command.o` is disabled for this no_std command (see
-// `.cargo/config.toml`), so no libc provides the memcmp required by
-// alloc/serde code. Implement it against the same ABI as wasi-libc.
-#[no_mangle]
-/// Compare the first `n` bytes of `a` and `b`, returning 0 on equality or the
-/// difference of the first differing byte pair.
-///
-/// # Safety
-/// `a` and `b` must be valid for reads of `n` bytes each
-pub unsafe extern "C" fn memcmp(
-    a: *const core::ffi::c_void,
-    b: *const core::ffi::c_void,
-    n: usize,
-) -> i32 {
-    // SAFETY: callers pass valid, in-bounds buffers of length `n`.
-    unsafe {
-        let sa = core::slice::from_raw_parts(a.cast::<u8>(), n);
-        let sb = core::slice::from_raw_parts(b.cast::<u8>(), n);
-        for (x, y) in sa.iter().zip(sb.iter()) {
-            if x != y {
-                return (*x as i32) - (*y as i32);
-            }
-        }
+    if failed == 0 {
+        0
+    } else {
+        1
     }
-    0
 }

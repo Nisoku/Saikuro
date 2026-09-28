@@ -38,6 +38,11 @@ pub fn register(suite: &mut TestSuite) {
     );
     shared_test!(
         suite,
+        "transport::selector_tcp_scheme_is_stripped",
+        selector_tcp_scheme_is_stripped,
+    );
+    shared_test!(
+        suite,
         "transport::selector_wasm_host_route",
         selector_wasm_host_route,
     );
@@ -148,6 +153,22 @@ fn selector_tcp_fallback() -> Result<(), &'static str> {
         check_test!(
             address.as_deref() == Some("host:8080"),
             "tcp address must be preserved"
+        );
+    }
+    Ok(())
+}
+
+fn selector_tcp_scheme_is_stripped() -> Result<(), &'static str> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (kind, address) = TransportSelector::select(Some("tcp://127.0.0.1:7700"), None);
+        check_test!(
+            kind == TransportKind::Tcp,
+            "a tcp:// address must select Tcp"
+        );
+        check_test!(
+            address.as_deref() == Some("127.0.0.1:7700"),
+            "tcp:// scheme must be stripped"
         );
     }
     Ok(())

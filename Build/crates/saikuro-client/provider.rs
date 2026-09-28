@@ -14,6 +14,7 @@ pub use handler::{HandlerArgs, RegisterOptions};
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 use bytes::Bytes;
 use saikuro_core::envelope::{Envelope, InvocationType, ResponseEnvelope};
@@ -96,7 +97,7 @@ impl Provider {
 
     /// Serve on an already-connected transport.
     pub async fn serve_on(self, mut transport: Box<dyn AdapterTransport>) -> Result<()> {
-        self.announce(&mut *transport).await?;
+        let mut buffered = self.announce(&mut *transport).await?;
 
         {
             let mut record = LogRecord::now(
@@ -113,25 +114,30 @@ impl Provider {
         let log = self.log.clone();
 
         loop {
-            let frame = match transport.recv().await {
-                Ok(Some(f)) => f,
-                Ok(None) => {
-                    let mut record = LogRecord::now(
-                        LogLevel::Info,
-                        "saikuro.rust.provider",
-                        "runtime closed connection",
-                    );
-                    record.set_context("namespace", namespace.to_string());
-                    log.emit(&record).await;
-                    break;
-                }
-                Err(e) => {
-                    let mut record =
-                        LogRecord::now(LogLevel::Error, "saikuro.rust.provider", "recv error");
-                    record.set_context("namespace", namespace.to_string());
-                    record.set_context("error", alloc::format!("{e}"));
-                    log.emit(&record).await;
-                    break;
+            let frame = if !buffered.is_empty() {
+                // Frames the announce phase read past the ack.
+                buffered.remove(0)
+            } else {
+                match transport.recv().await {
+                    Ok(Some(f)) => f,
+                    Ok(None) => {
+                        let mut record = LogRecord::now(
+                            LogLevel::Info,
+                            "saikuro.rust.provider",
+                            "runtime closed connection",
+                        );
+                        record.set_context("namespace", namespace.to_string());
+                        log.emit(&record).await;
+                        break;
+                    }
+                    Err(e) => {
+                        let mut record =
+                            LogRecord::now(LogLevel::Error, "saikuro.rust.provider", "recv error");
+                        record.set_context("namespace", namespace.to_string());
+                        record.set_context("error", alloc::format!("{e}"));
+                        log.emit(&record).await;
+                        break;
+                    }
                 }
             };
 
@@ -178,7 +184,8 @@ impl Provider {
 
     // Announce
 
-    async fn announce(&self, transport: &mut dyn AdapterTransport) -> Result<()> {
+    /// Announce the schema and wait for the runtime's ack.
+    async fn announce(&self, transport: &mut dyn AdapterTransport) -> Result<Vec<Bytes>> {
         let schema = match self.build_schema() {
             Ok(schema) => schema,
             Err(e) => {
@@ -232,9 +239,49 @@ impl Provider {
             return Err(SaikuroError::SendFailed(e.to_string()));
         }
 
-        match saikuro_exec::timeout(core::time::Duration::from_millis(500), transport.recv()).await
-        {
-            Ok(Ok(Some(ack_frame))) => match ResponseEnvelope::from_msgpack(&ack_frame) {
+        // Read frames until the ack arrives.
+        let mut buffered: Vec<Bytes> = Vec::new();
+        loop {
+            let ack_frame = match saikuro_exec::timeout(
+                core::time::Duration::from_millis(500),
+                transport.recv(),
+            )
+            .await
+            {
+                Ok(Ok(Some(frame))) => frame,
+                Ok(Ok(None)) => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "transport closed after schema announce",
+                    );
+                    record.set_context("namespace", self.namespace.clone());
+                    self.log.emit(&record).await;
+                    return Ok(buffered);
+                }
+                Ok(Err(e)) => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Warn,
+                        "saikuro.rust.provider",
+                        "error receiving schema announce ack",
+                    );
+                    record.set_context("error", alloc::format!("{e}"));
+                    self.log.emit(&record).await;
+                    return Ok(buffered);
+                }
+                Err(_) => {
+                    let mut record = LogRecord::now(
+                        LogLevel::Debug,
+                        "saikuro.rust.provider",
+                        "schema announce ack timed out, continuing",
+                    );
+                    record.set_context("namespace", self.namespace.clone());
+                    self.log.emit(&record).await;
+                    return Ok(buffered);
+                }
+            };
+
+            match ResponseEnvelope::from_msgpack(&ack_frame) {
                 Ok(ack) if ack.ok => {
                     let mut record = LogRecord::now(
                         LogLevel::Debug,
@@ -255,43 +302,20 @@ impl Provider {
                 }
                 Err(e) => {
                     let mut record = LogRecord::now(
-                        LogLevel::Warn,
+                        LogLevel::Debug,
                         "saikuro.rust.provider",
-                        "could not decode schema announce ack",
+                        "invocation received during schema announce, buffering",
                     );
                     record.set_context("error", alloc::format!("{e}"));
                     self.log.emit(&record).await;
+                    buffered.push(ack_frame);
+                    continue;
                 }
-            },
-            Ok(Ok(None)) => {
-                let mut record = LogRecord::now(
-                    LogLevel::Warn,
-                    "saikuro.rust.provider",
-                    "transport closed after schema announce",
-                );
-                record.set_context("namespace", self.namespace.clone());
-                self.log.emit(&record).await;
             }
-            Ok(Err(e)) => {
-                let mut record = LogRecord::now(
-                    LogLevel::Warn,
-                    "saikuro.rust.provider",
-                    "error receiving schema announce ack",
-                );
-                record.set_context("error", alloc::format!("{e}"));
-                self.log.emit(&record).await;
-            }
-            Err(_) => {
-                let mut record = LogRecord::now(
-                    LogLevel::Debug,
-                    "saikuro.rust.provider",
-                    "schema announce ack timed out, continuing",
-                );
-                record.set_context("namespace", self.namespace.clone());
-                self.log.emit(&record).await;
-            }
+
+            break;
         }
 
-        Ok(())
+        Ok(buffered)
     }
 }

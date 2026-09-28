@@ -46,7 +46,7 @@ pub fn run<F: Future + 'static>(fut: F) {
 /// **Spin fallback** (degraded, last resort): if JSPI is unavailable (not in
 /// a JSPI context, or the suspension failed), falls back to a busy-poll loop
 /// that drives the executor directly. Because wasm holds the CPU while
-/// spinning, futures that wait on [`crate::time::sleep`]/[`crate::time::timeout`], 
+/// spinning, futures that wait on [`crate::time::sleep`]/[`crate::time::timeout`],
 /// or any JS event-loop event, cannot complete here, only internal work can.
 pub fn block_on<F>(fut: F) -> F::Output
 where
@@ -115,7 +115,11 @@ where
                  wasm spins; run this call inside a JSPI export (COOP/COEP) instead",
                 BLOCK_ON_SPIN_TIMEOUT.as_secs(),
                 super::time::pending_sleeps(),
-                if super::time::pending_sleeps() == 1 { "" } else { "s" }
+                if super::time::pending_sleeps() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             );
         }
     }
