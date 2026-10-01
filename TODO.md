@@ -62,6 +62,17 @@
 - [ ] Named Pipes (Windows)
 - [ ] WebRTC Transport
 
+## Storage
+
+- [ ] Every read copies the whole file twice across the wasm boundary: `arrayBuffer()` into the JS heap, then `Bytes` (`Vec<u8>`) into wasm memory (`wasm/fs_access.rs:99`, `wasm/opfs.rs:95`). For audio (tens of MB) that is very expensive versus building a `Blob` URL in JS and never touching wasm
+- [ ] No streaming read API: `FileBackend::read_file` returns the full `Bytes` or nothing
+- [ ] No range/offset reads, so a header/metadata probe has to pull the whole file
+- [ ] No way to hand a `Blob` back out to JS, so the caller cannot build a URL for `createObjectURL`/`MediaSource` streaming
+- [ ] No permission re-grant logic. `FsAccessStorage::with_config` (`wasm/fs_access.rs:272`) takes an already-granted `FileSystemDirectoryHandle` and nothing calls `queryPermission`/`requestPermission`. A handle persisted to IDB and re-hydrated must have its permission re-requested or every access fails. This is deliberately left to the caller (we would do it in TS), but it needs to be documented
+- [ ] Never uses `createSyncAccessHandle` (the fast OPFS path); all reads are async full-file `arrayBuffer` reads. Fine for the blob-URL + metadata use case, not optimal
+- [ ] `FsAccessStorage` hardcodes a single root directory; no multi-directory support per instance (use multiple instances)
+- [ ] `?Send` async traits with `RefCell`/`thread_local` handles are single-threaded-wasm-only. Fine for the browser, but it blocks reuse from workers
+
 ## The Sashiki Problem
 
 - [ ] Every language adapter independently re-implements the same wire protocol logic, so every protocol change requires updating all of them
@@ -71,6 +82,8 @@
 - [ ] like previously mentioned, it's called sashiki
 
 ## Current
+
+- [ ] watch WebAssembly/binaryen#9159, once it lands drop the binaryen submodule and use a stock release
 
 - [ ] Asyncify fallback for JSPI (before the spin one)
 

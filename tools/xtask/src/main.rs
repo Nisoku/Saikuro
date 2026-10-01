@@ -1,5 +1,6 @@
 //! Saikuro build system
 
+mod asyncify;
 mod config;
 mod gates;
 mod languages;
@@ -8,6 +9,7 @@ mod paths;
 mod qemu;
 mod run;
 mod setup;
+mod wasmopt;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
@@ -64,6 +66,8 @@ enum Command {
     },
     /// Print the pinned toolchain table.
     Tools,
+    /// Build wasm-opt and print its path.
+    WasmOpt,
     /// cargo-deny check against Build/deny.toml.
     Deny,
     /// cargo-audit dependency advisories.
@@ -91,6 +95,7 @@ enum Command {
 enum TestTarget {
     Native,
     Wasm,
+    WasmAsyncify,
     Embedded,
     Wasi,
 }
@@ -197,6 +202,7 @@ impl Command {
                 )
                 .context("native runner tests"),
                 TestTarget::Wasm => wasm_tests(),
+                TestTarget::WasmAsyncify => asyncify::test_e2e(),
                 TestTarget::Embedded => qemu::test_embedded(),
                 TestTarget::Wasi => wasi_tests(),
             },
@@ -226,6 +232,11 @@ impl Command {
             Command::Clean => languages::clean_all(),
             Command::Setup { check } => setup::sync(check),
             Command::Tools => setup::list(),
+            Command::WasmOpt => {
+                let path = wasmopt::ensure()?;
+                println!("{}", path.display());
+                Ok(())
+            }
             Command::Deny => gates::deny(),
             Command::Audit => gates::audit(),
             Command::Miri => gates::miri(),

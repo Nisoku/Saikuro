@@ -11,6 +11,7 @@ publish = false
 
 [lib]
 path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "native"
@@ -160,9 +161,16 @@ riscv = [
     "dep:riscv-rt",
     "dep:riscv",
 ]
+asyncify = ["saikuro-exec/asyncify", "dep:console_error_panic_hook"]
 sqlite = ["saikuro-storage/sqlite"]
 flash = ["saikuro-storage/flash"]
 adapter = ["dep:saikuro", "dep:saikuro-c", "saikuro-c/native", "saikuro/native"]
+
+[package.metadata.saikuro.asyncify]
+entry = "run_asyncify_suite"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [lints.rust]
 # Only the embedded targets set `saikuro_test_capacity`; register the cfg so `rustc --check-cfg` stays quiet.
@@ -197,6 +205,7 @@ heapless = { workspace = true }
 
 # wasm (wasm runner)
 wasm-bindgen = { workspace = true, optional = true }
+console_error_panic_hook = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }

@@ -77,6 +77,7 @@ wasm = [
     "wasm-host",
     "dep:wasm-bindgen",
 ]
+asyncify = ["saikuro-exec/asyncify"]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-schema/embedded",

@@ -40,3 +40,15 @@ pub fn start(channel: String) {
 pub fn pump() {
     pump_executor();
 }
+
+/// Asyncify synchronous entry.
+#[cfg(feature = "asyncify")]
+#[wasm_bindgen]
+pub fn asyncify_entry(op: &wasm_bindgen::JsValue) -> wasm_bindgen::JsValue {
+    use core::time::Duration;
+    let op = op.clone();
+    saikuro_exec::block_on(async move {
+        saikuro_exec::sleep(Duration::from_millis(1)).await;
+        op
+    })
+}

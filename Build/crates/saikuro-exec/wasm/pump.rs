@@ -11,8 +11,8 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsError, JsValue};
 
-use super::jspi::static_executor;
 use super::time;
+use crate::base::block_on::static_executor;
 
 /// True while a pump microtask is already queued.
 static PUMP_SCHEDULED: AtomicBool = AtomicBool::new(false);

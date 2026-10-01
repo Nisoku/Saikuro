@@ -18,8 +18,28 @@ struct SleepEntry {
     waker: Waker,
 }
 
-static SLEEPS: CriticalSectionMutex<RefCell<Vec<SleepEntry>>> =
-    CriticalSectionMutex::new(RefCell::new(Vec::new()));
+/// Pending sleeps plus the deadline
+struct SleepTable {
+    sleeps: Vec<SleepEntry>,
+    armed: Option<Instant>,
+}
+
+static SLEEPS: CriticalSectionMutex<RefCell<SleepTable>> =
+    CriticalSectionMutex::new(RefCell::new(SleepTable {
+        sleeps: Vec::new(),
+        armed: None,
+    }));
+
+/// Claim the leader timer for `deadline`.
+fn claim_leader(table: &mut SleepTable, deadline: Instant, now: Instant) -> Option<Duration> {
+    if let Some(armed) = table.armed {
+        if armed <= deadline {
+            return None;
+        }
+    }
+    table.armed = Some(deadline);
+    Some(deadline.saturating_duration_since(now))
+}
 
 /// Monotonic clock, readable synchronously from wasm on both browser and
 /// Node.
@@ -28,20 +48,20 @@ pub(crate) fn now() -> Instant {
 }
 
 /// Number of sleeps currently waiting on a clock advance.
+#[cfg(not(feature = "asyncify"))]
 pub(crate) fn pending_sleeps() -> usize {
-    SLEEPS.lock(|r| r.borrow().len())
+    SLEEPS.lock(|r| r.borrow().sleeps.len())
 }
 
-/// Wake every sleep whose deadline has passed, then re-arm a JS timer for the
-/// next pending deadline. Called from every executor pump site: `pump()`, the
-/// `block_on` spin loop, and the JS timer itself.
+/// Wake every sleep whose deadline has passed, then make sure a JS timer is
+/// aimed at the earliest deadline still pending.
 pub(crate) fn advance_clock() {
     let now = now();
     let mut expired = Vec::new();
-    let mut arm_next = None;
+    let mut arm_delay = None;
     SLEEPS.lock(|r| {
-        let mut sleeps = r.borrow_mut();
-        sleeps.retain(|entry| {
+        let mut table = r.borrow_mut();
+        table.sleeps.retain(|entry| {
             if entry.deadline <= now {
                 expired.push(entry.waker.clone());
                 false
@@ -49,16 +69,22 @@ pub(crate) fn advance_clock() {
                 true
             }
         });
-        if !expired.is_empty() {
-            arm_next = sleeps.iter().map(|e| e.deadline).min();
+        if let Some(next) = table.sleeps.iter().map(|e| e.deadline).min() {
+            arm_delay = claim_leader(&mut table, next, now);
         }
     });
-    if let Some(next) = arm_next {
-        schedule_js_advance(next.saturating_duration_since(now));
+    if let Some(delay) = arm_delay {
+        schedule_js_advance(delay);
     }
     for waker in expired {
         waker.wake();
     }
+}
+
+/// Leader timer callback.
+fn on_leader_timer() {
+    SLEEPS.lock(|r| r.borrow_mut().armed = None);
+    advance_clock();
 }
 
 /// Sleep for `dur`, suspending until a pump advances the clock past the
@@ -70,30 +96,33 @@ pub async fn sleep(dur: Duration) {
         if now >= deadline {
             return Poll::Ready(());
         }
-        // Leader-timer registration: keep exactly one entry per (task,
-        // deadline) and arm a fresh JS timer whenever this sleep becomes the
-        // earliest pending deadline.
-        let mut should_arm = false;
+        // Leader-timer registration: keep exactly one entry per (task, deadline)
+        // and take over the shared JS timer only when this sleep is the earliest
+        // pending deadline.
+        let mut arm_delay = None;
         SLEEPS.lock(|r| {
-            let mut sleeps = r.borrow_mut();
-            if sleeps
+            let mut table = r.borrow_mut();
+            if table
+                .sleeps
                 .iter()
                 .any(|e| e.deadline == deadline && e.waker.will_wake(cx.waker()))
             {
                 return;
             }
-            sleeps.retain(|e| e.deadline != deadline || !e.waker.will_wake(cx.waker()));
-            should_arm = match sleeps.iter().map(|e| e.deadline).min() {
-                None => true,
-                Some(head) => deadline < head,
-            };
-            sleeps.push(SleepEntry {
+            table
+                .sleeps
+                .retain(|e| e.deadline != deadline || !e.waker.will_wake(cx.waker()));
+            table.sleeps.push(SleepEntry {
                 deadline,
                 waker: cx.waker().clone(),
             });
+            let head = table.sleeps.iter().map(|e| e.deadline).min();
+            if head == Some(deadline) {
+                arm_delay = claim_leader(&mut table, deadline, now);
+            }
         });
-        if should_arm {
-            schedule_js_advance(deadline.saturating_duration_since(now));
+        if let Some(delay) = arm_delay {
+            schedule_js_advance(delay);
         }
         Poll::Pending
     })
@@ -119,7 +148,7 @@ fn schedule_js_advance(after: Duration) {
         js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout"))
             .expect("globalThis.setTimeout must exist in browser and Node")
             .unchecked_into();
-    let callback: JsValue = Closure::once_into_js(advance_clock);
+    let callback: JsValue = Closure::once_into_js(on_leader_timer);
     // Cap at u32 ms; browser setTimeout saturates at 2^31-1 anyway.
     let delay: JsValue = (after.as_millis().min(u32::MAX as u128) as u32).into();
     settimeout

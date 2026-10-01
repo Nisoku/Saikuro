@@ -266,28 +266,7 @@ fn ensure_public_dirs() -> anyhow::Result<()> {
 
 /// Build a wasm-pack component into `Demo/public/wasm/<out>`.
 fn wasm_pack(src: &Path, out: &str) -> anyhow::Result<()> {
-    let out_dir = paths::public_wasm_dir().join(out);
-    std::fs::create_dir_all(&out_dir).with_context(|| format!("mkdir {}", out_dir.display()))?;
-    run::run(
-        &root(),
-        "wasm-pack",
-        [
-            "build",
-            src.display().to_string().as_str(),
-            "--target",
-            "web",
-            "--out-dir",
-            out_dir.display().to_string().as_str(),
-            "--release",
-        ],
-    )
-    .with_context(|| format!("wasm-pack {out}"))?;
-    let gitignore = out_dir.join(".gitignore");
-    if gitignore.is_file() {
-        std::fs::remove_file(&gitignore)
-            .with_context(|| format!("remove {}", gitignore.display()))?;
-    }
-    Ok(())
+    crate::asyncify::wasm_pack(src, &paths::public_wasm_dir().join(out), "wasm")
 }
 
 pub(super) fn demo_wasm_runtime() -> anyhow::Result<()> {

@@ -110,6 +110,7 @@ critical-section = { version = "1" }
 embassy-time-driver = { version = "0.2", default-features = false }
 
 # WASM
+console_error_panic_hook = "0.1.7"
 wasm-bindgen = "0.2.128"
 wasm-bindgen-futures = "0.4.78"
 js-sys = "0.3.105"
