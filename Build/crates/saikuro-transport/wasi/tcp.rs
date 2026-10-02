@@ -12,7 +12,7 @@ use crate::shared::error::{Result, TransportError};
 use crate::shared::framing::{read_frame, write_frame, AsyncByteRead, AsyncByteWrite};
 use crate::shared::traits::{
     LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
-    LocalTransportSender,
+    LocalTransportSender, TransportReceiver, TransportSender,
 };
 use crate::wasi::tcp::backend::{Connection, Listener};
 
@@ -139,6 +139,54 @@ pub struct WasiTcpReceiver {
 impl LocalTransportReceiver for WasiTcpReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
         read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+    }
+}
+
+/// Bridge the WASI TCP halves onto the engine's boxed [`TransportSender`] /
+/// [`TransportReceiver`] traits.
+#[cfg(feature = "native")]
+mod send_impls {
+    use super::*;
+
+    #[async_trait]
+    impl TransportSender for WasiTcpSender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            write_frame(&mut WasiWriter(self.conn.as_ref()), &frame).await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl TransportReceiver for WasiTcpReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+        }
+    }
+}
+
+#[cfg(not(feature = "native"))]
+mod nosend_impls {
+    use super::*;
+
+    #[async_trait(?Send)]
+    impl TransportSender for WasiTcpSender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            write_frame(&mut WasiWriter(self.conn.as_ref()), &frame).await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TransportReceiver for WasiTcpReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+        }
     }
 }
 

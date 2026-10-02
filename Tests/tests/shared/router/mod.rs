@@ -10,6 +10,7 @@ pub fn register(suite: &mut TestSuite) {
     resource_dispatch::register(suite);
     log_dispatch::register(suite);
     sandbox_dispatch::register(suite);
+    stream_state::register(suite);
 }
 
 pub mod announce_dispatch;
@@ -21,3 +22,4 @@ pub mod provider_registry;
 pub mod resource_dispatch;
 pub mod sandbox_dispatch;
 pub mod stream_dispatch;
+pub mod stream_state;

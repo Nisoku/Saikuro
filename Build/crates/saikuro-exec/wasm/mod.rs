@@ -1,5 +1,9 @@
+pub(crate) mod cell;
 pub mod exec;
-pub mod jspi;
+pub(crate) mod pump;
 pub(crate) mod time;
+
+#[cfg(feature = "asyncify")]
+pub mod asyncify;
 
 pub use exec::*;

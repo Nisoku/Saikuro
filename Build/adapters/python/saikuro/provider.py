@@ -265,19 +265,25 @@ class SaikuroProvider:
             await self._run_serve_loop(transport)
 
     async def _run_serve_loop(self, transport: BaseTransport) -> None:
+        buffered: list[dict[str, Any]] = []
+
         # Announce schema immediately after connecting.
         try:
             schema_dict = self._schema_builder.build()
             announce_env = Envelope.make_announce(schema_dict)
             await transport.send(announce_env.to_msgpack_dict())
             # Wait for the runtime's ok_empty acknowledgement.
-            ack_raw = await transport.recv()
-            if ack_raw is None:
-                logger.warning(
-                    "provider '%s': transport closed after schema announce",
-                    self._namespace,
-                )
-                return
+            while True:
+                ack_raw = await transport.recv()
+                if ack_raw is None:
+                    logger.warning(
+                        "provider '%s': transport closed after schema announce",
+                        self._namespace,
+                    )
+                    return
+                if "ok" in ack_raw:
+                    break
+                buffered.append(ack_raw)
             try:
                 ack = ResponseEnvelope.from_msgpack_dict(ack_raw)
                 if not ack.ok:
@@ -306,7 +312,10 @@ class SaikuroProvider:
 
         logger.info("provider '%s' ready", self._namespace)
         while True:
-            raw = await transport.recv()
+            if buffered:
+                raw = buffered.pop(0)
+            else:
+                raw = await transport.recv()
             if raw is None:
                 logger.info("provider '%s': transport closed", self._namespace)
                 break

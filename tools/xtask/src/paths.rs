@@ -46,6 +46,18 @@ pub fn tools_manifest() -> PathBuf {
     tools_dir().join("tools.toml")
 }
 
+pub fn xtask_assets_dir() -> PathBuf {
+    tools_dir().join("xtask").join("assets")
+}
+
+pub fn binaryen_dir() -> PathBuf {
+    repo_root().join("vendor").join("binaryen")
+}
+
+pub fn wasmopt_cache_dir() -> PathBuf {
+    tools_dir().join("cache").join("wasm-opt")
+}
+
 pub fn engine_manifest() -> PathBuf {
     repo_root().join("Cargo.toml")
 }

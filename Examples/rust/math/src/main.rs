@@ -1,139 +1,105 @@
-//! Math example
-//!
-//! Wires a math provider and a client together over an in-memory transport,
-//! then exercises call, cast, batch, and error-handling paths.
+//! Math example: one provider and one client over a selectable transport.
 //!
 //! Run with:
-//!   cargo run -p math
+//!   cargo run -p math                                  # in-memory (default)
+//!   cargo run -p math -- --transport tcp               # loopback TCP
+//!   cargo run -p math -- --transport tcp --addr 127.0.0.1:9000
+//!
+//! The TCP mode hosts a provider and dials it in the same process. Pass
+//! `--serve-only` to listen without a local client instead
+//!   cargo run -p math -- --transport tcp --addr 127.0.0.1:9000 --serve-only
 
-use saikuro::{Client, Error, MemoryAdapterTransport, Provider, Result};
-use serde_json::Value as JsonValue;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 
-fn extract_two_floats(args: &[JsonValue]) -> (f64, f64) {
-    let a = args.first().and_then(JsonValue::as_f64).unwrap_or(0.0);
-    let b = args.get(1).and_then(JsonValue::as_f64).unwrap_or(0.0);
-    (a, b)
-}
+use math_core::{run_in_memory, Options, TransportChoice};
+use saikuro::event::{LogSink, NullSink};
+use saikuro::transport::{TcpTransportListener, Transport, TransportListener};
+use saikuro::{from_halves, Client, Result};
 
 fn main() -> Result<()> {
     saikuro_exec::block_on(async_main())
 }
 
 async fn async_main() -> Result<()> {
-    // provider setup
+    let (serve_only, args) = split_serve_only(std::env::args().skip(1));
+    let options = Options::parse(args.into_iter())?;
+    match (options.transport, serve_only) {
+        (TransportChoice::Memory, true) => Err(saikuro::Error::ProviderError(
+            "--serve-only needs --transport tcp".into(),
+        )),
+        (TransportChoice::Memory, false) => run_in_memory().await,
+        (TransportChoice::Tcp, true) => serve_tcp(options.addr).await,
+        (TransportChoice::Tcp, false) => run_tcp(options.addr).await,
+    }
+}
 
-    let mut provider = Provider::new("math");
+fn split_serve_only<I: Iterator<Item = String>>(args: I) -> (bool, Vec<String>) {
+    let mut serve_only = false;
+    let rest = args
+        .filter(|a| {
+            if a == "--serve-only" {
+                serve_only = true;
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    (serve_only, rest)
+}
 
-    provider.register("add", |args: Vec<JsonValue>| async move {
-        let (a, b) = extract_two_floats(&args);
-        Ok(serde_json::json!(a + b))
-    });
+/// Listen on `addr` and serve the provider until the peer hangs up.
+async fn serve_tcp(addr: SocketAddr) -> Result<()> {
+    let sink: Box<dyn LogSink> = Box::new(NullSink);
+    let mut listener = TcpTransportListener::bind(addr, Arc::from(sink)).await?;
+    let bound = listener.local_addr();
+    println!("transport: tcp (provider listening on {bound}, serve-only)");
 
-    provider.register("subtract", |args: Vec<JsonValue>| async move {
-        let (a, b) = extract_two_floats(&args);
-        Ok(serde_json::json!(a - b))
-    });
-
-    provider.register("multiply", |args: Vec<JsonValue>| async move {
-        let (a, b) = extract_two_floats(&args);
-        Ok(serde_json::json!(a * b))
-    });
-
-    provider.register("divide", |args: Vec<JsonValue>| async move {
-        let (a, b) = extract_two_floats(&args);
-        if b == 0.0 {
-            return Err(Error::ProviderError("division by zero".into()));
+    while let Some(transport) = listener.accept().await? {
+        // `connect` only dials, so the accepted side is wrapped here.
+        let (sender, receiver) = transport.split();
+        // One bad connection must not take the listener down; report and keep
+        // accepting.
+        if let Err(e) = math_core::math_provider()
+            .serve_on(from_halves(sender, receiver))
+            .await
+        {
+            println!("provider: connection failed: {e}");
         }
-        Ok(serde_json::json!(a / b))
-    });
-
-    // wire provider + client over in-memory transport
-
-    let (provider_transport, client_transport) = MemoryAdapterTransport::pair();
-
-    saikuro_exec::spawn(async move {
-        let _ = provider.serve_on(Box::new(provider_transport)).await;
-    });
-
-    // Give the provider task a chance to start and send its announce frame.
-    saikuro_exec::yield_now().await;
-
-    let client = Client::from_transport(Box::new(client_transport), None)?;
-
-    // call
-
-    let sum = client
-        .call(
-            "math.add",
-            vec![serde_json::json!(10), serde_json::json!(32)],
-        )
-        .await?;
-    println!("math.add(10, 32) = {sum}");
-    assert_eq!(sum, serde_json::json!(42.0));
-
-    let diff = client
-        .call(
-            "math.subtract",
-            vec![serde_json::json!(100), serde_json::json!(58)],
-        )
-        .await?;
-    println!("math.subtract(100, 58) = {diff}");
-    assert_eq!(diff, serde_json::json!(42.0));
-
-    let product = client
-        .call(
-            "math.multiply",
-            vec![serde_json::json!(6), serde_json::json!(7)],
-        )
-        .await?;
-    println!("math.multiply(6, 7) = {product}");
-    assert_eq!(product, serde_json::json!(42.0));
-
-    let quotient = client
-        .call(
-            "math.divide",
-            vec![serde_json::json!(84.0), serde_json::json!(2.0)],
-        )
-        .await?;
-    println!("math.divide(84, 2) = {quotient}");
-    assert_eq!(quotient, serde_json::json!(42.0));
-
-    // cast (fire-and-forget)
-
-    client
-        .cast("math.add", vec![serde_json::json!(1), serde_json::json!(1)])
-        .await?;
-    println!("cast sent (no response expected)");
-
-    // batch
-
-    let results = client
-        .batch(vec![
-            (
-                "math.add".into(),
-                vec![serde_json::json!(1), serde_json::json!(2)],
-            ),
-            (
-                "math.multiply".into(),
-                vec![serde_json::json!(3), serde_json::json!(4)],
-            ),
-        ])
-        .await?;
-    println!("batch [add(1,2), multiply(3,4)] = {results:?}");
-
-    // error handling
-
-    let err = client
-        .call(
-            "math.divide",
-            vec![serde_json::json!(1), serde_json::json!(0)],
-        )
-        .await
-        .unwrap_err();
-    println!("divide by zero caught: {err}");
-    assert!(matches!(err, Error::Remote { .. } | Error::ProviderError(_)));
-
-    client.close().await?;
-    println!("all examples passed");
+    }
     Ok(())
+}
+
+/// Bind a loopback TCP listener, serve the provider on the accepted connection,
+/// and have the client dial it.
+async fn run_tcp(addr: SocketAddr) -> Result<()> {
+    let sink: Box<dyn LogSink> = Box::new(NullSink);
+    let mut listener = TcpTransportListener::bind(addr, Arc::from(sink)).await?;
+    let bound = listener.local_addr();
+    println!("transport: tcp (provider listening on {bound})");
+
+    // Accept first so the listener is bound and the client cannot race it.
+    let accepting = saikuro_exec::spawn(async move {
+        match listener.accept().await {
+            Ok(Some(transport)) => {
+                // `connect` only dials, so the accepted side is wrapped here.
+                let (sender, receiver) = transport.split();
+                let _ = math_core::math_provider()
+                    .serve_on(from_halves(sender, receiver))
+                    .await;
+            }
+            Ok(None) => {}
+            Err(e) => println!("provider: accept failed: {e}"),
+        }
+    });
+
+    let client = Client::connect(format!("tcp://{bound}")).await?;
+    let result = math_core::run_demo(client).await;
+
+    // Let the provider notice the hang-up rather than leaving the task behind.
+    let _ = saikuro_exec::timeout(Duration::from_millis(200), accepting).await;
+
+    result
 }

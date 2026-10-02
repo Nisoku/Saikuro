@@ -266,32 +266,29 @@ fn ensure_public_dirs() -> anyhow::Result<()> {
 
 /// Build a wasm-pack component into `Demo/public/wasm/<out>`.
 fn wasm_pack(src: &Path, out: &str) -> anyhow::Result<()> {
-    let out_dir = paths::public_wasm_dir().join(out);
-    std::fs::create_dir_all(&out_dir).with_context(|| format!("mkdir {}", out_dir.display()))?;
-    run::run(
-        &root(),
-        "wasm-pack",
-        [
-            "build",
-            src.display().to_string().as_str(),
-            "--target",
-            "web",
-            "--out-dir",
-            out_dir.display().to_string().as_str(),
-            "--release",
-        ],
+    crate::asyncify::wasm_pack(
+        src,
+        &paths::public_wasm_dir().join(out),
+        "",
+        crate::asyncify::Asyncify::Off,
     )
-    .with_context(|| format!("wasm-pack {out}"))?;
-    let gitignore = out_dir.join(".gitignore");
-    if gitignore.is_file() {
-        std::fs::remove_file(&gitignore)
-            .with_context(|| format!("remove {}", gitignore.display()))?;
-    }
-    Ok(())
 }
 
 pub(super) fn demo_wasm_runtime() -> anyhow::Result<()> {
     wasm_pack(&wasm_dir().join("runtime"), "runtime")
+}
+
+/// Build the Asyncify version of the runtime demo
+pub(super) fn demo_wasm_runtime_asyncify() -> anyhow::Result<()> {
+    crate::asyncify::wasm_pack(
+        &wasm_dir().join("runtime"),
+        &paths::public_wasm_dir().join("runtime-asyncify"),
+        "asyncify",
+        crate::asyncify::Asyncify::Entry {
+            entry: "asyncify_call",
+            placeholder: crate::asyncify::Placeholder::EmptyString,
+        },
+    )
 }
 
 pub(super) fn demo_wasm_rust() -> anyhow::Result<()> {

@@ -4,3 +4,6 @@
 [submodule "vendor/graphitesql"]
 	path = vendor/graphitesql
 	url = https://github.com/Nisoku/graphitesql
+[submodule "vendor/binaryen"]
+	path = vendor/binaryen
+	url = https://github.com/NellowTCS/binaryen/

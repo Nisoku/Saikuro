@@ -20,6 +20,7 @@ use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};
 pub struct Connection {
     input: InputStream,
     output: OutputStream,
+    _socket: TcpSocket,
 }
 
 /// A listening preview2 socket.
@@ -78,8 +79,20 @@ pub fn connect(addr: &str) -> Result<Arc<Connection>> {
     socket
         .start_connect(&network, ipv4_socket_addr(octets, port))
         .map_err(to_err)?;
-    let (input, output) = socket.finish_connect().map_err(to_err)?;
-    Ok(Arc::new(Connection { input, output }))
+    // Preview2 sockets are non-blocking
+    let ready = socket.subscribe();
+    let (input, output) = loop {
+        match socket.finish_connect() {
+            Ok(connected) => break connected,
+            Err(ErrorCode::WouldBlock) => ready.block(),
+            Err(e) => return Err(to_err(e)),
+        }
+    };
+    Ok(Arc::new(Connection {
+        input,
+        output,
+        _socket: socket,
+    }))
 }
 
 /// Bind and listen on `port` on all interfaces.
@@ -104,7 +117,11 @@ pub fn listen(port: u16) -> Result<Listener> {
 impl Listener {
     /// Accept one inbound connection and return its socket.
     pub fn accept(&self) -> Result<Arc<Connection>> {
-        let (_new_socket, input, output) = self.socket.accept().map_err(to_err)?;
-        Ok(Arc::new(Connection { input, output }))
+        let (socket, input, output) = self.socket.accept().map_err(to_err)?;
+        Ok(Arc::new(Connection {
+            input,
+            output,
+            _socket: socket,
+        }))
     }
 }

@@ -5,6 +5,10 @@
 #[macro_use]
 extern crate alloc;
 
+// Link wasi-libc for the `memcmp` that `alloc`/serde code needs.
+#[link(name = "c")]
+extern "C" {}
+
 use saikuro_core::Arc;
 
 use saikuro_exec::watch;
@@ -15,7 +19,7 @@ use saikuro_transport::wasi::tcp::WasiTcpListener;
 
 /// WASI command entry point. Returns a process exit code.
 #[no_mangle]
-pub extern "C" fn _start() -> i32 {
+pub extern "C" fn __main_void() -> i32 {
     #[cfg(all(not(feature = "std"), not(feature = "embedded")))]
     saikuro_runtime::init_heap();
 
@@ -30,8 +34,8 @@ pub extern "C" fn _start() -> i32 {
         };
 
         let runtime = Arc::new(builder.build().await);
-        let mut rx1 = shutdown_rx.clone();
-        let mut rx2 = shutdown_rx.clone();
+        let rx1 = shutdown_rx.clone();
+        let rx2 = shutdown_rx.clone();
 
         let tcp_task = {
             let rt = runtime.clone();

@@ -2,12 +2,23 @@
 name = "math"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [[bin]]
 name = "math"
 path = "src/main.rs"
 
+[features]
+default = ["std", "native", "tcp", "unix", "ws", "storage", "inmemory"]
+std = ["math-core/std", "saikuro-exec/std"]
+native = ["math-core/native", "saikuro-exec/native"]
+tcp = ["math-core/tcp"]
+unix = ["math-core/unix"]
+ws = ["math-core/ws"]
+storage = ["math-core/storage"]
+inmemory = ["math-core/inmemory"]
+
 [dependencies]
-saikuro = { path = "../../../Build/adapters/rust" }
-saikuro-exec = { path = "../../../Build/crates/saikuro-exec" }
-serde_json = "1"
+math-core = { path = "../math-core" }
+saikuro = { path = "../../../Build/adapters/rust", default-features = false }
+saikuro-exec = { path = "../../../Build/crates/saikuro-exec", default-features = false }

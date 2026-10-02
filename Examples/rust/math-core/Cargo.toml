@@ -1,0 +1,35 @@
+[package]
+name = "math-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "math_core"
+path = "src/lib.rs"
+
+[features]
+default = []
+std = ["saikuro/std", "saikuro-exec/std"]
+native = ["std", "saikuro/native", "saikuro-exec/native"]
+wasm = ["std", "saikuro/wasm", "saikuro-exec/wasm"]
+no_std = ["saikuro/no_std", "saikuro-exec/no_std"]
+inmemory = ["saikuro/inmemory"]
+storage = ["saikuro/storage"]
+tcp = ["saikuro/tcp"]
+unix = ["saikuro/unix"]
+ws = ["saikuro/ws"]
+ws-wasi = ["saikuro/ws-wasi"]
+wasi-tcp = ["saikuro/wasi-tcp"]
+wasm-host = ["saikuro/wasm-host"]
+wasi-host = ["saikuro/wasi-host"]
+wasi-preview1 = ["saikuro/wasi-preview1", "saikuro/default-panic-handler"]
+wasi-preview2 = ["saikuro/wasi-preview2"]
+wasi-runtime-support = ["dep:embassy-time-driver", "dep:critical-section"]
+
+[dependencies]
+saikuro = { path = "../../../Build/adapters/rust", default-features = false }
+saikuro-exec = { path = "../../../Build/crates/saikuro-exec", default-features = false }
+serde_json = "1"
+embassy-time-driver = { version = "0.2", default-features = false, optional = true }
+critical-section = { version = "1", optional = true }

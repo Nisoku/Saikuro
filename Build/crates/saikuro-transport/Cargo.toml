@@ -29,6 +29,7 @@ native = [
 ]
 no_std = ["saikuro-core/no_std", "saikuro-net/no_std", "saikuro-exec/no_std", "saikuro-event/no_std"]
 wasm = [
+    "std",
     "saikuro-core/wasm",
     "saikuro-net/wasm",
     "saikuro-exec/wasm",

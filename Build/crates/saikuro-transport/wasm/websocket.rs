@@ -23,6 +23,11 @@ pub struct WebSocketTransport {
 }
 
 impl WebSocketTransport {
+    /// Return the URL this transport is connected to.
+    pub fn peer_addr(&self) -> &str {
+        &self.url
+    }
+
     /// Connect to a WebSocket server using the browser WebSocket API.
     pub async fn connect(url: impl Into<String>) -> Result<Self> {
         let url = url.into();
@@ -118,12 +123,9 @@ impl Transport for WebSocketTransport {
         });
         let _ = ws_for_receiver.set_onerror(Some(onerror.as_ref().unchecked_ref()));
 
-        let url = self.url;
-
         (
             WebSocketSender {
                 ws: SendWrapper::new(ws),
-                url: url.clone(),
             },
             WebSocketReceiver {
                 ws: SendWrapper::new(ws_for_receiver),
@@ -131,7 +133,6 @@ impl Transport for WebSocketTransport {
                 _onmsg: SendWrapper::new(onmsg),
                 _onclose: SendWrapper::new(onclose),
                 _onerror: SendWrapper::new(onerror),
-                url,
             },
         )
     }
@@ -146,7 +147,6 @@ impl Transport for WebSocketTransport {
 /// Sends binary frames via [`web_sys::WebSocket::send_with_array_buffer`].
 pub struct WebSocketSender {
     ws: SendWrapper<web_sys::WebSocket>,
-    url: String,
 }
 
 #[async_trait(?Send)]
@@ -183,7 +183,6 @@ pub struct WebSocketReceiver {
     _onmsg: SendWrapper<Closure<dyn FnMut(MessageEvent)>>,
     _onclose: SendWrapper<Closure<dyn FnMut(CloseEvent)>>,
     _onerror: SendWrapper<Closure<dyn FnMut(ErrorEvent)>>,
-    url: String,
 }
 
 impl Drop for WebSocketReceiver {

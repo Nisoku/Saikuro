@@ -16,6 +16,17 @@ pub use saikuro_client::{
     RegisterOptions, Result, SaikuroChannel, SaikuroStream, TypeDescriptor, Value, Visibility,
 };
 
+#[cfg(any(
+    feature = "tcp",
+    feature = "unix",
+    feature = "ws",
+    feature = "ws-wasi",
+    feature = "wasm",
+    feature = "wasi-tcp",
+    feature = "wasi-host"
+))]
+pub use saikuro_client::from_halves;
+
 pub mod core;
 pub mod event;
 pub mod exec;
