@@ -189,8 +189,13 @@ async function runInMemory(): Promise<void> {
  */
 async function runTcp(options: Options): Promise<void> {
   const server = createServer();
-  await new Promise<void>((resolve) => {
-    server.listen(options.port, options.host, resolve);
+  await new Promise<void>((resolve, reject) => {
+    // A failed bind (port in use, bad host) must reject rather than hang.
+    server.once("error", reject);
+    server.listen(options.port, options.host, () => {
+      server.removeListener("error", reject);
+      resolve();
+    });
   });
 
   const address = server.address();
@@ -201,8 +206,9 @@ async function runTcp(options: Options): Promise<void> {
     `transport: tcp (provider listening on ${address.address}:${address.port})`,
   );
 
-  const accepted = new Promise<import("node:net").Socket>((resolve) => {
+  const accepted = new Promise<import("node:net").Socket>((resolve, reject) => {
     server.once("connection", (socket) => resolve(socket));
+    server.once("error", reject);
   });
 
   // The provider adopts the accepted socket; the client dials it.
@@ -232,12 +238,15 @@ async function serveOverPair(
   const servePromise = mathProvider().serveOn(providerTransport);
   const client = await SaikuroClient.openOn(clientTransport);
 
-  await runDemo(client);
-
-  await client.close();
-  await servePromise.catch((err: unknown) => {
-    console.error("serve failed:", err);
-  });
+  try {
+    await runDemo(client);
+  } finally {
+    // Tear both sides down even if the demo threw.
+    await client.close();
+    await servePromise.catch((err: unknown) => {
+      console.error("serve failed:", err);
+    });
+  }
 }
 
 async function main(): Promise<void> {

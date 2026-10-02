@@ -60,9 +60,14 @@ async fn serve_tcp(addr: SocketAddr) -> Result<()> {
     while let Some(transport) = listener.accept().await? {
         // `connect` only dials, so the accepted side is wrapped here.
         let (sender, receiver) = transport.split();
-        math_core::math_provider()
+        // One bad connection must not take the listener down; report and keep
+        // accepting.
+        if let Err(e) = math_core::math_provider()
             .serve_on(from_halves(sender, receiver))
-            .await?;
+            .await
+        {
+            println!("provider: connection failed: {e}");
+        }
     }
     Ok(())
 }

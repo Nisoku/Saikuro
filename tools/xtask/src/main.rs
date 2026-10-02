@@ -130,6 +130,7 @@ enum LangVerb {
     BuildCpp,
     BuildCsharp,
     BuildRustRuntime,
+    BuildRustRuntimeAsyncify,
     BuildRustProvider,
     BuildRust,
     BuildPython,
@@ -152,6 +153,7 @@ impl LangVerb {
             LangVerb::BuildCpp => "build-cpp",
             LangVerb::BuildCsharp => "build-csharp",
             LangVerb::BuildRustRuntime => "build-rust-runtime",
+            LangVerb::BuildRustRuntimeAsyncify => "build-rust-runtime-asyncify",
             LangVerb::BuildRustProvider => "build-rust-provider",
             LangVerb::BuildRust => "build-rust",
             LangVerb::BuildPython => "build-python",
@@ -299,10 +301,12 @@ fn cov(fail_under_lines: Option<f64>) -> anyhow::Result<()> {
         [
             "llvm-cov",
             "run",
+            "-p",
+            "saikuro-tests",
             "--bin",
             "native",
             "--features",
-            "saikuro-tests/native",
+            "native",
         ],
     )
     .context("native coverage run")?;

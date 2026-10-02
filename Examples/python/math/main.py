@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import sys
 
 from saikuro import (
@@ -111,10 +112,8 @@ async def serve_over_pair(
     finally:
         await client.close()
         serve_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await serve_task
-        except asyncio.CancelledError:
-            pass
 
 
 async def run_in_memory() -> None:
@@ -138,22 +137,27 @@ async def run_tcp(host: str, port: int) -> None:
             accepted.set_result((reader, writer))
 
     server = await asyncio.start_server(on_connection, host, port)
-    sockets = server.sockets or ()
-    bound_port = sockets[0].getsockname()[1] if sockets else port
-    print(f"transport: tcp (provider listening on {host}:{bound_port})")
-
-    client_transport = TcpTransport(host, bound_port)
-    # Dial before awaiting the accept: the server cannot see a connection until
-    # the client reaches out, so the reverse order deadlocks. `open_on` would
-    # dial anyway, but the connect is explicit to keep the ordering obvious.
-    await client_transport.connect()
-
-    reader, writer = await accepted
-    provider_transport = TcpTransport.from_stream(reader, writer)
-
+    # The listener must be closed even if the dial or the accept fails
+    client_transport: TcpTransport | None = None
     try:
+        sockets = server.sockets or ()
+        bound_port = sockets[0].getsockname()[1] if sockets else port
+        print(f"transport: tcp (provider listening on {host}:{bound_port})")
+
+        client_transport = TcpTransport(host, bound_port)
+        # Dial before awaiting the accept: the server cannot see a connection
+        # until the client reaches out, so the reverse order deadlocks. `open_on`
+        # would dial anyway, but the connect is explicit to keep the ordering
+        # obvious.
+        await client_transport.connect()
+
+        reader, writer = await accepted
+        provider_transport = TcpTransport.from_stream(reader, writer)
+
         await serve_over_pair(provider_transport, client_transport)
     finally:
+        if client_transport is not None:
+            await client_transport.close()
         server.close()
         await server.wait_closed()
 
@@ -198,7 +202,6 @@ async def main(argv: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    try:
+    # Ctrl-C is the documented way to stop this example.
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(main(sys.argv[1:]))
-    except KeyboardInterrupt:
-        pass

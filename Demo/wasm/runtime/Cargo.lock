@@ -699,6 +699,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "critical-section",
+ "embassy-sync",
  "futures",
  "portable-atomic",
  "portable-atomic-util",

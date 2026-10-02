@@ -19,6 +19,7 @@ const log = getLogger("saikuro.transport");
 export class NodeStreamTransport extends BaseTransport {
   private _socket?: import("net").Socket;
   private _buffer: Buffer = Buffer.alloc(0);
+  private _connected = false;
   private readonly _connectionOptions:
     | { type: "tcp"; host: string; port: number }
     | { type: "unix"; path: string }
@@ -55,9 +56,12 @@ export class NodeStreamTransport extends BaseTransport {
   /** Wire up event handlers for an already-connected socket. */
   private _attach(socket: import("net").Socket): void {
     this._socket = socket;
+    this._connected = true;
     socket.on("error", (err: Error) => this._closeHandler?.(err));
     socket.on("data", (chunk: Buffer) => this._onData(chunk));
     socket.on("close", (hadError: boolean) => {
+      this._connected = false;
+      this._buffer = Buffer.alloc(0);
       const err = hadError ? new Error("socket closed with error") : undefined;
       this._closeHandler?.(err);
     });
@@ -67,11 +71,20 @@ export class NodeStreamTransport extends BaseTransport {
    * Dial the transport.
    *
    * Idempotent: a transport built by {@link fromSocket} is already connected,
-   * and `SaikuroClient.open()` connects unconditionally
+   * and `SaikuroClient.open()` connects unconditionally.
+   *
+   * Throws when a socket adopted via {@link fromSocket} has gone away:
+   * adoption carries no dial target, so there is nothing to reconnect to.
    */
   async connect(): Promise<void> {
+    if (this._connected) return;
     const opts = this._connectionOptions;
-    if (opts.type === "socket" || this._socket !== undefined) return;
+    if (opts.type === "socket") {
+      // Adoption carries no dial target, so there is nothing to reconnect to.
+      throw new Error(
+        "cannot reconnect a socket adopted via fromSocket, it has no dial target",
+      );
+    }
 
     const net = await import("net");
     return new Promise((resolve, reject) => {
@@ -92,6 +105,11 @@ export class NodeStreamTransport extends BaseTransport {
       const onConnectError = (err: Error) => reject(err);
       socket.on("error", onConnectError);
     });
+  }
+
+  /** Whether the transport holds a live socket. */
+  get isConnected(): boolean {
+    return this._connected;
   }
 
   private _onData(chunk: Buffer): void {
@@ -119,11 +137,13 @@ export class NodeStreamTransport extends BaseTransport {
   }
 
   async close(): Promise<void> {
+    this._connected = false;
     this._socket?.end();
   }
 
   async send(obj: object): Promise<void> {
     if (this._socket === undefined) throw new Error("not connected");
+    if (!this._connected) throw new Error("not connected");
     const payload = encode(obj) as Uint8Array;
     const frame = buildFrame(payload);
     await new Promise<void>((resolve, reject) => {

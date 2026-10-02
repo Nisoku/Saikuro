@@ -9,6 +9,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+asyncify = ["saikuro-runtime/asyncify"]
+
 [dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

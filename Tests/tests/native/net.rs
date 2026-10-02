@@ -36,16 +36,25 @@ fn tcp_echo_roundtrip() -> Result<(), &'static str> {
             }
         };
 
+        const MESSAGE: &[u8] = b"hello saikuro";
+
         let client = async {
             let mut stream = TcpStream::connect(addr).await.map_err(|_| "connect")?;
             stream
-                .write_all(b"hello saikuro")
+                .write_all(MESSAGE)
                 .await
                 .map_err(|_| "client write")?;
-            let mut buf = [0u8; 64];
-            let n = stream.read(&mut buf).await.map_err(|_| "client read")?;
+            // Half-close so the server's echo loop observes EOF deterministically
+            // rather than depending on the socket being dropped.
+            stream.shutdown().await.map_err(|_| "client shutdown")?;
+            // A single read may return a short read, so require the full echo.
+            let mut buf = [0u8; MESSAGE.len()];
+            stream
+                .read_exact(&mut buf)
+                .await
+                .map_err(|_| "client read")?;
             saikuro_tests::check_test!(
-                &buf[..n] == b"hello saikuro",
+                buf.as_slice() == MESSAGE,
                 "the echoed bytes must match what was sent"
             );
             Ok::<(), &'static str>(())

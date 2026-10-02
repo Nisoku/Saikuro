@@ -14,8 +14,6 @@ class UnixSocketTransport(_StreamTransport):
         super().__init__()
         self._path = path
 
-    async def connect(self) -> None:
-        # Idempotent
-        if self.is_connected:
-            return
+    async def _dial(self) -> None:
         self._reader, self._writer = await asyncio.open_unix_connection(self._path)
+        self._connected = True

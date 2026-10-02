@@ -101,6 +101,63 @@ async def test_connect_on_adopted_tcp_transport_does_not_redial():
 
 
 @pytest.mark.asyncio
+async def test_reconnect_after_peer_eof_dials_again():
+    # A dial transport has to survive the peer hanging up: recv reports EOF,
+    # the transport stops being live, and connect dials a fresh socket.
+    sessions: list[asyncio.StreamWriter] = []
+    connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+
+    async def on_connection(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        sessions.append(writer)
+        if not connected.done():
+            connected.set_result(None)
+        await reader.read()
+
+    server = await asyncio.start_server(on_connection, "127.0.0.1", 0)
+    port = (server.sockets or ())[0].getsockname()[1]
+
+    transport = TcpTransport("127.0.0.1", port)
+    try:
+        await transport.connect()
+        await connected
+
+        # Peer hangup: the writer stays referenced by asyncio, so retention is
+        # not liveness.
+        sessions[0].close()
+        assert await transport.recv() is None
+        assert not transport.is_connected
+
+        await transport.connect()
+        assert transport.is_connected
+        await connected
+
+        # The redial reached the server as a new session.
+        await transport.send({"ping": 5})
+        assert len(sessions) == 2
+    finally:
+        await transport.close()
+        for writer in sessions:
+            writer.close()
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_of_dead_adopted_transport_is_rejected():
+    async with _tcp_pair() as (client, provider_side):
+        await client.close()
+        assert await provider_side.recv() is None
+        assert not provider_side.is_connected
+
+        # Adoption carries no dial target, so this must be an explicit refusal
+        # rather than an AttributeError or a second socket.
+        with pytest.raises(RuntimeError, match="no dial target"):
+            await provider_side.connect()
+
+
+@pytest.mark.asyncio
 async def test_from_stream_adopts_an_accepted_unix_connection():
     async with _unix_pair() as (client, provider_side):
         assert provider_side.is_connected

@@ -2,11 +2,12 @@
  * Tests for the provider/client schema-announce handshake.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { InMemoryTransport } from "../src/transport";
 import { SaikuroClient } from "../src/client";
 import { SaikuroProvider } from "../src/provider";
 import { makeAnnounceEnvelope, makeSchemaObject } from "../src/envelope";
+import { setLogSink, resetLogSink, type LogRecord } from "../src/logger";
 import type { Transport } from "../src/transport";
 
 /** Timeout for calls that must complete without waiting out the handshake. */
@@ -77,6 +78,84 @@ describe("schema announce handshake", () => {
 
     await client.close();
     await servePromise;
+  });
+
+  it("ignores a malformed announce instead of acking an undefined id", async () => {
+    const [clientTransport, providerTransport] = InMemoryTransport.pair();
+
+    const client = SaikuroClient.fromTransport(clientTransport);
+    await client.open();
+
+    const records: LogRecord[] = [];
+    setLogSink((record) => records.push(record));
+
+    // An announce without a usable byte id must not be acked, and must not take
+    // down the connection.
+    await providerTransport.send({
+      type: "announce",
+      id: "not-bytes",
+      schema: makeSchemaObject("math", {}),
+    } as unknown as Record<string, unknown>);
+    await vi.waitFor(() =>
+      expect(records.some((r) => r.msg.includes("without a byte id"))).toBe(
+        true,
+      ),
+    );
+    resetLogSink();
+
+    expect(client.connected).toBe(true);
+    await client.close();
+  });
+
+  it("does not drop a frame that arrived before open", async () => {
+    const [clientTransport, providerTransport] = InMemoryTransport.pair();
+
+    // A response lands while the client is still closed: it stays in the
+    // transport inbox and the pre-open drain has to hand it to the dispatcher
+    // rather than swallow it.
+    await providerTransport.send({
+      id: new Uint8Array([9, 9]),
+      ok: true,
+      result: 1,
+    });
+    await providerTransport.send(
+      makeAnnounceEnvelope(makeSchemaObject("math", {})),
+    );
+
+    const records: LogRecord[] = [];
+    setLogSink((record) => records.push(record));
+
+    const client = SaikuroClient.fromTransport(clientTransport);
+    await client.open();
+    await vi.waitFor(() =>
+      expect(
+        records.some(
+          (r) =>
+            r.msg.includes("no matching pending") &&
+            JSON.stringify(r.state ?? {}).includes("0909"),
+        ),
+      ).toBe(true),
+    );
+    resetLogSink();
+
+    await client.close();
+  });
+
+  it("open() resolves even when the transport recv never yields", async () => {
+    const [clientTransport] = InMemoryTransport.pair();
+    const client = SaikuroClient.fromTransport(clientTransport);
+    // A socket-backed recv waits for the next frame, so open() must not depend
+    // on it returning null to finish the drain.
+    clientTransport.recv = () => new Promise<null>(() => {});
+
+    await expect(
+      Promise.race([
+        client.open().then(() => "opened"),
+        new Promise((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+      ]),
+    ).resolves.toBe("opened");
+
+    await client.close();
   });
 
   it("announce ack is not dispatched to a registered handler", async () => {

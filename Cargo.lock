@@ -2059,6 +2059,7 @@ dependencies = [
  "clap",
  "critical-section",
  "embassy-executor",
+ "embassy-sync",
  "futures",
  "portable-atomic",
  "portable-atomic-util",

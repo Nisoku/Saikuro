@@ -77,7 +77,7 @@ wasm = [
     "wasm-host",
     "dep:wasm-bindgen",
 ]
-asyncify = ["saikuro-exec/asyncify"]
+asyncify = ["saikuro-exec/asyncify", "dep:embassy-sync"]
 embedded = [
     "saikuro-core/embedded",
     "saikuro-schema/embedded",
@@ -132,6 +132,7 @@ wasi = { workspace = true, optional = true }
 embassy-executor = { workspace = true, optional = true }
 saikuro-net = { path = "../saikuro-net", default-features = false, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+embassy-sync = { workspace = true, optional = true }
 talc = { workspace = true }
 
 anyhow = { workspace = true, optional = true }

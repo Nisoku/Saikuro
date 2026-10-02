@@ -266,11 +266,29 @@ fn ensure_public_dirs() -> anyhow::Result<()> {
 
 /// Build a wasm-pack component into `Demo/public/wasm/<out>`.
 fn wasm_pack(src: &Path, out: &str) -> anyhow::Result<()> {
-    crate::asyncify::wasm_pack(src, &paths::public_wasm_dir().join(out), "wasm")
+    crate::asyncify::wasm_pack(
+        src,
+        &paths::public_wasm_dir().join(out),
+        "",
+        crate::asyncify::Asyncify::Off,
+    )
 }
 
 pub(super) fn demo_wasm_runtime() -> anyhow::Result<()> {
     wasm_pack(&wasm_dir().join("runtime"), "runtime")
+}
+
+/// Build the Asyncify version of the runtime demo
+pub(super) fn demo_wasm_runtime_asyncify() -> anyhow::Result<()> {
+    crate::asyncify::wasm_pack(
+        &wasm_dir().join("runtime"),
+        &paths::public_wasm_dir().join("runtime-asyncify"),
+        "asyncify",
+        crate::asyncify::Asyncify::Entry {
+            entry: "asyncify_call",
+            placeholder: crate::asyncify::Placeholder::EmptyString,
+        },
+    )
 }
 
 pub(super) fn demo_wasm_rust() -> anyhow::Result<()> {

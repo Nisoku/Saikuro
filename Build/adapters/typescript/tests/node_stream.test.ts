@@ -4,7 +4,9 @@
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createServer, type Server, type Socket } from "node:net";
+import { encode } from "@msgpack/msgpack";
 import { NodeStreamTransport } from "../src/transport";
+import { buildFrame } from "../src/transport/framing";
 
 /** Address used for loopback binds; port 0 lets the OS pick a free one. */
 const LOOPBACK = "127.0.0.1";
@@ -107,6 +109,53 @@ describe("NodeStreamTransport accept path", () => {
 
     await clientSide.close();
     await serverSide.close();
+  });
+
+  it("stops reporting live once the peer closes, and refuses to redial an adopted socket", async () => {
+    const { serverSide, clientSide } = await connectedPair();
+
+    expect(serverSide.isConnected).toBe(true);
+    await clientSide.close();
+
+    await vi.waitFor(() => expect(serverSide.isConnected).toBe(false));
+
+    // Adoption carries no dial target, so this must be an explicit refusal
+    // rather than silently reporting success while still dead.
+    await expect(serverSide.connect()).rejects.toThrow("no dial target");
+  });
+
+  it("redials a tcp transport after the peer closes", async () => {
+    const sessions: Socket[] = [];
+    const server = createServer((socket) => sessions.push(socket));
+    openServers.push(server);
+    await new Promise<void>((resolve) => {
+      server.listen(0, LOOPBACK, resolve);
+    });
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("expected an IP socket address");
+    }
+
+    const clientSide = NodeStreamTransport.tcp(LOOPBACK, address.port);
+    await clientSide.connect();
+
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+    sessions[0].destroy();
+    await vi.waitFor(() => expect(clientSide.isConnected).toBe(false));
+
+    await clientSide.connect();
+    expect(clientSide.isConnected).toBe(true);
+    await vi.waitFor(() => expect(sessions).toHaveLength(2));
+
+    const received: Record<string, unknown>[] = [];
+    clientSide.onMessage((msg) => received.push(msg));
+    const redialed = sessions[sessions.length - 1]!;
+    redialed.write(buildFrame(encode({ ping: 9 }) as Uint8Array));
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toEqual({ ping: 9 });
+
+    await clientSide.close();
+    for (const socket of sessions) socket.destroy();
   });
 
   it("surfaces a clean peer close without an error", async () => {
