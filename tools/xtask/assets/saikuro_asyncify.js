@@ -17,9 +17,15 @@ export function asyncify_suspend() {
   binding.suspend();
 }
 
-export function createAsyncify(entry, rewindArg) {
-  if (typeof entry !== "function") {
-    throw new Error("saikuro asyncify: entry must be a function");
+export function createAsyncify(entry) {
+  if (
+    entry === null ||
+    typeof entry.call !== "function" ||
+    typeof entry.rewind !== "function"
+  ) {
+    throw new Error(
+      "saikuro asyncify: entry must provide call() and rewind() functions",
+    );
   }
   if (binding !== null) {
     throw new Error(
@@ -68,11 +74,21 @@ export function createAsyncify(entry, rewindArg) {
     state = REWINDING;
     wasm.asyncify_start_rewind(data);
     suspendedThisCall = false;
-    // The rewind restores the frozen stack, so the real argument is already in
-    // place by the time the entry body runs again. The placeholder only has to
-    // satisfy wasm-bindgen's glue, which converts JS arguments before calling
-    // into wasm; the build site picks one matching the entry's signature.
-    const result = entry(rewindArg);
+    // Rewind through `entry.rewind`, which jumps straight into the raw wasm
+    // export. The frozen frame restores its own arguments, so the rewind needs
+    // none.
+    let result;
+    try {
+      result = entry.rewind();
+    } catch (err) {
+      // The resumed body threw, so nothing will resolve or suspend the captured
+      // promise again. Fail it here
+      state = NORMAL;
+      const failed = pending;
+      pending = null;
+      if (failed) failed.reject(err);
+      return;
+    }
     afterEntry();
     if (suspendedThisCall) {
       scheduleResume();
@@ -103,7 +119,7 @@ export function createAsyncify(entry, rewindArg) {
     suspendedThisCall = false;
     let immediate;
     try {
-      immediate = entry(op);
+      immediate = entry.call(op);
     } catch (err) {
       pending = null;
       return Promise.reject(err);

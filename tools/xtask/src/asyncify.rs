@@ -5,7 +5,11 @@
 //! ```toml
 //! [package.metadata.saikuro.asyncify]
 //! entry = "asyncify_entry"
+//! signature = "str" # or "no-args", the default
 //! ```
+//!
+//! `entry` is the blocking `#[wasm_bindgen]` export; `signature` is its ABI
+//! shape, which fixes how the generated glue re-enters it after a rewind.
 //!
 
 use std::borrow::Cow;
@@ -59,30 +63,22 @@ pub enum Asyncify {
     Entry {
         /// The synchronous `#[wasm_bindgen]` export that blocks in `block_on`.
         entry: &'static str,
-        /// How the shim re-enters `entry` after a rewind.
-        placeholder: Placeholder,
+        /// The export's ABI shape, which fixes how the shim re-enters it.
+        signature: Signature,
     },
     /// Do not, even if the manifest opts in.
     Off,
 }
 
-/// How the shim re-enters an entry that takes arguments.
+/// The wasm ABI shape of an asyncify entry. Every supported entry returns a
+/// `String`; the shape only fixes the argument marshalling, and therefore how the
+/// shim re-enters the entry after a rewind.
 #[derive(Clone, Copy)]
-pub enum Placeholder {
-    /// Entry takes no arguments, so re-enter it with nothing.
-    None,
-    /// Entry takes one string; re-enter it with `""`.
-    EmptyString,
-}
-
-impl Placeholder {
-    /// The JS literal passed on every re-entry after the first.
-    fn literal(self) -> &'static str {
-        match self {
-            Placeholder::None => "undefined",
-            Placeholder::EmptyString => "\"\"",
-        }
-    }
+pub enum Signature {
+    /// `fn() -> String`: marshals nothing, so re-entry passes nothing.
+    NoArgs,
+    /// `fn(&str) -> String`: marshals one request string, reused on re-entry.
+    Str,
 }
 
 /// The `#[package.metadata.saikuro.asyncify]` table.
@@ -91,34 +87,29 @@ struct AsyncifyConfig {
     /// Name of the synchronous `#[wasm_bindgen]` export that blocks in
     /// `block_on`. Driven through the generated `callSync`.
     entry: String,
-    /// What the shim passes when it re-enters `entry` after a rewind. Defaults
-    /// to `None`, which is only correct for an entry that takes no arguments.
+    /// The export's ABI shape. Defaults to `NoArgs`, the safe default for an
+    /// entry that takes no arguments.
     #[serde(default)]
-    placeholder: PlaceholderArg,
+    signature: SignatureArg,
 }
 
-/// Manifest spelling of [`Placeholder`].
-#[derive(Deserialize)]
-enum PlaceholderArg {
-    /// Re-enter with `undefined`. Only valid for a zero-argument entry.
-    #[serde(rename = "none")]
-    None,
-    /// Re-enter with `""`. Valid for an entry taking one string.
-    #[serde(rename = "empty-string")]
-    EmptyString,
+/// Manifest spelling of [`Signature`].
+#[derive(Deserialize, Default)]
+enum SignatureArg {
+    /// `fn() -> String`.
+    #[default]
+    #[serde(rename = "no-args")]
+    NoArgs,
+    /// `fn(&str) -> String`.
+    #[serde(rename = "str")]
+    Str,
 }
 
-impl Default for PlaceholderArg {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl From<PlaceholderArg> for Placeholder {
-    fn from(arg: PlaceholderArg) -> Self {
+impl From<SignatureArg> for Signature {
+    fn from(arg: SignatureArg) -> Self {
         match arg {
-            PlaceholderArg::None => Placeholder::None,
-            PlaceholderArg::EmptyString => Placeholder::EmptyString,
+            SignatureArg::NoArgs => Signature::NoArgs,
+            SignatureArg::Str => Signature::Str,
         }
     }
 }
@@ -152,14 +143,14 @@ fn read_config(manifest: &Path) -> anyhow::Result<Option<AsyncifyConfig>> {
 
 /// Instrument the wasm-pack output in `out_dir` for Asyncify.
 pub fn instrument(manifest: &Path, out_dir: &Path, mode: Asyncify) -> anyhow::Result<()> {
-    let (entry, placeholder) = match mode {
+    let (entry, signature) = match mode {
         Asyncify::Off => return Ok(()),
-        Asyncify::Entry { entry, placeholder } => (Cow::Borrowed(entry), placeholder),
+        Asyncify::Entry { entry, signature } => (Cow::Borrowed(entry), signature),
         Asyncify::FromManifest => {
             let Some(config) = read_config(manifest)? else {
                 return Ok(());
             };
-            (Cow::Owned(config.entry), config.placeholder.into())
+            (Cow::Owned(config.entry), config.signature.into())
         }
     };
     let entry = entry.as_ref();
@@ -181,7 +172,7 @@ pub fn instrument(manifest: &Path, out_dir: &Path, mode: Asyncify) -> anyhow::Re
     run_wasm_opt(&wasm)?;
     verify_instrumented(&wasm)?;
     write_shim(out_dir)?;
-    patch_glue(&glue, &entry, placeholder)?;
+    patch_glue(&glue, entry, signature)?;
     println!("  asyncify  instrumented {stem} (entry `{entry}`)");
     Ok(())
 }
@@ -310,7 +301,7 @@ fn write_shim(out_dir: &Path) -> anyhow::Result<()> {
 }
 
 /// Append the `callSync` epilogue to the generated glue.
-fn patch_glue(glue: &Path, entry: &str, placeholder: Placeholder) -> anyhow::Result<()> {
+fn patch_glue(glue: &Path, entry: &str, signature: Signature) -> anyhow::Result<()> {
     let source =
         std::fs::read_to_string(glue).with_context(|| format!("read {}", glue.display()))?;
 
@@ -340,11 +331,53 @@ fn patch_glue(glue: &Path, entry: &str, placeholder: Placeholder) -> anyhow::Res
         );
     }
 
+    // The rewind path must not run instrumented wasm before it reaches the frozen
+    // export frame.
+    let (decl, entry_binding) = match signature {
+        Signature::NoArgs => (
+            "",
+            format!(
+                r#"{{
+  call: () => __saikuro_decode(wasm.{entry}()),
+  rewind: () => __saikuro_decode(wasm.{entry}()),
+}}"#
+            ),
+        ),
+        Signature::Str => (
+            "let __saikuro_request = null;\n",
+            format!(
+                r#"{{
+  call: (request) => {{
+    const ptr = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len = WASM_VECTOR_LEN;
+    __saikuro_request = [ptr, len];
+    return __saikuro_decode(wasm.{entry}(ptr, len));
+  }},
+  rewind: () => __saikuro_decode(wasm.{entry}(__saikuro_request[0], __saikuro_request[1])),
+}}"#
+            ),
+        ),
+    };
+
     let epilogue = format!(
         r#"
 // --- {marker} (generated by xtask; do not edit) ---
 import {{ createAsyncify }} from "./{shim}";
-const __saikuro_asyncify = createAsyncify({entry}, {placeholder});
+
+// A wasm-bindgen `-> String` return is the multi-value pair (ptr, len). Read it,
+// then free it. A frame that suspends again returns (0, 0), which decodes to the
+// empty string that `callSync` discards.
+function __saikuro_decode(ret) {{
+    const ptr = ret[0];
+    const len = ret[1];
+    try {{
+        return getStringFromWasm0(ptr, len);
+    }} finally {{
+        wasm.__wbindgen_free(ptr, len, 1);
+    }}
+}}
+
+{decl}const __saikuro_asyncify = createAsyncify({entry_binding});
 const __saikuro_initSync = initSync;
 initSync = function (module_or_path) {{
     const instance = __saikuro_initSync(module_or_path);
@@ -361,7 +394,8 @@ export const callSync = (op) => __saikuro_asyncify.callSync(op);
 "#,
         marker = EPILOGUE_MARKER,
         shim = SHIM_FILE,
-        placeholder = placeholder.literal(),
+        decl = decl,
+        entry_binding = entry_binding,
     );
 
     std::fs::write(glue, format!("{source}{epilogue}"))

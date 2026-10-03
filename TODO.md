@@ -68,7 +68,7 @@
 - [ ] No streaming read API: `FileBackend::read_file` returns the full `Bytes` or nothing
 - [ ] No range/offset reads, so a header/metadata probe has to pull the whole file
 - [ ] No way to hand a `Blob` back out to JS, so the caller cannot build a URL for `createObjectURL`/`MediaSource` streaming
-- [ ] No permission re-grant logic. `FsAccessStorage::with_config` (`wasm/fs_access.rs:272`) takes an already-granted `FileSystemDirectoryHandle` and nothing calls `queryPermission`/`requestPermission`. A handle persisted to IDB and re-hydrated must have its permission re-requested or every access fails. This is deliberately left to the caller (we would do it in TS), but it needs to be documented
+- [ ] No permission re-grant logic. `FsAccessStorage::with_config` (`wasm/fs_access.rs:272`) takes an already-granted `FileSystemDirectoryHandle` and nothing calls `queryPermission`/`requestPermission`. A handle persisted to IDB and re-hydrated may come back still `granted` or with its permission revoked, so callers must `queryPermission` it and call `requestPermission` only when the state is not `granted`; requesting unconditionally prompts even when access is already allowed. This is deliberately left to the caller (we would do it in TS), but it needs to be documented
 - [ ] Never uses `createSyncAccessHandle` (the fast OPFS path); all reads are async full-file `arrayBuffer` reads. Fine for the blob-URL + metadata use case, not optimal
 - [ ] `FsAccessStorage` hardcodes a single root directory; no multi-directory support per instance (use multiple instances)
 - [ ] `?Send` async traits with `RefCell`/`thread_local` handles are single-threaded-wasm-only. Fine for the browser, but it blocks reuse from workers

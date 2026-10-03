@@ -286,7 +286,7 @@ pub(super) fn demo_wasm_runtime_asyncify() -> anyhow::Result<()> {
         "asyncify",
         crate::asyncify::Asyncify::Entry {
             entry: "asyncify_call",
-            placeholder: crate::asyncify::Placeholder::EmptyString,
+            signature: crate::asyncify::Signature::Str,
         },
     )
 }

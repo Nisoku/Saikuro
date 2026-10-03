@@ -112,7 +112,10 @@ where
         }
 
         let executor = static_executor();
-        let start = super::time::now();
+        // Measure a stall, not total runtime. A pending sleep completes as the
+        // clock advances, so the spin fallback is making progress even when the
+        // sleep outlives the timeout
+        let mut stalled_since = super::time::now();
         loop {
             if cell::is_ready() {
                 break;
@@ -123,19 +126,26 @@ where
                 unsafe { executor.poll() };
             }
             core::hint::spin_loop();
-            if super::time::now().saturating_duration_since(start) > BLOCK_ON_SPIN_TIMEOUT {
-                panic!(
-                    "block_on: spin fallback made no progress after {}s \
-                     ({} sleep{}) - futures waiting on JS timers/events cannot complete while \
-                     wasm spins; run this call inside a JSPI export (COOP/COEP) instead",
-                    BLOCK_ON_SPIN_TIMEOUT.as_secs(),
-                    super::time::pending_sleeps(),
-                    if super::time::pending_sleeps() == 1 {
-                        ""
-                    } else {
-                        "s"
-                    }
-                );
+            if super::time::pending_sleeps() == 0 {
+                if super::time::now().saturating_duration_since(stalled_since)
+                    > BLOCK_ON_SPIN_TIMEOUT
+                {
+                    panic!(
+                        "block_on: spin fallback made no progress after {}s \
+                         ({} sleep{}); futures waiting on JS timers/events cannot complete \
+                         while wasm spins; run this call inside a JSPI export (COOP/COEP) \
+                         instead",
+                        BLOCK_ON_SPIN_TIMEOUT.as_secs(),
+                        super::time::pending_sleeps(),
+                        if super::time::pending_sleeps() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
+                    );
+                }
+            } else {
+                stalled_since = super::time::now();
             }
         }
     }

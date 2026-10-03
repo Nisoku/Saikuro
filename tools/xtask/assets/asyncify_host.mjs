@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const outDir = path.resolve(process.argv[2]);
 const repetitions = Number(process.argv[3] ?? "10");
+const request = "asyncify-probe";
 
 if (!Number.isInteger(repetitions) || repetitions < 1) {
   console.error(`invalid repetition count: ${process.argv[3]}`);
@@ -21,7 +22,14 @@ const module = new WebAssembly.Module(
 glue.initSync({ module });
 
 for (let i = 0; i < repetitions; i++) {
-  const report = await glue.callSync(0);
+  const report = await glue.callSync(request);
+  const echoed = report.match(/asyncify_request=(.*)/);
+  if (echoed === null || echoed[1] !== request) {
+    console.error(
+      `run ${i + 1}: entry did not echo the request; got ${JSON.stringify(echoed?.[1])}\n${report}`,
+    );
+    process.exit(1);
+  }
   const failures = report.match(/asyncify_failed=(\d+)/);
   if (failures === null) {
     console.error(`run ${i + 1}: report has no asyncify_failed marker\n${report}`);

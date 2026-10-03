@@ -168,6 +168,7 @@ adapter = ["dep:saikuro", "dep:saikuro-c", "saikuro-c/native", "saikuro/native"]
 
 [package.metadata.saikuro.asyncify]
 entry = "run_asyncify_suite"
+signature = "str"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
