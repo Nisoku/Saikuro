@@ -149,6 +149,13 @@ wasi-preview2 = [
     "dep:saikuro-client",
     "saikuro-client/no_std",
 ]
+ws-wasi = [
+    "saikuro-transport/ws-wasi",
+    "saikuro-transport/wasi-host",
+    "saikuro-transport/wasi-preview2",
+    "saikuro-transport/wasi-tcp",
+    "saikuro-runtime/wasi-tcp",
+]
 arm = [
     "embedded",
     "dep:cortex-m-rt",

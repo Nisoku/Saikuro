@@ -146,19 +146,40 @@
       <div class="status" id="status-host"></div>
     </section>
 
+    <section>
+      <h2>WebSocket</h2>
+      <p class="note">
+        Client-only: dial a <code>ws://</code> or <code>wss://</code> provider
+        running elsewhere, for example
+        <code>cargo run -p math -- --transport ws --addr 127.0.0.1:9000 --serve-only</code>.
+        A browser cannot serve WebSocket connections.
+      </p>
+      <label>
+        url
+        <input id="ws-url" value="ws://127.0.0.1:9000" spellcheck="false" />
+      </label>
+      <button id="btn-ws">Dial (this tab)</button>
+      <pre id="out-ws">idle</pre>
+      <div class="status" id="status-ws"></div>
+    </section>
+
     <script type="module">
       import init, {
         run_memory,
         run_wasm_host_provider,
         run_wasm_host_client,
+        run_ws_client,
         set_output,
       } from "./pkg/math_wasm.js";
 
       const outMemory = document.getElementById("out-memory");
       const outHost = document.getElementById("out-host");
+      const outWs = document.getElementById("out-ws");
       const statusMemory = document.getElementById("status-memory");
       const statusHost = document.getElementById("status-host");
+      const statusWs = document.getElementById("status-ws");
       const channel = document.getElementById("channel");
+      const wsUrl = document.getElementById("ws-url");
 
       function report(status, message, state) {
         status.textContent = message;
@@ -208,6 +229,14 @@
           .addEventListener("click", (ev) =>
             run(ev.currentTarget, outHost, statusHost, "dialling…", () =>
               run_wasm_host_client(channel.value),
+            ),
+          );
+
+        document
+          .getElementById("btn-ws")
+          .addEventListener("click", (ev) =>
+            run(ev.currentTarget, outWs, statusWs, "dialling…", () =>
+              run_ws_client(wsUrl.value),
             ),
           );
       }

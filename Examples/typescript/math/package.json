@@ -8,10 +8,12 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@nisoku/saikuro": "file:../../../Build/adapters/typescript"
+    "@nisoku/saikuro": "file:../../../Build/adapters/typescript",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.5.0"
   },
   "license": "Apache-2.0"

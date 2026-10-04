@@ -70,12 +70,15 @@ export type { Transport } from "./transport";
 export {
   InMemoryTransport,
   WebSocketTransport,
+  WebSocketListener,
+  WebSocketServerTransport,
   NodeStreamTransport,
   WasmHostTransport,
   WasmHostConnector,
   WasmHostListener,
   makeTransport,
 } from "./transport";
+export type { WebSocketListenerOptions } from "./transport";
 
 // Client
 

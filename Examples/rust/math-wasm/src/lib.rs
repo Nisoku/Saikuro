@@ -92,3 +92,12 @@ pub async fn run_wasm_host_client(channel: String) -> Result<(), JsValue> {
         .map_err(to_js)?;
     math_core::run_demo(client).await.map_err(to_js)
 }
+
+/// Run the shared client demo against a WebSocket provider at `url`.
+#[wasm_bindgen]
+pub async fn run_ws_client(url: String) -> Result<(), JsValue> {
+    use_output_sink();
+    math_core::demo_log!("transport: ws (client dialling {url})");
+    let client = Client::connect(url).await.map_err(to_js)?;
+    math_core::run_demo(client).await.map_err(to_js)
+}

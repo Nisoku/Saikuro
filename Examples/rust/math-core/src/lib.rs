@@ -1,8 +1,9 @@
-use std::net::SocketAddr;
 use std::sync::Mutex;
 
 use saikuro::{Client, Error, MemoryAdapterTransport, Provider, Result};
 use serde_json::Value as JsonValue;
+
+pub const DEFAULT_UNIX_PATH: &str = "/tmp/saikuro-math.sock";
 
 /// Sink for the demo's output lines.
 type LogSink = Box<dyn Fn(&str) + Send + Sync>;
@@ -79,6 +80,10 @@ pub enum TransportChoice {
     Memory,
     /// TCP, via whichever listener the target provides.
     Tcp,
+    /// Unix domain socket. Native Unix targets only.
+    Unix,
+    /// WebSocket, via whichever listener/connector the target provides.
+    WebSocket,
 }
 
 impl TransportChoice {
@@ -87,8 +92,10 @@ impl TransportChoice {
         match value {
             "memory" => Ok(Self::Memory),
             "tcp" => Ok(Self::Tcp),
+            "unix" => Ok(Self::Unix),
+            "ws" | "websocket" => Ok(Self::WebSocket),
             other => Err(Error::ProviderError(format!(
-                "unknown transport '{other}': expected 'memory' or 'tcp'"
+                "unknown transport '{other}': expected 'memory', 'tcp', 'unix', or 'ws'"
             ))),
         }
     }
@@ -98,6 +105,18 @@ impl TransportChoice {
         match self {
             Self::Memory => "memory",
             Self::Tcp => "tcp",
+            Self::Unix => "unix",
+            Self::WebSocket => "ws",
+        }
+    }
+
+    /// The `--addr` value used when the flag is omitted. Empty for transports
+    /// that take no address.
+    pub fn default_addr(self) -> &'static str {
+        match self {
+            Self::Memory => "",
+            Self::Tcp | Self::WebSocket => "127.0.0.1:0",
+            Self::Unix => DEFAULT_UNIX_PATH,
         }
     }
 }
@@ -106,15 +125,17 @@ impl TransportChoice {
 pub struct Options {
     /// Requested transport.
     pub transport: TransportChoice,
-    /// Address the provider listens on for `--transport tcp`.
-    pub addr: SocketAddr,
+    /// Transport-specific address: `HOST:PORT` for tcp/ws, a filesystem path
+    /// for unix, and unused for memory.
+    pub addr: String,
 }
 
 impl Options {
-    /// Parse the command line, defaulting to in-memory on loopback.
+    /// Parse the command line, defaulting to in-memory and a per-transport
+    /// default address.
     pub fn parse<I: Iterator<Item = String>>(args: I) -> Result<Self> {
         let mut transport = TransportChoice::Memory;
-        let mut addr: SocketAddr = "127.0.0.1:0".parse().expect("valid default address");
+        let mut addr: Option<String> = None;
 
         let mut args = args.peekable();
         while let Some(arg) = args.next() {
@@ -129,9 +150,7 @@ impl Options {
                     let value = args
                         .next()
                         .ok_or_else(|| Error::ProviderError("--addr needs a value".into()))?;
-                    addr = value.parse().map_err(|e: std::net::AddrParseError| {
-                        Error::ProviderError(format!("invalid --addr '{value}': {e}"))
-                    })?;
+                    addr = Some(value);
                 }
                 "--help" | "-h" => {
                     print_usage();
@@ -145,13 +164,84 @@ impl Options {
             }
         }
 
-        Ok(Self { transport, addr })
+        Ok(Self {
+            transport,
+            addr: addr.unwrap_or_else(|| transport.default_addr().to_string()),
+        })
     }
 }
 
 /// Print the command line this example accepts.
 pub fn print_usage() {
-    demo_log!("usage: math [--transport memory|tcp] [--addr HOST:PORT]");
+    demo_log!("usage: math [--transport memory|tcp|unix|ws] [--addr HOST:PORT|PATH|URL]");
+}
+
+/// How the provider and client are wired for a run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// Host the provider and dial it in-process (default).
+    Both,
+    /// Only host the provider.
+    ServeOnly,
+    /// Only dial an existing provider.
+    ClientOnly,
+}
+
+/// Split the run-mode flags out of the argument list, rejecting conflicts.
+pub fn split_mode<I: Iterator<Item = String>>(args: I) -> Result<(Mode, Vec<String>)> {
+    let mut serve = false;
+    let mut client = false;
+    let rest: Vec<String> = args
+        .filter(|a| {
+            if a == "--serve-only" {
+                serve = true;
+                false
+            } else if a == "--client-only" {
+                client = true;
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    let mode = match (serve, client) {
+        (true, true) => {
+            return Err(Error::ProviderError(
+                "--serve-only and --client-only are mutually exclusive".into(),
+            ));
+        }
+        (true, false) => Mode::ServeOnly,
+        (false, true) => Mode::ClientOnly,
+        (false, false) => Mode::Both,
+    };
+    Ok((mode, rest))
+}
+
+/// Build the client URL for the selected transport from `options.addr`.
+pub fn client_url(options: &Options) -> String {
+    match options.transport {
+        TransportChoice::Memory => "memory".into(),
+        TransportChoice::Tcp => format!("tcp://{}", options.addr),
+        TransportChoice::Unix => format!("unix://{}", options.addr),
+        TransportChoice::WebSocket => {
+            if options.addr.starts_with("ws://") || options.addr.starts_with("wss://") {
+                options.addr.clone()
+            } else {
+                format!("ws://{}", options.addr)
+            }
+        }
+    }
+}
+
+/// Dial an existing provider and drive the shared demo.
+pub async fn run_client(options: &Options) -> Result<()> {
+    let url = client_url(options);
+    demo_log!(
+        "transport: {} (client dialling {url})",
+        options.transport.name()
+    );
+    let client = Client::connect(&url).await?;
+    run_demo(client).await
 }
 
 /// Read the two operands a math handler expects, defaulting to zero.

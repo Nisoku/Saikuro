@@ -9,7 +9,7 @@ runner = "wasmtime --wasi common"
 
 # wasip2 uses wasmtime's preview2 component support.
 [target.wasm32-wasip2]
-runner = "wasmtime --wasi common"
+runner = "wasmtime --wasi common -S inherit-network=y"
 
 # QEMU embedded target configurations.
 

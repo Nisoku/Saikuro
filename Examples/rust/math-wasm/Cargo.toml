@@ -11,11 +11,12 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [features]
-default = ["wasm", "inmemory", "storage", "wasm-host"]
+default = ["wasm", "inmemory", "storage", "wasm-host", "ws"]
 wasm = ["math-core/wasm", "saikuro-exec/wasm"]
 inmemory = ["math-core/inmemory"]
 storage = ["math-core/storage"]
 wasm-host = ["math-core/wasm-host"]
+ws = ["math-core/ws"]
 
 [dependencies]
 math-core = { path = "../math-core" }

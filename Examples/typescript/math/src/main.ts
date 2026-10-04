@@ -7,20 +7,32 @@
  *   npm start                              # in-memory (default)
  *   npm start -- --transport tcp           # loopback TCP
  *   npm start -- --transport tcp --addr 127.0.0.1:9000
+ *   npm start -- --transport unix          # loopback Unix socket
+ *   npm start -- --transport unix --addr /tmp/math.sock
+ *   npm start -- --transport ws            # loopback WebSocket
+ *   npm start -- --transport ws --addr 127.0.0.1:9000
+ *
+ * The socket modes host a provider and dial it in the same process. Use
+ * `--serve-only` to listen without a local client, or `--client-only` to dial
+ * an existing provider without listening.
  */
 
-import { createServer } from "node:net";
+import { once } from "node:events";
+import { existsSync, unlinkSync } from "node:fs";
+import { createServer, type Server as NetServer, type Socket } from "node:net";
 import {
   InMemoryTransport,
   NodeStreamTransport,
   SaikuroClient,
   SaikuroError,
   SaikuroProvider,
+  WebSocketListener,
   type Transport,
 } from "@nisoku/saikuro";
 
 /** Which transport the example wires the provider and client over. */
-type TransportChoice = "memory" | "tcp";
+type TransportChoice = "memory" | "tcp" | "unix" | "ws";
+type Mode = "both" | "serve-only" | "client-only";
 
 /** Loopback host used when no `--addr` is given. */
 const LOOPBACK = "127.0.0.1";
@@ -28,52 +40,75 @@ const LOOPBACK = "127.0.0.1";
 /** Default listen port. 0 asks the OS for a free port. */
 const DEFAULT_PORT = 0;
 
+/** Default Unix socket path */
+const DEFAULT_UNIX_PATH = "/tmp/saikuro-math.sock";
+
 /** Parsed command line. */
 interface Options {
   transport: TransportChoice;
-  host: string;
-  port: number;
+  mode: Mode;
+  addr: string;
 }
 
-/** Read `--transport` / `--addr` from argv, defaulting to in-memory. */
+/** The default `--addr` for a transport. */
+function defaultAddr(transport: TransportChoice): string {
+  switch (transport) {
+    case "memory":
+      return "";
+    case "tcp":
+    case "ws":
+      return `${LOOPBACK}:${DEFAULT_PORT}`;
+    case "unix":
+      return DEFAULT_UNIX_PATH;
+  }
+}
+
+/** Read the command line, defaulting to in-memory over a per-transport address. */
 function parseOptions(argv: readonly string[]): Options {
-  const options: Options = {
-    transport: "memory",
-    host: LOOPBACK,
-    port: DEFAULT_PORT,
-  };
+  let transport: TransportChoice = "memory";
+  let mode: Mode = "both";
+  let addr: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     switch (arg) {
       case "--transport": {
         const value = argv[++i];
-        if (value !== "memory" && value !== "tcp") {
+        if (value !== "memory" && value !== "tcp" && value !== "unix" && value !== "ws") {
           throw new Error(
-            `unknown transport '${String(value)}': expected 'memory' or 'tcp'`,
+            `unknown transport '${String(value)}': expected 'memory', 'tcp', 'unix', or 'ws'`,
           );
         }
-        options.transport = value;
+        transport = value;
         break;
       }
       case "--addr": {
         const value = argv[++i];
-        const [host, port] = String(value).split(":");
-        if (host === undefined || port === undefined) {
-          throw new Error(`invalid --addr '${String(value)}': expected HOST:PORT`);
+        if (value === undefined || value.length === 0) {
+          throw new Error("--addr needs a value");
         }
-        const parsed = Number.parseInt(port, 10);
-        if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-          throw new Error(`invalid --addr port '${port}'`);
+        addr = value;
+        break;
+      }
+      case "--serve-only": {
+        if (mode === "client-only") {
+          throw new Error("--serve-only and --client-only are mutually exclusive");
         }
-        options.host = host;
-        options.port = parsed;
+        mode = "serve-only";
+        break;
+      }
+      case "--client-only": {
+        if (mode === "serve-only") {
+          throw new Error("--serve-only and --client-only are mutually exclusive");
+        }
+        mode = "client-only";
         break;
       }
       case "--help":
       case "-h": {
         console.log(
-          "usage: math [--transport memory|tcp] [--addr HOST:PORT]",
+          "usage: math [--transport memory|tcp|unix|ws] [--addr HOST:PORT|PATH] " +
+            "[--serve-only|--client-only]",
         );
         process.exit(0);
         break;
@@ -83,7 +118,11 @@ function parseOptions(argv: readonly string[]): Options {
     }
   }
 
-  return options;
+  if (mode !== "both" && transport === "memory") {
+    throw new Error("--serve-only/--client-only need a socket transport");
+  }
+
+  return { transport, mode, addr: addr ?? defaultAddr(transport) };
 }
 
 /**
@@ -173,9 +212,12 @@ async function runDemo(client: SaikuroClient): Promise<void> {
 
 // Transports
 
-/**
- * Wire provider and client directly over a paired in-memory transport.
- */
+/** A bound listener/closable the example can shut down. */
+interface Closable {
+  close(): unknown;
+}
+
+/** Wire provider and client directly over a paired in-memory transport. */
 async function runInMemory(): Promise<void> {
   console.log("transport: in-memory");
 
@@ -183,48 +225,161 @@ async function runInMemory(): Promise<void> {
   await serveOverPair(providerTransport, clientTransport);
 }
 
-/**
- * Bind a loopback TCP listener, serve the provider on the accepted connection,
- * and have the client dial it.
- */
-async function runTcp(options: Options): Promise<void> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    // A failed bind (port in use, bad host) must reject rather than hang.
-    server.once("error", reject);
-    server.listen(options.port, options.host, () => {
-      server.removeListener("error", reject);
-      resolve();
-    });
-  });
-
-  const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("expected an IP socket address");
+/** Serve the provider until the connection closes, reporting failures. */
+async function serveProvider(transport: Transport): Promise<void> {
+  try {
+    await mathProvider().serveOn(transport);
+  } catch (err) {
+    console.error("provider: connection failed:", err);
   }
-  console.log(
-    `transport: tcp (provider listening on ${address.address}:${address.port})`,
-  );
+}
 
-  const accepted = new Promise<import("node:net").Socket>((resolve, reject) => {
-    server.once("connection", (socket) => resolve(socket));
-    server.once("error", reject);
+/** Parse `HOST:PORT`, naming the transport in any error. */
+function parseHostPort(value: string, transport: string): { host: string; port: number } {
+  const [host, portText] = value.split(":");
+  if (host === undefined || portText === undefined) {
+    throw new Error(`invalid --addr '${value}' for ${transport}: expected HOST:PORT`);
+  }
+  const port = Number.parseInt(portText, 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`invalid --addr port '${portText}'`);
+  }
+  return { host, port };
+}
+
+/** Resolve a `net` listen call. */
+function listenServer(server: NetServer, target: { host: string; port: number } | { path: string }): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (err: Error) => reject(err);
+    server.once("error", onError);
+    const done = () => {
+      server.removeListener("error", onError);
+      resolve();
+    };
+    if ("path" in target) {
+      server.listen(target.path, done);
+    } else {
+      server.listen(target.port, target.host, done);
+    }
   });
+}
 
-  // The provider adopts the accepted socket; the client dials it.
-  const clientTransport = NodeStreamTransport.tcp(
-    address.address,
-    address.port,
+/** Wait for the next inbound connection on a `net` server. */
+async function acceptConnection(server: NetServer): Promise<Socket> {
+  const [socket] = (await once(server, "connection")) as [Socket];
+  return socket;
+}
+
+/** Bind a TCP or Unix `net` listener handling the selected mode. */
+async function runNodeStream(
+  options: Options,
+  target: { host: string; port: number } | { path: string },
+): Promise<void> {
+  if ("path" in target && existsSync(target.path)) {
+    // A stale socket file from a previous run would fail the bind.
+    unlinkSync(target.path);
+  }
+
+  const server = createServer();
+  await listenServer(server, target);
+
+  let clientAddress: string;
+  let display: string;
+  if ("path" in target) {
+    clientAddress = `unix://${target.path}`;
+    display = target.path;
+  } else {
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("expected an IP socket address");
+    }
+    clientAddress = `tcp://${address.address}:${address.port}`;
+    display = `${address.address}:${address.port}`;
+  }
+  console.log(`transport: ${options.transport} (provider listening on ${display})`);
+
+  if (options.mode === "serve-only") {
+    for (;;) {
+      const socket = await acceptConnection(server);
+      await serveProvider(NodeStreamTransport.fromSocket(socket));
+    }
+  }
+
+  // Register the accept before dialling so the connection cannot race it.
+  const accepting = acceptConnection(server).then((socket) =>
+    serveProvider(NodeStreamTransport.fromSocket(socket)),
   );
-  await clientTransport.connect();
+  await runClient(clientAddress, accepting, server);
+}
 
-  const socket = await accepted;
-  await serveOverPair(
-    NodeStreamTransport.fromSocket(socket),
-    clientTransport,
-  );
+/** Bind a WebSocket listener handling the selected mode. */
+async function runWebSocket(options: Options): Promise<void> {
+  const { host, port } = parseHostPort(options.addr, "ws");
+  const listener = await WebSocketListener.bind({ host, port });
+  console.log(`transport: ws (provider listening on ${host}:${listener.port})`);
 
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  const clientAddress =
+    options.addr.startsWith("ws://") || options.addr.startsWith("wss://")
+      ? options.addr
+      : `ws://${host}:${listener.port}`;
+
+  if (options.mode === "serve-only") {
+    for (;;) {
+      const transport = await listener.accept();
+      await serveProvider(transport);
+    }
+  }
+
+  const accepting = listener.accept().then((transport) => serveProvider(transport));
+  await runClient(clientAddress, accepting, listener);
+}
+
+/** Dial an existing provider and drive the shared demo. */
+async function runClientOnly(options: Options): Promise<void> {
+  let clientAddress: string;
+  switch (options.transport) {
+    case "memory":
+      clientAddress = "memory";
+      break;
+    case "tcp":
+      clientAddress = `tcp://${options.addr}`;
+      break;
+    case "unix":
+      clientAddress = `unix://${options.addr}`;
+      break;
+    case "ws":
+      clientAddress =
+        options.addr.startsWith("ws://") || options.addr.startsWith("wss://")
+          ? options.addr
+          : `ws://${options.addr}`;
+      break;
+  }
+  console.log(`transport: ${options.transport} (client dialling ${clientAddress})`);
+  const client = await SaikuroClient.connect(clientAddress);
+  try {
+    await runDemo(client);
+  } finally {
+    await client.close();
+  }
+}
+
+/**
+ * Dial `clientAddress`, run the shared demo, then tear down the client, the
+ * provider accept task, and the listener.
+ */
+async function runClient(
+  clientAddress: string,
+  accepting: Promise<void>,
+  listener: Closable,
+): Promise<void> {
+  const client = await SaikuroClient.connect(clientAddress);
+  try {
+    await runDemo(client);
+  } finally {
+    await client.close();
+    await accepting.catch((err: unknown) => console.error("serve failed:", err));
+    await listener.close();
+  }
 }
 
 /**
@@ -251,13 +406,23 @@ async function serveOverPair(
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
-  switch (options.transport) {
-    case "memory":
-      await runInMemory();
-      break;
-    case "tcp":
-      await runTcp(options);
-      break;
+
+  if (options.transport === "memory") {
+    await runInMemory();
+  } else if (options.mode === "client-only") {
+    await runClientOnly(options);
+  } else {
+    switch (options.transport) {
+      case "tcp":
+        await runNodeStream(options, parseHostPort(options.addr, "tcp"));
+        break;
+      case "unix":
+        await runNodeStream(options, { path: options.addr });
+        break;
+      case "ws":
+        await runWebSocket(options);
+        break;
+    }
   }
   console.log("all examples passed");
 }

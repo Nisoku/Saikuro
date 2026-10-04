@@ -355,6 +355,12 @@ fn wasi_tests() -> anyhow::Result<()> {
             "wasi-preview2",
             "wasi-preview2",
         ),
+        (
+            "wasi-preview2,ws-wasi",
+            "wasm32-wasip2",
+            "wasi-preview2",
+            "wasi-preview2 (ws)",
+        ),
     ] {
         run::run(
             &paths::repo_root(),
