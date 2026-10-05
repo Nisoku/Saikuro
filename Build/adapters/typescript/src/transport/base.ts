@@ -26,6 +26,7 @@ export abstract class BaseTransport implements Transport {
    */
   private readonly _undelivered: Record<string, unknown>[] = [];
   private _warnedAboutOverflow = false;
+  private _replaying = false;
 
   abstract connect(): Promise<void>;
   abstract close(): Promise<void>;
@@ -41,7 +42,17 @@ export abstract class BaseTransport implements Transport {
       log.debug("replaying messages buffered before onMessage", {
         count: buffered.length,
       });
-      for (const msg of buffered) handler(msg);
+      this._replaying = true;
+      try {
+        for (const msg of buffered) handler(msg);
+      } finally {
+        this._replaying = false;
+      }
+      // A replayed handler can pull messages in (InMemoryTransport dispatches
+      // synchronously from send). Those queue up so they keep arrival order
+      // behind everything buffered earlier.
+      const queued = this._undelivered.splice(0, this._undelivered.length);
+      for (const msg of queued) handler(msg);
     }
   }
 
@@ -55,6 +66,10 @@ export abstract class BaseTransport implements Transport {
 
   /** Snapshot the current handler set and dispatch to each in registration order. */
   _dispatch(msg: Record<string, unknown>): void {
+    if (this._replaying) {
+      this._bufferOrDrop(msg);
+      return;
+    }
     if (this._messageHandlers.size === 0) {
       this._bufferOrDrop(msg);
       return;

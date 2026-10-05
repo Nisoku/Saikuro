@@ -175,6 +175,26 @@ describe("BaseTransport buffering before onMessage", () => {
     expect(received).toHaveLength(MAX_BUFFERED_MESSAGES);
     expect(received[0]).toEqual({ n: 0 });
   });
+
+  it("replays reentrant messages after everything buffered earlier", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    await b.send({ step: 1 });
+    await b.send({ step: 2 });
+
+    const received: Record<string, unknown>[] = [];
+    a.onMessage((msg) => {
+      received.push(msg);
+      if (msg.step !== undefined) void b.send({ reply: msg.step });
+    });
+
+    // The echoed replies arrived last, so they must not jump the queue.
+    expect(received).toEqual([
+      { step: 1 },
+      { step: 2 },
+      { reply: 1 },
+      { reply: 2 },
+    ]);
+  });
 });
 
 describe("InMemoryTransport.recv", () => {

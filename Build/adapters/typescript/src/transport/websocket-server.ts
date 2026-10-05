@@ -4,6 +4,9 @@ import { BaseTransport } from "./base";
 
 const log = getLogger("saikuro.transport");
 
+/** Most unaccepted transports a listener queues before refusing new peers. */
+export const MAX_PENDING_TRANSPORTS = 64;
+
 //  WebSocket server transport (Node.js)
 
 interface WsSocketLike {
@@ -102,12 +105,12 @@ export class WebSocketListener {
   private readonly _server: WsServerLike;
   private readonly _boundPort: number;
   private readonly _pending: WebSocketServerTransport[] = [];
-  private _waiter:
-    | {
-        resolve: (transport: WebSocketServerTransport) => void;
-        reject: (err: Error) => void;
-      }
-    | undefined = undefined;
+  /** Transports already handed to an accept() caller; shutdown must close them. */
+  private readonly _accepted = new Set<WebSocketServerTransport>();
+  private readonly _waiters: Array<{
+    resolve: (transport: WebSocketServerTransport) => void;
+    reject: (err: Error) => void;
+  }> = [];
   private _closed = false;
 
   private constructor(server: WsServerLike, boundPort: number) {
@@ -120,11 +123,19 @@ export class WebSocketListener {
         socket.close(1001, "server closed");
         return;
       }
+      if (this._pending.length >= MAX_PENDING_TRANSPORTS) {
+        socket.close(1013, "too many pending connections");
+        return;
+      }
       // Wrap the socket here rather than in accept()
       const transport = WebSocketServerTransport.fromSocket(socket);
-      const waiter = this._waiter;
+      // A peer that disappears before it is accepted must not sit in the queue
+      // forever, and must not keep shutdown waiting on it.
+      socket.on("close", () => this._forget(transport));
+      socket.on("error", () => this._forget(transport));
+      const waiter = this._waiters.shift();
       if (waiter !== undefined) {
-        this._waiter = undefined;
+        this._accepted.add(transport);
         waiter.resolve(transport);
       } else {
         this._pending.push(transport);
@@ -190,10 +201,27 @@ export class WebSocketListener {
     }
     const queued = this._pending.shift();
     if (queued !== undefined) {
+      this._accepted.add(queued);
       return Promise.resolve(queued);
     }
     return new Promise<WebSocketServerTransport>((resolve, reject) => {
-      this._waiter = { resolve, reject };
+      this._waiters.push({ resolve, reject });
+    });
+  }
+
+  /** Drop a transport whose peer went away. */
+  private _forget(transport: WebSocketServerTransport): void {
+    const index = this._pending.indexOf(transport);
+    if (index !== -1) {
+      this._pending.splice(index, 1);
+    }
+    this._accepted.delete(transport);
+  }
+
+  /** Close a transport whose close failure must not abort shutdown. */
+  private _closeQuietly(transport: WebSocketServerTransport): void {
+    transport.close().catch((err: unknown) => {
+      log.debug("ws server transport close failed", { err: String(err) });
     });
   }
 
@@ -203,15 +231,21 @@ export class WebSocketListener {
   close(): Promise<void> {
     this._closed = true;
 
-    // A parked accept() has to be woken
-    const waiter = this._waiter;
-    this._waiter = undefined;
-    waiter?.reject(new Error("WebSocketListener is closed"));
+    // Every parked accept() has to be woken
+    for (const waiter of this._waiters.splice(0)) {
+      waiter.reject(new Error("WebSocketListener is closed"));
+    }
 
     // Transports nobody accepted belong to peers that would otherwise hold an
     // open connection nothing will ever serve.
     for (const transport of this._pending.splice(0)) {
-      transport.close();
+      this._closeQuietly(transport);
+    }
+
+    // ws only settles close() once every client is gone, so the ones already
+    // handed out have to be closed first or close() never resolves.
+    for (const transport of this._accepted) {
+      this._closeQuietly(transport);
     }
 
     return new Promise<void>((resolve, reject) => {

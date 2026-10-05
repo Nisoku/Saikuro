@@ -19,6 +19,7 @@ export type { Transport } from "./types";
 export { InMemoryTransport } from "./memory";
 export { WebSocketTransport } from "./websocket";
 export {
+  MAX_PENDING_TRANSPORTS,
   WebSocketListener,
   WebSocketServerTransport,
 } from "./websocket-server";

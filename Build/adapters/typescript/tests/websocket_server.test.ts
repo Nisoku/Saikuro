@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  MAX_PENDING_TRANSPORTS,
   WebSocketListener,
   WebSocketServerTransport,
   WebSocketTransport,
@@ -149,5 +150,118 @@ describe("WebSocketListener / WebSocketServerTransport", () => {
     await listener.close();
 
     await expect(listener.close()).rejects.toThrow();
+  });
+
+  it("settles every accept when two run concurrently", async () => {
+    const listener = await WebSocketListener.bind({
+      host: "127.0.0.1",
+      port: 0,
+    });
+    try {
+      // Both park before either client arrives, so a single-slot waiter would
+      // strand the first promise forever.
+      const first = listener.accept();
+      const second = listener.accept();
+
+      const clientA = new WebSocketTransport(`ws://127.0.0.1:${listener.port}`);
+      const clientB = new WebSocketTransport(`ws://127.0.0.1:${listener.port}`);
+      await Promise.all([clientA.connect(), clientB.connect()]);
+
+      const transports = await Promise.all([first, second]);
+      expect(transports).toHaveLength(2);
+      expect(transports[0]).not.toBe(transports[1]);
+
+      await clientA.close();
+      await clientB.close();
+      await Promise.all(transports.map((t) => t.close()));
+    } finally {
+      await listener.close();
+    }
+  });
+
+  it("rejects every parked accept on close", async () => {
+    const listener = await WebSocketListener.bind({
+      host: "127.0.0.1",
+      port: 0,
+    });
+    const parked = [listener.accept(), listener.accept(), listener.accept()];
+    await listener.close();
+
+    for (const promise of parked) {
+      await expect(promise).rejects.toThrow("closed");
+    }
+  });
+
+  it("drops a queued transport whose peer disconnected", async () => {
+    const listener = await WebSocketListener.bind({
+      host: "127.0.0.1",
+      port: 0,
+    });
+    try {
+      const doomed = new WebSocketTransport(`ws://127.0.0.1:${listener.port}`);
+      await doomed.connect();
+      // Give the server's connection handler time to queue it.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await doomed.close();
+
+      // The dead peer must not be handed to the next accept() caller.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const live = new WebSocketTransport(`ws://127.0.0.1:${listener.port}`);
+      const [transport] = await Promise.all([
+        listener.accept(),
+        live.connect(),
+      ]);
+      expect(transport.isConnected).toBe(true);
+
+      await live.close();
+      await transport.close();
+    } finally {
+      await listener.close();
+    }
+  });
+
+  it("refuses connections past the pending limit", async () => {
+    const listener = await WebSocketListener.bind({
+      host: "127.0.0.1",
+      port: 0,
+    });
+    const clients: WebSocketTransport[] = [];
+    let refused = 0;
+    try {
+      for (let i = 0; i < MAX_PENDING_TRANSPORTS + 3; i++) {
+        const client = new WebSocketTransport(
+          `ws://127.0.0.1:${listener.port}`,
+        );
+        // connect() resolves before the server's refusal reaches the client.
+        client.onClose(() => {
+          refused += 1;
+        });
+        await client.connect();
+        clients.push(client);
+      }
+      await waitFor(() => refused > 0);
+    } finally {
+      for (const client of clients) await client.close();
+      await listener.close();
+    }
+  });
+
+  it("settles close while an accepted client is still connected", async () => {
+    const listener = await WebSocketListener.bind({
+      host: "127.0.0.1",
+      port: 0,
+    });
+    const client = new WebSocketTransport(`ws://127.0.0.1:${listener.port}`);
+    const [transport] = await Promise.all([
+      listener.accept(),
+      client.connect(),
+    ]);
+    expect(transport.isConnected).toBe(true);
+
+    // ws defers its close callback until every client is gone
+    await listener.close();
+
+    await client.close();
+    await transport.close();
   });
 });

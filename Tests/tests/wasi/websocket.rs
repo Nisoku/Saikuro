@@ -1,5 +1,6 @@
 //! WASI WebSocket transport: server upgrade plus a loopback round-trip.
 
+use alloc::boxed::Box;
 use alloc::format;
 use core::future::Future;
 use core::pin::Pin;
