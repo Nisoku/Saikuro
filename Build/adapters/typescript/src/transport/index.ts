@@ -18,6 +18,12 @@ import { Transport } from "./types";
 export type { Transport } from "./types";
 export { InMemoryTransport } from "./memory";
 export { WebSocketTransport } from "./websocket";
+export {
+  MAX_PENDING_TRANSPORTS,
+  WebSocketListener,
+  WebSocketServerTransport,
+} from "./websocket-server";
+export type { WebSocketListenerOptions } from "./websocket-server";
 export { NodeStreamTransport } from "./node-stream";
 export { WasmHostTransport } from "./wasmhost";
 export { WasmHostConnector, WasmHostListener } from "./wasmhost";

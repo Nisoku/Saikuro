@@ -9,3 +9,13 @@ pub async fn start_runtime(channel: String) -> Result<(), JsValue> {
     saikuro_runtime::wasm::start_runtime(channel);
     Ok(())
 }
+
+/// Blocking JSON entry for hosts without JSPI. Call it through the
+/// `callSync` wrapper that `xtask` appends to the generated glue:
+///
+/// ```js
+/// import init, { callSync } from "./pkg/saikuro_web_runtime.js";
+/// const response = JSON.parse(await callSync(JSON.stringify(envelope)));
+/// ```
+#[cfg(feature = "asyncify")]
+pub use saikuro_runtime::wasm::asyncify_call;

@@ -40,6 +40,61 @@ compile_error!(
      or enable `std` on the wasm engine."
 );
 
+/// Gate items that exist only for engines with a *passive* transport, i.e. an
+/// engine that can accept a connection and so needs `from_halves`
+macro_rules! passive_engine_items {
+    (for native; $($item:item)*) => {
+        $(
+            #[cfg(all(
+                feature = "native",
+                any(
+                    feature = "tcp",
+                    feature = "unix",
+                    feature = "ws",
+                    feature = "ws-wasi",
+                    feature = "wasm",
+                    feature = "wasm-host",
+                    feature = "wasi-tcp",
+                    feature = "wasi-host"
+                )
+            ))]
+            $item
+        )*
+    };
+    (for non_native; $($item:item)*) => {
+        $(
+            #[cfg(all(
+                not(feature = "native"),
+                any(
+                    feature = "tcp",
+                    feature = "unix",
+                    feature = "ws",
+                    feature = "ws-wasi",
+                    feature = "wasm",
+                    feature = "wasm-host",
+                    feature = "wasi-tcp",
+                    feature = "wasi-host"
+                )
+            ))]
+            $item
+        )*
+    };
+    ($($item:item)*) => {
+        $(
+            #[cfg(any(
+                feature = "tcp",
+                feature = "unix",
+                feature = "ws",
+                feature = "ws-wasi",
+                feature = "wasm",
+                feature = "wasm-host",
+                feature = "wasi-tcp",
+                feature = "wasi-host"
+            ))]
+            $item
+        )*
+    };
+}
 pub mod shared;
 
 #[cfg(feature = "native")]
@@ -67,6 +122,10 @@ pub mod wasi;
 pub use wasi::*;
 
 pub use shared::adapter::{connect, AdapterTransport, MemoryAdapterTransport};
+
+passive_engine_items! {
+    pub use shared::adapter::from_halves;
+}
 pub use shared::error::TransportError;
 pub use shared::host::{
     HostPipeFactory, HostPipeRecv, HostPipeSend, Role, WasmHostConnector, WasmHostListener,

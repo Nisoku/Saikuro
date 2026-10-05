@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Saikuro math example</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #16181d;
+        --muted: #5b6472;
+        --line: #d8dde5;
+        --accent: #2f5fd0;
+        --bg: #fbfcfd;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #e6e9ef;
+          --muted: #9aa4b2;
+          --line: #2c323c;
+          --accent: #7ba2f5;
+          --bg: #14171c;
+        }
+      }
+      body {
+        margin: 0 auto;
+        max-width: 46rem;
+        padding: 2.5rem 1.25rem 4rem;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 {
+        margin: 0 0 0.25rem;
+        font-size: 1.4rem;
+        letter-spacing: -0.01em;
+      }
+      p.lede {
+        margin: 0 0 1.75rem;
+        color: var(--muted);
+      }
+      section {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem 1.15rem;
+        margin-bottom: 1rem;
+      }
+      h2 {
+        margin: 0 0 0.35rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+      p.note {
+        margin: 0 0 0.8rem;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fff;
+        border-radius: 7px;
+        padding: 0.45rem 0.9rem;
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: progress;
+      }
+      label {
+        display: inline-flex;
+        gap: 0.4rem;
+        align-items: center;
+        margin-right: 0.75rem;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      input {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--fg);
+        padding: 0.35rem 0.5rem;
+        font: inherit;
+        font-size: 0.875rem;
+        width: 12rem;
+      }
+      pre {
+        margin: 0.9rem 0 0;
+        padding: 0.7rem 0.8rem;
+        min-height: 7.5rem;
+        max-height: 22rem;
+        overflow: auto;
+        background: color-mix(in srgb, var(--fg) 5%, transparent);
+        border-radius: 7px;
+        font: 12.5px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        white-space: pre-wrap;
+      }
+      .status {
+        margin-top: 0.5rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .status[data-state="error"] {
+        color: #c0392b;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Saikuro math example</h1>
+    <p class="lede">
+      One math provider and one client, built from <code>math-core</code> for the browser.
+    </p>
+
+    <section>
+      <h2>In-memory</h2>
+      <p class="note">
+        Provider and client in this page, over in-process MPSC channels. Runs on load.
+      </p>
+      <pre id="out-memory">running…</pre>
+      <div class="status" id="status-memory"></div>
+    </section>
+
+    <section>
+      <h2>In-realm (BroadcastChannel)</h2>
+      <p class="note">
+        Provider and client in two same-origin contexts, over a
+        <code>BroadcastChannel</code> rendezvous. Open this page in a second tab and
+        provide on the same channel, then dial. Tab order does not matter btw as the
+        client half re-announces until the accept lands.
+      </p>
+      <label>
+        channel
+        <input id="channel" value="saikuro-math" spellcheck="false" />
+      </label>
+      <button id="btn-provide">Provide (this tab)</button>
+      <button id="btn-dial" class="secondary">Dial (this tab)</button>
+      <pre id="out-host">idle</pre>
+      <div class="status" id="status-host"></div>
+    </section>
+
+    <section>
+      <h2>WebSocket</h2>
+      <p class="note">
+        Client-only: dial a <code>ws://</code> or <code>wss://</code> provider
+        running elsewhere, for example
+        <code>cargo run -p math -- --transport ws --addr 127.0.0.1:9000 --serve-only</code>.
+        A browser cannot serve WebSocket connections.
+      </p>
+      <label>
+        url
+        <input id="ws-url" value="ws://127.0.0.1:9000" spellcheck="false" />
+      </label>
+      <button id="btn-ws">Dial (this tab)</button>
+      <pre id="out-ws">idle</pre>
+      <div class="status" id="status-ws"></div>
+    </section>
+
+    <script type="module">
+      import init, {
+        run_memory,
+        run_wasm_host_provider,
+        run_wasm_host_client,
+        run_ws_client,
+        set_output,
+      } from "./pkg/math_wasm.js";
+
+      const outMemory = document.getElementById("out-memory");
+      const outHost = document.getElementById("out-host");
+      const outWs = document.getElementById("out-ws");
+      const statusMemory = document.getElementById("status-memory");
+      const statusHost = document.getElementById("status-host");
+      const statusWs = document.getElementById("status-ws");
+      const channel = document.getElementById("channel");
+      const wsUrl = document.getElementById("ws-url");
+
+      function report(status, message, state) {
+        status.textContent = message;
+        if (state) status.dataset.state = state;
+        else delete status.dataset.state;
+      }
+
+      // Mirror one demo line into a <pre>, scrolling as it grows.
+      function tee(target) {
+        return (line) => {
+          target.textContent += line + "\n";
+          target.scrollTop = target.scrollHeight;
+        };
+      }
+
+      async function run(button, out, status, label, call) {
+        const previous = button ? button.disabled : false;
+        if (button) button.disabled = true;
+        out.textContent = label + "\n";
+        set_output(tee(out));
+        try {
+          await call();
+          report(status, "done");
+        } catch (e) {
+          report(status, "failed: " + (e?.message ?? e), "error");
+        } finally {
+          set_output(null);
+          if (button) button.disabled = previous;
+        }
+      }
+
+      async function main() {
+        await init();
+
+        await run(null, outMemory, statusMemory, "running in-memory demo…", run_memory);
+
+        document
+          .getElementById("btn-provide")
+          .addEventListener("click", (ev) =>
+            run(ev.currentTarget, outHost, statusHost, "waiting for a client…", () =>
+              run_wasm_host_provider(channel.value),
+            ),
+          );
+
+        document
+          .getElementById("btn-dial")
+          .addEventListener("click", (ev) =>
+            run(ev.currentTarget, outHost, statusHost, "dialling…", () =>
+              run_wasm_host_client(channel.value),
+            ),
+          );
+
+        document
+          .getElementById("btn-ws")
+          .addEventListener("click", (ev) =>
+            run(ev.currentTarget, outWs, statusWs, "dialling…", () =>
+              run_ws_client(wsUrl.value),
+            ),
+          );
+      }
+
+      main().catch((e) => {
+        outMemory.textContent = "startup failed: " + e;
+        report(statusMemory, "startup failed: " + (e?.message ?? e), "error");
+      });
+    </script>
+  </body>
+</html>

@@ -3,6 +3,7 @@
 pub mod adapter;
 pub mod core;
 pub mod exec;
+pub mod net;
 pub mod storage;
 
 /// Register host-only tests into the shared [`TestSuite`](saikuro_tests::TestSuite) instance the native
@@ -12,5 +13,6 @@ pub fn register(suite: &mut saikuro_tests::TestSuite) {
     adapter::register(suite);
     core::register(suite);
     exec::register(suite);
+    net::register(suite);
     storage::register(suite);
 }

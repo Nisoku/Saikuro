@@ -1,3 +1,5 @@
+//! Executor entry point shared by the no_std and embedded engines.
+
 #[cfg(any(feature = "no_std", feature = "embedded"))]
 use core::future::Future;
 #[cfg(any(feature = "no_std", feature = "embedded"))]
@@ -59,15 +61,49 @@ async fn task_runner() {
     }
 }
 
+/// Shared failure for a `block_on` invoked from inside a future this runtime is
+/// already driving.
+#[cold]
+#[track_caller]
+pub(crate) fn nested_block_on_panic() -> ! {
+    panic!(
+        "block_on: called from inside the executor (a task on this runtime is already driving \
+         it); this would deadlock so restructure the task to `await` instead"
+    );
+}
+
+/// Nesting depth of the embedded `block_on` poll loop.
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+static BLOCK_ON_DEPTH: portable_atomic::AtomicUsize = portable_atomic::AtomicUsize::new(0);
+
+/// Releases a [`BLOCK_ON_DEPTH`] reservation on drop, including on unwind.
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+struct BlockOnDepthGuard;
+
+#[cfg(any(feature = "no_std", feature = "embedded"))]
+impl Drop for BlockOnDepthGuard {
+    fn drop(&mut self) {
+        BLOCK_ON_DEPTH.fetch_sub(1, core::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// Run `fut` to completion on the spin executor. Loops until `fut` resolves so
 /// the result can be returned. Used by the no_std and embedded engines; the
 /// wasm engine drives work through `wasm::pump` instead.
+///
+/// Panics if called from inside a future already being driven.
 #[cfg(any(feature = "no_std", feature = "embedded"))]
 pub fn block_on<F>(fut: F) -> F::Output
 where
     F: Future + 'static,
     F::Output: 'static,
 {
+    use core::sync::atomic::Ordering;
+    if BLOCK_ON_DEPTH.load(Ordering::SeqCst) != 0 {
+        nested_block_on_panic();
+    }
+    BLOCK_ON_DEPTH.fetch_add(1, Ordering::SeqCst);
+    let _depth = BlockOnDepthGuard;
     block_on_inner(fut)
 }
 
@@ -102,7 +138,7 @@ where
     }
 }
 
-fn static_executor() -> &'static ArchExecutor {
+pub(crate) fn static_executor() -> &'static ArchExecutor {
     use core::sync::atomic::Ordering;
     static mut EXECUTOR: Option<ArchExecutor> = None;
     static EXECUTOR_INIT: portable_atomic::AtomicBool = portable_atomic::AtomicBool::new(false);

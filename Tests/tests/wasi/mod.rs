@@ -2,4 +2,15 @@
 
 use saikuro_tests::TestSuite;
 
-pub fn register(_suite: &mut TestSuite) {}
+#[cfg(feature = "ws-wasi")]
+mod websocket;
+
+#[cfg(feature = "wasi-preview2")]
+mod tcp;
+
+pub fn register(suite: &mut TestSuite) {
+    #[cfg(feature = "ws-wasi")]
+    websocket::register(suite);
+    #[cfg(feature = "wasi-preview2")]
+    tcp::register(suite);
+}

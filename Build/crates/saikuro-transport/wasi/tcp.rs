@@ -12,7 +12,7 @@ use crate::shared::error::{Result, TransportError};
 use crate::shared::framing::{read_frame, write_frame, AsyncByteRead, AsyncByteWrite};
 use crate::shared::traits::{
     LocalTransport, LocalTransportConnector, LocalTransportListener, LocalTransportReceiver,
-    LocalTransportSender,
+    LocalTransportSender, TransportReceiver, TransportSender,
 };
 use crate::wasi::tcp::backend::{Connection, Listener};
 
@@ -31,7 +31,7 @@ pub use crate::wasi::preview1 as backend;
 #[cfg(feature = "wasi-preview2")]
 pub use crate::wasi::preview2 as backend;
 
-/// Raw byte I/O over a WASI socket connection.
+/// Blocking raw byte I/O over a WASI socket connection.
 pub trait WasiConn {
     /// Read up to `buf.len()` bytes into `buf`, returning the count (0 = EOF).
     fn read_bytes(&self, buf: &mut [u8]) -> Result<usize>;
@@ -39,26 +39,36 @@ pub trait WasiConn {
     fn write_bytes(&self, buf: &[u8]) -> Result<()>;
 }
 
-/// Borrowing reader half that adapts a [`WasiConn`] to [`AsyncByteRead`].
-pub struct WasiReader<'a, C: WasiConn>(&'a C);
+/// Asynchronous raw byte I/O over a WASI socket connection.
+pub trait WasiAsyncConn {
+    /// Read up to `buf.len()` bytes into `buf`, returning the count (0 = EOF).
+    async fn read_bytes(&self, buf: &mut [u8]) -> Result<usize>;
+    /// Write the entirety of `buf`.
+    async fn write_bytes(&self, buf: &[u8]) -> Result<()>;
+    /// Flush buffered output.
+    async fn flush(&self) -> Result<()>;
+}
 
-/// Borrowing writer half that adapts a [`WasiConn`] to [`AsyncByteWrite`].
-pub struct WasiWriter<'a, C: WasiConn>(&'a C);
+/// Borrowing reader half that adapts a [`WasiAsyncConn`] to [`AsyncByteRead`].
+pub struct WasiReader<'a, C: WasiAsyncConn>(&'a C);
 
-impl<'a, C: WasiConn> AsyncByteRead for WasiReader<'a, C> {
+/// Borrowing writer half that adapts a [`WasiAsyncConn`] to [`AsyncByteWrite`].
+pub struct WasiWriter<'a, C: WasiAsyncConn>(&'a C);
+
+impl<'a, C: WasiAsyncConn> AsyncByteRead for WasiReader<'a, C> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.0.read_bytes(buf)
+        self.0.read_bytes(buf).await
     }
 }
 
-impl<'a, C: WasiConn> AsyncByteWrite for WasiWriter<'a, C> {
+impl<'a, C: WasiAsyncConn> AsyncByteWrite for WasiWriter<'a, C> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        self.0.write_bytes(buf)?;
+        self.0.write_bytes(buf).await?;
         Ok(buf.len())
     }
 
     async fn flush(&mut self) -> Result<()> {
-        Ok(())
+        self.0.flush().await
     }
 }
 
@@ -118,6 +128,13 @@ pub struct WasiTcpSender {
     conn: Arc<Connection>,
 }
 
+impl WasiTcpSender {
+    /// Half-close the shared socket so the peer observes EOF.
+    async fn shutdown_send(&mut self) -> Result<()> {
+        self.conn.shutdown_send()
+    }
+}
+
 #[async_trait(?Send)]
 impl LocalTransportSender for WasiTcpSender {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
@@ -125,7 +142,7 @@ impl LocalTransportSender for WasiTcpSender {
     }
 
     async fn close(&mut self) -> Result<()> {
-        Ok(())
+        self.shutdown_send().await
     }
 }
 
@@ -139,6 +156,54 @@ pub struct WasiTcpReceiver {
 impl LocalTransportReceiver for WasiTcpReceiver {
     async fn recv(&mut self) -> Result<Option<Bytes>> {
         read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+    }
+}
+
+/// Bridge the WASI TCP halves onto the engine's boxed [`TransportSender`] /
+/// [`TransportReceiver`] traits.
+#[cfg(feature = "native")]
+mod send_impls {
+    use super::*;
+
+    #[async_trait]
+    impl TransportSender for WasiTcpSender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            write_frame(&mut WasiWriter(self.conn.as_ref()), &frame).await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            self.shutdown_send().await
+        }
+    }
+
+    #[async_trait]
+    impl TransportReceiver for WasiTcpReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+        }
+    }
+}
+
+#[cfg(not(feature = "native"))]
+mod nosend_impls {
+    use super::*;
+
+    #[async_trait(?Send)]
+    impl TransportSender for WasiTcpSender {
+        async fn send(&mut self, frame: Bytes) -> Result<()> {
+            write_frame(&mut WasiWriter(self.conn.as_ref()), &frame).await
+        }
+
+        async fn close(&mut self) -> Result<()> {
+            self.shutdown_send().await
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TransportReceiver for WasiTcpReceiver {
+        async fn recv(&mut self) -> Result<Option<Bytes>> {
+            read_frame(&mut WasiReader(self.conn.as_ref()), self.max_frame_size).await
+        }
     }
 }
 
@@ -159,7 +224,7 @@ impl LocalTransportConnector for WasiTcpConnector {
     type Output = WasiTcpTransport;
 
     async fn connect(&self) -> Result<Self::Output> {
-        let conn = backend::connect(&self.addr)?;
+        let conn = backend::connect(&self.addr).await?;
         Ok(WasiTcpTransport::new(conn, self.addr.clone()))
     }
 }
@@ -177,6 +242,16 @@ impl WasiTcpListener {
             inner: backend::listen(port)?,
         })
     }
+
+    /// Return the local port this listener is bound to.
+    pub fn local_port(&self) -> Result<u16> {
+        self.inner.local_port()
+    }
+
+    /// Accept one inbound connection and return its raw socket unframed.
+    pub async fn accept_conn(&mut self) -> Result<Option<Arc<Connection>>> {
+        Ok(Some(self.inner.accept().await?))
+    }
 }
 
 #[async_trait(?Send)]
@@ -184,7 +259,10 @@ impl LocalTransportListener for WasiTcpListener {
     type Output = WasiTcpTransport;
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
-        let conn = self.inner.accept()?;
+        let conn = match self.accept_conn().await? {
+            Some(conn) => conn,
+            None => return Ok(None),
+        };
         Ok(Some(WasiTcpTransport::new(conn, String::new())))
     }
 

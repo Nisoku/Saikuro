@@ -243,6 +243,7 @@ pub fn run_lang(lang: Lang, verb: &str) -> anyhow::Result<()> {
         (Lang::Demo, "build-cpp") => demo_wasm_cpp(),
         (Lang::Demo, "build-csharp") => demo_wasm_csharp(),
         (Lang::Demo, "build-rust-runtime") => demo_wasm_runtime(),
+        (Lang::Demo, "build-rust-runtime-asyncify") => demo_wasm_runtime_asyncify(),
         (Lang::Demo, "build-rust-provider") => demo_wasm_rust(),
         (Lang::Demo, "build-rust") => demo_wasm_rust_all(),
         (Lang::Demo, "build-python") => demo_wasm_python(),

@@ -2,11 +2,12 @@
 Transport abstraction for the Python Saikuro adapter.
 
 Implementations:
-  - UnixSocketTransport  (same-machine, Unix only)
-  - TcpTransport         (cross-machine)
-  - WebSocketTransport   (ws:// or wss://)
-  - InMemoryTransport    (in-process testing)
-  - WasmHostTransport    (Pyodide WASM environment)
+  - UnixSocketTransport      (same-machine, Unix only)
+  - TcpTransport             (cross-machine)
+  - WebSocketTransport       (ws:// or wss:// client)
+  - WebSocketListener        (WebSocket server; yields accepted transports)
+  - InMemoryTransport        (in-process testing)
+  - WasmHostTransport        (Pyodide WASM environment)
 """
 
 from __future__ import annotations
@@ -18,7 +19,11 @@ from saikuro.transport.memory import InMemoryTransport
 from saikuro.transport.tcp import TcpTransport
 from saikuro.transport.unix import UnixSocketTransport
 from saikuro.transport.wasm_host import WasmHostTransport
-from saikuro.transport.websocket import WebSocketTransport
+from saikuro.transport.websocket import (
+    WebSocketListener,
+    WebSocketServerTransport,
+    WebSocketTransport,
+)
 
 __all__ = [
     "BaseTransport",
@@ -26,6 +31,8 @@ __all__ = [
     "TcpTransport",
     "UnixSocketTransport",
     "WasmHostTransport",
+    "WebSocketListener",
+    "WebSocketServerTransport",
     "WebSocketTransport",
     "make_transport",
     "reset_transport_factory",

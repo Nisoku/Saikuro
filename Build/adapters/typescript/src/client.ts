@@ -225,6 +225,11 @@ export class SaikuroClient {
 
   private _connected = false;
 
+  /**
+   * Frames already handed to `_handleRaw` by the `onMessage` handler
+   */
+  private readonly _handledViaCallback = new WeakSet<Record<string, unknown>>();
+
   private constructor(transport: Transport, options: ClientOptions = {}) {
     this._transport = transport;
     this._options = {
@@ -277,9 +282,80 @@ export class SaikuroClient {
     this._connected = true;
     log.info("client connected");
 
-    this._transport.onMessage((raw) => this._handleRaw(raw));
+    this._transport.onMessage((raw) => {
+      this._handledViaCallback.add(raw);
+      this._handleRaw(raw);
+    });
     this._transport.onClose((err) => this._handleClose(err));
+
+    await this._drainAnnounces();
   }
+
+  /**
+   * Acknowledge any `announce` envelopes already sitting in the transport's
+   * inbox before `open` returns.
+   *
+   * The transport pushes frames to `onMessage` handlers as well as queueing
+   * them for `recv`, so this must only consume the queue copy. A frame that
+   * arrived before `open` registered its handler was never dispatched and is
+   * still handled here; one that arrived afterwards is already in
+   * `_handledViaCallback` and is dropped to keep it single-delivered. Anything
+   * that is not an announce is handed to {@link _handleRaw} so a frame that
+   * arrived before `open` is not silently dropped.
+   */
+  private async _drainAnnounces(): Promise<void> {
+    const deadline = Date.now() + SaikuroClient.ANNOUNCE_DRAIN_GRACE_MS;
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return;
+
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expiry = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), remaining);
+      });
+      try {
+        const raw = await Promise.race([this._transport.recv(), expiry]);
+        if (raw === null) return;
+        // Already dispatched by the onMessage handler; the inbox holds the
+        // same object, so handling it here would double-count it.
+        if (this._handledViaCallback.has(raw)) continue;
+        if (!(await this._maybeAckAnnounce(raw))) this._handleRaw(raw);
+      } finally {
+        // Clear the loser of the race so a timer cannot keep the process alive.
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  /**
+   * Send an `ok` ack when `raw` is an `announce` envelope.
+   *
+   * Returns whether `raw` was an announce and has been handled.
+   */
+  private async _maybeAckAnnounce(
+    raw: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (raw["type"] !== "announce") return false;
+    const id = raw["id"];
+    // A malformed announce must not take down the connection or ack an
+    // undefined id; the provider stays un-acked and open() still resolves.
+    if (!(id instanceof Uint8Array)) {
+      log.warn("client ignoring schema announce without a byte id", {
+        id: typeof id,
+      });
+      return true;
+    }
+    await this._transport.send({ id, ok: true });
+    log.debug("client acked schema announce", { id: idToKey(id) });
+    return true;
+  }
+
+  /**
+   * Grace period for the pre-`open` announce drain, in milliseconds.
+   *
+   * `recv` on a socket-backed transport waits for the next frame
+   */
+  static readonly ANNOUNCE_DRAIN_GRACE_MS = 50;
 
   /** Returns `true` if the client is currently connected. */
   get connected(): boolean {
@@ -556,6 +632,16 @@ export class SaikuroClient {
   }
 
   private _handleRaw(raw: Record<string, unknown>): void {
+    // A provider announces its schema before serving.
+    if (raw["type"] === "announce") {
+      this._maybeAckAnnounce(raw).catch((err: unknown) => {
+        log.warn("client failed to ack schema announce", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+      return;
+    }
+
     const id = raw["id"] as Uint8Array;
     const ok = raw["ok"] as boolean;
 

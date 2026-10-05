@@ -15,7 +15,7 @@ export default defineConfig([
     platform: "node",
     target: "es2022",
     outExtensions,
-    deps: { neverBundle: ["net"] },
+    deps: { neverBundle: ["net", "ws"] },
   },
   // Schema extractor (separate chunk, pulls in the full TypeScript compiler)
   // Import via: import { extractSchema } from "@nisoku/saikuro/schema-extractor"

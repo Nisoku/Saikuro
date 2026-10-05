@@ -1,5 +1,7 @@
 //! WASI preview2 runner (`wasm32-wasip2`)
 
+extern crate alloc;
+
 use std::process::ExitCode;
 use std::sync::OnceLock;
 use std::time::Instant;

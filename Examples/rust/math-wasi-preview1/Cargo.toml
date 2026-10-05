@@ -1,0 +1,38 @@
+[package]
+name = "math-wasi-preview1"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "math-wasi-preview1"
+path = "src/main.rs"
+
+[features]
+default = [
+    "std",
+    "no_std",
+    "inmemory",
+    "storage",
+    "wasi-host",
+    "wasi-preview1",
+    "wasi-runtime-support",
+]
+std = ["math-core/std", "saikuro-exec/std"]
+no_std = ["math-core/no_std", "saikuro-exec/no_std"]
+inmemory = ["math-core/inmemory"]
+storage = ["math-core/storage"]
+wasi-host = ["math-core/wasi-host", "saikuro-transport/wasi-host"]
+wasi-preview1 = [
+    "math-core/wasi-preview1",
+    "saikuro-transport/wasi-preview1",
+    "saikuro-runtime/wasi-preview1",
+]
+wasi-runtime-support = ["math-core/wasi-runtime-support"]
+
+[dependencies]
+math-core = { path = "../math-core" }
+saikuro = { path = "../../../Build/adapters/rust", default-features = false }
+saikuro-runtime = { path = "../../../Build/crates/saikuro-runtime", default-features = false }
+saikuro-transport = { path = "../../../Build/crates/saikuro-transport", default-features = false }
+saikuro-exec = { path = "../../../Build/crates/saikuro-exec", default-features = false }

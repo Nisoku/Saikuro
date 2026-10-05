@@ -16,7 +16,7 @@ pub mod quic;
 #[cfg(all(feature = "native", feature = "quic"))]
 pub use quic::{QuicConnector, QuicTransport, QuicTransportListener};
 #[cfg(feature = "tcp")]
-pub use tcp::TcpTransport;
+pub use tcp::{TcpTransport, TcpTransportListener};
 #[cfg(all(feature = "unix", target_family = "unix"))]
 pub use unix::UnixTransport;
 #[cfg(feature = "ws")]

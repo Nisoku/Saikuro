@@ -62,21 +62,38 @@
 - [ ] Named Pipes (Windows)
 - [ ] WebRTC Transport
 
-## Other
+## Storage
+
+- [ ] Every read copies the whole file twice across the wasm boundary: `arrayBuffer()` into the JS heap, then `Bytes` (`Vec<u8>`) into wasm memory (`wasm/fs_access.rs:99`, `wasm/opfs.rs:95`). For audio (tens of MB) that is very expensive versus building a `Blob` URL in JS and never touching wasm
+- [ ] No streaming read API: `FileBackend::read_file` returns the full `Bytes` or nothing
+- [ ] No range/offset reads, so a header/metadata probe has to pull the whole file
+- [ ] No way to hand a `Blob` back out to JS, so the caller cannot build a URL for `createObjectURL`/`MediaSource` streaming
+- [ ] No permission re-grant logic. `FsAccessStorage::with_config` (`wasm/fs_access.rs:272`) takes an already-granted `FileSystemDirectoryHandle` and nothing calls `queryPermission`/`requestPermission`. A handle persisted to IDB and re-hydrated may come back still `granted` or with its permission revoked, so callers must `queryPermission` it and call `requestPermission` only when the state is not `granted`; requesting unconditionally prompts even when access is already allowed. This is deliberately left to the caller (we would do it in TS), but it needs to be documented
+- [ ] Never uses `createSyncAccessHandle` (the fast OPFS path); all reads are async full-file `arrayBuffer` reads. Fine for the blob-URL + metadata use case, not optimal
+- [ ] `FsAccessStorage` hardcodes a single root directory; no multi-directory support per instance (use multiple instances)
+- [ ] `?Send` async traits with `RefCell`/`thread_local` handles are single-threaded-wasm-only. Fine for the browser, but it blocks reuse from workers
+
+## The Sashiki Problem
 
 - [ ] Every language adapter independently re-implements the same wire protocol logic, so every protocol change requires updating all of them
-- [ ] Language Adapter Template Generator (using above)
+- [ ] Language Adapter Code Generator (aka Sashiki)
+- [ ] Uses existing things like oxc, syn, roslyn, etc. to get direct access to language internals after code is parsed, so we can generate a IR that works across them all
+- [ ] works with both compiled and interpreted things
+- [ ] like previously mentioned, it's called sashiki
 
 ## Current
 
-- [ ] Asyncify fallback for JSPI (before the spinning one)
-- [ ] Update `saikuro-c`/`saikuro-cpp`/`saikuro-csharp` to just use a new `Build/codegen/cxx/` thing that automatically generates bindings for all three (1-1 api match, not the yucky serializing to JSON or whatever) (not safe tho (cffi) :( hmmm)
-- [ ] Possibly use something similar for JS/TS
-- [ ] python-ctypes too for Python via the same `cxx/` (not safe tho eitherrr)
+- [ ] watch WebAssembly/binaryen#9159, once it lands drop the binaryen submodule and use a stock release
 
-- [ ] Add more tests
+- [ ] Asyncify fallback for JSPI (before the spin one)
+
+- [ ] Add more shared and also runner-specific tests?
+
+- [ ] Run no_std Saikuro on `wasm32-unknown-unknown` through WAMR (`iwasm`/`wamrc`), the embedded-class runtime (Zephyr/FreeRTOS/ESP-IDF/etc.) (current `wasm` suite is JS-hosted (wasm-bindgen/JSPI) and can't even load there, so no_std wasm needs to become basically the non-browser WASM, vs std WASM, which is for browsers)
 
 - [ ] Update docs/demo/examples for the new everything
+- [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that
+
 - [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
 
-- [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that
+- [ ] Make everything that can be made push-pull push-pull

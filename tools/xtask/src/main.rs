@@ -1,5 +1,6 @@
 //! Saikuro build system
 
+mod asyncify;
 mod config;
 mod gates;
 mod languages;
@@ -8,6 +9,7 @@ mod paths;
 mod qemu;
 mod run;
 mod setup;
+mod wasmopt;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
@@ -32,6 +34,12 @@ enum Command {
     },
     /// Cross-compile check across the full engine x target matrix.
     Matrix(MatrixArgs),
+    /// Run the native suite under LLVM coverage and emit an HTML report.
+    Cov {
+        /// Fail if line coverage is below this percentage.
+        #[arg(long)]
+        fail_under_lines: Option<f64>,
+    },
     /// QEMU embedded build/run.
     Qemu {
         #[arg(value_enum, default_value_t = QemuVerb::Check)]
@@ -58,6 +66,8 @@ enum Command {
     },
     /// Print the pinned toolchain table.
     Tools,
+    /// Build wasm-opt and print its path.
+    WasmOpt,
     /// cargo-deny check against Build/deny.toml.
     Deny,
     /// cargo-audit dependency advisories.
@@ -85,6 +95,7 @@ enum Command {
 enum TestTarget {
     Native,
     Wasm,
+    WasmAsyncify,
     Embedded,
     Wasi,
 }
@@ -119,6 +130,7 @@ enum LangVerb {
     BuildCpp,
     BuildCsharp,
     BuildRustRuntime,
+    BuildRustRuntimeAsyncify,
     BuildRustProvider,
     BuildRust,
     BuildPython,
@@ -141,6 +153,7 @@ impl LangVerb {
             LangVerb::BuildCpp => "build-cpp",
             LangVerb::BuildCsharp => "build-csharp",
             LangVerb::BuildRustRuntime => "build-rust-runtime",
+            LangVerb::BuildRustRuntimeAsyncify => "build-rust-runtime-asyncify",
             LangVerb::BuildRustProvider => "build-rust-provider",
             LangVerb::BuildRust => "build-rust",
             LangVerb::BuildPython => "build-python",
@@ -191,6 +204,7 @@ impl Command {
                 )
                 .context("native runner tests"),
                 TestTarget::Wasm => wasm_tests(),
+                TestTarget::WasmAsyncify => asyncify::test_e2e(),
                 TestTarget::Embedded => qemu::test_embedded(),
                 TestTarget::Wasi => wasi_tests(),
             },
@@ -201,6 +215,7 @@ impl Command {
                 args.json.as_deref(),
                 args.verbose,
             ),
+            Command::Cov { fail_under_lines } => cov(fail_under_lines),
             Command::Qemu { verb } => match verb {
                 QemuVerb::Setup => qemu::setup(),
                 QemuVerb::BuildArm => qemu::build_arm(),
@@ -219,6 +234,11 @@ impl Command {
             Command::Clean => languages::clean_all(),
             Command::Setup { check } => setup::sync(check),
             Command::Tools => setup::list(),
+            Command::WasmOpt => {
+                let path = wasmopt::ensure()?;
+                println!("{}", path.display());
+                Ok(())
+            }
             Command::Deny => gates::deny(),
             Command::Audit => gates::audit(),
             Command::Miri => gates::miri(),
@@ -273,7 +293,54 @@ fn wasm_tests() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run the wasi suites by executing each runner bin under wasmtime
+fn cov(fail_under_lines: Option<f64>) -> anyhow::Result<()> {
+    let root = paths::repo_root();
+    run::run(
+        &root,
+        "cargo",
+        [
+            "llvm-cov",
+            "run",
+            "-p",
+            "saikuro-tests",
+            "--bin",
+            "native",
+            "--features",
+            "native",
+        ],
+    )
+    .context("native coverage run")?;
+
+    run::run(
+        &root,
+        "cargo",
+        [
+            "llvm-cov",
+            "report",
+            "--html",
+            "--output-dir",
+            "target/cov/html",
+        ],
+    )
+    .context("coverage html report")?;
+
+    if let Some(threshold) = fail_under_lines {
+        run::run(
+            &root,
+            "cargo",
+            [
+                "llvm-cov",
+                "report",
+                "--fail-under-lines",
+                &threshold.to_string(),
+            ],
+        )
+        .context("coverage threshold gate")?;
+    }
+    Ok(())
+}
+
+/// Run the saikuro-tests wasi suites by executing each runner bin under wasmtime
 fn wasi_tests() -> anyhow::Result<()> {
     for (features, target, bin, label) in [
         (
@@ -287,6 +354,12 @@ fn wasi_tests() -> anyhow::Result<()> {
             "wasm32-wasip2",
             "wasi-preview2",
             "wasi-preview2",
+        ),
+        (
+            "wasi-preview2,ws-wasi",
+            "wasm32-wasip2",
+            "wasi-preview2",
+            "wasi-preview2 (ws)",
         ),
     ] {
         run::run(

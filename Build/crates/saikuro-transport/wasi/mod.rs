@@ -13,3 +13,8 @@ pub mod websocket;
 pub use host::{WasiHostRecv, WasiHostSend, WasiPipe};
 #[cfg(feature = "wasi-tcp")]
 pub use tcp::{WasiTcpConnector, WasiTcpListener, WasiTcpTransport};
+#[cfg(feature = "ws-wasi")]
+pub use websocket::{
+    WasiWsListener, WebSocketReceiver, WebSocketSender, WebSocketServerReceiver,
+    WebSocketServerSender, WebSocketServerTransport, WebSocketTransport,
+};

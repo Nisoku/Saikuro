@@ -4,10 +4,11 @@ use portable_atomic_util::Arc;
 use saikuro_core::Arc;
 
 use crate::shared::error::{Result, TransportError};
-use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};
+use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiAsyncConn, WasiConn};
 
 const AF_INET: u8 = 0; // witx address-family::inet4
 const SOCK_STREAM: u8 = 1; // witx socket-type::stream
+const SD_WRITE: u8 = 2; // witx sdflags::wr
 
 #[repr(C)]
 struct Ciovec {
@@ -42,8 +43,10 @@ extern "C" {
     fn sock_bind(fd: u32, addr: *const SockaddrIn, addr_len: u32) -> u16;
     fn sock_listen(fd: u32, backlog: u32) -> u16;
     fn sock_accept(fd: u32, flags: *mut u16, ret_area: *mut u32) -> u16;
+    fn sock_getsockname(fd: u32, addr: *mut u8) -> u16;
     fn sock_recv(fd: u32, ri_data: *const Ciovec, ri_flags: u16, ret_area: *mut RecvRet) -> u16;
     fn sock_send(fd: u32, si_data: *const Iovec, si_flags: u16, ret_area: *mut u32) -> u16;
+    fn sock_shutdown(fd: u32, how: u8) -> u16;
     fn fd_close(fd: u32) -> u16;
 }
 
@@ -58,6 +61,18 @@ impl Drop for Connection {
         unsafe {
             let _ = fd_close(self.fd);
         }
+    }
+}
+
+impl Connection {
+    /// Half-close the socket so the peer observes EOF.
+    pub fn shutdown_send(&self) -> Result<()> {
+        // SAFETY: fd is a valid open socket and `how` is one of the witx sdflags.
+        let rc = unsafe { sock_shutdown(self.fd, SD_WRITE) };
+        if !errno_ok(rc) {
+            return Err(TransportError::SendFailed(format!("sock_shutdown: {rc}")));
+        }
+        Ok(())
     }
 }
 
@@ -118,6 +133,22 @@ impl WasiConn for Connection {
     }
 }
 
+/// Preview1 has no pollable: every socket call blocks on the host, so the async
+/// interface forwards to the blocking one.
+impl WasiAsyncConn for Connection {
+    async fn read_bytes(&self, buf: &mut [u8]) -> Result<usize> {
+        recv_raw(self.fd, buf)
+    }
+
+    async fn write_bytes(&self, buf: &[u8]) -> Result<()> {
+        send_frame(self, buf)
+    }
+
+    async fn flush(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 /// Send one length-prefixed frame over `conn`.
 pub fn send_frame(conn: &Connection, frame: &[u8]) -> Result<()> {
     let mut offset = 0;
@@ -142,7 +173,7 @@ pub fn send_frame(conn: &Connection, frame: &[u8]) -> Result<()> {
 }
 
 /// Dial `addr` (host:port) and return the connected socket.
-pub fn connect(addr: &str) -> Result<Arc<Connection>> {
+pub async fn connect(addr: &str) -> Result<Arc<Connection>> {
     let (host, port) = parse_addr(addr)?;
     let octets = parse_ipv4(&host)
         .ok_or_else(|| TransportError::ConnectionRefused(format!("unresolved host {host}")))?;
@@ -201,8 +232,22 @@ pub fn listen(port: u16) -> Result<Listener> {
 }
 
 impl Listener {
+    /// Return the local port this listener is bound to.
+    pub fn local_port(&self) -> Result<u16> {
+        let mut addr = [0u8; 128];
+        // SAFETY: the host writes at most a `sockaddr` into the 128-byte
+        // buffer; the fd is a valid open listening socket.
+        let rc = unsafe { sock_getsockname(self.fd, addr.as_mut_ptr()) };
+        if !errno_ok(rc) {
+            return Err(TransportError::ConnectionRefused(format!(
+                "sock_getsockname: {rc}"
+            )));
+        }
+        Ok(u16::from_be_bytes([addr[2], addr[3]]))
+    }
+
     /// Accept one inbound connection and return its socket.
-    pub fn accept(&self) -> Result<Arc<Connection>> {
+    pub async fn accept(&self) -> Result<Arc<Connection>> {
         let mut flags = 0u16;
         let mut fd = 0u32;
         // SAFETY: host writes the accepted fd to ret_area; flags is read by host.

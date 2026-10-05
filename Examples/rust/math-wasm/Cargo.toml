@@ -1,0 +1,31 @@
+[package]
+name = "math-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Browser wasm build of the Saikuro math example"
+
+[lib]
+name = "math_wasm"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+default = ["wasm", "inmemory", "storage", "wasm-host", "ws"]
+wasm = ["math-core/wasm", "saikuro-exec/wasm"]
+inmemory = ["math-core/inmemory"]
+storage = ["math-core/storage"]
+wasm-host = ["math-core/wasm-host"]
+ws = ["math-core/ws"]
+
+[dependencies]
+math-core = { path = "../math-core" }
+saikuro = { path = "../../../Build/adapters/rust", default-features = false }
+saikuro-exec = { path = "../../../Build/crates/saikuro-exec", default-features = false }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["console"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

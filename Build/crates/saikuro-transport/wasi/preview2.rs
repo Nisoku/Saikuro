@@ -3,16 +3,20 @@ use portable_atomic_util::Arc;
 #[cfg(target_has_atomic = "ptr")]
 use saikuro_core::Arc;
 
-use wasi::io::streams::{InputStream, OutputStream};
+use core::future::poll_fn;
+use core::task::Poll;
+
+use wasi::io::poll::Pollable;
+use wasi::io::streams::{InputStream, OutputStream, StreamError};
 use wasi::sockets::instance_network::instance_network;
 use wasi::sockets::network::{
     ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Network,
 };
-use wasi::sockets::tcp::TcpSocket;
+use wasi::sockets::tcp::{ShutdownType, TcpSocket};
 use wasi::sockets::tcp_create_socket::create_tcp_socket;
 
 use crate::shared::error::{Result, TransportError};
-use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};
+use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiAsyncConn, WasiConn};
 
 /// An open preview2 socket: holds the input/output streams.  Dropping the
 /// streams closes the connection on the host (the generated resource handles
@@ -20,6 +24,14 @@ use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiConn};
 pub struct Connection {
     input: InputStream,
     output: OutputStream,
+    socket: TcpSocket,
+}
+
+impl Connection {
+    /// Half-close the socket so the peer observes EOF.
+    pub fn shutdown_send(&self) -> Result<()> {
+        self.socket.shutdown(ShutdownType::Send).map_err(to_err)
+    }
 }
 
 /// A listening preview2 socket.
@@ -59,17 +71,78 @@ impl WasiConn for Connection {
     }
 }
 
-/// Send one length-prefixed frame over `conn`.
-pub fn send_frame(conn: &Connection, frame: &[u8]) -> Result<()> {
-    conn.output
-        .blocking_write_and_flush(frame)
-        .map_err(|e| TransportError::SendFailed(format!("{e:?}")))?;
-    Ok(())
+/// Yield until `pollable` reports ready.
+async fn wait_ready(pollable: &Pollable) {
+    poll_fn(|cx| {
+        if pollable.ready() {
+            Poll::Ready(())
+        } else {
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    })
+    .await
+}
+
+impl WasiAsyncConn for Connection {
+    async fn read_bytes(&self, buf: &mut [u8]) -> Result<usize> {
+        loop {
+            match self.input.read(buf.len() as u64) {
+                Ok(chunk) => {
+                    let n = chunk.len().min(buf.len());
+                    if n == 0 {
+                        // No bytes buffered yet
+                        wait_ready(&self.input.subscribe()).await;
+                        continue;
+                    }
+                    buf[..n].copy_from_slice(&chunk[..n]);
+                    return Ok(n);
+                }
+                Err(StreamError::Closed) => return Ok(0),
+                Err(e) => return Err(TransportError::ReceiveFailed(format!("{e:?}"))),
+            }
+        }
+    }
+
+    async fn write_bytes(&self, buf: &[u8]) -> Result<()> {
+        let mut written = 0;
+        while written < buf.len() {
+            let permit = loop {
+                match self.output.check_write() {
+                    Ok(0) => wait_ready(&self.output.subscribe()).await,
+                    Ok(n) => break n,
+                    Err(StreamError::Closed) => {
+                        return Err(TransportError::SendFailed("stream closed".into()));
+                    }
+                    Err(e) => return Err(TransportError::SendFailed(format!("{e:?}"))),
+                }
+            };
+            // A `write` longer than the permit traps
+            let permit = usize::try_from(permit)
+                .map_err(|_| TransportError::SendFailed("write permit overflow".into()))?;
+            let n = permit.min(buf.len() - written);
+            if n == 0 {
+                wait_ready(&self.output.subscribe()).await;
+                continue;
+            }
+            self.output
+                .write(&buf[written..written + n])
+                .map_err(|e| TransportError::SendFailed(format!("{e:?}")))?;
+            written += n;
+        }
+        Ok(())
+    }
+
+    async fn flush(&self) -> Result<()> {
+        self.output
+            .flush()
+            .map_err(|e| TransportError::SendFailed(format!("{e:?}")))
+    }
 }
 
 /// Dial `addr` (host:port) and return the connected socket.  `host` must be a
 /// numeric IPv4 literal (no DNS resolution on the preview2 path).
-pub fn connect(addr: &str) -> Result<Arc<Connection>> {
+pub async fn connect(addr: &str) -> Result<Arc<Connection>> {
     let (host, port) = parse_addr(addr)?;
     let octets = parse_ipv4(&host)
         .ok_or_else(|| TransportError::ConnectionRefused(format!("unresolved host {host}")))?;
@@ -78,8 +151,21 @@ pub fn connect(addr: &str) -> Result<Arc<Connection>> {
     socket
         .start_connect(&network, ipv4_socket_addr(octets, port))
         .map_err(to_err)?;
-    let (input, output) = socket.finish_connect().map_err(to_err)?;
-    Ok(Arc::new(Connection { input, output }))
+    // Preview2 sockets are non-blocking: the handshake completes on the host
+    // while this task yields, letting the executor run other tasks meanwhile.
+    let ready = socket.subscribe();
+    let (input, output) = loop {
+        match socket.finish_connect() {
+            Ok(connected) => break connected,
+            Err(ErrorCode::WouldBlock) => wait_ready(&ready).await,
+            Err(e) => return Err(to_err(e)),
+        }
+    };
+    Ok(Arc::new(Connection {
+        input,
+        output,
+        socket,
+    }))
 }
 
 /// Bind and listen on `port` on all interfaces.
@@ -102,9 +188,28 @@ pub fn listen(port: u16) -> Result<Listener> {
 }
 
 impl Listener {
+    /// Return the local port this listener is bound to.
+    pub fn local_port(&self) -> Result<u16> {
+        match self.socket.local_address().map_err(to_err)? {
+            IpSocketAddress::Ipv4(addr) => Ok(addr.port),
+            IpSocketAddress::Ipv6(addr) => Ok(addr.port),
+        }
+    }
+
     /// Accept one inbound connection and return its socket.
-    pub fn accept(&self) -> Result<Arc<Connection>> {
-        let (_new_socket, input, output) = self.socket.accept().map_err(to_err)?;
-        Ok(Arc::new(Connection { input, output }))
+    pub async fn accept(&self) -> Result<Arc<Connection>> {
+        let ready = self.socket.subscribe();
+        let (socket, input, output) = loop {
+            match self.socket.accept() {
+                Ok(connection) => break connection,
+                Err(ErrorCode::WouldBlock) => wait_ready(&ready).await,
+                Err(e) => return Err(to_err(e)),
+            }
+        };
+        Ok(Arc::new(Connection {
+            input,
+            output,
+            socket,
+        }))
     }
 }

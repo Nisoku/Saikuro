@@ -16,6 +16,7 @@ import {
   PROTOCOL_VERSION,
   makeAnnounceEnvelope,
   makeSchemaObject,
+  idToKey,
 } from "./envelope";
 import type {
   Envelope,
@@ -26,6 +27,9 @@ import { SaikuroError } from "./error";
 import { getLogger } from "./logger";
 
 const log = getLogger("saikuro.provider");
+
+/** How long to wait for the runtime to acknowledge a schema announce. */
+const ANNOUNCE_ACK_TIMEOUT_MS = 5000;
 
 // Handler types
 
@@ -614,8 +618,9 @@ export class SaikuroProvider {
   async serve(address: string): Promise<void> {
     const transport = makeTransport(address);
     await transport.connect();
+    const closed = this._installDispatchLoop(transport);
     await this._announce(transport);
-    await this._runServeLoop(transport);
+    await closed;
     await transport.close();
   }
 
@@ -635,6 +640,9 @@ export class SaikuroProvider {
         : undefined,
       handlers: this._handlers.size,
     });
+
+    // Install the dispatch listener before announcing.
+    const closed = this._installDispatchLoop(transport);
 
     if (options?.dev && Array.isArray(options.sourceFiles)) {
       try {
@@ -658,14 +666,22 @@ export class SaikuroProvider {
     }
 
     log.info("serveOn entering dispatch loop", { namespace: this._namespace });
-    await this._runServeLoop(transport);
+    await closed;
   }
 
-  private _runServeLoop(transport: Transport): Promise<void> {
+  /**
+   * Attach the invocation dispatch listener and return a promise that settles
+   * when the transport closes.
+   */
+  private _installDispatchLoop(transport: Transport): Promise<void> {
     return new Promise<void>((resolve) => {
       transport.onClose(() => resolve());
 
       transport.onMessage((raw) => {
+        // Announce acks and other responses carry `ok` and no invocation
+        // `type`.
+        if (raw["ok"] !== undefined) return;
+
         const envelope = _rawToEnvelope(raw);
         if (envelope === null) {
           // Already logged inside _rawToEnvelope.
@@ -695,10 +711,11 @@ export class SaikuroProvider {
     try {
       const schema = schemaOverride ?? this.schemaObject();
       const envelope = makeAnnounceEnvelope(schema);
-      const ack = await _waitForMessage(
+      const ack = await _waitForAck(
         transport,
         () => transport.send(envelope),
-        5000,
+        envelope.id,
+        ANNOUNCE_ACK_TIMEOUT_MS,
       );
       if (ack !== null) {
         if (ack["ok"] === true) {
@@ -721,12 +738,13 @@ export class SaikuroProvider {
 
 /**
  * Register a one-shot message listener, invoke *sendFn*, and resolve with the
- * first message received, or `null` on timeout. Cleans up listener and timer
- * on all paths (success, timeout, send-failure).
+ * first message whose id matches *expectedId*, or `null` on timeout. Cleans up
+ * listener and timer on all paths (success, timeout, send-failure).
  */
-async function _waitForMessage(
+async function _waitForAck(
   transport: Transport,
   sendFn: () => Promise<void>,
+  expectedId: Uint8Array,
   timeoutMs: number,
 ): Promise<Record<string, unknown> | null> {
   return new Promise<Record<string, unknown> | null>((resolve, reject) => {
@@ -735,6 +753,7 @@ async function _waitForMessage(
       resolve(null);
     }, timeoutMs);
     const onMsg = (raw: Record<string, unknown>): void => {
+      if (idToKey(raw["id"] as Uint8Array) !== idToKey(expectedId)) return;
       cleanup();
       resolve(raw);
     };

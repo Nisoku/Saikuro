@@ -15,8 +15,9 @@ class TcpTransport(_StreamTransport):
         self._host = host
         self._port = port
 
-    async def connect(self) -> None:
+    async def _dial(self) -> None:
         self._reader, self._writer = await asyncio.wait_for(
             asyncio.open_connection(self._host, self._port),
             timeout=10.0,
         )
+        self._connected = True

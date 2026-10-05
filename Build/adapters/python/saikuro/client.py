@@ -338,6 +338,12 @@ class SaikuroClient:
                 logger.debug("saikuro client: transport closed by peer")
                 break
 
+            # A provider announces its schema as the first frame of its
+            # connection and then blocks on `recv()` until the runtime acks it.
+            if raw.get("type") == InvocationType.ANNOUNCE.value:
+                await self._ack_announce(raw)
+                continue
+
             try:
                 response = ResponseEnvelope.from_msgpack_dict(raw)
             except Exception:
@@ -357,6 +363,26 @@ class SaikuroClient:
                     TransportError("ConnectionLost", "transport closed unexpectedly")
                 )
         self._close_open_handles()
+
+    async def _ack_announce(self, raw: dict[str, Any]) -> None:
+        """Acknowledge a provider's schema announcement."""
+        announce_id = raw.get("id")
+        if not isinstance(announce_id, str):
+            logger.warning(
+                "saikuro client: schema announce frame has no string id, not acking: raw=%r",
+                raw,
+            )
+            return
+
+        try:
+            await self._transport.send({"id": announce_id, "ok": True})
+        except Exception:
+            logger.exception(
+                "saikuro client: failed to ack schema announce %s", announce_id
+            )
+            return
+
+        logger.debug("saikuro client: acked schema announce %s", announce_id)
 
     def _close_open_handles(self) -> None:
         for stream in self._open_streams.values():

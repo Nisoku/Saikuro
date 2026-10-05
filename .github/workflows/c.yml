@@ -1,0 +1,50 @@
+name: C
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Build/adapters/c/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/c.yml"
+  pull_request:
+    paths:
+      - "Build/adapters/c/**"
+      - "tools/xtask/**"
+      - "tools/tools.toml"
+      - "Justfile"
+      - "Justfile.d"
+      - ".github/workflows/c.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: format + lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Setup xtask deps
+        run: cargo xtask setup
+      - name: Check
+        run: cargo xtask lang c check
