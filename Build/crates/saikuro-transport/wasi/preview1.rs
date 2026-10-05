@@ -8,6 +8,7 @@ use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiAsyncConn, WasiConn};
 
 const AF_INET: u8 = 0; // witx address-family::inet4
 const SOCK_STREAM: u8 = 1; // witx socket-type::stream
+const SD_WRITE: u8 = 2; // witx sdflags::wr
 
 #[repr(C)]
 struct Ciovec {
@@ -45,6 +46,7 @@ extern "C" {
     fn sock_getsockname(fd: u32, addr: *mut u8) -> u16;
     fn sock_recv(fd: u32, ri_data: *const Ciovec, ri_flags: u16, ret_area: *mut RecvRet) -> u16;
     fn sock_send(fd: u32, si_data: *const Iovec, si_flags: u16, ret_area: *mut u32) -> u16;
+    fn sock_shutdown(fd: u32, how: u8) -> u16;
     fn fd_close(fd: u32) -> u16;
 }
 
@@ -59,6 +61,18 @@ impl Drop for Connection {
         unsafe {
             let _ = fd_close(self.fd);
         }
+    }
+}
+
+impl Connection {
+    /// Half-close the socket so the peer observes EOF.
+    pub fn shutdown_send(&self) -> Result<()> {
+        // SAFETY: fd is a valid open socket and `how` is one of the witx sdflags.
+        let rc = unsafe { sock_shutdown(self.fd, SD_WRITE) };
+        if !errno_ok(rc) {
+            return Err(TransportError::SendFailed(format!("sock_shutdown: {rc}")));
+        }
+        Ok(())
     }
 }
 

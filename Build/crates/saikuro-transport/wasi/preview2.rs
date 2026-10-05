@@ -12,7 +12,7 @@ use wasi::sockets::instance_network::instance_network;
 use wasi::sockets::network::{
     ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Network,
 };
-use wasi::sockets::tcp::TcpSocket;
+use wasi::sockets::tcp::{ShutdownType, TcpSocket};
 use wasi::sockets::tcp_create_socket::create_tcp_socket;
 
 use crate::shared::error::{Result, TransportError};
@@ -24,7 +24,14 @@ use crate::wasi::tcp::{parse_addr, parse_ipv4, WasiAsyncConn, WasiConn};
 pub struct Connection {
     input: InputStream,
     output: OutputStream,
-    _socket: TcpSocket,
+    socket: TcpSocket,
+}
+
+impl Connection {
+    /// Half-close the socket so the peer observes EOF.
+    pub fn shutdown_send(&self) -> Result<()> {
+        self.socket.shutdown(ShutdownType::Send).map_err(to_err)
+    }
 }
 
 /// A listening preview2 socket.
@@ -157,7 +164,7 @@ pub async fn connect(addr: &str) -> Result<Arc<Connection>> {
     Ok(Arc::new(Connection {
         input,
         output,
-        _socket: socket,
+        socket,
     }))
 }
 
@@ -202,7 +209,7 @@ impl Listener {
         Ok(Arc::new(Connection {
             input,
             output,
-            _socket: socket,
+            socket,
         }))
     }
 }

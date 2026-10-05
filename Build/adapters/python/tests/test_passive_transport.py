@@ -105,14 +105,15 @@ async def test_reconnect_after_peer_eof_dials_again():
     # A dial transport has to survive the peer hanging up: recv reports EOF,
     # the transport stops being live, and connect dials a fresh socket.
     sessions: list[asyncio.StreamWriter] = []
-    connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+    # One token per accept, so each dial can wait for its own accept callback.
+    # A one-shot future would already be resolved by the second dial.
+    accepts: asyncio.Queue[None] = asyncio.Queue()
 
     async def on_connection(
         reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         sessions.append(writer)
-        if not connected.done():
-            connected.set_result(None)
+        accepts.put_nowait(None)
         await reader.read()
 
     server = await asyncio.start_server(on_connection, "127.0.0.1", 0)
@@ -121,7 +122,7 @@ async def test_reconnect_after_peer_eof_dials_again():
     transport = TcpTransport("127.0.0.1", port)
     try:
         await transport.connect()
-        await connected
+        await accepts.get()
 
         # Peer hangup: the writer stays referenced by asyncio, so retention is
         # not liveness.
@@ -131,7 +132,7 @@ async def test_reconnect_after_peer_eof_dials_again():
 
         await transport.connect()
         assert transport.is_connected
-        await connected
+        await accepts.get()
 
         # The redial reached the server as a new session.
         await transport.send({"ping": 5})

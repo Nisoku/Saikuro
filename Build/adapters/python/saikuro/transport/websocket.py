@@ -33,6 +33,16 @@ _DEFAULT_PING_INTERVAL = 20.0
 """Seconds between keepalive pings; ``None`` disables them."""
 
 
+class _ListenerClosed:
+    """
+    Sentinel type queued by :meth:`WebSocketListener.close`
+    """
+
+
+_LISTENER_CLOSED = _ListenerClosed()
+"""Queue sentinel meaning the listener is closed and no transport will arrive."""
+
+
 class _WebSocketConnection(BaseTransport):
     """
     Shared send/recv/shutdown for transports backed by a websockets connection.
@@ -203,20 +213,23 @@ class WebSocketListener:
     def __init__(
         self,
         server: Server,
-        pending: asyncio.Queue[WebSocketServerTransport],
+        pending: asyncio.Queue[WebSocketServerTransport | _ListenerClosed],
         bound_port: int,
     ) -> None:
         self._server = server
         self._pending = pending
         self._bound_port = bound_port
         self._closed = False
+        self._accept_waiters = 0
 
     @classmethod
     async def bind(cls, host: str = "127.0.0.1", port: int = 0) -> WebSocketListener:
         """Bind a listener. Pass ``port=0`` to let the OS choose a free port."""
         from websockets.asyncio.server import serve as ws_serve
 
-        pending: asyncio.Queue[WebSocketServerTransport] = asyncio.Queue()
+        pending: asyncio.Queue[WebSocketServerTransport | _ListenerClosed] = (
+            asyncio.Queue()
+        )
 
         async def handler(ws: ServerConnection) -> None:
             transport = WebSocketServerTransport(ws)
@@ -239,10 +252,23 @@ class WebSocketListener:
         return self._bound_port
 
     async def accept(self) -> WebSocketServerTransport:
-        """Wait for the next inbound connection."""
+        """Wait for the next inbound connection.
+
+        Raises:
+            RuntimeError: the listener is closed, so no connection will arrive.
+        """
         if self._closed:
             raise RuntimeError("WebSocketListener is closed")
-        return await self._pending.get()
+        self._accept_waiters += 1
+        try:
+            item = await self._pending.get()
+        finally:
+            self._accept_waiters -= 1
+        # Identity, not isinstance: _LISTENER_CLOSED is a singleton sentinel and
+        # a closed listener is a runtime state, not a bad argument type.
+        if item is _LISTENER_CLOSED:
+            raise RuntimeError("WebSocketListener is closed")
+        return item
 
     async def close(self) -> None:
         """Stop listening, close accepted connections, and release handlers."""
@@ -251,6 +277,19 @@ class WebSocketListener:
         self._closed = True
         self._server.close()
         await self._server.wait_closed()
+        await self._discard_pending()
+
+    async def _discard_pending(self) -> None:
+        """Close unaccepted transports and wake callers parked in :meth:`accept`."""
+        while True:
+            try:
+                item = self._pending.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if item is not _LISTENER_CLOSED:
+                await item.close()
+        for _ in range(self._accept_waiters):
+            self._pending.put_nowait(_LISTENER_CLOSED)
 
     async def __aenter__(self) -> Self:
         return self

@@ -26,6 +26,36 @@ function collectAcks(transport: Transport): Array<Record<string, unknown>> {
 }
 
 describe("schema announce handshake", () => {
+  /**
+   * Transport whose `recv` blocks once the inbox is empty
+   */
+  class GatedTransport extends InMemoryTransport {
+    private readonly _waiters: Array<
+      (frame: Record<string, unknown> | null) => void
+    > = [];
+
+    override async recv(): Promise<Record<string, unknown> | null> {
+      const inbox = (this as unknown as { _inbox: unknown[] })._inbox;
+      if (inbox.length > 0) return super.recv();
+      return new Promise<Record<string, unknown> | null>((resolve) => {
+        this._waiters.push(resolve);
+      });
+    }
+
+    /** Hand `frame` to whichever `recv` is currently parked. */
+    release(frame: Record<string, unknown>): void {
+      this._waiters.shift()?.(frame);
+    }
+  }
+
+  /** Pair a gated client-side transport with a peer that can send into it. */
+  function gatedPair(): [GatedTransport, InMemoryTransport] {
+    const gated = new GatedTransport();
+    const peer = new InMemoryTransport();
+    (gated as unknown as { _peer: unknown })._peer = peer;
+    (peer as unknown as { _peer: unknown })._peer = gated;
+    return [gated, peer];
+  }
   it("client acks a schema announce with an ok response", async () => {
     const [clientTransport, providerTransport] = InMemoryTransport.pair();
 
@@ -137,6 +167,30 @@ describe("schema announce handshake", () => {
       ).toBe(true),
     );
     resetLogSink();
+
+    await client.close();
+  });
+
+  it("acks once when an announce arrives while the pre-open drain is running", async () => {
+    // The transport both dispatches a frame and queues it for `recv`
+    const [gated, peer] = gatedPair();
+    const acks = collectAcks(peer);
+
+    const client = SaikuroClient.fromTransport(gated as unknown as Transport);
+    const openPromise = client.open();
+    // Let `open` register its handler and park in the drain.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const announce = makeAnnounceEnvelope(makeSchemaObject("math", {}));
+    await peer.send(announce);
+    gated.release(announce as unknown as Record<string, unknown>);
+
+    await openPromise;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(acks).toHaveLength(1);
+    expect(acks[0]?.["ok"]).toBe(true);
+    expect(acks[0]?.["id"]).toEqual(announce.id);
 
     await client.close();
   });

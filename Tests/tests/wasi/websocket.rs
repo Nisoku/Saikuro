@@ -1,16 +1,17 @@
 //! WASI WebSocket transport: server upgrade plus a loopback round-trip.
 
 use alloc::format;
+use core::future::Future;
+use core::pin::Pin;
+use core::time::Duration;
 
 use crate::TestSuite;
 use bytes::Bytes;
-use core::future::Future;
-use core::pin::Pin;
 use saikuro_exec::spawn;
 use saikuro_tests::shared_test_async;
 use saikuro_transport::{
-    LocalTransport, LocalTransportListener, TransportReceiver, TransportSender, WasiWsListener,
-    WebSocketTransport,
+    LocalTransport, LocalTransportConnector, LocalTransportListener, TransportError,
+    TransportReceiver, TransportSender, WasiTcpConnector, WasiWsListener, WebSocketTransport,
 };
 
 const PAYLOAD: &[u8] = &[0xA5; 10_000];
@@ -21,6 +22,104 @@ pub fn register(suite: &mut TestSuite) {
         "wasi::websocket_server_round_trip",
         websocket_server_round_trip,
     );
+    shared_test_async!(
+        suite,
+        "wasi::websocket_rejects_oversized_message",
+        websocket_rejects_oversized_message,
+    );
+    shared_test_async!(
+        suite,
+        "wasi::websocket_stalled_peer_does_not_wedge_listener",
+        websocket_stalled_peer_does_not_wedge_listener,
+    );
+}
+
+/// A peer that connects and then stalls must not wedge the listener.
+fn websocket_stalled_peer_does_not_wedge_listener(
+) -> Pin<Box<dyn Future<Output = Result<(), &'static str>>>> {
+    Box::pin(async {
+        let mut listener = WasiWsListener::new("127.0.0.1:0").map_err(|_| "bind ws listener")?;
+        let port = listener.local_port().map_err(|_| "resolve ws port")?;
+        let url = format!("ws://127.0.0.1:{port}");
+
+        let serving = spawn(async move {
+            match listener.accept().await {
+                Ok(Some(_)) => Ok(()),
+                Ok(None) => Err("ws listener closed"),
+                Err(_) => Err("ws accept"),
+            }
+        });
+
+        // Connect and never send, so the handshake blocks on a read.
+        let _stalled = WasiTcpConnector::new(format!("127.0.0.1:{port}"))
+            .connect()
+            .await
+            .map_err(|_| "stalled peer connect")?;
+
+        // Unreachable while the listener is still stuck on the first peer.
+        let client =
+            saikuro_exec::timeout(Duration::from_secs(30), WebSocketTransport::connect(url))
+                .await
+                .map_err(|_| "listener never accepted the good connection")?
+                .map_err(|_| "ws client connect")?;
+        let (mut sender, _receiver) = client.split();
+        sender.close().await.ok();
+
+        match serving.await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err("provider task did not complete"),
+        }
+    })
+}
+
+/// A message past the assembler cap is rejected, not accumulated.
+fn websocket_rejects_oversized_message() -> Pin<Box<dyn Future<Output = Result<(), &'static str>>>>
+{
+    Box::pin(async {
+        // Just past the 64 KiB assembler cap.
+        let oversized = alloc::vec![0xA5u8; 80 * 1024];
+
+        let mut listener = WasiWsListener::new("127.0.0.1:0").map_err(|_| "bind ws listener")?;
+        let port = listener.local_port().map_err(|_| "resolve ws port")?;
+        let url = format!("ws://127.0.0.1:{port}");
+
+        let serving = spawn(async move {
+            let transport = match listener.accept().await {
+                Ok(Some(transport)) => transport,
+                Ok(None) => return Err("ws listener closed"),
+                Err(_) => return Err("ws accept"),
+            };
+            let (_sender, mut receiver) = transport.split();
+            // Must report the cap rather than hand back a giant message.
+            match receiver.recv().await {
+                Err(TransportError::MessageTooLarge { .. }) => Ok(()),
+                Ok(_) => Err("oversized message was accepted"),
+                Err(_) => Err("expected MessageTooLarge"),
+            }
+        });
+
+        let client = WebSocketTransport::connect(url)
+            .await
+            .map_err(|_| "ws client connect")?;
+        let (mut sender, _receiver) = client.split();
+        // Own task: the server stops reading once it rejects the message.
+        let flooding = spawn(async move {
+            let _ = sender.send(Bytes::from(oversized)).await;
+        });
+
+        let outcome = saikuro_exec::timeout(Duration::from_secs(10), async move {
+            match serving.await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err("provider task did not complete"),
+            }
+        })
+        .await
+        .map_err(|_| "server never rejected the oversized message")?;
+        flooding.abort();
+        outcome
+    })
 }
 
 /// A WASI provider upgrading an inbound socket and echoing one frame, with the

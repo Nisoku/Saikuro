@@ -272,9 +272,19 @@ async def _accept_one(listener: WebSocketListener) -> None:
 
 async def _accept_forever(listener: WebSocketListener) -> None:
     """Accept connections until cancelled, serving each in the background."""
-    while True:
-        transport = await listener.accept()
-        asyncio.ensure_future(serve_connection(transport))
+    serving: set[asyncio.Task[None]] = set()
+    try:
+        while True:
+            transport = await listener.accept()
+            task = asyncio.ensure_future(serve_connection(transport))
+            # Retained until it finishes, so shutdown can still stop it.
+            serving.add(task)
+            task.add_done_callback(serving.discard)
+    finally:
+        for task in serving:
+            task.cancel()
+        if serving:
+            await asyncio.gather(*serving, return_exceptions=True)
 
 
 async def run_ws(options: Options) -> None:

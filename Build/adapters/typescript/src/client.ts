@@ -225,6 +225,11 @@ export class SaikuroClient {
 
   private _connected = false;
 
+  /**
+   * Frames already handed to `_handleRaw` by the `onMessage` handler
+   */
+  private readonly _handledViaCallback = new WeakSet<Record<string, unknown>>();
+
   private constructor(transport: Transport, options: ClientOptions = {}) {
     this._transport = transport;
     this._options = {
@@ -277,7 +282,10 @@ export class SaikuroClient {
     this._connected = true;
     log.info("client connected");
 
-    this._transport.onMessage((raw) => this._handleRaw(raw));
+    this._transport.onMessage((raw) => {
+      this._handledViaCallback.add(raw);
+      this._handleRaw(raw);
+    });
     this._transport.onClose((err) => this._handleClose(err));
 
     await this._drainAnnounces();
@@ -288,9 +296,12 @@ export class SaikuroClient {
    * inbox before `open` returns.
    *
    * The transport pushes frames to `onMessage` handlers as well as queueing
-   * them for `recv`, so this must only consume the queue copy. Anything that is
-   * not an announce is handed to {@link _handleRaw} so a frame that arrived
-   * before `open` is not silently dropped.
+   * them for `recv`, so this must only consume the queue copy. A frame that
+   * arrived before `open` registered its handler was never dispatched and is
+   * still handled here; one that arrived afterwards is already in
+   * `_handledViaCallback` and is dropped to keep it single-delivered. Anything
+   * that is not an announce is handed to {@link _handleRaw} so a frame that
+   * arrived before `open` is not silently dropped.
    */
   private async _drainAnnounces(): Promise<void> {
     const deadline = Date.now() + SaikuroClient.ANNOUNCE_DRAIN_GRACE_MS;
@@ -305,6 +316,9 @@ export class SaikuroClient {
       try {
         const raw = await Promise.race([this._transport.recv(), expiry]);
         if (raw === null) return;
+        // Already dispatched by the onMessage handler; the inbox holds the
+        // same object, so handling it here would double-count it.
+        if (this._handledViaCallback.has(raw)) continue;
         if (!(await this._maybeAckAnnounce(raw))) this._handleRaw(raw);
       } finally {
         // Clear the loser of the race so a timer cannot keep the process alive.

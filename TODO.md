@@ -95,3 +95,5 @@
 - [ ] remake demo to be something better, and maybe cooler? + combine with Examples so that we have one thing for all that
 
 - [ ] update all the various md files and stuff, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, HANDROLLED, PARITY, README, SECURITY, etc. and add more
+
+- [ ] Make everything that can be made push-pull push-pull

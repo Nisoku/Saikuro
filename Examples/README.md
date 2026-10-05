@@ -108,7 +108,7 @@ wasmtime run -S inherit-network=y \
 ### Rust, WASI preview 1
 
 Memory only, and not runnable on current runtimes. See
-[WASI limitations](#wasi-limitations).
+[WASI limitations](#wasi).
 
 ```bash
 cd Examples/rust

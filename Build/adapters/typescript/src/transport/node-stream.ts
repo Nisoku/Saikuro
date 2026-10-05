@@ -57,9 +57,18 @@ export class NodeStreamTransport extends BaseTransport {
   private _attach(socket: import("net").Socket): void {
     this._socket = socket;
     this._connected = true;
-    socket.on("error", (err: Error) => this._closeHandler?.(err));
-    socket.on("data", (chunk: Buffer) => this._onData(chunk));
+    // A replaced socket keeps emitting until it drains
+    const isCurrentSocket = (): boolean => this._socket === socket;
+    socket.on("error", (err: Error) => {
+      if (!isCurrentSocket()) return;
+      this._closeHandler?.(err);
+    });
+    socket.on("data", (chunk: Buffer) => {
+      if (!isCurrentSocket()) return;
+      this._onData(chunk);
+    });
     socket.on("close", (hadError: boolean) => {
+      if (!isCurrentSocket()) return;
       this._connected = false;
       this._buffer = Buffer.alloc(0);
       const err = hadError ? new Error("socket closed with error") : undefined;

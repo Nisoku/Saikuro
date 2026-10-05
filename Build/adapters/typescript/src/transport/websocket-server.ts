@@ -19,7 +19,8 @@ interface WsServerLike {
   on(event: "connection", cb: (socket: WsSocketLike) => void): void;
   on(event: "listening", cb: () => void): void;
   on(event: "error", cb: (err: Error) => void): void;
-  close(cb?: () => void): void;
+  off(event: "error", cb: (err: Error) => void): void;
+  close(cb?: (err?: Error) => void): void;
   address(): { address: string; port: number } | string | null;
 }
 
@@ -100,23 +101,35 @@ export interface WebSocketListenerOptions {
 export class WebSocketListener {
   private readonly _server: WsServerLike;
   private readonly _boundPort: number;
-  private readonly _pending: WsSocketLike[] = [];
-  private _waiter: ((socket: WsSocketLike) => void) | undefined = undefined;
+  private readonly _pending: WebSocketServerTransport[] = [];
+  private _waiter:
+    | {
+        resolve: (transport: WebSocketServerTransport) => void;
+        reject: (err: Error) => void;
+      }
+    | undefined = undefined;
   private _closed = false;
 
   private constructor(server: WsServerLike, boundPort: number) {
     this._server = server;
     this._boundPort = boundPort;
     server.on("connection", (socket: WsSocketLike) => {
-      if (this._waiter !== undefined) {
-        const waiter = this._waiter;
+      if (this._closed) {
+        // A connection that races close() must not be left hanging on a peer
+        // that will never be served.
+        socket.close(1001, "server closed");
+        return;
+      }
+      // Wrap the socket here rather than in accept()
+      const transport = WebSocketServerTransport.fromSocket(socket);
+      const waiter = this._waiter;
+      if (waiter !== undefined) {
         this._waiter = undefined;
-        waiter(socket);
+        waiter.resolve(transport);
       } else {
-        this._pending.push(socket);
+        this._pending.push(transport);
       }
     });
-    server.on("error", (err: Error) => log.error("ws listener error", { err: String(err) }));
   }
 
   /**
@@ -145,9 +158,20 @@ export class WebSocketListener {
       port: options.port ?? 0,
     });
     await new Promise<void>((resolve, reject) => {
-      server.on("listening", () => resolve());
-      server.on("error", reject);
+      const onBindError = (err: Error): void => {
+        reject(err);
+      };
+      server.on("error", onBindError);
+      server.on("listening", () => {
+        // The bind-scoped rejection must not outlive the bind
+        server.off("error", onBindError);
+        resolve();
+      });
     });
+    // Long-lived replacement for the bind-scoped listener.
+    server.on("error", (err: Error) =>
+      log.error("ws listener error", { err: String(err) }),
+    );
     const address = server.address();
     const boundPort =
       typeof address === "object" && address !== null ? address.port : 0;
@@ -166,18 +190,38 @@ export class WebSocketListener {
     }
     const queued = this._pending.shift();
     if (queued !== undefined) {
-      return Promise.resolve(WebSocketServerTransport.fromSocket(queued));
+      return Promise.resolve(queued);
     }
-    return new Promise<WsSocketLike>((resolve) => {
-      this._waiter = resolve;
-    }).then((socket) => WebSocketServerTransport.fromSocket(socket));
+    return new Promise<WebSocketServerTransport>((resolve, reject) => {
+      this._waiter = { resolve, reject };
+    });
   }
 
-  /** Stop accepting new connections. */
+  /**
+   * Stop accepting new connections.
+   */
   close(): Promise<void> {
     this._closed = true;
-    return new Promise<void>((resolve) => {
-      this._server.close(() => resolve());
+
+    // A parked accept() has to be woken
+    const waiter = this._waiter;
+    this._waiter = undefined;
+    waiter?.reject(new Error("WebSocketListener is closed"));
+
+    // Transports nobody accepted belong to peers that would otherwise hold an
+    // open connection nothing will ever serve.
+    for (const transport of this._pending.splice(0)) {
+      transport.close();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      this._server.close((err?: Error) => {
+        if (err !== undefined) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
     });
   }
 }

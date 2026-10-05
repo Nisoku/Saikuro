@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { InMemoryTransport } from "../src/transport";
+import { MAX_BUFFERED_MESSAGES } from "../src/transport/base";
 
 describe("InMemoryTransport.pair", () => {
   it("returns two transport instances", () => {
@@ -110,6 +111,69 @@ describe("InMemoryTransport.offMessage", () => {
     await a.send({ n: 1 }); // fires once
     await a.send({ n: 2 }); // fires once more
     expect(callCount).toBe(2);
+  });
+});
+
+describe("BaseTransport buffering before onMessage", () => {
+  it("replays a message received before onMessage registered", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    await b.send({ early: true });
+
+    const received: Record<string, unknown>[] = [];
+    a.onMessage((msg) => received.push(msg));
+
+    expect(received).toEqual([{ early: true }]);
+  });
+
+  it("replays in arrival order", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    await b.send({ n: 1 });
+    await b.send({ n: 2 });
+    await b.send({ n: 3 });
+
+    const received: Record<string, unknown>[] = [];
+    a.onMessage((msg) => received.push(msg));
+
+    expect(received).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+  });
+
+  it("replays only once and then delivers live", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    await b.send({ buffered: true });
+
+    const received: Record<string, unknown>[] = [];
+    a.onMessage((msg) => received.push(msg));
+    await b.send({ live: true });
+    await vi.waitFor(() => expect(received).toHaveLength(2));
+
+    expect(received).toEqual([{ buffered: true }, { live: true }]);
+  });
+
+  it("gives an early message to the handler that registers first", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    await b.send({ early: true });
+
+    const first: Record<string, unknown>[] = [];
+    const second: Record<string, unknown>[] = [];
+    a.onMessage((msg) => first.push(msg));
+    a.onMessage((msg) => second.push(msg));
+
+    expect(first).toEqual([{ early: true }]);
+    expect(second).toEqual([]);
+  });
+
+  it("drops the newest message once the buffer is full", async () => {
+    const [a, b] = InMemoryTransport.pair();
+    for (let n = 0; n < MAX_BUFFERED_MESSAGES + 5; n += 1) {
+      await b.send({ n });
+    }
+
+    const received: Record<string, unknown>[] = [];
+    a.onMessage((msg) => received.push(msg));
+
+    // The cap is honoured and the earliest frames are the ones kept.
+    expect(received).toHaveLength(MAX_BUFFERED_MESSAGES);
+    expect(received[0]).toEqual({ n: 0 });
   });
 });
 

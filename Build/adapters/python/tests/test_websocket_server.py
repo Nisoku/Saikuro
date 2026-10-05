@@ -4,6 +4,8 @@ Tests for the server-side WebSocket transport and its listener.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from saikuro.transport import (
@@ -74,6 +76,48 @@ async def test_recv_returns_none_when_client_closes():
             await server.close()
     finally:
         await listener.close()
+
+
+@pytest.mark.asyncio
+async def test_close_wakes_an_accept_that_is_already_waiting():
+    listener = await WebSocketListener.bind(host="127.0.0.1", port=0)
+
+    # Park an accept with nothing to deliver; close() has to wake it.
+    acceptor = asyncio.ensure_future(listener.accept())
+    await asyncio.sleep(0)
+
+    await listener.close()
+
+    with pytest.raises(RuntimeError, match="closed"):
+        await asyncio.wait_for(acceptor, timeout=1.0)
+
+
+@pytest.mark.asyncio
+async def test_close_wakes_every_parked_accept():
+    listener = await WebSocketListener.bind(host="127.0.0.1", port=0)
+
+    acceptors = [asyncio.ensure_future(listener.accept()) for _ in range(3)]
+    await asyncio.sleep(0)
+
+    await listener.close()
+
+    for acceptor in acceptors:
+        with pytest.raises(RuntimeError, match="closed"):
+            await asyncio.wait_for(acceptor, timeout=1.0)
+
+
+@pytest.mark.asyncio
+async def test_close_closes_a_connection_nobody_accepted():
+    listener = await WebSocketListener.bind(host="127.0.0.1", port=0)
+    client = WebSocketTransport(f"ws://127.0.0.1:{listener.port}")
+    await client.connect()
+    # Give the handler time to queue the transport without accepting it.
+    await asyncio.sleep(0.05)
+
+    await listener.close()
+
+    assert await client.recv() is None
+    await client.close()
 
 
 @pytest.mark.asyncio

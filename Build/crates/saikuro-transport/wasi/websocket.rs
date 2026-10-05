@@ -10,6 +10,11 @@ use saikuro_core::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use core::cell::RefCell;
+use core::time::Duration;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex as AsyncMutex;
+
+use saikuro_exec::timeout;
 
 use crate::shared::error::{Result, TransportError};
 #[cfg(not(feature = "native"))]
@@ -35,6 +40,9 @@ const WS_HEADER_RESERVE: usize = 14;
 const WS_PAYLOAD: usize = WS_BUF - WS_HEADER_RESERVE;
 /// Safety cap on unparsed inbound bytes retained between socket reads.
 const WS_MAX_BUFFER: usize = 64 * 1024;
+/// Cap on one reassembled message: it spans many reads, so a small read
+/// buffer does not bound it.
+const WS_MAX_MESSAGE: usize = 64 * 1024;
 /// Safety cap on the HTTP handshake bytes accumulated in either direction.
 const WS_HANDSHAKE_MAX: usize = 16 * 1024;
 /// Buffer for a control frame: 125-byte payload limit plus the 6-byte masked header.
@@ -43,6 +51,8 @@ const WS_CTRL: usize = 132;
 const WS_MAX_HEADERS: usize = 16;
 /// Upper bound on the HTTP response written during the server handshake.
 const WS_RESPONSE_MAX: usize = 512;
+/// Bounds the opening handshake, which blocks on a peer-supplied read.
+const WS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Mask-key entropy for the client role.
 pub struct WsRng;
@@ -246,6 +256,9 @@ async fn server_handshake(conn: &Connection, ws: &mut WebSocketServer) -> Result
 pub struct WsConn<W> {
     state: Arc<RefCell<WasiWsState<W>>>,
     conn: Arc<Connection>,
+    /// Held across each frame's writes: a socket write yields mid-frame, so an
+    /// overlapping `recv` reply would be spliced into the middle of one.
+    write_lock: Arc<AsyncMutex<NoopRawMutex, ()>>,
 }
 
 /// A WebSocket client transport, dialed out to a remote provider.
@@ -270,6 +283,7 @@ impl WebSocketTransport {
         };
         let rx = client_handshake(&conn, &mut ws, &options).await?;
         Ok(Self {
+            write_lock: Arc::new(AsyncMutex::new(())),
             state: Arc::new(RefCell::new(WasiWsState {
                 ws,
                 rx,
@@ -294,10 +308,12 @@ where
             WsSender {
                 state: self.state.clone(),
                 conn: self.conn.clone(),
+                write_lock: self.write_lock.clone(),
             },
             WsRecv {
                 state: self.state,
                 conn: self.conn,
+                write_lock: self.write_lock,
             },
         )
     }
@@ -339,6 +355,9 @@ where
 pub struct WsSender<W> {
     state: Arc<RefCell<WasiWsState<W>>>,
     conn: Arc<Connection>,
+    /// Held across each frame's writes: a socket write yields mid-frame, so an
+    /// overlapping `recv` reply would be spliced into the middle of one.
+    write_lock: Arc<AsyncMutex<NoopRawMutex, ()>>,
 }
 
 /// Sending half of a client-role [`WebSocketTransport`].
@@ -355,6 +374,8 @@ where
     async fn send(&mut self, frame: Bytes) -> Result<()> {
         let mut out = [0u8; WS_BUF];
         let mut remaining = frame.as_ref();
+        // Held across encoding and the flush, so the message stays contiguous.
+        let _guard = self.write_lock.lock().await;
         loop {
             let chunk_len = remaining.len().min(WS_PAYLOAD);
             let end_of_message = remaining.len() <= WS_PAYLOAD;
@@ -386,6 +407,7 @@ where
 
     async fn close(&mut self) -> Result<()> {
         let mut out = [0u8; WS_BUF];
+        let _guard = self.write_lock.lock().await;
         let len = {
             let mut st = self.state.borrow_mut();
             if st.closed {
@@ -422,6 +444,9 @@ enum RecvStep {
 pub struct WsRecv<W> {
     state: Arc<RefCell<WasiWsState<W>>>,
     conn: Arc<Connection>,
+    /// Held across each frame's writes: a socket write yields mid-frame, so an
+    /// overlapping `recv` reply would be spliced into the middle of one.
+    write_lock: Arc<AsyncMutex<NoopRawMutex, ()>>,
 }
 
 /// Receiving half of a client-role [`WebSocketTransport`].
@@ -434,7 +459,7 @@ where
     R: RngCore,
     T: WebSocketType,
 {
-    /// Parse buffered bytes. 
+    /// Parse buffered bytes.
     fn parse(&self) -> Result<RecvStep> {
         let mut st = self.state.borrow_mut();
         if st.closed {
@@ -447,6 +472,14 @@ where
                 rx.drain(..res.len_from);
                 match res.message_type {
                     WebSocketReceiveMessageType::Text | WebSocketReceiveMessageType::Binary => {
+                        // Bounded here, not just at the read buffer.
+                        let size = frame.len() + res.len_to;
+                        if size > WS_MAX_MESSAGE {
+                            return Err(TransportError::MessageTooLarge {
+                                size,
+                                limit: WS_MAX_MESSAGE,
+                            });
+                        }
                         frame.extend_from_slice(&payload[..res.len_to]);
                         if res.end_of_message {
                             let message = Bytes::copy_from_slice(frame);
@@ -529,6 +562,7 @@ where
                     }
                 }
                 RecvStep::Reply { len, close, buf } => {
+                    let _guard = self.write_lock.lock().await;
                     self.conn.write_bytes(&buf[..len]).await?;
                     self.conn.flush().await?;
                     if close {
@@ -566,20 +600,34 @@ impl LocalTransportListener for WasiWsListener {
     type Output = WebSocketServerTransport;
 
     async fn accept(&mut self) -> Result<Option<Self::Output>> {
-        let conn = match self.inner.accept_conn().await? {
-            Some(conn) => conn,
-            None => return Ok(None),
-        };
-        let mut ws = WebSocketServer::new_server();
-        let rx = server_handshake(&conn, &mut ws).await?;
-        #[allow(clippy::arc_with_non_send_sync)]
-        let state = Arc::new(RefCell::new(WasiWsState {
-            ws,
-            rx,
-            frame: Vec::new(),
-            closed: false,
-        }));
-        Ok(Some(WebSocketServerTransport { state, conn }))
+        loop {
+            let conn = match self.inner.accept_conn().await? {
+                Some(conn) => conn,
+                None => return Ok(None),
+            };
+            let mut ws = WebSocketServer::new_server();
+            // Only this connection is at stake; a bad upgrade is dropped.
+            let rx = match timeout(WS_HANDSHAKE_TIMEOUT, server_handshake(&conn, &mut ws)).await {
+                Ok(Ok(rx)) => rx,
+                Ok(Err(_)) => continue,
+                Err(_) => continue,
+            };
+            #[allow(clippy::arc_with_non_send_sync)]
+            let state = Arc::new(RefCell::new(WasiWsState {
+                ws,
+                rx,
+                frame: Vec::new(),
+                closed: false,
+            }));
+            return Ok(Some(WebSocketServerTransport {
+                // `NoopRawMutex` carries no thread-safety, matching the
+                // single-threaded assumption the `RefCell` state above makes.
+                #[allow(clippy::arc_with_non_send_sync)]
+                write_lock: Arc::new(AsyncMutex::new(())),
+                state,
+                conn,
+            }));
+        }
     }
 
     async fn close(&mut self) -> Result<()> {

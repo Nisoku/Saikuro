@@ -301,7 +301,7 @@ async function runNodeStream(
   if (options.mode === "serve-only") {
     for (;;) {
       const socket = await acceptConnection(server);
-      await serveProvider(NodeStreamTransport.fromSocket(socket));
+      void serveProvider(NodeStreamTransport.fromSocket(socket));
     }
   }
 
@@ -326,7 +326,7 @@ async function runWebSocket(options: Options): Promise<void> {
   if (options.mode === "serve-only") {
     for (;;) {
       const transport = await listener.accept();
-      await serveProvider(transport);
+      void serveProvider(transport);
     }
   }
 

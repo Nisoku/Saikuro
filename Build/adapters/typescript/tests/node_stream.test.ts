@@ -174,4 +174,43 @@ describe("NodeStreamTransport accept path", () => {
 
     await serverSide.close();
   });
+
+  it("ignores events from a socket that a reconnect replaced", async () => {
+    const sessions: Socket[] = [];
+    const server = createServer((socket) => {
+      sessions.push(socket);
+      openSockets.push(socket);
+    });
+    openServers.push(server);
+    await new Promise<void>((resolve) => {
+      server.listen(0, LOOPBACK, resolve);
+    });
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("expected an IP socket address");
+    }
+
+    const clientSide = NodeStreamTransport.tcp(LOOPBACK, address.port);
+    await clientSide.connect();
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+
+    // close() ends the socket without waiting for it to drain
+    await clientSide.close();
+    let closeNotifications = 0;
+    clientSide.onClose(() => {
+      closeNotifications += 1;
+    });
+
+    await clientSide.connect();
+    expect(clientSide.isConnected).toBe(true);
+
+    await vi.waitFor(() => expect(sessions).toHaveLength(2));
+    // Give the replaced socket time to emit.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(clientSide.isConnected).toBe(true);
+    expect(closeNotifications).toBe(0);
+
+    await clientSide.close();
+  });
 });

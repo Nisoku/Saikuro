@@ -128,6 +128,13 @@ pub struct WasiTcpSender {
     conn: Arc<Connection>,
 }
 
+impl WasiTcpSender {
+    /// Half-close the shared socket so the peer observes EOF.
+    async fn shutdown_send(&mut self) -> Result<()> {
+        self.conn.shutdown_send()
+    }
+}
+
 #[async_trait(?Send)]
 impl LocalTransportSender for WasiTcpSender {
     async fn send(&mut self, frame: Bytes) -> Result<()> {
@@ -135,7 +142,7 @@ impl LocalTransportSender for WasiTcpSender {
     }
 
     async fn close(&mut self) -> Result<()> {
-        Ok(())
+        self.shutdown_send().await
     }
 }
 
@@ -165,7 +172,7 @@ mod send_impls {
         }
 
         async fn close(&mut self) -> Result<()> {
-            Ok(())
+            self.shutdown_send().await
         }
     }
 
@@ -188,7 +195,7 @@ mod nosend_impls {
         }
 
         async fn close(&mut self) -> Result<()> {
-            Ok(())
+            self.shutdown_send().await
         }
     }
 
