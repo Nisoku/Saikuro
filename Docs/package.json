@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@docmd/core": "^0.9.5",
-    "@huggingface/transformers": "^4.2.0",
+    "@huggingface/transformers": "^4.3.0",
     "docmd-search": "^0.1.5",
     "onnxruntime-node": "^1.30.0"
   }
