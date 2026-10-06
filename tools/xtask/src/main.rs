@@ -89,6 +89,8 @@ enum Command {
     Spellcheck,
     /// rustdoc intra-doc link gate.
     Deadlinks,
+    /// Build at the declared workspace.package.rust-version.
+    Msrv,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -247,6 +249,7 @@ impl Command {
             // Command::Outdated => gates::outdated(),
             Command::Spellcheck => gates::spellcheck(),
             Command::Deadlinks => gates::deadlinks(),
+            Command::Msrv => gates::msrv(),
         }
     }
 }
