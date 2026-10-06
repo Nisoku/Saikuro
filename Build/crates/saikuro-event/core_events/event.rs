@@ -15,7 +15,7 @@ pub const CONTEXT_CAPACITY: usize = 16;
 
 /// Fixed-capacity map of structured context entries on [`ErrorDetail`] and
 /// [`LogRecord`](crate::LogRecord).
-pub type ContextMap = heapless::FnvIndexMap<String, Value, CONTEXT_CAPACITY>;
+pub type ContextMap = heapless::index_map::FnvIndexMap<String, Value, CONTEXT_CAPACITY>;
 
 /// All error codes transmitted on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

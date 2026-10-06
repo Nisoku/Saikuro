@@ -16,7 +16,7 @@ use saikuro_event::Value;
 pub const ENVELOPE_META_CAPACITY: usize = 16;
 
 /// Fixed-capacity map of metadata entries on an [`Envelope`].
-pub type MetaMap = heapless::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
+pub type MetaMap = heapless::index_map::FnvIndexMap<String, Value, ENVELOPE_META_CAPACITY>;
 
 /// Serialize the metadata map with keys sorted, so equivalent metadata always
 /// produces identical bytes regardless of the caller's insertion order.

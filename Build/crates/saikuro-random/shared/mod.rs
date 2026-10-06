@@ -3,7 +3,7 @@ use core::mem::MaybeUninit;
 use chacha20::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
 use chacha20::XChaCha20;
 use portable_atomic::{AtomicBool, AtomicU64, Ordering};
-use rand_core::{CryptoRng, RngCore, SeedableRng};
+use rand_core::{SeedableRng, TryCryptoRng, TryRng};
 use saikuro_event::SaikuroError;
 
 pub use uuid::Uuid;
@@ -107,25 +107,28 @@ impl Drbg {
     }
 }
 
-impl RngCore for Drbg {
-    fn next_u32(&mut self) -> u32 {
+/// Keystream exhaustion is reported through [`SaikuroError`]
+impl TryRng for Drbg {
+    type Error = SaikuroError;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         let mut bytes = [0u8; 4];
-        self.fill(&mut bytes).expect("Drbg keystream exhausted");
-        u32::from_ne_bytes(bytes)
+        self.fill(&mut bytes)?;
+        Ok(u32::from_ne_bytes(bytes))
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
         let mut bytes = [0u8; 8];
-        self.fill(&mut bytes).expect("Drbg keystream exhausted");
-        u64::from_ne_bytes(bytes)
+        self.fill(&mut bytes)?;
+        Ok(u64::from_ne_bytes(bytes))
     }
 
-    fn fill_bytes(&mut self, dst: &mut [u8]) {
-        self.fill(dst).expect("Drbg keystream exhausted");
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+        self.fill(dst)
     }
 }
 
-impl CryptoRng for Drbg {}
+impl TryCryptoRng for Drbg {}
 
 /// Seed wrapper for `rand_core::SeedableRng`.
 #[derive(Clone)]

@@ -73,6 +73,12 @@
 - [ ] `FsAccessStorage` hardcodes a single root directory; no multi-directory support per instance (use multiple instances)
 - [ ] `?Send` async traits with `RefCell`/`thread_local` handles are single-threaded-wasm-only. Fine for the browser, but it blocks reuse from workers
 
+## CI gaps
+
+- [ ] Cross-compile matrix never links, so bare-metal cdylib is unproven. `tools/xtask/src/matrix.rs:213-220` runs `cargo check --lib`, which type-checks only. `Build/adapters/c/Cargo.toml:13` declares `crate-type = ["cdylib", "staticlib", "rlib"]`, and cdylib cannot link on `thumbv6m`/`thumbv7m`/`thumbv8m.main`, `riscv32imac`/`riscv32imc`, or `aarch64-unknown-none` (no dynamic loader). CI is green because nothing links. Fix: add a build/link gate for MCU targets restricted to staticlib/rlib, or a target-specific crate-type override
+- [ ] Only the lib target is checked, so adapter tests and C/C++ headers are never compiled. Same `--lib` flag at `matrix.rs:214`. Never type-checked on any target: the C adapter test modules under `Tests/adapters/c/` (`c_api_protocol.rs`, `c_api_runtime.rs`, `c_api_smoke.rs`, `c_api_validation.rs`, `c_api_schema_extractor.rs`, `cpp_wrapper_runtime.rs`) and `Build/adapters/c/include/saikuro.h`. The C and C++ sides get zero compile coverage across the nine targets. Fix: `--all-targets` for adapter members, plus a real C/C++ compile step
+- [ ] Untestable combos are silently reported as passing. `matrix.rs:235-255`: when a crate declares none of a combo's features, the combo is skipped and recorded `passed: true` with note `(skipped: no matching features)` without invoking cargo. A crate that should have been covered reads as green. Fix: distinguish "not applicable" from "passed" in the report and JSON schema, and fail the matrix on unexpected skips
+
 ## The Sashiki Problem
 
 - [ ] Every language adapter independently re-implements the same wire protocol logic, so every protocol change requires updating all of them

@@ -49,7 +49,9 @@ pin-project-lite = "0.2"
 uuid = { version = "1.23", default-features = false }
 
 getrandom = { version = "0.3", default-features = false }
-chacha20 = { version = "0.9", default-features = false }
+chacha20 = { version = "0.10", default-features = false, features = [
+    "xchacha",
+] }
 portable-atomic = { version = "1", default-features = false, features = [
     "fallback",
     "critical-section",
@@ -58,9 +60,9 @@ portable-atomic-util = { version = "0.2", default-features = false, features = [
     "alloc",
 ] }
 
-rand_core = { version = "0.9", default-features = false }
+rand_core = { version = "0.10", default-features = false }
 
-heapless = { version = "0.8", default-features = false, features = ["serde"] }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 
 serde_with = "3.0"
 
