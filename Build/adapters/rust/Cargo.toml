@@ -80,6 +80,7 @@ storage-sled = ["saikuro-storage/sled"]
 storage-sqlite = ["saikuro-storage/sqlite-native"]
 wasm-storage = ["saikuro-storage/wasm"]
 net = ["saikuro-net"]
+quic = ["saikuro-transport/quic"]
 
 [dependencies]
 saikuro-client = { path = "../../crates/saikuro-client", default-features = false }
