@@ -14,6 +14,9 @@ pub enum TransportKind {
     /// Raw TCP stream:  cross-machine, on native hosts and on WASI.
     #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
     Tcp,
+    /// QUIC stream: cross-machine, on native hosts.
+    #[cfg(all(feature = "quic", not(target_arch = "wasm32")))]
+    Quic,
     /// WebSocket:  cross-machine and WASM-compatible.
     WebSocket,
     /// BroadcastChannel host transport:  WASM in-browser communication.
@@ -129,6 +132,11 @@ impl TransportSelector {
             // WebSocket URL.
             if addr.starts_with("ws://") || addr.starts_with("wss://") {
                 return (TransportKind::WebSocket, Some(addr.to_owned()));
+            }
+
+            #[cfg(feature = "quic")]
+            if let Some(rest) = addr.strip_prefix("quic://") {
+                return (TransportKind::Quic, Some(rest.to_owned()));
             }
 
             // TCP

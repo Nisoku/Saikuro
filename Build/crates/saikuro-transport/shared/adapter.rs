@@ -220,10 +220,11 @@ impl AdapterTransport for MemoryAdapterTransport {
 ///
 /// # Supported address formats
 ///
-/// - `memory` - in-memory channel (no network I/O)
-/// - `tcp://host:port` - TCP stream
+/// - `memory` - in-process MPSC
+/// - `tcp://host:port` - TCP
 /// - `unix:///path/to/socket` - Unix domain socket
 /// - `ws://host:port/path` or `wss://...` - WebSocket
+/// - `quic://host:port` - QUIC (if built with `quic` feature)
 #[allow(unused_variables)]
 pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
     let log: Arc<dyn LogSink> = Arc::from(Box::new(NullSink) as Box<dyn LogSink>);
@@ -248,6 +249,21 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
                     TransportError::ConnectionRefused(e.to_string())
                 })?;
             let connector = crate::native::tcp::TcpConnector::new(sock_addr, log);
+            let transport = connector.connect().await?;
+            let (sender, receiver) = transport.split();
+            Ok(Box::new(CombinedAdapter { sender, receiver }))
+        }
+
+        #[cfg(all(feature = "quic", feature = "native", not(target_arch = "wasm32")))]
+        TransportKind::Quic => {
+            let addr_str = addr.as_deref().ok_or(TransportError::ConnectionRefused(
+                "quic requires a host:port address".into(),
+            ))?;
+            let sock_addr: std::net::SocketAddr =
+                addr_str.parse().map_err(|e: std::net::AddrParseError| {
+                    TransportError::ConnectionRefused(e.to_string())
+                })?;
+            let connector = crate::native::quic::QuicConnector::new_addr(sock_addr, log).await?;
             let transport = connector.connect().await?;
             let (sender, receiver) = transport.split();
             Ok(Box::new(CombinedAdapter { sender, receiver }))

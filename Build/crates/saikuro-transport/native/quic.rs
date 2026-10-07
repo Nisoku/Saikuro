@@ -101,6 +101,18 @@ impl QuicConnector {
             .map_err(io_err)?;
         Ok(Self { client, addr, log })
     }
+
+    /// Build a client endpoint with default TLS configuration connecting to `addr`.
+    pub async fn new_addr(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
+        let client = Client::builder()
+            .with_tls(s2n_quic::provider::tls::default::Client::builder().build().unwrap())
+            .map_err(io_err)?
+            .with_io("0.0.0.0:0")
+            .map_err(io_err)?
+            .start()
+            .map_err(io_err)?;
+        Ok(Self { client, addr, log })
+    }
 }
 
 #[async_trait]
