@@ -316,3 +316,40 @@ pub fn deadlinks() -> anyhow::Result<()> {
     println!("deadlinks: ok (rustdoc intra-doc links clean)");
     Ok(())
 }
+
+/// Minimum supported Rust version gate.
+pub fn msrv() -> anyhow::Result<()> {
+    let toolchain = declared_msrv()?;
+    let flag = format!("+{toolchain}");
+
+    let mut default_args = vec![flag.as_str()];
+    default_args.extend(["check", "--workspace", "--all-targets"]);
+    run::run(&root(), "cargo", default_args)
+        .with_context(|| format!("workspace build on rustc {toolchain}"))?;
+
+    // `quic` sits outside the default graph but pins the declared value
+    // through s2n-quic, so it needs a pass of its own.
+    let mut quic_args = vec![flag.as_str()];
+    quic_args.extend(["check", "-p", "saikuro-transport", "--features", "quic"]);
+    run::run(&root(), "cargo", quic_args)
+        .with_context(|| format!("quic transport build on rustc {toolchain}"))?;
+
+    println!("msrv: ok (rust-version {toolchain})");
+    Ok(())
+}
+
+/// Read `workspace.package.rust-version` out of the workspace manifest.
+fn declared_msrv() -> anyhow::Result<String> {
+    let manifest = root().join("Cargo.toml");
+    let text = std::fs::read_to_string(&manifest)
+        .with_context(|| format!("read {}", manifest.display()))?;
+    let value: toml::Value =
+        toml::from_str(&text).with_context(|| format!("parse {}", manifest.display()))?;
+    value
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("rust-version"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
+        .with_context(|| "workspace.package.rust-version is not set in Cargo.toml")
+}

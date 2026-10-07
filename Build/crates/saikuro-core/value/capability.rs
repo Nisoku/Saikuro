@@ -9,7 +9,7 @@ pub const WILDCARD_TOKEN: &str = "*";
 pub const CAPABILITY_SET_CAPACITY: usize = 256;
 
 /// Fixed-capacity set of capability tokens held by a peer.
-pub type TokenSet = heapless::FnvIndexSet<CapabilityToken, CAPABILITY_SET_CAPACITY>;
+pub type TokenSet = heapless::index_set::FnvIndexSet<CapabilityToken, CAPABILITY_SET_CAPACITY>;
 
 /// A single capability token: a namespaced, human-readable permission string.
 ///

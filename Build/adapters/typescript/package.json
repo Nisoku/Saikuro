@@ -71,5 +71,8 @@
   "optionalDependencies": {
     "@rollup/rollup-darwin-x64": "^4.63.3",
     "ws": "^8.18.3"
+  },
+  "overrides": {
+    "katex": "^0.18.2"
   }
 }

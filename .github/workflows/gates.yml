@@ -123,3 +123,29 @@ jobs:
         run: cargo xtask setup
       - name: Run miri
         run: cargo xtask miri
+
+  msrv:
+    name: msrv (declared rust-version)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Read declared MSRV
+        id: msrv
+        run: |
+          msrv="$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)"
+          if [ -z "$msrv" ]; then
+            echo "workspace.package.rust-version not found in Cargo.toml" >&2
+            exit 1
+          fi
+          echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Cargo.toml
+      - name: Run msrv gate
+        run: cargo xtask msrv

@@ -13,7 +13,7 @@ path = "lib.rs"
 
 [features]
 default = ["std", "native"]
-std = ["rand_core/std"]
+std = []
 native = ["std", "getrandom", "getrandom/std", "saikuro-event/getrandom", "saikuro-event/native"]
 no_std = ["getrandom", "saikuro-event/getrandom", "saikuro-event/no_std"]
 wasm = ["getrandom", "getrandom/wasm_js", "saikuro-event/getrandom", "saikuro-event/wasm"]
