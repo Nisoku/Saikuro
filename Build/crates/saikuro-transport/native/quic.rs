@@ -9,7 +9,7 @@ use s2n_quic::{Client, Server};
 #[cfg(target_has_atomic = "ptr")]
 use saikuro_core::Arc;
 use saikuro_event::{LogLevel, LogRecord};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use crate::shared::{
     error::{Result, TransportError},
@@ -84,6 +84,14 @@ pub struct QuicConnector {
 }
 
 impl QuicConnector {
+    fn bind_addr(addr: SocketAddr) -> SocketAddr {
+        if addr.is_ipv4() {
+            (Ipv4Addr::UNSPECIFIED, 0).into()
+        } else {
+            (Ipv6Addr::UNSPECIFIED, 0).into()
+        }
+    }
+
     /// Build a client endpoint that trusts `server_cert_pem` and connect to
     /// `addr`.  The PEM is the server's own self-signed certificate or the CA
     /// chain that signed it.
@@ -93,9 +101,9 @@ impl QuicConnector {
         log: Arc<dyn saikuro_event::LogSink>,
     ) -> Result<Self> {
         let client = Client::builder()
-            .with_tls(server_cert_pem)
+            .with_tls(core::str::from_utf8(server_cert_pem).map_err(io_err)?)
             .map_err(io_err)?
-            .with_io("0.0.0.0:0")
+            .with_io(Self::bind_addr(addr))
             .map_err(io_err)?
             .start()
             .map_err(io_err)?;
@@ -105,9 +113,13 @@ impl QuicConnector {
     /// Build a client endpoint with default TLS configuration connecting to `addr`.
     pub async fn new_addr(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
         let client = Client::builder()
-            .with_tls(s2n_quic::provider::tls::default::Client::builder().build().unwrap())
+            .with_tls(
+                s2n_quic::provider::tls::default::Client::builder()
+                    .build()
+                    .map_err(io_err)?,
+            )
             .map_err(io_err)?
-            .with_io("0.0.0.0:0")
+            .with_io(Self::bind_addr(addr))
             .map_err(io_err)?
             .start()
             .map_err(io_err)?;
@@ -124,7 +136,9 @@ impl TransportConnector for QuicConnector {
             LogRecord::now(LogLevel::Debug, "saikuro.transport.quic", "quic connecting");
         record.set_context("addr", alloc::format!("{}", self.addr));
         self.log.emit(&record).await;
-        let mut connection = self.client.connect(self.addr.into()).await.map_err(|e| {
+        let connect =
+            s2n_quic::client::Connect::new(self.addr).with_server_name(self.addr.ip().to_string());
+        let mut connection = self.client.connect(connect).await.map_err(|e| {
             TransportError::ConnectionRefused(format!("quic connect to {} failed: {e}", self.addr))
         })?;
         let stream = connection.open_bidirectional_stream().await.map_err(|e| {

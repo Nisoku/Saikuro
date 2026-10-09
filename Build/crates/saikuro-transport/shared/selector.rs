@@ -134,7 +134,7 @@ impl TransportSelector {
                 return (TransportKind::WebSocket, Some(addr.to_owned()));
             }
 
-            #[cfg(feature = "quic")]
+            #[cfg(all(feature = "quic", feature = "native"))]
             if let Some(rest) = addr.strip_prefix("quic://") {
                 return (TransportKind::Quic, Some(rest.to_owned()));
             }

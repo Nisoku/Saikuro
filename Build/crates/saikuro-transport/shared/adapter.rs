@@ -13,7 +13,10 @@ use saikuro_event::{LogSink, NullSink};
 use super::error::{Result, TransportError};
 use super::memory::{MemoryReceiver, MemorySender, MemoryTransport};
 use super::selector::{TransportKind, TransportSelector};
-#[cfg(feature = "tcp")]
+#[cfg(any(
+    feature = "tcp",
+    all(feature = "quic", feature = "native", not(target_arch = "wasm32"))
+))]
 use super::traits::TransportConnector;
 #[cfg(any(
     all(feature = "wasm-host", target_arch = "wasm32"),
@@ -213,6 +216,15 @@ impl AdapterTransport for MemoryAdapterTransport {
     }
 }
 
+/// Options for establishing an adapter connection.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ConnectOptions<'a> {
+    /// PEM-encoded self-signed server certificate or CA chain trusted for QUIC.
+    /// The server certificate must be valid for the destination IP address.
+    /// `None` uses the default TLS trust configuration. Ignored by other transports.
+    pub quic_server_cert_pem: Option<&'a [u8]>,
+}
+
 /// Parse an address string and return a connected boxed transport.
 ///
 /// The best transport backend is selected automatically based on the address
@@ -224,9 +236,19 @@ impl AdapterTransport for MemoryAdapterTransport {
 /// - `tcp://host:port` - TCP
 /// - `unix:///path/to/socket` - Unix domain socket
 /// - `ws://host:port/path` or `wss://...` - WebSocket
-/// - `quic://host:port` - QUIC (if built with `quic` feature)
-#[allow(unused_variables)]
+/// - `quic://host:port` - QUIC (native targets with `quic` and `native` features)
+///
+/// Uses default TLS trust. Use [`connect_with_options`] to configure custom QUIC trust.
 pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
+    connect_with_options(address, ConnectOptions::default()).await
+}
+
+/// Connect using the address formats supported by [`connect`] and explicit options.
+#[allow(unused_variables)]
+pub async fn connect_with_options(
+    address: &str,
+    options: ConnectOptions<'_>,
+) -> Result<Box<dyn AdapterTransport>> {
     let log: Arc<dyn LogSink> = Arc::from(Box::new(NullSink) as Box<dyn LogSink>);
     let (kind, addr) = TransportSelector::select(Some(address), None);
 
@@ -263,7 +285,10 @@ pub async fn connect(address: &str) -> Result<Box<dyn AdapterTransport>> {
                 addr_str.parse().map_err(|e: std::net::AddrParseError| {
                     TransportError::ConnectionRefused(e.to_string())
                 })?;
-            let connector = crate::native::quic::QuicConnector::new_addr(sock_addr, log).await?;
+            let connector = match options.quic_server_cert_pem {
+                Some(cert) => crate::native::quic::QuicConnector::new(sock_addr, cert, log).await?,
+                None => crate::native::quic::QuicConnector::new_addr(sock_addr, log).await?,
+            };
             let transport = connector.connect().await?;
             let (sender, receiver) = transport.split();
             Ok(Box::new(CombinedAdapter { sender, receiver }))

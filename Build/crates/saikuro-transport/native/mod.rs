@@ -1,4 +1,4 @@
-#[cfg(any(feature = "tcp", feature = "unix"))]
+#[cfg(any(feature = "tcp", feature = "unix", feature = "quic"))]
 pub mod framed;
 
 #[cfg(feature = "tcp")]
