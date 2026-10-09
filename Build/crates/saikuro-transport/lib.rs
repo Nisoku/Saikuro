@@ -49,6 +49,7 @@ macro_rules! passive_engine_items {
                 feature = "native",
                 any(
                     feature = "tcp",
+                    feature = "quic",
                     feature = "unix",
                     feature = "ws",
                     feature = "ws-wasi",
@@ -83,6 +84,7 @@ macro_rules! passive_engine_items {
         $(
             #[cfg(any(
                 feature = "tcp",
+                all(feature = "native", feature = "quic"),
                 feature = "unix",
                 feature = "ws",
                 feature = "ws-wasi",
@@ -121,7 +123,9 @@ pub mod wasi;
 #[allow(unused_imports)]
 pub use wasi::*;
 
-pub use shared::adapter::{connect, AdapterTransport, MemoryAdapterTransport};
+pub use shared::adapter::{
+    connect, connect_with_options, AdapterTransport, ConnectOptions, MemoryAdapterTransport,
+};
 
 passive_engine_items! {
     pub use shared::adapter::from_halves;
