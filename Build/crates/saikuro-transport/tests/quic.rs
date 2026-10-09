@@ -9,19 +9,23 @@ use std::{net::SocketAddr, time::Duration};
 const CERT: &[u8] = include_bytes!("fixtures/quic-cert.pem");
 const KEY: &[u8] = include_bytes!("fixtures/quic-key.pem");
 
+fn bind_server(addr: SocketAddr) -> s2n_quic::Server {
+    s2n_quic::Server::builder()
+        .with_tls((
+            std::str::from_utf8(CERT).unwrap(),
+            std::str::from_utf8(KEY).unwrap(),
+        ))
+        .unwrap()
+        .with_io(addr)
+        .unwrap()
+        .start()
+        .unwrap()
+}
+
 fn roundtrip(addr: SocketAddr) {
     saikuro_exec::block_on(async {
         saikuro_exec::timeout(Duration::from_secs(10), async {
-            let mut listener = s2n_quic::Server::builder()
-                .with_tls((
-                    std::str::from_utf8(CERT).unwrap(),
-                    std::str::from_utf8(KEY).unwrap(),
-                ))
-                .unwrap()
-                .with_io(addr)
-                .unwrap()
-                .start()
-                .unwrap();
+            let mut listener = bind_server(addr);
             let address = format!("quic://{}", listener.local_addr().unwrap());
             let server = async {
                 let mut connection = listener.accept().await.unwrap();
@@ -87,11 +91,21 @@ fn adapter_rejects_invalid_custom_trust() {
 }
 
 #[test]
-fn adapter_default_trust_reports_provider_error_without_panicking() {
-    // The configured rustls provider has no default root store. Preserve that
-    // policy and return its configuration error instead of bypassing verification.
+fn adapter_default_trust_rejects_untrusted_server() {
+    // The default path loads the system root store before the client is built,
+    // so configuration succeeds and an untrusted self-signed server is rejected
+    // during the handshake instead of while configuring TLS.
     saikuro_exec::block_on(async {
-        let result = connect("quic://127.0.0.1:443").await;
-        assert!(matches!(result, Err(TransportError::Io(_))));
+        saikuro_exec::timeout(Duration::from_secs(10), async {
+            let listener = bind_server("127.0.0.1:0".parse().unwrap());
+            let address = format!("quic://{}", listener.local_addr().unwrap());
+            match connect(&address).await {
+                Err(TransportError::ConnectionRefused(_)) => {}
+                Err(other) => panic!("unexpected error: {other}"),
+                Ok(_) => panic!("untrusted server certificate was accepted"),
+            }
+        })
+        .await
+        .expect("default trust check timed out");
     });
 }

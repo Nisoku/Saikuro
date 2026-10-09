@@ -112,12 +112,28 @@ impl QuicConnector {
 
     /// Build a client endpoint with default TLS configuration connecting to `addr`.
     pub async fn new_addr(addr: SocketAddr, log: Arc<dyn saikuro_event::LogSink>) -> Result<Self> {
+        let roots = rustls_native_certs::load_native_certs();
+        if roots.certs.is_empty() {
+            let errors = roots
+                .errors
+                .iter()
+                .map(|e| format!("{e}"))
+                .collect::<Vec<_>>();
+            return Err(io_err(if errors.is_empty() {
+                String::from("no system root certificates found")
+            } else {
+                format!(
+                    "failed to load system root certificates: {}",
+                    errors.join("; ")
+                )
+            }));
+        }
+        let mut tls = s2n_quic::provider::tls::default::Client::builder();
+        for cert in roots.certs {
+            tls = tls.with_certificate(cert.to_vec()).map_err(io_err)?;
+        }
         let client = Client::builder()
-            .with_tls(
-                s2n_quic::provider::tls::default::Client::builder()
-                    .build()
-                    .map_err(io_err)?,
-            )
+            .with_tls(tls.build().map_err(io_err)?)
             .map_err(io_err)?
             .with_io(Self::bind_addr(addr))
             .map_err(io_err)?

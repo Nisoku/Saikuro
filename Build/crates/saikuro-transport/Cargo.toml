@@ -52,7 +52,7 @@ tcp-net = ["dep:saikuro-net", "saikuro-net/embedded"]
 unix = []
 ws = ["ws-native"]
 ws-native = ["tokio-tungstenite?/connect", "tokio-tungstenite?/handshake"]
-quic = ["dep:s2n-quic"]
+quic = ["dep:s2n-quic", "dep:rustls-native-certs"]
 ws-wasi = ["dep:embedded-websocket", "dep:rand_core_06", "dep:getrandom", "wasi-tcp", "ws", "dep:embassy-sync"]
 wasm-host = ["wasm"]
 wasi-tcp = ["saikuro-exec/no_std", "dep:embedded-io-async"]
@@ -78,6 +78,7 @@ embedded-io-async = { workspace = true, optional = true }
 embassy-sync = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 s2n-quic = { workspace = true, optional = true }
+rustls-native-certs = { workspace = true, optional = true }
 embedded-websocket = { workspace = true, optional = true }
 rand_core_06 = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }
