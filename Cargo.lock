@@ -642,7 +642,7 @@ checksum = "71f0aa32082b7df00164f485322d6edab59122c9718b363b07ec23424c2c06a0"
 dependencies = [
  "document-features",
  "embassy-net-driver",
- "embassy-sync",
+ "embassy-sync 0.7.2",
  "embassy-time",
  "embedded-io-async 0.7.0",
  "embedded-nal-async",
@@ -669,6 +669,20 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "heapless 0.8.0",
+]
+
+[[package]]
+name = "embassy-sync"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bbd85cf5a5ae56bdf26f618364af642d1d0a4e245cdd75cd9aabda382f65a81"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "embedded-io-async 0.7.0",
+ "futures-core",
+ "futures-sink",
+ "heapless 0.9.3",
 ]
 
 [[package]]
@@ -2013,7 +2027,7 @@ dependencies = [
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
- "embassy-sync",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "futures",
  "js-sys",
@@ -2075,7 +2089,7 @@ dependencies = [
  "clap",
  "critical-section",
  "embassy-executor",
- "embassy-sync",
+ "embassy-sync 0.8.0",
  "futures",
  "portable-atomic",
  "portable-atomic-util",
@@ -2191,7 +2205,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bytes",
- "embassy-sync",
+ "embassy-sync 0.8.0",
  "embedded-io-async 0.7.0",
  "embedded-websocket",
  "futures",
