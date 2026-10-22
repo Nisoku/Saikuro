@@ -260,7 +260,7 @@ pub fn geiger(update: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: Disabled until kbknapp/cargo-outdated#122 merges
+// TODO: Disabled until kbknapp/cargo-outdated#444 merges
 // pub fn outdated() -> anyhow::Result<()> {
 //     require("cargo-outdated")?;
 //     run::run(&root(), "cargo", ["outdated", "--exit-code", "1"]).with_context(|| "cargo outdated")

@@ -82,7 +82,7 @@ enum Command {
         #[arg(long)]
         update: bool,
     },
-    // TODO: Disabled until kbknapp/cargo-outdated#122 merges
+    // TODO: Disabled until kbknapp/cargo-outdated#444 merges
     // /// cargo-outdated with a failure on any drift.
     // Outdated,
     /// cargo-spellcheck doc spell analysis.
