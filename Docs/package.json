@@ -9,7 +9,7 @@
     "preview": "npx serve site"
   },
   "dependencies": {
-    "@docmd/core": "^0.9.7",
+    "@docmd/core": "^0.9.8",
     "@huggingface/transformers": "^4.3.1",
     "docmd-search": "^0.1.5",
     "onnxruntime-node": "^1.30.0"
